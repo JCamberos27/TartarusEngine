@@ -157,6 +157,65 @@ glm::vec3 FaceProbeNudge(const glm::ivec3& ijk, const glm::ivec3& dims, const gl
     return o;
 }
 
+bool NudgeBlocked(const glm::vec3& from, const glm::vec3& to, const std::vector<SolidBox>& solids) {
+    constexpr float kEps = 1e-4f; // a point on a box's surface counts as inside it
+    const glm::vec3 d = to - from;
+    for (const SolidBox& b : solids) {
+        if (glm::all(glm::greaterThanEqual(from, b.Min - kEps)) && glm::all(glm::lessThanEqual(from, b.Max + kEps))) continue;
+        float t0 = 0.0f, t1 = 1.0f; // slab test along the segment
+        bool hit = true;
+        for (int a = 0; a < 3 && hit; ++a) {
+            if (std::abs(d[a]) < 1e-9f) {
+                if (from[a] < b.Min[a] || from[a] > b.Max[a]) hit = false;
+            } else {
+                float ta = (b.Min[a] - from[a]) / d[a], tb = (b.Max[a] - from[a]) / d[a];
+                if (ta > tb) std::swap(ta, tb);
+                t0 = std::max(t0, ta);
+                t1 = std::min(t1, tb);
+                if (t0 > t1) hit = false;
+            }
+        }
+        if (hit) return true;
+    }
+    return false;
+}
+
+std::vector<glm::vec3> PlanFaceNudges(const Box& bounds, const glm::ivec3& dims, float nudge, const std::vector<SolidBox>& solids,
+                                      int* nudged, int* blocked) {
+    std::vector<glm::vec3> out((std::size_t)dims.x * dims.y * dims.z, glm::vec3(0.0f));
+    int nOk = 0, nBlocked = 0;
+    if (nudge > 0.0f) {
+        glm::vec3 wmin(1e30f), wmax(-1e30f); // the volume's world box, a little wider than the nudge
+        for (int c = 0; c < 8; ++c) {
+            const glm::vec3 q((c & 1) ? bounds.Half.x : -bounds.Half.x, (c & 2) ? bounds.Half.y : -bounds.Half.y,
+                              (c & 4) ? bounds.Half.z : -bounds.Half.z);
+            wmin = glm::min(wmin, bounds.ToWorld(q));
+            wmax = glm::max(wmax, bounds.ToWorld(q));
+        }
+        wmin -= glm::vec3(nudge + 0.05f);
+        wmax += glm::vec3(nudge + 0.05f);
+        std::vector<SolidBox> near;
+        for (const SolidBox& b : solids)
+            if (b.Min.x <= wmax.x && b.Max.x >= wmin.x && b.Min.y <= wmax.y && b.Max.y >= wmin.y && b.Min.z <= wmax.z && b.Max.z >= wmin.z)
+                near.push_back(b);
+        for (int pr = 0; pr < (int)out.size(); ++pr) {
+            const glm::ivec3 ijk(pr % dims.x, (pr / dims.x) % dims.y, pr / (dims.x * dims.y));
+            const glm::vec3 off = FaceProbeNudge(ijk, dims, bounds.Half, nudge);
+            if (off == glm::vec3(0.0f)) continue;
+            const glm::vec3 local = ProbeLocal(ijk, dims, bounds.Half);
+            if (NudgeBlocked(bounds.ToWorld(local), bounds.ToWorld(local + off), near)) {
+                ++nBlocked;
+                continue;
+            }
+            out[pr] = off;
+            ++nOk;
+        }
+    }
+    if (nudged) *nudged = nOk;
+    if (blocked) *blocked = nBlocked;
+    return out;
+}
+
 glm::vec3 VolumeBake::Sample(int layer, const glm::vec3& q, const glm::vec3& n) const {
     if (layer < 0 || layer >= (int)Layers.size()) return glm::vec3(0.0f);
     const auto& P = Layers[layer].Probes;
