@@ -1,0 +1,105 @@
+{
+ "version": 1,
+ "scene": "scenes/Forest.json",
+ "stillFrames": 0,
+ "player": {
+  "eyeHeight": 1.6,
+  "horizontalFovDeg": 90.0,
+  "verticalFovDeg": 58.72,
+  "walkSpeed": 4.0,
+  "source": "sweep v2: eye 1.6 m; Forest.json Player Spawn FOV"
+ },
+ "doorState": "allOpen",
+ "waypoints": [
+  {
+   "id": "jlook-bathdoor-hall_match1",
+   "room": "entrance hall",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_floor",
+   "feet": [
+    7.3,
+    0.194,
+    27.4
+   ],
+   "yawDeg": -125.0,
+   "pitchDeg": -25.0,
+   "cut": true,
+   "note": "JACOB #2 retake HALL side of door 20762 (doorway x ~6.34, z 26; hall z>26; yaw -90 = -z, +x = right). MATCH to Jacob screenshot 2.webp: east of the doorway (+x), 0.6 m off the wall, looking down and diagonally W-NW into the bathroom; jamb and blotch wall on the RIGHT"
+  },
+  {
+   "id": "jlook-bathdoor-hall_match2",
+   "room": "entrance hall",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_floor",
+   "feet": [
+    7.0,
+    0.194,
+    27.0
+   ],
+   "yawDeg": -120.0,
+   "pitchDeg": -28.0,
+   "cut": true,
+   "note": "JACOB #2 retake HALL side of door 20762 (doorway x ~6.34, z 26; hall z>26; yaw -90 = -z, +x = right). MATCH variant: closer to the jamb, steeper"
+  },
+  {
+   "id": "jlook-bathdoor-hall_match3",
+   "room": "entrance hall",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_floor",
+   "feet": [
+    7.7,
+    0.194,
+    27.9
+   ],
+   "yawDeg": -130.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "JACOB #2 retake HALL side of door 20762 (doorway x ~6.34, z 26; hall z>26; yaw -90 = -z, +x = right). MATCH variant: further back and east, more oblique"
+  },
+  {
+   "id": "jlook-bathdoor-hall_wall_e",
+   "room": "entrance hall",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_floor",
+   "feet": [
+    7.4,
+    0.194,
+    28.4
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "JACOB #2 retake HALL side of door 20762 (doorway x ~6.34, z 26; hall z>26; yaw -90 = -z, +x = right). straight at the wall east of the doorway, 2.4 m"
+  },
+  {
+   "id": "jlook-bathdoor-hall_wall_e_up",
+   "room": "entrance hall",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_floor",
+   "feet": [
+    7.4,
+    0.194,
+    27.2
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 10.0,
+   "cut": true,
+   "note": "JACOB #2 retake HALL side of door 20762 (doorway x ~6.34, z 26; hall z>26; yaw -90 = -z, +x = right). straight at the wall east of the doorway, 1.2 m, pitch up"
+  },
+  {
+   "id": "jlook-bathdoor-hall_wall_w",
+   "room": "entrance hall",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_floor",
+   "feet": [
+    5.6,
+    0.194,
+    28.4
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "JACOB #2 retake HALL side of door 20762 (doorway x ~6.34, z 26; hall z>26; yaw -90 = -z, +x = right). straight at the wall west of the doorway (control)"
+  }
+ ]
+}

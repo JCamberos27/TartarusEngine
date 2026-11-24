@@ -1,0 +1,42 @@
+{
+ "version": 1,
+ "scene": "scenes/Forest.json",
+ "stillFrames": 0,
+ "player": {
+  "eyeHeight": 1.6,
+  "horizontalFovDeg": 90.0,
+  "verticalFovDeg": 58.72,
+  "walkSpeed": 4.0,
+  "source": "sweep v2: eye 1.6 m; Forest.json Player Spawn FOV"
+ },
+ "doorState": "allOpen",
+ "waypoints": [
+  {
+   "id": "jlook-hallline_view",
+   "room": "entrance hall",
+   "giVolume": "",
+   "kind": "sweep_option",
+   "feet": [
+    3.4,
+    0.194,
+    28.3
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 20.0
+  },
+  {
+   "id": "jlook-hallline_alt",
+   "room": "upstairs landing",
+   "giVolume": "",
+   "kind": "sweep_option",
+   "feet": [
+    7.5,
+    3.104,
+    29.2
+   ],
+   "yawDeg": 150.0,
+   "pitchDeg": -20.0,
+   "cut": true
+  }
+ ]
+}

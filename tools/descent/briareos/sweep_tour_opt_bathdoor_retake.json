@@ -1,0 +1,74 @@
+{
+ "version": 1,
+ "scene": "scenes/Forest.json",
+ "stillFrames": 0,
+ "player": {
+  "eyeHeight": 1.6,
+  "horizontalFovDeg": 90.0,
+  "verticalFovDeg": 58.72,
+  "walkSpeed": 4.0,
+  "source": "sweep v2: eye 1.6 m; Forest.json Player Spawn FOV"
+ },
+ "doorState": "allOpen",
+ "waypoints": [
+  {
+   "id": "jlook-bathdoor-retake_a",
+   "room": "entrance hall",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    7.5,
+    0.194,
+    24.6
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 12.0,
+   "note": "Atlas: Lamp_table_B 35606/35608 +z edge z 26.07 along Wall_Interior_3x(4), x -14.4..-11.1, floor line + wall base. AFTER 6c4b9d89 (fam3-tableB-fade)"
+  },
+  {
+   "id": "jlook-bathdoor-retake_b",
+   "room": "entrance hall",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    7.0,
+    0.194,
+    23.9
+   ],
+   "yawDeg": 100.0,
+   "pitchDeg": 10.0,
+   "note": "Atlas: Lamp_table_B 35606/35608 +z edge z 26.07 along Wall_Interior_3x(4), x -14.4..-11.1, floor line + wall base. AFTER 6c4b9d89 (fam3-tableB-fade)",
+   "cut": true
+  },
+  {
+   "id": "jlook-bathdoor-retake_c",
+   "room": "entrance hall",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    8.3,
+    0.194,
+    25.0
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 15.0,
+   "note": "Atlas: Lamp_table_B 35606/35608 +z edge z 26.07 along Wall_Interior_3x(4), x -14.4..-11.1, floor line + wall base. AFTER 6c4b9d89 (fam3-tableB-fade)",
+   "cut": true
+  },
+  {
+   "id": "jlook-bathdoor-retake_d",
+   "room": "entrance hall",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    6.2,
+    0.194,
+    24.4
+   ],
+   "yawDeg": 60.0,
+   "pitchDeg": 12.0,
+   "note": "Atlas: Lamp_table_B 35606/35608 +z edge z 26.07 along Wall_Interior_3x(4), x -14.4..-11.1, floor line + wall base. AFTER 6c4b9d89 (fam3-tableB-fade)",
+   "cut": true
+  }
+ ]
+}

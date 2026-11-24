@@ -1,0 +1,31 @@
+diff --git a/project/scenes/Forest.json b/project/scenes/Forest.json
+index a606a7b9..d7613c19 100644
+--- a/project/scenes/Forest.json
++++ b/project/scenes/Forest.json
+@@ -387161,7 +387161,7 @@
+         ],
+         "Bounds Fade": 0.05000000074505806,
+         "Bounds Fade -": [
+-          0.2,
++          0.4,
+           -1.0,
+           -1.0
+         ],
+@@ -387284,7 +387284,7 @@
+         ],
+         "Bounds Fade": 0.05000000074505806,
+         "Bounds Fade -": [
+-          0.2,
++          0.4,
+           -1.0,
+           -1.0
+         ],
+@@ -387323,7 +387323,7 @@
+       "position": [
+         -28.58530044555664,
+         4.452099800109863,
+-        -13.677200317382813
++        -13.677200317382812
+       ],
+       "rotation": [
+         0.0,

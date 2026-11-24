@@ -1,0 +1,29 @@
+{
+ "version": 1,
+ "scene": "scenes/Forest.json",
+ "stillFrames": 0,
+ "player": {
+  "eyeHeight": 1.6,
+  "horizontalFovDeg": 90.0,
+  "verticalFovDeg": 58.72,
+  "walkSpeed": 4.0,
+  "source": "sweep v2: eye 1.6 m; Forest.json Player Spawn FOV"
+ },
+ "doorState": "allOpen",
+ "waypoints": [
+  {
+   "id": "jlook-south-wall-z20-3_view",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_view",
+   "feet": [
+    -10.5,
+    0.194,
+    23.0
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -5.0,
+   "note": "Atlas: Lamp_stand 19 (35613) -z edge z 20.3 = south window wall x -14.38..-6.78, floor 0.194 + ceiling 2.871 junctions + windows. AFTER 525e3a75 (fam4-south)"
+  }
+ ]
+}

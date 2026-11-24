@@ -1,0 +1,134 @@
+{
+ "version": 1,
+ "scene": "scenes/Forest.json",
+ "stillFrames": 0,
+ "player": {
+  "eyeHeight": 1.6,
+  "horizontalFovDeg": 90.0,
+  "verticalFovDeg": 58.72,
+  "walkSpeed": 4.0,
+  "source": "sweep v2: eye 1.6 m; Forest.json Player Spawn FOV"
+ },
+ "doorState": "allOpen",
+ "waypoints": [
+  {
+   "id": "jlook-tableb-retake_a",
+   "room": "upstairs",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -12.8,
+    3.104,
+    25.2
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -50.0,
+   "note": "Atlas: Lamp_table_B 35606/35608 +z edge z 26.07 along Wall_Interior_3x(4), x -14.4..-11.1, floor line + wall base. AFTER 6c4b9d89 (fam3-tableB-fade)"
+  },
+  {
+   "id": "jlook-tableb-retake_b",
+   "room": "upstairs",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -12.8,
+    3.104,
+    25.2
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 45.0,
+   "note": "Atlas: Lamp_table_B 35606/35608 +z edge z 26.07 along Wall_Interior_3x(4), x -14.4..-11.1, floor line + wall base. AFTER 6c4b9d89 (fam3-tableB-fade)",
+   "cut": true
+  },
+  {
+   "id": "jlook-tableb-retake_c",
+   "room": "upstairs",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -12.8,
+    3.104,
+    27.5
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -50.0,
+   "note": "Atlas: Lamp_table_B 35606/35608 +z edge z 26.07 along Wall_Interior_3x(4), x -14.4..-11.1, floor line + wall base. AFTER 6c4b9d89 (fam3-tableB-fade)",
+   "cut": true
+  },
+  {
+   "id": "jlook-tableb-retake_d",
+   "room": "upstairs",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -12.8,
+    3.104,
+    27.5
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 45.0,
+   "note": "Atlas: Lamp_table_B 35606/35608 +z edge z 26.07 along Wall_Interior_3x(4), x -14.4..-11.1, floor line + wall base. AFTER 6c4b9d89 (fam3-tableB-fade)",
+   "cut": true
+  },
+  {
+   "id": "jlook-tableb-retake_e",
+   "room": "upstairs",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -14.0,
+    3.104,
+    24.0
+   ],
+   "yawDeg": 70.0,
+   "pitchDeg": -30.0,
+   "note": "Atlas: Lamp_table_B 35606/35608 +z edge z 26.07 along Wall_Interior_3x(4), x -14.4..-11.1, floor line + wall base. AFTER 6c4b9d89 (fam3-tableB-fade)",
+   "cut": true
+  },
+  {
+   "id": "jlook-tableb-retake_f",
+   "room": "upstairs",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -11.5,
+    3.104,
+    24.0
+   ],
+   "yawDeg": 110.0,
+   "pitchDeg": -30.0,
+   "note": "Atlas: Lamp_table_B 35606/35608 +z edge z 26.07 along Wall_Interior_3x(4), x -14.4..-11.1, floor line + wall base. AFTER 6c4b9d89 (fam3-tableB-fade)",
+   "cut": true
+  },
+  {
+   "id": "jlook-tableb-retake_g",
+   "room": "upstairs",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -12.8,
+    3.104,
+    22.5
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "note": "Atlas: Lamp_table_B 35606/35608 +z edge z 26.07 along Wall_Interior_3x(4), x -14.4..-11.1, floor line + wall base. AFTER 6c4b9d89 (fam3-tableB-fade)",
+   "cut": true
+  },
+  {
+   "id": "jlook-tableb-retake_h",
+   "room": "upstairs",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -12.8,
+    3.104,
+    29.0
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "note": "Atlas: Lamp_table_B 35606/35608 +z edge z 26.07 along Wall_Interior_3x(4), x -14.4..-11.1, floor line + wall base. AFTER 6c4b9d89 (fam3-tableB-fade)",
+   "cut": true
+  }
+ ]
+}
