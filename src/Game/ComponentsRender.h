@@ -153,6 +153,11 @@ struct LightComponent {
     glm::vec3 BoundsCenter{0.0f};
     glm::vec3 BoundsSize{4.0f, 3.0f, 4.0f}; // full extents along the parent's axes
     float BoundsFade = 0.15f;
+    // Per-face overrides of BoundsFade (metres) for the -x/-y/-z faces (Neg) and the +x/+y/+z faces (Pos), along the
+    // parent's axes; < 0 = use BoundsFade. A face that ends in open-plan air takes a wide fade (no hard edge) while the
+    // faces on walls keep a short one (the wall surface stays fully lit).
+    glm::vec3 BoundsFadeNeg{-1.0f};
+    glm::vec3 BoundsFadePos{-1.0f};
 
     // Per-light shadow tuning. Always present (not a separate ECS component) so every light can be
     // authored with shadow settings recorded even when it isn't currently casting. `Enabled`

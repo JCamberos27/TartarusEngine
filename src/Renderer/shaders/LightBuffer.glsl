@@ -20,8 +20,10 @@ float LightBoxFade(uint i, vec3 p) {
     if (h.w < 0.0) return 1.0;
     vec3 q = vec3(dot(uLights[i].BoxX.xyz, p) + uLights[i].BoxX.w, dot(uLights[i].BoxY.xyz, p) + uLights[i].BoxY.w,
                   dot(uLights[i].BoxZ.xyz, p) + uLights[i].BoxZ.w);
-    vec3 in3 = h.xyz - abs(q);
-    return clamp(min(in3.x, min(in3.y, in3.z)) / h.w, 0.0, 1.0);
+    // Each face its own fade (LightBuffer::BoxWeight is the CPU mirror): the -faces where q < 0, the +faces otherwise.
+    vec3 f = max(mix(uLights[i].BoxFadeNeg.xyz, uLights[i].BoxFadePos.xyz, step(0.0, q)), vec3(1e-3));
+    vec3 w = clamp((h.xyz - abs(q)) / f, 0.0, 1.0);
+    return min(w.x, min(w.y, w.z));
 }
 // Windowed inverse-square: the contribution reaches exactly zero at range, no hard clip.
 float LightDistanceAtten(float dist, float range) {
