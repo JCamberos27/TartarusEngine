@@ -434,6 +434,13 @@ private:
     DebugLineGather debugLineGather;
     Sky sky;
     SkyAtmosphere skyAtmosphere; // the physical sky (World::SkySource::Atmosphere)
+    // --bake-gi: pin every clock a capture can see, so two bakes of one scene match (GIBaker::Options::PinClocks).
+    const bool giPinClocks = giBakeMode && !Env::Flag(Env::Var::GiBakeLiveClocks);
+    Step stepPinBakeClocks{[&] {
+        skyAtmosphere.SetBakeClock(giPinClocks);
+        Material::PinWindTime(giPinClocks);
+        if (giBakeMode) std::cout << "--bake-gi: clocks " << (giPinClocks ? "pinned" : "live (TARTARUS_GI_BAKE_LIVE_CLOCKS)") << std::endl;
+    }};
     IblProbe iblProbe; // #196: sky-baked irradiance / prefiltered specular / BRDF LUT
     // PR13: HDRI state — non-null when an HDRI is loaded, path tracks the loaded file
     std::shared_ptr<Cubemap> hdriCube;
@@ -468,6 +475,8 @@ private:
     // --bake-gi: made once the scene has settled (the sky's IBL baked, the probes captured), stepped every frame.
     std::unique_ptr<GIBaker> giBaker;
     int giBakeWait = 0, giBakeExit = 0;
+    int giBakeSettled = 0;          // pinned bakes: consecutive frames with no async load in flight before the start
+    int giBakeLateLoadFrames = 0;   // pinned bakes: frames during the bake with a load still in flight (not repeatable)
     bool giBakeDone = false;
     // PR15: SSAO — depth pre-pass FBO + compute + blur shaders (all scene-view only)
     Ssao ssao;
@@ -2084,10 +2093,18 @@ bool AppSession::Frame() {
     if (giBakeMode && !giBakeDone) {
         PROFILE_SCOPE("GI Bake");
         if (!giBaker) {
-            if (++giBakeWait >= 30 && iblProbe.IsValid() && !probeCapture.Busy()) {
+            // Pinned (repeatable) bakes also wait for every async load and GPU upload to land, so no capture draws a
+            // surface with its maps still missing (bindSlot falls back to the base colour alone).
+            // 30 frames in a row with nothing in flight (a load chain can leave a one-frame gap), then a fixed frame
+            // phase, so frame-counted schedules (shadow refresh turns, slot settling) line up with the passes alike.
+            giBakeSettled = assets.AsyncInFlight() == 0 ? giBakeSettled + 1 : 0;
+            const bool loadsSettled = !giPinClocks || (giBakeSettled >= 30 && Time::FrameCount() % 64 == 0);
+            if (++giBakeWait >= 30 && iblProbe.IsValid() && !probeCapture.Busy() && loadsSettled) {
+                std::cout << "--bake-gi: starting after " << giBakeWait << " frames" << std::endl;
                 giBaker = std::make_unique<GIBaker>();
                 GIBaker::Options bo;
                 bo.Only = opt.bakeGiOnly;
+                bo.PinClocks = giPinClocks;
                 bo.Emissive = Env::Float(Env::Var::GiBakeEmissive, bo.Emissive); // (a malformed value keeps the default)
                 bo.Bounces = Env::Int(Env::Var::GiBakeBounces, bo.Bounces);
                 if (Env::Flag(Env::Var::GiBakeTrace))
@@ -2102,9 +2119,13 @@ bool AppSession::Frame() {
                 giBakeExit = 1;
                 giBakeDone = true;
             }
-        } else if (giBaker->Step(world, giVolumes, [&](const RenderFrameContext& c) { viewPipeline.DrawScene(viewIn, c, nullptr); },
+        } else if ((giPinClocks && assets.AsyncInFlight() > 0 ? ++giBakeLateLoadFrames : 0),
+                   giBaker->Step(world, giVolumes, [&](const RenderFrameContext& c) { viewPipeline.DrawScene(viewIn, c, nullptr); },
                                  [&](const glm::vec3& p) { editorCamera.Position = p; })) {
             if (giBaker->Failed()) std::cerr << "--bake-gi: " << giBaker->Error() << std::endl;
+            if (giBakeLateLoadFrames > 0)
+                std::cerr << "--bake-gi: WARNING, " << giBakeLateLoadFrames
+                          << " frames of the bake had an asset load in flight: this bake may not be repeatable" << std::endl;
             giBakeExit = giBaker->Failed() ? 1 : 0;
             giBakeDone = true;
         }

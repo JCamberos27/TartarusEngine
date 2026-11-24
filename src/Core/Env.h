@@ -71,6 +71,7 @@
     X(GiBakeEmissive, "TARTARUS_GI_EMISSIVE", Float, "--bake-gi: emission kept in the captures (default 0)")            \
     X(GiBakeBounces, "TARTARUS_GI_BOUNCES", Int, "--bake-gi: light bounces to bake (default 2)")                      \
     X(GiBakeTrace, "TARTARUS_GI_BAKE_TRACE", Flag, "--bake-gi: log the shadow-slot holders of every probe batch")     \
+    X(GiBakeLiveClocks, "TARTARUS_GI_BAKE_LIVE_CLOCKS", Flag, "--bake-gi: leave the clocks running (A/B vs the pinned bake clock)") \
     X(SkinAudit, "TARTARUS_SKIN_AUDIT", Flag, "log skinning audit")                                                   \
     X(TrisReport, "TARTARUS_TRIS_REPORT", Int, "print a triangle report on this frame")                               \
     X(HizStats, "TARTARUS_HIZ_STATS", Flag, "print Hi-Z culling stats")                                               \

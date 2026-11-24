@@ -67,7 +67,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
     // game camera): nothing moved since (the transform cache stamp is per frame), so the tags already match.
     const std::uint64_t inactiveCount = (std::uint64_t)Registry.storage<InactiveTag>().size();
     if (!full && m_LodMemo.Stamp == m_TransformCacheStamp && m_TransformCacheStamp != 0 && m_LodMemo.ViewPos == viewPos &&
-        m_LodMemo.YScale == yScale && m_LodMemo.Ortho == ortho && m_LodMemo.Inactive == inactiveCount)
+        m_LodMemo.YScale == yScale && m_LodMemo.Ortho == ortho && m_LodMemo.Inactive == inactiveCount && m_LodMemo.Smooth == LodSmooth)
         return m_LodMemo.Evaluated;
     std::vector<entt::entity>& stack = m_LodStack;
     // The recorded group at `e`, if any.
@@ -542,6 +542,6 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
     }
     std::copy(signature, signature + 4, m_LodSignature);
     m_LodValid = true;
-    m_LodMemo = {m_TransformCacheStamp, viewPos, yScale, ortho, inactiveCount, evaluated};
+    m_LodMemo = {m_TransformCacheStamp, viewPos, yScale, ortho, inactiveCount, evaluated, LodSmooth};
     return evaluated;
 }

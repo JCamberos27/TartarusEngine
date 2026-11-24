@@ -187,12 +187,14 @@ struct Material {
         // vertex identically (a mismatch fails the main pass's LEQUAL against the pre-pass depth).
         // Game-clock time (Time::UnscaledTimeSinceStartup): the wall clock but for hitches, and fixed-step under
         // --perf-bench --smoke-shots, so the picture's leaves are in the same place every run.
-        s_PrevWindTime = s_WindTime; // TAA: the wind's motion vectors need where the leaves were last frame
-        s_WindTime = (float)Time::UnscaledTimeSinceStartup();
+        // --bake-gi (PinWindTime): one fixed moment, so leaves and houseplants stand the same way in every capture.
+        s_PrevWindTime = s_WindPinned ? 0.0f : s_WindTime; // TAA: the wind's motion vectors need where the leaves were last frame
+        s_WindTime = s_WindPinned ? 0.0f : (float)Time::UnscaledTimeSinceStartup();
     }
     static std::uint32_t HashFrame() { return s_HashFrame; }
     static float WindTime() { return s_WindTime; }
     static float PrevWindTime() { return s_PrevWindTime; }
+    static void PinWindTime(bool pin) { s_WindPinned = pin; }
     static glm::vec2 WindDirection() { return s_WindDir; }
     static void SetWindDirection(glm::vec2 d) { if (glm::dot(d, d) > 1e-6f) s_WindDir = glm::normalize(d); }
     // The scene's surface wind (SkySettings::Wind*), set once per frame before anything renders (WindCommon.glsl).
@@ -307,6 +309,7 @@ private:
     static TARTARUS_CORE_API std::uint32_t s_HashFrame;
     static TARTARUS_CORE_API float s_WindTime;
     static TARTARUS_CORE_API float s_PrevWindTime;
+    static TARTARUS_CORE_API bool s_WindPinned;
     static TARTARUS_CORE_API glm::vec2 s_WindDir; // world XZ, unit length
     static TARTARUS_CORE_API WindField s_Wind;
 };
