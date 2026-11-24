@@ -47,7 +47,9 @@ public:
         std::string SkipLightPrefix = "Bounce "; // hand-placed fakes of the bounce (house_lights.py FILL_I): never baked
         // The doors, drawers and lids (OpenableComponent) in the captures: as Play starts them (Start Open / Start Ajar
         // open that far, the rest shut), all open, or all shut as authored (before GI Phase 2 every bake saw them shut).
-        enum class Doors { Start, Open, Shut };
+        // Hidden: the interior door leaves not drawn at all (Openable::HideDoorLeaves), the rest shut as authored, so
+        // the probes in a doorway see through it instead of baking the back of a shut leaf.
+        enum class Doors { Start, Open, Shut, Hidden };
         Doors DoorPose = Doors::Start;
         // TARTARUS_GI_BAKE_TRACE: when set, called once per probe batch for this frame's shadow-slot holders (a stable
         // text, e.g. "spots[2]: A, B | points[1]: C"). Each batch is logged with it, and each pass ends with how many
@@ -72,7 +74,7 @@ public:
     // The openables as loaded again (a no-op once done). RestoreLighting calls it; the app also calls it before an
     // emergency recovery save and at shutdown, for a bake that ends without Finish.
     void RestoreDoors(World& world);
-    // Begin's door step, public for the tests: saves every openable, poses them (start / open / shut), sets
+    // Begin's door step, public for the tests: saves every openable, poses them (start / open / shut / hidden), sets
     // Openable::BakePosed and logs the "[GI bake] doors:" line (and a "[GI trace]" one under TARTARUS_GI_BAKE_TRACE).
     void PoseDoors(World& world, Options::Doors pose);
     // The error path of Step without the GIVolumes reset: sets the error (if none yet), puts the lighting and the doors

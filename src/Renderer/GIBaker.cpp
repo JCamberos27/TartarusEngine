@@ -197,6 +197,29 @@ void GIBaker::PoseDoors(World& world, Options::Doors pose) {
     std::string line;
     if (pose == Options::Doors::Shut) {
         line = "all shut as authored (--bake-gi-doors shut)";
+    } else if (pose == Options::Doors::Hidden) {
+        // Indoors = inside any active GI Volume in the scene (not only the ones this run bakes: a room is a room).
+        world.RebuildWorldTransformCache();
+        std::vector<GI::Box> rooms;
+        for (auto [e, tc, gv] : world.Registry.view<const TransformComponent, const GIVolumeComponent>().each())
+            if (!world.Registry.any_of<InactiveTag, DeactivatedTag>(e))
+                rooms.push_back(GI::Box::FromTransform(world.GetCachedWorldTransform(e), gv.Size));
+        const Openable::Hidden hidden = Openable::HideDoorLeaves(world, [&rooms](const glm::vec3& p) {
+            for (const auto& b : rooms) {
+                const glm::vec3 l = glm::abs(b.ToLocal(p));
+                if (l.x <= b.Half.x && l.y <= b.Half.y && l.z <= b.Half.z) return true;
+            }
+            return false;
+        });
+        world.SyncActiveInHierarchy(); // the leaves' handles and knobs go with them
+        auto list = [](const std::vector<std::string>& v) {
+            std::string s;
+            for (const auto& n : v) s += (s.empty() ? "" : ", ") + n;
+            return s.empty() ? s : " (" + s + ")";
+        };
+        line = std::to_string(hidden.Leaves.size()) + " door leaves hidden" + list(hidden.Leaves) + ", " +
+               std::to_string(hidden.Exterior.size()) + " exterior doors kept" + list(hidden.Exterior) + ", " +
+               std::to_string(hidden.Other) + " other openables shut (--bake-gi-doors hidden)";
     } else if (pose == Options::Doors::Open) {
         Openable::SetAll(world, 1.0f);
         int n = 0; // what SetAll posed: the openables with a loaded model
@@ -221,6 +244,7 @@ void GIBaker::RestoreDoors(World& world) {
     m_DoorsSaved.clear();
     m_DoorsPosed = false;
     Openable::SetBakePosed(false);
+    world.SyncActiveInHierarchy(); // hidden leaves (and their handles) shown again before anything can save the scene
     world.RebuildWorldTransformCache();
 }
 

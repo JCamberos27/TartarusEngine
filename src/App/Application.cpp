@@ -2112,8 +2112,9 @@ bool AppSession::Frame() {
                 bo.Only = opt.bakeGiOnly;
                 bo.PinClocks = giPinClocks;
                 bo.DoorPose = opt.bakeGiDoors == "open"   ? GIBaker::Options::Doors::Open
-                            : opt.bakeGiDoors == "shut" ? GIBaker::Options::Doors::Shut
-                                                        : GIBaker::Options::Doors::Start;
+                            : opt.bakeGiDoors == "shut"   ? GIBaker::Options::Doors::Shut
+                            : opt.bakeGiDoors == "hidden" ? GIBaker::Options::Doors::Hidden
+                                                          : GIBaker::Options::Doors::Start;
                 bo.Emissive = Env::Float(Env::Var::GiBakeEmissive, bo.Emissive); // (a malformed value keeps the default)
                 bo.Bounces = Env::Int(Env::Var::GiBakeBounces, bo.Bounces);
                 if (Env::Flag(Env::Var::GiBakeTrace))

@@ -61,7 +61,11 @@ void Test_LaunchOptions_Modes() {
     CHECK(Parse({"--bake-gi", "s.json"}, o, err) && o.mode == LaunchMode::BakeGI && o.bakeGiDoors == "start");
     CHECK(Parse({"--bake-gi", "s.json", "--bake-gi-doors", "open"}, o, err) && o.bakeGiDoors == "open");
     CHECK(Parse({"--bake-gi", "s.json", "--bake-gi-doors", "shut"}, o, err) && o.bakeGiDoors == "shut");
-    CHECK(!Parse({"--bake-gi", "s.json", "--bake-gi-doors", "ajar"}, o, err) && err.find("start, open or shut") != std::string::npos);
+    CHECK(Parse({"--bake-gi", "s.json", "--bake-gi-doors", "hidden"}, o, err) && o.bakeGiDoors == "hidden");
+    CHECK(!Parse({"--bake-gi", "s.json", "--bake-gi-doors", "ajar"}, o, err) &&
+          err.find("start, open, shut or hidden") != std::string::npos);
+    CHECK(!Parse({"--bake-gi", "s.json", "--bake-gi-doors", "bogus"}, o, err) &&
+          err.find("start, open, shut or hidden") != std::string::npos);
     CHECK(!Parse({"--smoke-test", "--bake-gi-doors", "open"}, o, err));
 }
 
