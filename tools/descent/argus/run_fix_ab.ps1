@@ -19,6 +19,8 @@ $utf8 = New-Object Text.UTF8Encoding($false)
 $orig = [IO.File]::ReadAllText($sh); $fixT = [IO.File]::ReadAllText($Fix)
 function Swap($t, $a, $b) { if (-not $t.Contains($a)) { throw "text missing: $a" }; $t.Replace($a, $b) }
 Copy-Item -LiteralPath $sh -Destination $bak -Force
+$h0 = (Get-FileHash -LiteralPath $sh -Algorithm SHA256).Hash
+"build shader SHA256 before: $h0"
 try {
     foreach ($v in $Variants) {
         switch ($v) {
@@ -43,6 +45,10 @@ try {
     }
 } finally {
     Copy-Item -LiteralPath $bak -Destination $sh -Force; Remove-Item -LiteralPath $bak -Force
+    $h1 = (Get-FileHash -LiteralPath $sh -Algorithm SHA256).Hash
+    "build shader SHA256 after : $h1  $(if ($h0 -eq $h1) { '== before: RESTORED' } else { 'DIFFERS: STOP' })"
+    $src = "$Gpu\src\Renderer\shaders\ModelFragment.glsl"
+    if (Test-Path -LiteralPath $src) { "wt-gpu source shader SHA256: $((Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash)" }
     "shader restored; wt-gpu: $(if (git -C $Gpu status --porcelain --untracked-files=no) { 'DIRTY' } else { 'clean' })"
 }
 Get-Date -Format u
