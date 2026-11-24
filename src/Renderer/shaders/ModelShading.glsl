@@ -187,6 +187,7 @@ uniform int   uPointShadowCount; // arrays below are sized to PointShadowMap::kM
 uniform float uPointShadowFar[12];
 uniform float uPointShadowBias[12];       // per-light x depth bias   (#140 phase 2, default 1.0)
 uniform float uPointShadowNormalBias[12]; // per-light x normal offset
+uniform float uPointShadowSoftness[12];   // PCF radius in cube texels (PointShadowMap::KernelTexels), 0 = hard (S2)
 uniform float uPointShadowWeight[12];     // 0..1: the slot's shadow fading in or out (GI Phase 1)
 layout(binding = 10) uniform samplerCubeArrayShadow uPointShadowMap;
 uniform float uPointShadowMapResolution; // known CPU-side (PointShadowMap::Configure) (#190)
@@ -633,6 +634,36 @@ float SpotShadow(int slot, vec3 worldPos, vec3 N) {
     return mix(1.0, vis * 0.25, uSpotShadowWeight[slot]);
 }
 
+// Point PCF (fix-3 S2): a rotated Poisson disk of radius `radiusW` (world units at the receiver) in the plane
+// perpendicular to the light->receiver direction `dir` (length d). Each tap compares against the distance from the
+// light to the RECEIVER'S PLANE along that tap's own direction (receiver-plane depth), not against d: a tilted wall
+// is then not shadowed by itself across the kernel, so no kernel-sized bias (and no peter-panning) is needed. Same
+// 4-probe early-out as SampleCascade: fully lit or fully shadowed pixels cost 4 taps, only the penumbra 16.
+float PointShadowPCF(int slot, vec3 dir, float d, vec3 N, float radiusW, float biasW, float far) {
+    vec3 w = dir / d;
+    vec3 t = normalize(cross(abs(w.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), w));
+    vec3 b = cross(w, t);
+    float rot = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
+    float s = sin(rot), co = cos(rot);
+    mat2 R = mat2(co, s, -s, co);
+    float pn = dot(dir, N); // light->receiver . N: < 0 for a light-facing receiver (callers pass nl >= 0.05)
+    float vis = 0.0;
+    for (int i = 0; i < 16; ++i) {
+        int k = (i < 4) ? i * 4 : ((i - 4) / 3) * 4 + 1 + (i - 4) % 3; // probes 0,4,8,12 first, then the rest
+        vec2 o = (R * kPoisson16[k]) * radiusW;
+        vec3 u = dir + t * o.x + b * o.y;
+        float un = dot(u, N);
+        // Receiver-plane distance along u: d * (pn / un) * |u| / d; clamp so a near-parallel tap can't run away.
+        float tPlane = (un < -1e-4) ? clamp(pn / un, 0.5, 2.0) * length(u) : d;
+        vis += texture(uPointShadowMap, vec4(u, float(slot)), (tPlane - biasW) / far);
+        if (i == 3) {
+            if (vis <= 0.0) return 0.0; // all 4 probes shadowed
+            if (vis >= 4.0) return 1.0; // all 4 probes lit
+        }
+    }
+    return vis / 16.0;
+}
+
 // Visibility from a point light's depth cube. 1 = lit, 0 = shadowed. Cube stores linear
 // distance / far, so this is a direct distance compare — no dominant-axis NDC reconstruction.
 float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N) {
@@ -648,8 +679,13 @@ float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N) {
     float d = length(dir);
     if (d >= far) return 1.0;                // past the shadow range
     // Texel-proportional, Range-independent depth bias — see SpotShadow (#134).
-    float ref = (d - texelW * (1.0 + 2.0 * (1.0 - nl)) * uPointShadowBias[slot]) / far;
-    return mix(1.0, texture(uPointShadowMap, vec4(dir, float(slot)), ref), uPointShadowWeight[slot]);
+    float biasW = texelW * (1.0 + 2.0 * (1.0 - nl)) * uPointShadowBias[slot];
+    float kernel = uPointShadowSoftness[slot];
+    // Softness 0 (or a grazing/back-facing receiver, which N.L already darkens): the old single hard compare.
+    if (kernel <= 0.0 || nl < 0.05)
+        return mix(1.0, texture(uPointShadowMap, vec4(dir, float(slot)), (d - biasW) / far), uPointShadowWeight[slot]);
+    return mix(1.0, PointShadowPCF(slot, dir, d, N, kernel * 2.0 * d / uPointShadowMapResolution, biasW, far),
+               uPointShadowWeight[slot]);
 }
 
 // Cook-Torrance contribution for one light direction L delivering `radiance` to the fragment.

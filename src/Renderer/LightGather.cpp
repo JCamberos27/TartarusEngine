@@ -295,6 +295,7 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
                 out.PointNear[slot] = std::max(lc.Shadow.NearPlane, 1e-3f);
                 out.PointBias[slot] = lc.Shadow.Bias;
                 out.PointNormalBias[slot] = lc.Shadow.NormalBias;
+                out.PointSoftness[slot] = lc.Shadow.Softness;
             }
             lightBuffer.AddPoint(pos, lc.Color, localIntensity, lc.Range, slot, ~(std::uint32_t)lc.CullingMask,
                                  lc.VolumetricIntensity); // #203

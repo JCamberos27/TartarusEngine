@@ -2033,6 +2033,7 @@ bool AppSession::Frame() {
     sceneInputs.pointShadowFar        = frameLights.PointFar;
     sceneInputs.pointShadowBias       = frameLights.PointBias;
     sceneInputs.pointShadowNormalBias = frameLights.PointNormalBias;
+    sceneInputs.pointShadowSoftness   = frameLights.PointSoftness;
     sceneInputs.pointShadowWeight     = frameLights.PointWeight;
     sceneInputs.shadowsEnabled   = world.Render.ShadowsEnabled;
     sceneInputs.ssaoEnabled      = world.Render.SsaoEnabled;

@@ -5,6 +5,11 @@
 #include <algorithm>
 #include <string>
 
+float PointShadowMap::KernelTexels(float softness) {
+    if (!(softness > 0.0f)) return 0.0f;
+    return std::clamp(softness * kKernelPerSoftness, kKernelMinTexels, kKernelMaxTexels);
+}
+
 void PointShadowMap::Configure(int resolution, int cubes) {
     resolution = std::clamp(resolution, 256, 2048);
     cubes = std::clamp(cubes, 1, kMaxPoints);
