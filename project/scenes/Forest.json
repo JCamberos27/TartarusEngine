@@ -387483,7 +387483,7 @@
         ],
         "ColorTempK": 0.0,
         "Culling Mask": -1,
-        "Intensity": 0.5,
+        "Intensity": 0.35,
         "Range": 7.570000171661377,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05000000074505806,
