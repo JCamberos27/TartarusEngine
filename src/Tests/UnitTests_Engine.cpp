@@ -1240,8 +1240,10 @@ void TestComponentRegistry() {
 
 } // namespace
 
-static constexpr size_t kSnapshotBytes = 28878;
-static constexpr std::uint64_t kSnapshotHash = 0x8f6b8763b0d778abull;
+// Re-pinned for Light "Bounds Fade -" / "Bounds Fade +" (per-face fade, two Vec3 per light: +396 bytes for the fixture's
+// 6 lights). Any other change to these numbers is a format change: say why.
+static constexpr size_t kSnapshotBytes = 29274;
+static constexpr std::uint64_t kSnapshotHash = 0x4fe4c65539bfdccbull;
 // The scene snapshot (SaveToString: every undo step and the scene open take one) must keep its
 // exact bytes when its builder changes: the undo history compares and diffs these strings, and
 // the files Save writes come from the same builder. A fixed scene - models sharing a few paths,
