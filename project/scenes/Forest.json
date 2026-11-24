@@ -409985,7 +409985,7 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Kitchen;Lamp_stand 19;Hall",
         "Fade": 0.10000000149011612,
-        "Intensity": 2.0,
+        "Intensity": 2.5,
         "Outside": true,
         "Size": [
           2.0499989986419678,
@@ -410020,7 +410020,7 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Kitchen;Hall",
         "Fade": 0.10000000149011612,
-        "Intensity": 2.0,
+        "Intensity": 3.448,
         "Outside": true,
         "Size": [
           2.0499985218048096,
@@ -410055,7 +410055,7 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Hall",
         "Fade": 0.10000000149011612,
-        "Intensity": 2.0,
+        "Intensity": 4.0,
         "Outside": true,
         "Size": [
           4.8629984855651855,
@@ -410125,7 +410125,7 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Hall",
         "Fade": 0.10000000149011612,
-        "Intensity": 2.0,
+        "Intensity": 5.263,
         "Outside": true,
         "Size": [
           1.1399999856948853,
@@ -410160,7 +410160,7 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Hall",
         "Fade": 0.10000000149011612,
-        "Intensity": 2.0,
+        "Intensity": 3.509,
         "Outside": true,
         "Size": [
           1.340000033378601,
@@ -410195,7 +410195,7 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Kitchen;Hall",
         "Fade": 0.10000000149011612,
-        "Intensity": 2.0,
+        "Intensity": 3.125,
         "Outside": true,
         "Size": [
           0.2250007688999176,
@@ -410230,7 +410230,7 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Downstairs bathroom",
         "Fade": 0.10000000149011612,
-        "Intensity": 2.0,
+        "Intensity": 2.941,
         "Outside": true,
         "Size": [
           2.922999858856201,
@@ -410265,7 +410265,7 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Downstairs bathroom",
         "Fade": 0.10000000149011612,
-        "Intensity": 2.0,
+        "Intensity": 3.448,
         "Outside": true,
         "Size": [
           2.5350005626678467,
@@ -410475,7 +410475,7 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Hall",
         "Fade": 0.10000000149011612,
-        "Intensity": 2.0,
+        "Intensity": 2.439,
         "Outside": true,
         "Size": [
           0.4399999976158142,
