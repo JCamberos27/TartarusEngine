@@ -11,6 +11,7 @@
 #include "Core/Env.h"
 #include "Core/FrameLoads.h"
 #include "Core/Paths.h"
+#include "Core/Profiler.h"
 #include "DecalSystem.h"
 #include "EditorLayer.h"
 #include "EditorSettings.h"
@@ -30,6 +31,8 @@
 #include "SamplingProfiler.h"
 #include "SceneRenderer.h"
 #include "SceneSerializer.h"
+#include "ShadowFrame.h"
+#include "ShadowLimits.h"
 #include "Tests/Cinematic.h"
 #include "Tests/FrameCapture.h"
 #include "Tests/SmokeChecks.h"
@@ -554,6 +557,39 @@ void SmokeHarness::GiTourLights(int waypoint) {
 
 // --gi-tour: called after each frame has presented. The frame just drawn showed timeline frame m_TourAt: take what that
 // frame asks for (a shot, a CSV row), then pose the camera for the next one. The first pose waits for streaming.
+// tour_perf.csv rows go out in frame order as their GPU times land (Profiler::GpuFrameScopes keeps the last few frames);
+// a row whose frame was never read back in time, or every row at the end (`all`), is written with -1 for those.
+void SmokeHarness::TourPerfFlush(bool all) {
+    if (!m_TourPerfCsv) return;
+    const unsigned now = Profiler::FrameSerial();
+    size_t done = 0;
+    for (; done < m_TourPerfPending.size(); ++done) {
+        const TourPerfRow& p = m_TourPerfPending[done];
+        const std::vector<Profiler::Entry>* gpu = Profiler::GpuFrameScopes(p.Serial);
+        if (!gpu && !all && now - p.Serial < 6) break; // not read back yet: wait (in order)
+        float total = -1.0f, point = -1.0f, spot = -1.0f, sun = -1.0f, depth = -1.0f, opaque = -1.0f, fog = -1.0f;
+        if (gpu) {
+            total = point = spot = sun = depth = opaque = fog = 0.0f;
+            for (const Profiler::Entry& e : *gpu) {
+                if (!e.Nested) total += e.Milliseconds;
+                if (e.Name == "Point Shadow Pass") point += e.Milliseconds;
+                else if (e.Name == "Spot Shadow Pass") spot += e.Milliseconds;
+                else if (e.Name == "Sun Shadow Pass") sun += e.Milliseconds;
+                else if (e.Name == "Depth Pre-pass") depth += e.Milliseconds;
+                else if (e.Name == "Opaque") opaque += e.Milliseconds;
+                else if (e.Name == "Volumetric Fog") fog += e.Milliseconds;
+            }
+        }
+        char buf[160];
+        std::snprintf(buf, sizeof(buf), "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f", p.WallMs, total, point, spot, sun, depth, opaque, fog);
+        *m_TourPerfCsv << p.TourFrame << "," << p.Mode << "," << GiTour::CsvField(p.Segment) << "," << buf << "," << p.SpotLive << ","
+                       << p.SpotStatic << "," << p.SpotDynamic << "," << p.SpotWhole << "," << p.PointLive << "," << p.PointStaticFaces
+                       << "," << p.PointDynamicFaces << "," << p.PointKeptFaces << "," << p.CasterDraws << "," << p.StaticCasterDraws
+                       << "," << m_Ctx.world.Render.MaxPointShadows << "\n";
+    }
+    m_TourPerfPending.erase(m_TourPerfPending.begin(), m_TourPerfPending.begin() + (std::ptrdiff_t)done);
+}
+
 void SmokeHarness::GiTourFrame() {
     namespace fs = std::filesystem;
     Camera& cam = m_Ctx.editorCamera;
@@ -569,6 +605,8 @@ void SmokeHarness::GiTourFrame() {
     auto finish = [&]() {
         m_TourCsv.reset();       // flushed and closed
         m_TourLightsCsv.reset();
+        TourPerfFlush(true);     // the last few frames' GPU times may never land: written without them
+        m_TourPerfCsv.reset();
         EditorSettings::Get().FRowLightDebug = m_TourSavedLightView;
         if (m_Ctx.giVolumes) m_Ctx.giVolumes->SetEnabled(true);
         m_TourDone = true;
@@ -606,6 +644,20 @@ void SmokeHarness::GiTourFrame() {
         }
         *m_TourCsv << GiTour::CsvHeader() << "\n";
         if (m_TourLightsCsv) *m_TourLightsCsv << "waypoint,room,light,entity,kind,circuit,on,shadow,intensity,range,distance,fade,slot\n";
+        // TARTARUS_TOUR_MAX_POINTS: this run's point-shadow budget (the 4 / 8 / 12 sweep), never saved (the tour
+        // saves nothing back).
+        if (Env::IsSet(Env::Var::TourMaxPoints)) {
+            m_Ctx.world.Render.MaxPointShadows = std::clamp(Env::Int(Env::Var::TourMaxPoints, 4), 0, ShadowLimits::kMaxPoints);
+            std::cout << "[GiTour] max point shadows: " << m_Ctx.world.Render.MaxPointShadows << " (TARTARUS_TOUR_MAX_POINTS)" << std::endl;
+        }
+        m_TourPerfPending.clear();
+        m_TourPerfCsv = std::make_unique<std::ofstream>(
+            fs::path(m_Opt.sceneBoundsOut) / (fullView ? "tour_perf.csv" : "tour_perf_" + m_Opt.giTourView + ".csv"), std::ios::binary);
+        *m_TourPerfCsv << "frame,mode,segment,wall_ms,gpu_total_ms,gpu_point_shadow_ms,gpu_spot_shadow_ms,gpu_sun_shadow_ms,"
+                          "gpu_depth_prepass_ms,gpu_opaque_ms,gpu_volumetric_ms,spot_live,spot_static_redraws,spot_dynamic_passes,"
+                          "spot_whole_redraws,point_live,point_static_faces,point_dynamic_faces,point_kept_faces,caster_draws,"
+                          "static_caster_draws,max_point_shadows\n";
+        if (m_Ctx.lightGather) m_Ctx.lightGather->RequestSnap(); // from wherever the scene opened
         pose(m_TourFrames[0]);
         return;
     }
@@ -691,12 +743,36 @@ void SmokeHarness::GiTourFrame() {
         m_TourLastHash = row.SlotHash;
         *m_TourCsv << GiTour::CsvLine(row) << "\n";
     }
+    // tour_perf.csv: this frame's local-shadow redraws now; its GPU pass times when they land (TourPerfFlush).
+    if (m_TourPerfCsv) {
+        const unsigned serial = Profiler::FrameSerial();
+        for (TourPerfRow& p : m_TourPerfPending) // the wall time Profiler measured for the frame before this one
+            if (p.Serial + 1 == serial) p.WallMs = Profiler::LastFrameWallMs();
+        TourPerfRow row;
+        row.Serial = serial;
+        row.TourFrame = m_TourAt;
+        row.Mode = f.Kind == GiTour::Step::Walk ? "walk" : f.Kind == GiTour::Step::Still ? "still" : "other";
+        row.Segment = f.Segment;
+        if (m_Ctx.shadowFrame) {
+            const ShadowFrame::LocalStats& s = m_Ctx.shadowFrame->LastLocalStats();
+            row.SpotLive = s.SpotLive; row.SpotStatic = s.SpotStaticRedraws; row.SpotDynamic = s.SpotDynamicPasses;
+            row.SpotWhole = s.SpotWholeRedraws; row.PointLive = s.PointLive; row.PointStaticFaces = s.PointStaticFaces;
+            row.PointDynamicFaces = s.PointDynamicFaces; row.PointKeptFaces = s.PointKeptFaces;
+            row.CasterDraws = s.CasterDraws; row.StaticCasterDraws = s.StaticCasterDraws;
+        }
+        m_TourPerfPending.push_back(std::move(row));
+        TourPerfFlush(false);
+    }
     if (++m_TourAt >= (int)m_TourFrames.size()) {
         std::cout << "[GiTour] done: " << m_TourFrames.size() << " frame(s) -> " << m_Opt.sceneBoundsOut << std::endl;
         finish();
         return;
     }
-    pose(m_TourFrames[m_TourAt]);
+    // A jump (a cut waypoint, a route's first point): anything but a walk that moves the eye. The next frame is a cut,
+    // so its shadows snap instead of fading in from the last place (the holds must not start mid-fade).
+    const GiTour::Frame& next = m_TourFrames[m_TourAt];
+    if (m_Ctx.lightGather && next.Kind != GiTour::Step::Walk && next.Eye != f.Eye) m_Ctx.lightGather->RequestSnap();
+    pose(next);
     // Only a start held the full 3000 frames runs past the budget: keep it going to the tour's end.
     if (m_FramesRendered >= m_FrameBudget - 1) m_FrameBudget = m_FramesRendered + 2;
 }

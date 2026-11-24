@@ -54,11 +54,13 @@ uniform mat4 uSpotShadowVP[16];
 uniform vec3 uSpotShadowPos[16];
 uniform float uSpotShadowFar[16];
 uniform float uSpotShadowHalfTan[16];
+uniform float uSpotShadowWeight[16]; // 0..1: the slot's shadow fading in or out (LightGather, GI Phase 1)
 uniform float uSpotShadowMapResolution;
 layout(binding = 9) uniform sampler2DArrayShadow uSpotShadowMap;
 
 uniform int   uPointShadowCount;
-uniform float uPointShadowFar[8];
+uniform float uPointShadowFar[12];
+uniform float uPointShadowWeight[12];
 uniform float uPointShadowMapResolution;
 layout(binding = 10) uniform samplerCubeArrayShadow uPointShadowMap;
 
@@ -94,7 +96,7 @@ float SpotShadow(int slot, vec3 p) {
     float d = distance(p, uSpotShadowPos[slot]);
     if (d >= far) return 1.0;
     float texelW = 2.0 * d * uSpotShadowHalfTan[slot] / uSpotShadowMapResolution;
-    return texture(uSpotShadowMap, vec4(sp.xy, float(slot), (d - 1.5 * texelW) / far));
+    return mix(1.0, texture(uSpotShadowMap, vec4(sp.xy, float(slot), (d - 1.5 * texelW) / far)), uSpotShadowWeight[slot]);
 }
 
 float PointShadow(int slot, vec3 p, vec3 lightPos) {
@@ -104,7 +106,7 @@ float PointShadow(int slot, vec3 p, vec3 lightPos) {
     float d = length(dir);
     if (d >= far) return 1.0;
     float texelW = 2.0 * d / uPointShadowMapResolution;
-    return texture(uPointShadowMap, vec4(dir, float(slot)), (d - 1.5 * texelW) / far);
+    return mix(1.0, texture(uPointShadowMap, vec4(dir, float(slot)), (d - 1.5 * texelW) / far), uPointShadowWeight[slot]);
 }
 
 // The light a point or spot light delivers to p, already scattered toward the eye (V points from
