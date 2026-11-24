@@ -405248,6 +405248,51 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Kitchen;Lamp_stand 19",
         "Fade": 0.10000000149011612,
+        "Fade Max": [
+          0.30000001192092896,
+          0.0,
+          0.0
+        ],
+        "Fade Min": [
+          0.30000001192092896,
+          0.0,
+          0.0
+        ],
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          0.870000422000885,
+          2.809999942779541,
+          2.1500000953674316
+        ],
+        "Spacing": 0.5
+      },
+      "id": 38112,
+      "name": "GI bridge kitchen-dining 1-dining bay",
+      "order": 160018,
+      "parentId": 35585,
+      "position": [
+        -27.315000534057617,
+        2.0399999618530273,
+        -10.174999237060547
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen;Lamp_stand 19",
+        "Fade": 0.10000000149011612,
         "Fade Min": [
           0.27000001072883606,
           0.0,
