@@ -686,8 +686,8 @@ float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float texelW
         vis += v * kTentW[g.x] * kTentW[g.y] * (1.0 / 64.0);
         if (i == 3) { // 4 corners (4/64 of the weight) + the centre all lit or all shadowed -> no edge in reach. The centre
                       // keeps a caster narrower than the corners' 3h spread (rails, chandelier arms) from vanishing.
-            if (vis <= 0.0 && centre <= 0.0) return 0.0;
-            if (vis >= 4.0 / 64.0 - 1e-6 && centre >= 1.0) return 1.0;
+            if (vis <= 1e-6 && centre <= 0.001) return 0.0; // hardware compare weights can round off 0 / 1
+            if (vis >= 4.0 / 64.0 - 1e-6 && centre >= 0.999) return 1.0;
         }
     }
     return vis;

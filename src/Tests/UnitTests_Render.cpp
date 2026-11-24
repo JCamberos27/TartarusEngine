@@ -933,7 +933,7 @@ void ShaderConstantsMatch() {
     CHECK(has(shading, "float soft = kernel > 0.0 ? smoothstep(0.03, 0.10, nlG) : 0.0;"));
     CHECK(has(shading, "bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance)"));
     CHECK(has(shading, "float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float texelW, float kernel, float biasW, float far) {"));
-    // Tent PCF: 4x4 grid, binomial weights, spacing <= 2 texels (continuous penumbra: no bands, no grain).
+    // Tent PCF: 4x4 grid, binomial weights, spacing <= 1 texel (continuous penumbra: no bands, no grain).
     CHECK(has(shading, "float h = clamp((kernel - 1.0) / 1.5, 0.0, 1.0) * texelW;")); // taps <= 1 texel apart
     CHECK(has(shading, "const float kTentW[4] = float[](1.0, 3.0, 3.0, 1.0);"));
     // fix-3 spot PCF: SpotShadow takes the geometric normal and the shared PCF (kind 1).
