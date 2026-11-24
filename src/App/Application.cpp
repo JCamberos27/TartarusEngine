@@ -280,7 +280,11 @@ public:
     bool Frame();
     int Finish();
     // The frame loop hit an exception: Play reverted and a recovery snapshot written while the editor and world exist.
-    void EmergencyRecoverySave() { if (!headless) editor.EmergencyRecoverySave(world, assets); }
+    void EmergencyRecoverySave() {
+        // A --bake-gi mid-bake: the lights, sky, switches and doors as loaded (the posed doors never reach the file).
+        if (giBaker && giBaker->DoorsPosed()) giBaker->Abort(world, "exception");
+        if (!headless) editor.EmergencyRecoverySave(world, assets);
+    }
 
 private:
     // Runs a statement at its place in the member order.
@@ -288,6 +292,7 @@ private:
         template <typename F> explicit Step(F&& f) { f(); }
     };
     void ShutdownEditor() {
+        if (giBaker) giBaker->RestoreDoors(world); // a bake closed before Finish leaves no posed door behind
         editor.Shutdown();
         editorModule.Shutdown();
         AppAudioMuter::Shutdown();
@@ -1762,6 +1767,7 @@ bool AppSession::Frame() {
     { PROFILE_SCOPE("Asset Pump"); assets.PumpAsync(AssetLibrary::PumpBudgetMs(playing, OutfitSystem::AnyPending(), lastFrameWorkMs)); }
     { PROFILE_SCOPE("Outfit Pending");
       // #15 - an edit made without an undo step stays its own step, not part of the baseline the landing makes.
+      // (Not while --bake-gi has the doors posed: the editor checks Openable::BakePosed itself.)
       if (!playerMode && OutfitSystem::LandingDue(world)) editor.JournalBeforeOutfitLanding(world);
       OutfitSystem::UpdatePending(world, assets); }
     { PROFILE_SCOPE("Outfit Hiding"); OutfitSystem::UpdateHiding(world); } // outfit skin under clothing (only when an outfit's pieces changed)
@@ -2105,6 +2111,9 @@ bool AppSession::Frame() {
                 GIBaker::Options bo;
                 bo.Only = opt.bakeGiOnly;
                 bo.PinClocks = giPinClocks;
+                bo.DoorPose = opt.bakeGiDoors == "open"   ? GIBaker::Options::Doors::Open
+                            : opt.bakeGiDoors == "shut" ? GIBaker::Options::Doors::Shut
+                                                        : GIBaker::Options::Doors::Start;
                 bo.Emissive = Env::Float(Env::Var::GiBakeEmissive, bo.Emissive); // (a malformed value keeps the default)
                 bo.Bounces = Env::Int(Env::Var::GiBakeBounces, bo.Bounces);
                 if (Env::Flag(Env::Var::GiBakeTrace))
