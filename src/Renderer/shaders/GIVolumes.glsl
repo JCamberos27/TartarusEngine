@@ -5,7 +5,8 @@
 #define GI_MAX_VOLUMES 64
 struct GIVolume {
     vec4 BoxX, BoxY, BoxZ; // world -> box rows: xyz unit axis, w = -dot(axis, centre)
-    vec4 HalfFade;         // xyz half extents, w fade metres
+    vec4 HalfFade;         // xyz half extents, w fade metres (the volume's base Fade)
+    vec4 FadeLo, FadeHi;   // xyz the fade of the -x/-y/-z faces, of the +x/+y/+z faces (box-local axes)
     vec4 Dims;             // xyz probe counts, w 1 = lit (the layers are mixed into one brick on the CPU), 0 = dark
     vec4 Params;           // x intensity, y replaces the sky's ambient, z normal bias (m)
     vec4 Brick;            // xyz brick origin in the atlas (texels)
@@ -52,8 +53,10 @@ vec3 SampleGI(vec3 p, vec3 n, out float fade, out float replaceSky) {
                       dot(uGIVolumes[v].BoxZ.xyz, pb) + uGIVolumes[v].BoxZ.w);
         vec4 hf = uGIVolumes[v].HalfFade;
         vec3 in3 = hf.xyz - abs(q);
-        float m = min(in3.x, min(in3.y, in3.z));
-        float f = hf.w > 0.0 ? clamp(m / hf.w, 0.0, 1.0) : (m >= 0.0 ? 1.0 : 0.0);
+        // A fade per face (GI::Box::FadeFaces): the face a point is nearest on its side of the centre; 0 = a hard edge.
+        vec3 fd = mix(uGIVolumes[v].FadeLo.xyz, uGIVolumes[v].FadeHi.xyz, step(vec3(0.0), q));
+        vec3 fv = mix(vec3(greaterThanEqual(in3, vec3(0.0))), clamp(in3 / max(fd, vec3(1e-6)), 0.0, 1.0), greaterThan(fd, vec3(0.0)));
+        float f = min(fv.x, min(fv.y, fv.z));
         if (f <= 0.0) continue;
         vec3 dims = uGIVolumes[v].Dims.xyz;
         // Probe-grid coordinate 0..dims-1 (probes sit on the faces), +0.5 to the texel centre.
