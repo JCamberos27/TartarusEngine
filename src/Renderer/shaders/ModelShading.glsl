@@ -646,7 +646,7 @@ float PointShadowPCF(int slot, vec3 dir, float d, vec3 N, float radiusW, float b
     float rot = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
     float s = sin(rot), co = cos(rot);
     mat2 R = mat2(co, s, -s, co);
-    float pn = dot(dir, N); // light->receiver . N: < 0 for a light-facing receiver (callers pass nl >= 0.05)
+    float pn = dot(dir, N); // light->receiver . N (the geometric normal): < 0 here (callers blend in at N.L >= 0.03)
     float vis = 0.0;
     for (int i = 0; i < 16; ++i) {
         int k = (i < 4) ? i * 4 : ((i - 4) / 3) * 4 + 1 + (i - 4) % 3; // probes 0,4,8,12 first, then the rest
@@ -666,7 +666,7 @@ float PointShadowPCF(int slot, vec3 dir, float d, vec3 N, float radiusW, float b
 
 // Visibility from a point light's depth cube. 1 = lit, 0 = shadowed. Cube stores linear
 // distance / far, so this is a direct distance compare — no dominant-axis NDC reconstruction.
-float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N) {
+float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N, vec3 geoN) {
     if (slot < 0 || slot >= uPointShadowCount || uNoReceiveShadows == 1) return 1.0;
     float far = max(uPointShadowFar[slot], 1e-3);
     // Same as SpotShadow: the cube pass stores the light-facing surface (back-face cull), so the
@@ -681,11 +681,16 @@ float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N) {
     // Texel-proportional, Range-independent depth bias — see SpotShadow (#134).
     float biasW = texelW * (1.0 + 2.0 * (1.0 - nl)) * uPointShadowBias[slot];
     float kernel = uPointShadowSoftness[slot];
-    // Softness 0 (or a grazing/back-facing receiver, which N.L already darkens): the old single hard compare.
-    if (kernel <= 0.0 || nl < 0.05)
-        return mix(1.0, texture(uPointShadowMap, vec4(dir, float(slot)), (d - biasW) / far), uPointShadowWeight[slot]);
-    return mix(1.0, PointShadowPCF(slot, dir, d, N, kernel * 2.0 * d / uPointShadowMapResolution, biasW, far),
-               uPointShadowWeight[slot]);
+    // The receiver plane is the GEOMETRIC surface (geoN): a normal map's per-texel N would tilt each tap's plane and
+    // make the PCF noisy on bumpy walls. A receiver that grazes the light (geometric N.L < 0.10) blends to the single
+    // hard compare by 0.03 (the plane math degenerates there and N.L already darkens it), with no visible switch.
+    float nlG = dot(geoN, toLight / max(d0, 1e-4));
+    float soft = kernel > 0.0 ? smoothstep(0.03, 0.10, nlG) : 0.0;
+    float vis = 1.0;
+    if (soft < 1.0) vis = texture(uPointShadowMap, vec4(dir, float(slot)), (d - biasW) / far);
+    if (soft > 0.0)
+        vis = mix(vis, PointShadowPCF(slot, dir, d, geoN, kernel * 2.0 * d / uPointShadowMapResolution, biasW, far), soft);
+    return mix(1.0, vis, uPointShadowWeight[slot]);
 }
 
 // Cook-Torrance contribution for one light direction L delivering `radiance` to the fragment.
@@ -707,7 +712,7 @@ vec3 ShadeLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, vec3 F0,
 // range / outside the cone / shadowed); otherwise L and the radiance that reaches here. Every lobe a
 // material shades (base, clear coat, sheen, subsurface) takes these, so the falloff and the shadow
 // fetch happen once per light, not once per lobe.
-bool PointSpotLight(uint i, vec3 N, out vec3 L, out vec3 radiance) {
+bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance) {
     Light lt = uLights[i];
     int type = int(lt.PositionType.w);
     L = vec3(0.0);
@@ -735,12 +740,15 @@ bool PointSpotLight(uint i, vec3 N, out vec3 L, out vec3 radiance) {
         atten *= SpotShadow(int(lt.Params.y), vWorldPos, N); // #119
     } else {
         if (atten <= 0.0) return false;
-        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N); // #119
+        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N, geoN); // #119
     }
     if (atten <= 0.0) return false;
     radiance = lt.ColorRange.rgb * atten;
     return true;
 }
+
+// Callers without a separate geometric normal (grass, fur, sprites, impostors: no normal maps) use N for both.
+bool PointSpotLight(uint i, vec3 N, out vec3 L, out vec3 radiance) { return PointSpotLight(i, N, N, L, radiance); }
 
 // Full shading for one point or spot light: its Lo contribution, or zero. The decal and sprite
 // shaders' clustered loops use it; the model shader runs PointSpotLight itself and shades each lobe.
