@@ -1,8 +1,8 @@
 # Briareos look tools (W6, Descent team, 2026-11-24)
 
 Text-only copy of the sweep / look-sheet tooling from the girlfriend's PC (desktop-gqko56v), where the team folder
-`D:\Jacob\tblocks\descent\` is NOT in git. No PNGs here. Paths inside the scripts are that PC's (`D:\Jacob\tblocks\descent\...`,
-the GPU runner worktree `wt-gpu`): on another machine, edit the path constants at the top of each script.
+`D:\Jacob\tblocks\descent\` is NOT in git. No PNGs here. Scripts take their locations from arguments / env vars: `DESCENT_ROOT` = the team folder
+(default `D:\Jacob\tblocks\descent`), `DESCENT_RUNNER` = the worktree whose `build\Release` runs the engine (default `<root>\wt-gpu`).
 `../FOUND_ISSUES.md` is a copy of the issue log (`house-polish\FOUND_ISSUES.md`) as of this commit.
 
 ## OPEN: Jacob #2 (hall -> bathroom doorway wall blotch) is NOT verified
