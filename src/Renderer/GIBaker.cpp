@@ -1,6 +1,7 @@
 #include "GIBaker.h"
 
 #include "GIVolumes.h"
+#include "Model.h"
 #include "HdrTarget.h"
 #include "ReflectionProbeCapture.h"
 #include "RenderFrameContext.h"
