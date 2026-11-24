@@ -30,7 +30,8 @@ void BoundLight(LightBuffer& buffer, World& world, entt::entity e, const LightCo
         axes[i] = s > 1e-8f ? col / s : glm::vec3(i == 0, i == 1, i == 2);
         half[i] = 0.5f * std::abs(lc.BoundsSize[i]) * (s > 1e-8f ? s : 1.0f);
     }
-    buffer.BoundLast(axes, glm::vec3(parent * glm::vec4(lc.BoundsCenter, 1.0f)), half, lc.BoundsFade);
+    buffer.BoundLast(axes, glm::vec3(parent * glm::vec4(lc.BoundsCenter, 1.0f)), half, lc.BoundsFade, lc.BoundsFadeNeg,
+                     lc.BoundsFadePos);
 }
 }
 

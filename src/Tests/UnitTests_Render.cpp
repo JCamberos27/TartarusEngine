@@ -64,6 +64,26 @@ void SmallObjectCull() {
     CHECK(!TooSmallOnScreen(lo, hi, glm::vec3(0, 0, 30), 4.0f, 0.004f));
 }
 
+// LightBuffer::BoxWeight (CPU mirror of LightBuffer.glsl LightBoxFade): uniform fade = the old single-fade result;
+// a per-face fade only changes its own face (Bounds Fade - / Bounds Fade +).
+void LightBoundsFaceFade() {
+    const glm::vec3 half(2.0f, 1.0f, 3.0f), f(0.05f);
+    CHECK(LightBuffer::BoxWeight(glm::vec3(0.0f), half, f, f) == 1.0f);
+    CHECK(LightBuffer::BoxWeight(glm::vec3(2.0f, 0, 0), half, f, f) == 0.0f);             // on the +x face
+    CHECK(std::abs(LightBuffer::BoxWeight(glm::vec3(-1.975f, 0, 0), half, f, f) - 0.5f) < 1e-3f); // half way in
+    // +x face widened to 1 m: 0.5 m inside it is half lit; the -x face keeps its 5 cm fade.
+    const glm::vec3 fp(1.0f, 0.05f, 0.05f);
+    CHECK(std::abs(LightBuffer::BoxWeight(glm::vec3(1.5f, 0, 0), half, f, fp) - 0.5f) < 1e-3f);
+    CHECK(LightBuffer::BoxWeight(glm::vec3(-1.5f, 0, 0), half, f, fp) == 1.0f);
+    CHECK(LightBuffer::BoxWeight(glm::vec3(0, 0, 2.99f), half, f, fp) < 0.21f);            // z faces untouched
+    // BoundLast: < 0 = the light's Bounds Fade, else the face's own (>= 1 mm).
+    LightBuffer lb;
+    lb.AddPoint(glm::vec3(0.0f), glm::vec3(1.0f), 1.0f, 5.0f);
+    lb.BoundLast(glm::mat3(1.0f), glm::vec3(0.0f), half, 0.05f, glm::vec3(-1.0f, 0.3f, -1.0f), glm::vec3(0.0f, -1.0f, -1.0f));
+    CHECK(lb.FaceFadeOfLast(false) == glm::vec3(0.05f, 0.3f, 0.05f));
+    CHECK(lb.FaceFadeOfLast(true) == glm::vec3(1e-3f, 0.05f, 0.05f));
+}
+
 // LightBuffer::DistanceFade: full strength near and inside the range sphere, a smooth monotonic fall by projected
 // size, nothing once the sphere is a few pixels; the same at any distance for the same size.
 void LightDistanceFade() {
@@ -2361,6 +2381,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Reflection probe captures + puddle SSR setting", ProbeCaptureAndPuddleSsr});
     tests.push_back({"Small-object cull: projected bounding-sphere height", SmallObjectCull});
     tests.push_back({"Light distance fade: by projected size, smooth, then dropped", LightDistanceFade});
+    tests.push_back({"Light bounds: per-face fade (Bounds Fade - / +), uniform = the old single fade", LightBoundsFaceFade});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
     tests.push_back({"GatherPatch", GatherPatch});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
