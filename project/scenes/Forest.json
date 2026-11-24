@@ -390745,7 +390745,7 @@
           2.815000057220459,
           7.599999904632568
         ],
-        "Cast Shadows": true,
+        "Cast Shadows": false,
         "Color": [
           1.0,
           0.8600000143051147,
@@ -391437,6 +391437,478 @@
         "Angular Size": 0.5299999713897705,
         "Bounds": true,
         "Bounds Center": [
+          -37.53900146484375,
+          4.947000026702881,
+          10.1850004196167
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          2.4379992485046387,
+          2.815000057220459,
+          3.990000009536743
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.6000000238418579,
+        "Range": 4.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Closet",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36375,
+      "name": "Ceiling Closet",
+      "order": 145815,
+      "parentId": 35585,
+      "position": [
+        -37.599998474121094,
+        6.045000076293945,
+        10.699999809265137
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -35.84149932861328,
+          4.947000026702881,
+          -13.77400016784668
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          5.8329997062683105,
+          2.815000057220459,
+          3.4080004692077637
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.6000000238418579,
+        "Range": 4.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Box room",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36374,
+      "name": "Ceiling Box room",
+      "order": 145814,
+      "parentId": 35585,
+      "position": [
+        -35.79999923706055,
+        6.045000076293945,
+        -13.800000190734863
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -35.76900100708008,
+          4.947000026702881,
+          -9.942500114440918
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          5.97799825668335,
+          2.815000057220459,
+          4.474999904632568
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.699999988079071,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Master bedroom",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36373,
+      "name": "Ceiling Master bedroom",
+      "order": 145813,
+      "parentId": 35585,
+      "position": [
+        -36.599998474121094,
+        6.045000076293945,
+        -10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -32.54349899291992,
+          2.0380001068115234,
+          5.577499866485596
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          2.9230003356933594,
+          2.815000057220459,
+          4.475000381469727
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.6000000238418579,
+        "Range": 4.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Downstairs bathroom",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36372,
+      "name": "Ceiling Downstairs bathroom",
+      "order": 145812,
+      "parentId": 35585,
+      "position": [
+        -32.5,
+        3.174999952316284,
+        5.099999904632568
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -36.32400131225586,
+          2.0380001068115234,
+          9.166500091552734
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          4.868000030517578,
+          2.815000057220459,
+          8.743000030517578
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.699999988079071,
+        "Range": 4.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36370,
+      "name": "Ceiling Living room",
+      "order": 145810,
+      "parentId": 35585,
+      "position": [
+        -36.29999923706055,
+        3.174999952316284,
+        5.800000190734863
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -37.29650115966797,
+          2.0380001068115234,
+          -5.335000038146973
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          2.922999858856201,
+          2.815000057220459,
+          4.960000038146973
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.6000000238418579,
+        "Range": 4.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Storeroom",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36369,
+      "name": "Ceiling Storeroom",
+      "order": 145809,
+      "parentId": 35585,
+      "position": [
+        -37.29999923706055,
+        3.174999952316284,
+        -5.300000190734863
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -36.326499938964844,
+          2.0380001068115234,
+          -1.3050000667572021
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          4.8629984855651855,
+          2.815000057220459,
+          3.320000171661377
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.6000000238418579,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Hall",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36368,
+      "name": "Ceiling Back hall",
+      "order": 145808,
+      "parentId": 35585,
+      "position": [
+        -36.599998474121094,
+        3.174999952316284,
+        -1.399999976158142
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -34.91999816894531,
+          2.0380001068115234,
+          -5.150000095367432
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          2.0500025749206543,
+          2.815000057220459,
+          5.539999961853027
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.6000000238418579,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Hall",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36367,
+      "name": "Ceiling Back hall",
+      "order": 145807,
+      "parentId": 35585,
+      "position": [
+        -34.900001525878906,
+        3.174999952316284,
+        -4.300000190734863
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
           -32.29999923706055,
           4.947000026702881,
           -2.6600000858306885
@@ -391506,7 +391978,7 @@
           2.815000057220459,
           5.239999771118164
         ],
-        "Cast Shadows": true,
+        "Cast Shadows": false,
         "Color": [
           1.0,
           0.8600000143051147,
@@ -391643,7 +392115,7 @@
         "Volumetric Intensity": 0.0
       },
       "Light Circuit": {
-        "Circuit": "Stairs",
+        "Circuit": "Upper hall",
         "Glow": 0.0,
         "Glow When Off": false
       },
@@ -391742,7 +392214,7 @@
           2.815000057220459,
           6.190000057220459
         ],
-        "Cast Shadows": true,
+        "Cast Shadows": false,
         "Color": [
           1.0,
           0.8600000143051147,
@@ -391791,6 +392263,65 @@
         "Angular Size": 0.5299999713897705,
         "Bounds": true,
         "Bounds Center": [
+          -34.923030853271484,
+          2.0380001068115234,
+          10.621500015258789
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          7.669935703277588,
+          2.815000057220459,
+          5.8329997062683105
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2700.0,
+        "Culling Mask": -1,
+        "Intensity": 0.5,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Lamp_stand 14",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36371,
+      "name": "Lamp_stand Lamp_stand 14",
+      "order": 145811,
+      "parentId": 35585,
+      "position": [
+        -32.94734573364258,
+        0.8700301647186279,
+        9.879916191101074
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
           -30.110000610351563,
           4.947000026702881,
           -10.960000038146973
@@ -391801,7 +392332,7 @@
           2.815000057220459,
           6.119999885559082
         ],
-        "Cast Shadows": true,
+        "Cast Shadows": false,
         "Color": [
           1.0,
           0.03500000014901161,
@@ -391860,7 +392391,7 @@
           2.815000057220459,
           5.230000019073486
         ],
-        "Cast Shadows": true,
+        "Cast Shadows": false,
         "Color": [
           1.0,
           0.8600000143051147,
@@ -391919,7 +392450,7 @@
           2.815000057220459,
           6.119999885559082
         ],
-        "Cast Shadows": true,
+        "Cast Shadows": false,
         "Color": [
           1.0,
           0.03500000014901161,
@@ -391978,7 +392509,7 @@
           2.815000057220459,
           5.670000076293945
         ],
-        "Cast Shadows": true,
+        "Cast Shadows": false,
         "Color": [
           1.0,
           0.8600000143051147,
@@ -392037,7 +392568,7 @@
           5.724999904632568,
           5.849999904632568
         ],
-        "Cast Shadows": true,
+        "Cast Shadows": false,
         "Color": [
           1.0,
           0.8600000143051147,
@@ -392096,7 +392627,7 @@
           2.815000057220459,
           6.119999885559082
         ],
-        "Cast Shadows": true,
+        "Cast Shadows": false,
         "Color": [
           1.0,
           0.03500000014901161,
@@ -392155,7 +392686,7 @@
           2.815000057220459,
           7.599999904632568
         ],
-        "Cast Shadows": true,
+        "Cast Shadows": false,
         "Color": [
           1.0,
           0.8600000143051147,
@@ -392221,7 +392752,7 @@
           2.815000057220459,
           7.599999904632568
         ],
-        "Cast Shadows": true,
+        "Cast Shadows": false,
         "Color": [
           1.0,
           0.8600000143051147,
@@ -392280,7 +392811,7 @@
           2.815000057220459,
           3.0399999618530273
         ],
-        "Cast Shadows": true,
+        "Cast Shadows": false,
         "Color": [
           1.0,
           0.8600000143051147,
@@ -409509,7 +410040,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Living room;Lamp_table_A 15",
+        "Circuits": "Living room;Lamp_table_A 15;Lamp_stand 14",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -409544,7 +410075,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Living room;Lamp_table_A 15",
+        "Circuits": "Living room;Lamp_table_A 15;Lamp_stand 14",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -409614,7 +410145,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Living room;Lamp_table_A 15",
+        "Circuits": "Living room;Lamp_table_A 15;Lamp_stand 14",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -409859,7 +410390,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Kitchen",
+        "Circuits": "Kitchen;Storeroom",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -409999,7 +410530,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Circuits": "Kitchen;Lamp_stand 19;Hall",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -410034,7 +410565,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Circuits": "Kitchen;Hall",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -410069,7 +410600,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Circuits": "Hall",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -410139,7 +410670,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Circuits": "Hall",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -410174,7 +410705,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Circuits": "Hall",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -410209,7 +410740,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Circuits": "Kitchen;Hall",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -410804,7 +411335,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Stairs",
+        "Circuits": "Stairs;Upper hall",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -411014,7 +411545,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Master bedroom",
+        "Circuits": "Box room",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -411154,7 +411685,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Child's bedroom",
+        "Circuits": "Child's bedroom;Closet",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -411189,7 +411720,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Stairs",
+        "Circuits": "Stairs;Lamp_table_A 16",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -1097420,7 +1097951,7 @@
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.5,
         "Start Ajar": 0.0,
-        "Start Open": true,
+        "Start Open": false,
         "Swing Back": false
       },
       "Rigidbody": {
@@ -1097568,7 +1098099,7 @@
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.5,
         "Start Ajar": 0.0,
-        "Start Open": true,
+        "Start Open": false,
         "Swing Back": false
       },
       "Rigidbody": {
@@ -1097790,7 +1098321,7 @@
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.5,
         "Start Ajar": 0.0,
-        "Start Open": true,
+        "Start Open": false,
         "Swing Back": false
       },
       "Rigidbody": {
@@ -1097863,8 +1098394,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.5,
-        "Start Ajar": 0.3499999940395355,
-        "Start Open": true,
+        "Start Ajar": 0.0,
+        "Start Open": false,
         "Swing Back": false
       },
       "Rigidbody": {
@@ -1098012,7 +1098543,7 @@
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.5,
         "Start Ajar": 0.0,
-        "Start Open": true,
+        "Start Open": false,
         "Swing Back": false
       },
       "Rigidbody": {
@@ -1122805,6 +1123336,375 @@
     },
     {
       "Light Switch": {
+        "Circuit": "Box room",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
+        "Rocker": "Rocker",
+        "Rocker Angle": 12.0,
+        "Start On": true
+      },
+      "castShadows": 0,
+      "collider": {
+        "center": [
+          0.004999999888241291,
+          0.0,
+          0.0
+        ],
+        "halfExtents": [
+          0.004999999888241291,
+          0.05700000002980232,
+          0.03500000014901161
+        ],
+        "isTrigger": false
+      },
+      "id": 36363,
+      "materials": [
+        {
+          "guid": "eadd7d2c70ee0323",
+          "path": "assets/Props/Electrical/Materials/M_Light_Switch_White.mat"
+        }
+      ],
+      "name": "Light Switch Box room",
+      "order": 145803,
+      "parentId": 35585,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
+      "pathGuid": "b728d9b29761e7a3",
+      "position": [
+        -35.154998779296875,
+        4.735000133514404,
+        -12.225000381469727
+      ],
+      "rotation": [
+        0.0,
+        0.7071070075035095,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Box room",
+        "Glow": 1.0,
+        "Glow When Off": true
+      },
+      "castShadows": 0,
+      "id": 36364,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Base_Color.png",
+              "pathGuid": "7c641d5fd5757e19"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              1.0,
+              0.33000001311302185,
+              0.07000000029802322
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.6000000238418579,
+            "factorsScaleMaps": true,
+            "metallic": 1.0,
+            "metallicMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Metallic.png",
+              "pathGuid": "42d315d33a607413"
+            },
+            "metallicRoughnessMap": "",
+            "normalMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Normal.png",
+              "pathGuid": "afbb29b41c598802"
+            },
+            "roughness": 1.0,
+            "roughnessMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Roughness.png",
+              "pathGuid": "e3ae94b188237842"
+            },
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Rocker",
+      "order": 145804,
+      "parentId": 36363,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Rocker.fbx",
+      "pathGuid": "db71fc6b96718fde",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Switch": {
+        "Circuit": "Living room",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
+        "Rocker": "Rocker",
+        "Rocker Angle": 12.0,
+        "Start On": true
+      },
+      "castShadows": 0,
+      "collider": {
+        "center": [
+          0.004999999888241291,
+          0.0,
+          0.0
+        ],
+        "halfExtents": [
+          0.004999999888241291,
+          0.05700000002980232,
+          0.03500000014901161
+        ],
+        "isTrigger": false
+      },
+      "id": 36357,
+      "materials": [
+        {
+          "guid": "eadd7d2c70ee0323",
+          "path": "assets/Props/Electrical/Materials/M_Light_Switch_White.mat"
+        }
+      ],
+      "name": "Light Switch Living room",
+      "order": 145797,
+      "parentId": 35585,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
+      "pathGuid": "b728d9b29761e7a3",
+      "position": [
+        -31.940000534057617,
+        1.8350000381469727,
+        13.383000373840332
+      ],
+      "rotation": [
+        0.0,
+        0.7071070075035095,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 1.0,
+        "Glow When Off": true
+      },
+      "castShadows": 0,
+      "id": 36358,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Base_Color.png",
+              "pathGuid": "7c641d5fd5757e19"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              1.0,
+              0.33000001311302185,
+              0.07000000029802322
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.6000000238418579,
+            "factorsScaleMaps": true,
+            "metallic": 1.0,
+            "metallicMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Metallic.png",
+              "pathGuid": "42d315d33a607413"
+            },
+            "metallicRoughnessMap": "",
+            "normalMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Normal.png",
+              "pathGuid": "afbb29b41c598802"
+            },
+            "roughness": 1.0,
+            "roughnessMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Roughness.png",
+              "pathGuid": "e3ae94b188237842"
+            },
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Rocker",
+      "order": 145798,
+      "parentId": 36357,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Rocker.fbx",
+      "pathGuid": "db71fc6b96718fde",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Switch": {
+        "Circuit": "Storeroom",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
+        "Rocker": "Rocker",
+        "Rocker Angle": 12.0,
+        "Start On": true
+      },
+      "castShadows": 0,
+      "collider": {
+        "center": [
+          0.004999999888241291,
+          0.0,
+          0.0
+        ],
+        "halfExtents": [
+          0.004999999888241291,
+          0.05700000002980232,
+          0.03500000014901161
+        ],
+        "isTrigger": false
+      },
+      "id": 36355,
+      "materials": [
+        {
+          "guid": "eadd7d2c70ee0323",
+          "path": "assets/Props/Electrical/Materials/M_Light_Switch_White.mat"
+        }
+      ],
+      "name": "Light Switch Storeroom",
+      "order": 145795,
+      "parentId": 35585,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
+      "pathGuid": "b728d9b29761e7a3",
+      "position": [
+        -36.625,
+        1.8350000381469727,
+        -3.009999990463257
+      ],
+      "rotation": [
+        0.0,
+        0.7071070075035095,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Storeroom",
+        "Glow": 1.0,
+        "Glow When Off": true
+      },
+      "castShadows": 0,
+      "id": 36356,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Base_Color.png",
+              "pathGuid": "7c641d5fd5757e19"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              1.0,
+              0.33000001311302185,
+              0.07000000029802322
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.6000000238418579,
+            "factorsScaleMaps": true,
+            "metallic": 1.0,
+            "metallicMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Metallic.png",
+              "pathGuid": "42d315d33a607413"
+            },
+            "metallicRoughnessMap": "",
+            "normalMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Normal.png",
+              "pathGuid": "afbb29b41c598802"
+            },
+            "roughness": 1.0,
+            "roughnessMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Roughness.png",
+              "pathGuid": "e3ae94b188237842"
+            },
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Rocker",
+      "order": 145796,
+      "parentId": 36355,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Rocker.fbx",
+      "pathGuid": "db71fc6b96718fde",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Switch": {
         "Circuit": "Living room",
         "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
@@ -1122839,9 +1123739,9 @@
       "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
       "pathGuid": "b728d9b29761e7a3",
       "position": [
-        -34.04750061035156,
-        1.8300000429153442,
-        4.150000095367432
+        -34.17599868774414,
+        1.8350000381469727,
+        3.686000108718872
       ],
       "rotation": [
         0.0,
@@ -1123060,9 +1123960,9 @@
       "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
       "pathGuid": "b728d9b29761e7a3",
       "position": [
-        -31.232500076293945,
-        1.8300000429153442,
-        -0.6654000282287598
+        -31.229999542236328,
+        1.8350000381469727,
+        -0.7450000047683716
       ],
       "rotation": [
         0.0,
@@ -1123149,6 +1124049,129 @@
     },
     {
       "Light Switch": {
+        "Circuit": "Closet",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
+        "Rocker": "Rocker",
+        "Rocker Angle": 12.0,
+        "Start On": true
+      },
+      "castShadows": 0,
+      "collider": {
+        "center": [
+          0.004999999888241291,
+          0.0,
+          0.0
+        ],
+        "halfExtents": [
+          0.004999999888241291,
+          0.05700000002980232,
+          0.03500000014901161
+        ],
+        "isTrigger": false
+      },
+      "id": 36365,
+      "materials": [
+        {
+          "guid": "eadd7d2c70ee0323",
+          "path": "assets/Props/Electrical/Materials/M_Light_Switch_White.mat"
+        }
+      ],
+      "name": "Light Switch Closet",
+      "order": 145805,
+      "parentId": 35585,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
+      "pathGuid": "b728d9b29761e7a3",
+      "position": [
+        -36.474998474121094,
+        4.735000133514404,
+        9.958999633789062
+      ],
+      "rotation": [
+        0.0,
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Closet",
+        "Glow": 1.0,
+        "Glow When Off": true
+      },
+      "castShadows": 0,
+      "id": 36366,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Base_Color.png",
+              "pathGuid": "7c641d5fd5757e19"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              1.0,
+              0.33000001311302185,
+              0.07000000029802322
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.6000000238418579,
+            "factorsScaleMaps": true,
+            "metallic": 1.0,
+            "metallicMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Metallic.png",
+              "pathGuid": "42d315d33a607413"
+            },
+            "metallicRoughnessMap": "",
+            "normalMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Normal.png",
+              "pathGuid": "afbb29b41c598802"
+            },
+            "roughness": 1.0,
+            "roughnessMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Roughness.png",
+              "pathGuid": "e3ae94b188237842"
+            },
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Rocker",
+      "order": 145806,
+      "parentId": 36365,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Rocker.fbx",
+      "pathGuid": "db71fc6b96718fde",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Switch": {
         "Circuit": "Downstairs bathroom",
         "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
@@ -1123183,9 +1124206,9 @@
       "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
       "pathGuid": "b728d9b29761e7a3",
       "position": [
-        -33.851898193359375,
-        1.8300000429153442,
-        5.9756999015808105
+        -33.849998474121094,
+        1.8350000381469727,
+        6.054999828338623
       ],
       "rotation": [
         0.0,
@@ -1123272,6 +1124295,375 @@
     },
     {
       "Light Switch": {
+        "Circuit": "Upper hall",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
+        "Rocker": "Rocker",
+        "Rocker Angle": 12.0,
+        "Start On": true
+      },
+      "castShadows": 0,
+      "collider": {
+        "center": [
+          0.004999999888241291,
+          0.0,
+          0.0
+        ],
+        "halfExtents": [
+          0.004999999888241291,
+          0.05700000002980232,
+          0.03500000014901161
+        ],
+        "isTrigger": false
+      },
+      "id": 36359,
+      "materials": [
+        {
+          "guid": "eadd7d2c70ee0323",
+          "path": "assets/Props/Electrical/Materials/M_Light_Switch_White.mat"
+        }
+      ],
+      "name": "Light Switch Upper hall",
+      "order": 145799,
+      "parentId": 35585,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
+      "pathGuid": "b728d9b29761e7a3",
+      "position": [
+        -34.81999969482422,
+        4.735000133514404,
+        2.674999952316284
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Upper hall",
+        "Glow": 1.0,
+        "Glow When Off": true
+      },
+      "castShadows": 0,
+      "id": 36360,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Base_Color.png",
+              "pathGuid": "7c641d5fd5757e19"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              1.0,
+              0.33000001311302185,
+              0.07000000029802322
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.6000000238418579,
+            "factorsScaleMaps": true,
+            "metallic": 1.0,
+            "metallicMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Metallic.png",
+              "pathGuid": "42d315d33a607413"
+            },
+            "metallicRoughnessMap": "",
+            "normalMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Normal.png",
+              "pathGuid": "afbb29b41c598802"
+            },
+            "roughness": 1.0,
+            "roughnessMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Roughness.png",
+              "pathGuid": "e3ae94b188237842"
+            },
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Rocker",
+      "order": 145800,
+      "parentId": 36359,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Rocker.fbx",
+      "pathGuid": "db71fc6b96718fde",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Switch": {
+        "Circuit": "Hall",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
+        "Rocker": "Rocker",
+        "Rocker Angle": 12.0,
+        "Start On": true
+      },
+      "castShadows": 0,
+      "collider": {
+        "center": [
+          0.004999999888241291,
+          0.0,
+          0.0
+        ],
+        "halfExtents": [
+          0.004999999888241291,
+          0.05700000002980232,
+          0.03500000014901161
+        ],
+        "isTrigger": false
+      },
+      "id": 36353,
+      "materials": [
+        {
+          "guid": "eadd7d2c70ee0323",
+          "path": "assets/Props/Electrical/Materials/M_Light_Switch_White.mat"
+        }
+      ],
+      "name": "Light Switch Hall",
+      "order": 145793,
+      "parentId": 35585,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
+      "pathGuid": "b728d9b29761e7a3",
+      "position": [
+        -33.849998474121094,
+        1.8350000381469727,
+        -5.109000205993652
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Hall",
+        "Glow": 1.0,
+        "Glow When Off": true
+      },
+      "castShadows": 0,
+      "id": 36354,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Base_Color.png",
+              "pathGuid": "7c641d5fd5757e19"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              1.0,
+              0.33000001311302185,
+              0.07000000029802322
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.6000000238418579,
+            "factorsScaleMaps": true,
+            "metallic": 1.0,
+            "metallicMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Metallic.png",
+              "pathGuid": "42d315d33a607413"
+            },
+            "metallicRoughnessMap": "",
+            "normalMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Normal.png",
+              "pathGuid": "afbb29b41c598802"
+            },
+            "roughness": 1.0,
+            "roughnessMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Roughness.png",
+              "pathGuid": "e3ae94b188237842"
+            },
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Rocker",
+      "order": 145794,
+      "parentId": 36353,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Rocker.fbx",
+      "pathGuid": "db71fc6b96718fde",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Switch": {
+        "Circuit": "Hall",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
+        "Rocker": "Rocker",
+        "Rocker Angle": 12.0,
+        "Start On": true
+      },
+      "castShadows": 0,
+      "collider": {
+        "center": [
+          0.004999999888241291,
+          0.0,
+          0.0
+        ],
+        "halfExtents": [
+          0.004999999888241291,
+          0.05700000002980232,
+          0.03500000014901161
+        ],
+        "isTrigger": false
+      },
+      "id": 36351,
+      "materials": [
+        {
+          "guid": "eadd7d2c70ee0323",
+          "path": "assets/Props/Electrical/Materials/M_Light_Switch_White.mat"
+        }
+      ],
+      "name": "Light Switch Hall",
+      "order": 145791,
+      "parentId": 35585,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
+      "pathGuid": "b728d9b29761e7a3",
+      "position": [
+        -33.849998474121094,
+        1.8350000381469727,
+        0.2590000033378601
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Hall",
+        "Glow": 1.0,
+        "Glow When Off": true
+      },
+      "castShadows": 0,
+      "id": 36352,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Base_Color.png",
+              "pathGuid": "7c641d5fd5757e19"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              1.0,
+              0.33000001311302185,
+              0.07000000029802322
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.6000000238418579,
+            "factorsScaleMaps": true,
+            "metallic": 1.0,
+            "metallicMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Metallic.png",
+              "pathGuid": "42d315d33a607413"
+            },
+            "metallicRoughnessMap": "",
+            "normalMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Normal.png",
+              "pathGuid": "afbb29b41c598802"
+            },
+            "roughness": 1.0,
+            "roughnessMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Roughness.png",
+              "pathGuid": "e3ae94b188237842"
+            },
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Rocker",
+      "order": 145792,
+      "parentId": 36351,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Rocker.fbx",
+      "pathGuid": "db71fc6b96718fde",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Switch": {
         "Circuit": "Master bedroom",
         "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
@@ -1123306,9 +1124698,9 @@
       "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
       "pathGuid": "b728d9b29761e7a3",
       "position": [
-        -35.73429870605469,
-        4.739999771118164,
-        -7.858099937438965
+        -35.654998779296875,
+        4.735000133514404,
+        -7.860000133514404
       ],
       "rotation": [
         0.0,
@@ -1123429,15 +1124821,15 @@
       "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
       "pathGuid": "b728d9b29761e7a3",
       "position": [
-        -35.73429870605469,
-        4.739999771118164,
-        -7.663099765777588
+        -35.02000045776367,
+        4.735000133514404,
+        -0.12999999523162842
       ],
       "rotation": [
         0.0,
-        -0.7071070075035095,
+        -1.0,
         0.0,
-        0.7071070075035095
+        0.0
       ],
       "scale": [
         1.0,
@@ -1123552,9 +1124944,9 @@
       "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
       "pathGuid": "b728d9b29761e7a3",
       "position": [
-        -34.8218994140625,
-        4.739999771118164,
-        -4.694300174713135
+        -34.81999969482422,
+        4.735000133514404,
+        -4.614999771118164
       ],
       "rotation": [
         0.0,
@@ -1123675,9 +1125067,9 @@
       "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
       "pathGuid": "b728d9b29761e7a3",
       "position": [
-        -34.76430130004883,
-        4.739999771118164,
-        8.341899871826172
+        -34.685001373291016,
+        4.735000133514404,
+        8.345000267028809
       ],
       "rotation": [
         0.0,
@@ -1123764,6 +1125156,129 @@
     },
     {
       "Light Switch": {
+        "Circuit": "Upstairs bathroom",
+        "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
+        "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
+        "Rocker": "Rocker",
+        "Rocker Angle": 12.0,
+        "Start On": true
+      },
+      "castShadows": 0,
+      "collider": {
+        "center": [
+          0.004999999888241291,
+          0.0,
+          0.0
+        ],
+        "halfExtents": [
+          0.004999999888241291,
+          0.05700000002980232,
+          0.03500000014901161
+        ],
+        "isTrigger": false
+      },
+      "id": 36361,
+      "materials": [
+        {
+          "guid": "eadd7d2c70ee0323",
+          "path": "assets/Props/Electrical/Materials/M_Light_Switch_White.mat"
+        }
+      ],
+      "name": "Light Switch Upstairs bathroom",
+      "order": 145801,
+      "parentId": 35585,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
+      "pathGuid": "b728d9b29761e7a3",
+      "position": [
+        -34.185001373291016,
+        4.735000133514404,
+        -7.659999847412109
+      ],
+      "rotation": [
+        0.0,
+        -0.7071070075035095,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Upstairs bathroom",
+        "Glow": 1.0,
+        "Glow When Off": true
+      },
+      "castShadows": 0,
+      "id": 36362,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Base_Color.png",
+              "pathGuid": "7c641d5fd5757e19"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              1.0,
+              0.33000001311302185,
+              0.07000000029802322
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.6000000238418579,
+            "factorsScaleMaps": true,
+            "metallic": 1.0,
+            "metallicMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Metallic.png",
+              "pathGuid": "42d315d33a607413"
+            },
+            "metallicRoughnessMap": "",
+            "normalMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Normal.png",
+              "pathGuid": "afbb29b41c598802"
+            },
+            "roughness": 1.0,
+            "roughnessMap": {
+              "path": "assets/Props/Electrical/Textures/Light_Switch_White/Light_Switches_Light_Switches_White_Roughness.png",
+              "pathGuid": "e3ae94b188237842"
+            },
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Rocker",
+      "order": 145802,
+      "parentId": 36361,
+      "path": "assets/Props/Electrical/Models/Light_Switch_Rocker.fbx",
+      "pathGuid": "db71fc6b96718fde",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Switch": {
         "Circuit": "Stairs",
         "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
         "On Sound": "assets/Audio/Foley/door/switch_on_1.wav;assets/Audio/Foley/door/switch_on_2.wav;assets/Audio/Foley/door/switch_on_3.wav",
@@ -1123798,9 +1125313,9 @@
       "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
       "pathGuid": "b728d9b29761e7a3",
       "position": [
-        -34.04750061035156,
-        1.8300000429153442,
-        0.1899999976158142
+        -34.04999923706055,
+        1.8350000381469727,
+        0.2590000033378601
       ],
       "rotation": [
         0.0,
@@ -1124148,9 +1125663,9 @@
       "path": "assets/Props/Electrical/Models/Light_Switch_Plate.fbx",
       "pathGuid": "b728d9b29761e7a3",
       "position": [
-        -31.232500076293945,
-        1.8300000429153442,
-        -0.7653999924659729
+        -31.229999542236328,
+        1.8350000381469727,
+        -0.8450000286102295
       ],
       "rotation": [
         0.0,
