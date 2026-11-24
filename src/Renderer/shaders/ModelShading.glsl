@@ -717,12 +717,13 @@ float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N, vec3 geoN) {
     float soft = kernel > 0.0 ? smoothstep(0.03, 0.10, nlG) : 0.0;
     float vis = 1.0;
     if (soft < 1.0) vis = texture(uPointShadowMap, vec4(dir, float(slot)), (d - biasW) / far);
-    if (soft > 0.0)
+    if (soft > 0.0) {
         // A cube texel's world size shrinks toward the face corners by 1 + s^2 + t^2 (s, t = the face coordinates):
-        // scale the tap spacing with it, or the taps sit > 2 texels apart near the corners (Argus's review).
+        // scale the tap spacing with it, or the taps sit > 1 texel apart near the corners (Argus's review).
         vec3 r = abs(dir) / max(max(abs(dir.x), abs(dir.y)), max(abs(dir.z), 1e-6));
         float faceTexelW = 2.0 * d / uPointShadowMapResolution / dot(r, r);
         vis = mix(vis, ShadowPlanePCF(0, slot, dir, d, geoN, faceTexelW, kernel, biasW, far), soft);
+    }
     return mix(1.0, vis, uPointShadowWeight[slot]);
 }
 
