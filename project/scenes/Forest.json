@@ -388908,13 +388908,13 @@
         "Angular Size": 0.5299999713897705,
         "Bounds": true,
         "Bounds Center": [
-          -32.97999954223633,
+          -32.68000030517578,
           2.0380001068115234,
           -11.579999923706055
         ],
         "Bounds Fade": 0.05000000074505806,
         "Bounds Size": [
-          11.359999656677246,
+          11.959999084472656,
           2.815000057220459,
           7.599999904632568
         ],
@@ -388946,9 +388946,9 @@
       "order": 107462,
       "parentId": 35585,
       "position": [
-        -28.875600814819336,
-        2.472399950027466,
-        -10.249199867248535
+        -28.876089096069336,
+        2.5450000762939453,
+        -10.249019622802734
       ],
       "rotation": [
         0.0,
@@ -388985,7 +388985,7 @@
         ],
         "ColorTempK": 3000.0,
         "Culling Mask": -1,
-        "Intensity": 1.6799999475479126,
+        "Intensity": 0.5600000023841858,
         "Range": 8.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05000000074505806,
@@ -389005,9 +389005,9 @@
       "order": 107463,
       "parentId": 35585,
       "position": [
-        -35.70859909057617,
-        2.7284998893737793,
-        -12.130200386047363
+        -35.70861053466797,
+        2.6449999809265137,
+        -12.094929695129395
       ],
       "rotation": [
         -0.7071070075035095,
@@ -389064,9 +389064,9 @@
       "order": 107464,
       "parentId": 35585,
       "position": [
-        -37.2661018371582,
-        3.174999952316284,
-        -12.057100296020508
+        -37.26612091064453,
+        3.3450000286102295,
+        -12.100749969482422
       ],
       "rotation": [
         -0.7071070075035095,
@@ -389123,9 +389123,9 @@
       "order": 107465,
       "parentId": 35585,
       "position": [
-        -33.964900970458984,
-        3.174999952316284,
-        -13.807900428771973
+        -33.95970153808594,
+        3.3450000286102295,
+        -13.807950019836426
       ],
       "rotation": [
         -0.7071070075035095,
@@ -389182,9 +389182,481 @@
       "order": 107466,
       "parentId": 35585,
       "position": [
-        -29.555599212646484,
-        3.174999952316284,
-        -13.807900428771973
+        -29.561721801757812,
+        3.3450000286102295,
+        -13.807950019836426
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -32.97999954223633,
+          2.0380001068115234,
+          -11.579999923706055
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          11.359999656677246,
+          2.815000057220459,
+          7.599999904632568
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 0.3,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Kitchen",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36382,
+      "name": "Ceiling Kitchen",
+      "order": 150001,
+      "parentId": 35585,
+      "position": [
+        -32.46885299682617,
+        3.3450000286102295,
+        -13.807968139648438
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -32.97999954223633,
+          2.0380001068115234,
+          -11.579999923706055
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          11.359999656677246,
+          2.815000057220459,
+          7.599999904632568
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 0.3,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Kitchen",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36383,
+      "name": "Ceiling Kitchen",
+      "order": 150002,
+      "parentId": 35585,
+      "position": [
+        -35.466156005859375,
+        3.3450000286102295,
+        -13.807968139648438
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -32.97999954223633,
+          2.0380001068115234,
+          -11.579999923706055
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          11.359999656677246,
+          2.815000057220459,
+          7.599999904632568
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 0.3,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Kitchen",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36384,
+      "name": "Ceiling Kitchen",
+      "order": 150003,
+      "parentId": 35585,
+      "position": [
+        -31.052650451660156,
+        3.3450000286102295,
+        -13.807968139648438
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -32.97999954223633,
+          2.0380001068115234,
+          -11.579999923706055
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          11.359999656677246,
+          2.815000057220459,
+          7.599999904632568
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 0.3,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Kitchen",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36385,
+      "name": "Ceiling Kitchen",
+      "order": 150004,
+      "parentId": 35585,
+      "position": [
+        -28.05243682861328,
+        3.3450000286102295,
+        -13.807968139648438
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -32.97999954223633,
+          2.0380001068115234,
+          -11.579999923706055
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          11.359999656677246,
+          2.815000057220459,
+          7.599999904632568
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 0.3,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Kitchen",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36386,
+      "name": "Ceiling Kitchen",
+      "order": 150005,
+      "parentId": 35585,
+      "position": [
+        -37.266170501708984,
+        3.3450000286102295,
+        -13.807968139648438
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -32.97999954223633,
+          2.0380001068115234,
+          -11.579999923706055
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          11.359999656677246,
+          2.815000057220459,
+          7.599999904632568
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 0.3,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Kitchen",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36387,
+      "name": "Ceiling Kitchen",
+      "order": 150006,
+      "parentId": 35585,
+      "position": [
+        -37.266170501708984,
+        3.3450000286102295,
+        -10.262613296508789
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -32.97999954223633,
+          2.0380001068115234,
+          -11.579999923706055
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          11.359999656677246,
+          2.815000057220459,
+          7.599999904632568
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 0.5600000023841858,
+        "Range": 8.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 59.212921142578125,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Kitchen",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36388,
+      "name": "Pendants Kitchen",
+      "order": 150007,
+      "parentId": 35585,
+      "position": [
+        -35.708656311035156,
+        2.9749999046325684,
+        -12.731266021728516
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -32.97999954223633,
+          2.0380001068115234,
+          -11.579999923706055
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          11.359999656677246,
+          2.815000057220459,
+          7.599999904632568
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 0.5600000023841858,
+        "Range": 8.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 59.212921142578125,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Kitchen",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36389,
+      "name": "Pendants Kitchen",
+      "order": 150008,
+      "parentId": 35585,
+      "position": [
+        -35.708656311035156,
+        2.9749999046325684,
+        -11.56435489654541
       ],
       "rotation": [
         -0.7071070075035095,
@@ -389241,15 +389713,310 @@
       "order": 107470,
       "parentId": 35585,
       "position": [
-        -36.40570068359375,
-        2.472399950027466,
-        10.237199783325195
+        -36.40620040893555,
+        2.5450000762939453,
+        10.237380027770996
       ],
       "rotation": [
         0.0,
         0.0,
         0.0,
         1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -33.31999969482422,
+          2.0380001068115234,
+          10.614999771118164
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          10.680000305175781,
+          2.815000057220459,
+          5.670000076293945
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.25,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36390,
+      "name": "Ceiling Living room",
+      "order": 150009,
+      "parentId": 35585,
+      "position": [
+        -37.11668395996094,
+        3.3450000286102295,
+        11.791335105895996
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -33.31999969482422,
+          2.0380001068115234,
+          10.614999771118164
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          10.680000305175781,
+          2.815000057220459,
+          5.670000076293945
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.25,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36391,
+      "name": "Ceiling Living room",
+      "order": 150010,
+      "parentId": 35585,
+      "position": [
+        -37.11668395996094,
+        3.3450000286102295,
+        8.541830062866211
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -33.31999969482422,
+          2.0380001068115234,
+          10.614999771118164
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          10.680000305175781,
+          2.815000057220459,
+          5.670000076293945
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.25,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36392,
+      "name": "Ceiling Living room",
+      "order": 150011,
+      "parentId": 35585,
+      "position": [
+        -29.27463722229004,
+        3.3450000286102295,
+        11.791335105895996
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -33.31999969482422,
+          2.0380001068115234,
+          10.614999771118164
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          10.680000305175781,
+          2.815000057220459,
+          5.670000076293945
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.25,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36393,
+      "name": "Ceiling Living room",
+      "order": 150012,
+      "parentId": 35585,
+      "position": [
+        -34.658145904541016,
+        3.3450000286102295,
+        11.791335105895996
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -33.31999969482422,
+          2.0380001068115234,
+          10.614999771118164
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          10.680000305175781,
+          2.815000057220459,
+          5.670000076293945
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.25,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36394,
+      "name": "Ceiling Living room",
+      "order": 150013,
+      "parentId": 35585,
+      "position": [
+        -30.681140899658203,
+        3.3450000286102295,
+        11.791335105895996
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
       ],
       "scale": [
         1.0,
@@ -389300,9 +390067,9 @@
       "order": 107471,
       "parentId": 35585,
       "position": [
-        -29.758800506591797,
-        2.472399950027466,
-        9.946200370788574
+        -29.759279251098633,
+        2.544999122619629,
+        9.946379661560059
       ],
       "rotation": [
         0.0,
@@ -389383,7 +390150,7 @@
       "parentId": 35585,
       "position": [
         -33.0,
-        3.174999952316284,
+        3.3450000286102295,
         -4.0
       ],
       "rotation": [
@@ -389465,7 +390232,7 @@
       "parentId": 35585,
       "position": [
         -33.0,
-        3.174999952316284,
+        3.3450000286102295,
         1.2000000476837158
       ],
       "rotation": [
@@ -389589,9 +390356,9 @@
       "order": 107487,
       "parentId": 35585,
       "position": [
-        -30.070999145507813,
-        6.040999889373779,
-        -11.04640007019043
+        -30.07097053527832,
+        6.10099983215332,
+        -11.04636001586914
       ],
       "rotation": [
         0.0,
@@ -389648,9 +390415,9 @@
       "order": 107491,
       "parentId": 35585,
       "position": [
-        -36.58940124511719,
-        6.040999889373779,
-        -3.5327000617980957
+        -36.58937072753906,
+        6.10099983215332,
+        -3.5327401161193848
       ],
       "rotation": [
         0.0,
@@ -389707,9 +390474,9 @@
       "order": 145815,
       "parentId": 35585,
       "position": [
-        -37.599998474121094,
-        6.045000076293945,
-        10.699999809265137
+        -37.400291442871094,
+        6.10099983215332,
+        10.329529762268066
       ],
       "rotation": [
         0.0,
@@ -389766,9 +390533,9 @@
       "order": 145814,
       "parentId": 35585,
       "position": [
-        -35.79999923706055,
-        6.045000076293945,
-        -13.800000190734863
+        -35.800045013427734,
+        6.10099983215332,
+        -13.800018310546875
       ],
       "rotation": [
         0.0,
@@ -389805,14 +390572,14 @@
         ],
         "ColorTempK": 2900.0,
         "Culling Mask": -1,
-        "Intensity": 0.699999988079071,
+        "Intensity": 0.6000000238418579,
         "Range": 5.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05000000074505806,
         "Shadow Normal Bias": 1.0,
         "Shadow Softness": 1.2999999523162842,
-        "Spot Angle": 30.0,
-        "Type": "Point",
+        "Spot Angle": 80.0,
+        "Type": "Spot",
         "Volumetric Intensity": 0.0
       },
       "Light Circuit": {
@@ -389825,15 +390592,133 @@
       "order": 145813,
       "parentId": 35585,
       "position": [
-        -36.599998474121094,
-        6.045000076293945,
-        -10.0
+        -35.8861198425293,
+        6.25499963760376,
+        -9.783419609069824
       ],
       "rotation": [
+        -0.7071070075035095,
         0.0,
         0.0,
-        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
         1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -35.76900100708008,
+          4.947000026702881,
+          -9.942500114440918
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          5.97799825668335,
+          2.815000057220459,
+          4.474999904632568
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.6000000238418579,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Master bedroom",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36401,
+      "name": "Ceiling Master bedroom",
+      "order": 146822,
+      "parentId": 35585,
+      "position": [
+        -33.596920013427734,
+        6.25499963760376,
+        -9.783419609069824
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -35.76900100708008,
+          4.947000026702881,
+          -9.942500114440918
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          5.97799825668335,
+          2.815000057220459,
+          4.474999904632568
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.6000000238418579,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Master bedroom",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36400,
+      "name": "Ceiling Master bedroom",
+      "order": 146821,
+      "parentId": 35585,
+      "position": [
+        -34.80495071411133,
+        6.25499963760376,
+        -9.783419609069824
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
       ],
       "scale": [
         1.0,
@@ -389870,8 +390755,8 @@
         "Shadow Near Plane": 0.05000000074505806,
         "Shadow Normal Bias": 1.0,
         "Shadow Softness": 1.2999999523162842,
-        "Spot Angle": 30.0,
-        "Type": "Point",
+        "Spot Angle": 80.0,
+        "Type": "Spot",
         "Volumetric Intensity": 0.0
       },
       "Light Circuit": {
@@ -389884,15 +390769,15 @@
       "order": 145812,
       "parentId": 35585,
       "position": [
-        -32.5,
-        3.174999952316284,
-        5.099999904632568
+        -32.50004196166992,
+        3.3450000286102295,
+        5.100006580352783
       ],
       "rotation": [
+        -0.7071070075035095,
         0.0,
         0.0,
-        0.0,
-        1.0
+        0.7071070075035095
       ],
       "scale": [
         1.0,
@@ -389929,8 +390814,8 @@
         "Shadow Near Plane": 0.05000000074505806,
         "Shadow Normal Bias": 1.0,
         "Shadow Softness": 1.2999999523162842,
-        "Spot Angle": 30.0,
-        "Type": "Point",
+        "Spot Angle": 80.0,
+        "Type": "Spot",
         "Volumetric Intensity": 0.0
       },
       "Light Circuit": {
@@ -389943,15 +390828,15 @@
       "order": 145810,
       "parentId": 35585,
       "position": [
-        -36.29999923706055,
-        3.174999952316284,
-        5.800000190734863
+        -36.300045013427734,
+        3.3450000286102295,
+        5.8000078201293945
       ],
       "rotation": [
+        -0.7071070075035095,
         0.0,
         0.0,
-        0.0,
-        1.0
+        0.7071070075035095
       ],
       "scale": [
         1.0,
@@ -390002,9 +390887,9 @@
       "order": 145809,
       "parentId": 35585,
       "position": [
-        -37.29999923706055,
-        3.174999952316284,
-        -5.300000190734863
+        -37.300048828125,
+        3.190999984741211,
+        -5.300006866455078
       ],
       "rotation": [
         0.0,
@@ -390047,8 +390932,8 @@
         "Shadow Near Plane": 0.05000000074505806,
         "Shadow Normal Bias": 1.0,
         "Shadow Softness": 1.2999999523162842,
-        "Spot Angle": 30.0,
-        "Type": "Point",
+        "Spot Angle": 80.0,
+        "Type": "Spot",
         "Volumetric Intensity": 0.0
       },
       "Light Circuit": {
@@ -390061,15 +390946,15 @@
       "order": 145808,
       "parentId": 35585,
       "position": [
-        -36.599998474121094,
-        3.174999952316284,
-        -1.399999976158142
+        -36.60004425048828,
+        3.3450000286102295,
+        -1.4000017642974854
       ],
       "rotation": [
+        -0.7071070075035095,
         0.0,
         0.0,
-        0.0,
-        1.0
+        0.7071070075035095
       ],
       "scale": [
         1.0,
@@ -390106,8 +390991,8 @@
         "Shadow Near Plane": 0.05000000074505806,
         "Shadow Normal Bias": 1.0,
         "Shadow Softness": 1.2999999523162842,
-        "Spot Angle": 30.0,
-        "Type": "Point",
+        "Spot Angle": 80.0,
+        "Type": "Spot",
         "Volumetric Intensity": 0.0
       },
       "Light Circuit": {
@@ -390120,15 +391005,15 @@
       "order": 145807,
       "parentId": 35585,
       "position": [
-        -34.900001525878906,
-        3.174999952316284,
-        -4.300000190734863
+        -34.900047302246094,
+        3.3450000286102295,
+        -4.300005912780762
       ],
       "rotation": [
+        -0.7071070075035095,
         0.0,
         0.0,
-        0.0,
-        1.0
+        0.7071070075035095
       ],
       "scale": [
         1.0,
@@ -390159,7 +391044,7 @@
         ],
         "ColorTempK": 3000.0,
         "Culling Mask": -1,
-        "Intensity": 1.0399999618530273,
+        "Intensity": 0.6000000238418579,
         "Range": 3.8134799003601074,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05000000074505806,
@@ -390179,9 +391064,68 @@
       "order": 107495,
       "parentId": 35585,
       "position": [
-        -32.380699157714844,
-        6.085000038146973,
-        -1.9962999820709229
+        -32.02492904663086,
+        6.25499963760376,
+        -1.9962600469589233
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -32.29999923706055,
+          4.947000026702881,
+          -2.6600000858306885
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          2.240000009536743,
+          2.815000057220459,
+          2.319999933242798
+        ],
+        "Cast Shadows": true,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 0.6000000238418579,
+        "Range": 3.8134799003601074,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Upstairs bathroom",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36405,
+      "name": "Ceiling Upstairs bathroom",
+      "order": 146826,
+      "parentId": 35585,
+      "position": [
+        -32.73653030395508,
+        6.25499963760376,
+        -1.9962600469589233
       ],
       "rotation": [
         -0.7071070075035095,
@@ -390218,7 +391162,7 @@
         ],
         "ColorTempK": 3400.0,
         "Culling Mask": -1,
-        "Intensity": 0.5074999928474426,
+        "Intensity": 0.30000001192092896,
         "Range": 5.570000171661377,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05000000074505806,
@@ -390239,8 +391183,67 @@
       "parentId": 35585,
       "position": [
         -31.452800750732422,
-        5.598100185394287,
-        -6.020699977874756
+        5.598050117492676,
+        -6.487249851226807
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -33.04999923706055,
+          4.947000026702881,
+          -5.099999904632568
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          3.740000009536743,
+          2.815000057220459,
+          5.239999771118164
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3400.0,
+        "Culling Mask": -1,
+        "Intensity": 0.30000001192092896,
+        "Range": 5.570000171661377,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Upstairs bathroom",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36406,
+      "name": "Lamp_wall_toilet Upstairs bathroom",
+      "order": 146827,
+      "parentId": 35585,
+      "position": [
+        -31.452800750732422,
+        5.598050117492676,
+        -5.554109573364258
       ],
       "rotation": [
         0.0,
@@ -390298,8 +391301,8 @@
       "parentId": 35585,
       "position": [
         -34.05670166015625,
-        6.040999889373779,
-        11.179200172424316
+        6.10099983215332,
+        11.17924976348877
       ],
       "rotation": [
         0.0,
@@ -390318,17 +391321,17 @@
         "Angular Size": 0.5299999713897705,
         "Bounds": true,
         "Bounds Center": [
-          -33.380001068115234,
-          4.947000026702881,
-          2.3450000286102295
+          -33.028499603271484,
+          4.961999893188477,
+          1.6974999904632568
         ],
         "Bounds Fade": 0.05000000074505806,
         "Bounds Size": [
-          3.0,
-          2.815000057220459,
-          4.929999828338623
+          3.892998218536377,
+          2.945000171661377,
+          6.414999961853027
         ],
-        "Cast Shadows": true,
+        "Cast Shadows": false,
         "Color": [
           1.0,
           0.8600000143051147,
@@ -390336,7 +391339,7 @@
         ],
         "ColorTempK": 3000.0,
         "Culling Mask": -1,
-        "Intensity": 1.5199999809265137,
+        "Intensity": 0.5,
         "Range": 4.570000171661377,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05000000074505806,
@@ -390356,9 +391359,186 @@
       "order": 107504,
       "parentId": 35585,
       "position": [
-        -32.95819854736328,
-        6.085000038146973,
-        1.8274999856948853
+        -33.65705871582031,
+        6.25499963760376,
+        0.990369975566864
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -33.028499603271484,
+          4.961999893188477,
+          1.6974999904632568
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          3.892998218536377,
+          2.945000171661377,
+          6.414999961853027
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 0.5,
+        "Range": 4.570000171661377,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Upper hall",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36404,
+      "name": "Ceiling Stairs",
+      "order": 146825,
+      "parentId": 35585,
+      "position": [
+        -32.2592887878418,
+        6.25499963760376,
+        2.6645898818969727
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -33.028499603271484,
+          4.961999893188477,
+          1.6974999904632568
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          3.892998218536377,
+          2.945000171661377,
+          6.414999961853027
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 0.5,
+        "Range": 4.570000171661377,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Upper hall",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36403,
+      "name": "Ceiling Stairs",
+      "order": 146824,
+      "parentId": 35585,
+      "position": [
+        -33.65705871582031,
+        6.25499963760376,
+        2.6645898818969727
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -33.028499603271484,
+          4.961999893188477,
+          1.6974999904632568
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          3.892998218536377,
+          2.945000171661377,
+          6.414999961853027
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 0.5,
+        "Range": 4.570000171661377,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 80.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Upper hall",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36402,
+      "name": "Ceiling Stairs",
+      "order": 146823,
+      "parentId": 35585,
+      "position": [
+        -32.2592887878418,
+        6.25499963760376,
+        0.990369975566864
       ],
       "rotation": [
         -0.7071070075035095,
@@ -390415,9 +391595,68 @@
       "order": 107505,
       "parentId": 35585,
       "position": [
-        -36.58940124511719,
-        6.040999889373779,
-        3.749000072479248
+        -36.58937072753906,
+        6.10099983215332,
+        3.7490499019622803
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -36.849998474121094,
+          3.492000102996826,
+          1.975000023841858
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          3.799999952316284,
+          5.724999904632568,
+          5.849999904632568
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.5,
+        "Range": 3.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36395,
+      "name": "Ceiling Under stairs",
+      "order": 150014,
+      "parentId": 35585,
+      "position": [
+        -35.861915588378906,
+        3.190999984741211,
+        3.7490546703338623
       ],
       "rotation": [
         0.0,
@@ -390533,9 +391772,9 @@
       "order": 145811,
       "parentId": 35585,
       "position": [
-        -32.94734573364258,
-        0.8700301647186279,
-        9.879916191101074
+        -33.567020416259766,
+        1.8931350708007812,
+        10.878270149230957
       ],
       "rotation": [
         0.0,
@@ -390651,9 +391890,9 @@
       "order": 107512,
       "parentId": 35585,
       "position": [
-        -35.5364990234375,
-        5.065700054168701,
-        13.296699523925781
+        -35.537471771240234,
+        5.0964179039001465,
+        13.169450759887695
       ],
       "rotation": [
         -0.7071070075035095,
@@ -408559,6 +409798,41 @@
         -29.61750030517578,
         2.0380001068115234,
         -11.644042015075684
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen;Lamp_stand 19",
+        "Fade": 0.10000000149011612,
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          0.6100000143051147,
+          2.809999942779541,
+          2.5999999046325684
+        ],
+        "Spacing": 0.5
+      },
+      "id": 36503,
+      "name": "GI dining bay",
+      "order": 160004,
+      "parentId": 35585,
+      "position": [
+        -27.145000457763672,
+        2.0399999618530273,
+        -10.149999618530273
       ],
       "rotation": [
         0.0,
@@ -1100404,6 +1101678,11 @@
       "static": true
     },
     {
+      "Light Circuit": {
+        "Circuit": "Lamp_stand 14",
+        "Glow": 0.2,
+        "Glow When Off": false
+      },
       "Light Switch": {
         "Circuit": "Lamp_stand 14",
         "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
@@ -1100412,6 +1101691,7 @@
         "Rocker Angle": 0.0,
         "Start On": true
       },
+      "castShadows": 0,
       "collider": {
         "center": [
           0.0013729999773204327,
@@ -1100428,8 +1101708,8 @@
       "id": 20858,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_stand",
@@ -1100439,21 +1101719,20 @@
       "pathGuid": "4f000d0cee8fb9bc",
       "position": [
         -33.566978454589844,
-        0.8738000392913818,
+        0.6931350231170654,
         10.878255844116211
       ],
       "rotation": [
-        -0.6801254153251648,
-        -0.1934671252965927,
-        -0.1934671252965927,
-        0.6801254153251648
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
       ],
       "scale": [
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "id": 20859,
@@ -1101182,7 +1102461,7 @@
     },
     {
       "Light Circuit": {
-        "Circuit": "Stairs",
+        "Circuit": "Upper hall",
         "Glow": 0.2199999988079071,
         "Glow When Off": false
       },
@@ -1101312,7 +1102591,7 @@
     },
     {
       "Light Circuit": {
-        "Circuit": "Stairs",
+        "Circuit": "Upper hall",
         "Glow": 0.2199999988079071,
         "Glow When Off": false
       },
@@ -1105578,7 +1106857,7 @@
     },
     {
       "Light Circuit": {
-        "Circuit": "Stairs",
+        "Circuit": "Upper hall",
         "Glow": 0.2199999988079071,
         "Glow When Off": false
       },
@@ -1105799,11 +1107078,17 @@
       ]
     },
     {
+      "Light Circuit": {
+        "Circuit": "Master bedroom",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
       "id": 20998,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_ceiling_circle (4)",
@@ -1105826,8 +1107111,7 @@
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "id": 20999,
@@ -1107183,11 +1108467,17 @@
       ]
     },
     {
+      "Light Circuit": {
+        "Circuit": "Master bedroom",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
       "id": 21034,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_ceiling_circle (2)",
@@ -1107210,8 +1108500,7 @@
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "id": 21035,
@@ -1110507,11 +1111796,17 @@
       "static": true
     },
     {
+      "Light Circuit": {
+        "Circuit": "Master bedroom",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
       "id": 21121,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_ceiling_circle (3)",
@@ -1110534,8 +1111829,7 @@
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "id": 21122,
@@ -1110941,7 +1112235,7 @@
     },
     {
       "Light Circuit": {
-        "Circuit": "Stairs",
+        "Circuit": "Upper hall",
         "Glow": 0.2199999988079071,
         "Glow When Off": false
       },
@@ -1111861,11 +1113155,17 @@
       "static": true
     },
     {
+      "Light Circuit": {
+        "Circuit": "Closet",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
       "id": 21158,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_bedroom (4)",
@@ -1111888,8 +1113188,7 @@
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "collider": {
@@ -1112019,11 +1113318,17 @@
       "static": true
     },
     {
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
       "id": 21162,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_bedroom (2)",
@@ -1112046,8 +1113351,7 @@
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "castShadows": 0,
@@ -1118522,7 +1119826,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1118645,7 +1119949,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1118768,7 +1120072,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1118891,7 +1120195,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1119014,7 +1120318,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1119235,7 +1120539,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1119358,7 +1120662,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1119481,7 +1120785,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1119604,7 +1120908,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1119727,7 +1121031,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1119850,7 +1121154,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1119973,7 +1121277,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1120096,7 +1121400,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1120219,7 +1121523,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1120342,7 +1121646,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1120465,7 +1121769,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1120588,7 +1121892,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1120711,7 +1122015,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1120761,6 +1122065,7 @@
         "Glow": 0.800000011920929,
         "Glow When Off": false
       },
+      "castShadows": 0,
       "collider": {
         "center": [
           -0.0,
@@ -1120886,7 +1122191,7 @@
               0.07000000029802322
             ],
             "emissiveMap": "",
-            "emissiveStrength": 0.6000000238418579,
+            "emissiveStrength": 0.18000000715255737,
             "factorsScaleMaps": true,
             "metallic": 1.0,
             "metallicMap": {
@@ -1151947,6 +1153252,222 @@
         0.800000011920929,
         0.800000011920929,
         0.800000011920929
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Hall",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
+      "id": 36376,
+      "materials": [
+        {
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
+        }
+      ],
+      "name": "Lamp_ceiling_circle (fixture for Ceiling Back hall)",
+      "order": 145816,
+      "parentId": 35187,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_ceiling_circle.FBX",
+      "pathGuid": "802ec77ee2406ca4",
+      "position": [
+        -34.900047302246094,
+        3.3949999809265137,
+        -4.300005912780762
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Hall",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
+      "id": 36377,
+      "materials": [
+        {
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
+        }
+      ],
+      "name": "Lamp_ceiling_circle (fixture for Ceiling Back hall)",
+      "order": 145817,
+      "parentId": 35187,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_ceiling_circle.FBX",
+      "pathGuid": "802ec77ee2406ca4",
+      "position": [
+        -36.60004425048828,
+        3.3949999809265137,
+        -1.4000017642974854
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Storeroom",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
+      "id": 36378,
+      "materials": [
+        {
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
+        }
+      ],
+      "name": "Lamp_bedroom (fixture for Ceiling Storeroom)",
+      "order": 145818,
+      "parentId": 35187,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_bedroom.FBX",
+      "pathGuid": "d83d9ef74cbe6a0a",
+      "position": [
+        -37.300048828125,
+        3.3949999809265137,
+        -5.300006866455078
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
+      "id": 36379,
+      "materials": [
+        {
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
+        }
+      ],
+      "name": "Lamp_ceiling_circle (fixture for Ceiling Living room)",
+      "order": 145819,
+      "parentId": 35187,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_ceiling_circle.FBX",
+      "pathGuid": "802ec77ee2406ca4",
+      "position": [
+        -36.300045013427734,
+        3.3949999809265137,
+        5.8000078201293945
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Downstairs bathroom",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
+      "id": 36380,
+      "materials": [
+        {
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
+        }
+      ],
+      "name": "Lamp_ceiling_circle (fixture for Ceiling Downstairs bathroom)",
+      "order": 145820,
+      "parentId": 35187,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_ceiling_circle.FBX",
+      "pathGuid": "802ec77ee2406ca4",
+      "position": [
+        -32.50004196166992,
+        3.3949999809265137,
+        5.100006580352783
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Box room",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
+      "id": 36381,
+      "materials": [
+        {
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
+        }
+      ],
+      "name": "Lamp_bedroom (fixture for Ceiling Box room)",
+      "order": 145821,
+      "parentId": 35187,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_bedroom.FBX",
+      "pathGuid": "d83d9ef74cbe6a0a",
+      "position": [
+        -35.800045013427734,
+        6.304999828338623,
+        -13.800018310546875
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
       ]
     }
   ],
