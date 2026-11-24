@@ -390230,6 +390230,65 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -32.599998474121094,
+          2.0380001068115234,
+          -2.184000015258789
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          2.8399999141693115,
+          2.815000057220459,
+          11.067999839782715
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 0.5,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 2.5,
+        "Spot Angle": 80.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Hall",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36407,
+      "name": "Ceiling Hall fill",
+      "order": 160005,
+      "parentId": 35585,
+      "position": [
+        -33.0,
+        3.3450000286102295,
+        -4.0
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
       "id": 35595,
       "name": "Lamp_ceiling_circle (hall)",
       "order": 107478,
@@ -390293,6 +390352,65 @@
       "id": 35596,
       "name": "Ceiling Hall",
       "order": 107480,
+      "parentId": 35585,
+      "position": [
+        -33.0,
+        3.3450000286102295,
+        1.2000000476837158
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -32.599998474121094,
+          2.0380001068115234,
+          -2.184000015258789
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          2.8399999141693115,
+          2.815000057220459,
+          11.067999839782715
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 0.5,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 2.5,
+        "Spot Angle": 80.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Hall",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36408,
+      "name": "Ceiling Hall fill",
+      "order": 160006,
       "parentId": 35585,
       "position": [
         -33.0,
@@ -390820,7 +390938,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Softness": 1.2999999523162842,
         "Spot Angle": 88.0,
-        "Type": "Spot",
+        "Type": "Point",
         "Volumetric Intensity": 0.0
       },
       "Light Circuit": {
@@ -390997,7 +391115,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Softness": 1.2999999523162842,
         "Spot Angle": 88.0,
-        "Type": "Spot",
+        "Type": "Point",
         "Volumetric Intensity": 0.0
       },
       "Light Circuit": {
@@ -391056,7 +391174,7 @@
         "Shadow Normal Bias": 1.0,
         "Shadow Softness": 1.2999999523162842,
         "Spot Angle": 88.0,
-        "Type": "Spot",
+        "Type": "Point",
         "Volumetric Intensity": 0.0
       },
       "Light Circuit": {
@@ -391328,13 +391446,13 @@
         "Bounds Center": [
           -33.75,
           4.947000026702881,
-          10.895000457763672
+          10.41349983215332
         ],
         "Bounds Fade": 0.05000000074505806,
         "Bounds Size": [
           5.139999866485596,
           2.815000057220459,
-          5.230000019073486
+          6.193000316619873
         ],
         "Cast Shadows": true,
         "Color": [
