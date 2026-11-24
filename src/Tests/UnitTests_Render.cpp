@@ -1034,6 +1034,12 @@ void GIVolumeLookup() {
         CHECK(!GI::NudgeBlocked(glm::vec3(9.0f, 4.0f, 25.0f), glm::vec3(8.85f, 4.0f, 25.0f), {S(8.0f, 3.0f, 24.0f, 9.3f, 5.0f, 26.0f)})); // the face point is already inside it (a slab)
         CHECK(!GI::NudgeBlocked(glm::vec3(5.0f, 5.0f, 5.0f), glm::vec3(5.0f, 4.85f, 5.0f), {S(0.0f, 4.9f, 0.0f, 9.0f, 5.1f, 9.0f)})); // a ceiling slab: the nudge leaves it
         CHECK(GI::NudgeBlocked(glm::vec3(5.0f, 5.0f, 5.0f), glm::vec3(5.0f, 4.85f, 5.0f), {S(0.0f, 4.0f, 4.0f, 9.0f, 4.9f, 6.0f)}));   // a fixture hanging 0.1 m below the face
+        // A volume's face sits 2-5 cm off the slab it is padded to: a slab within 6 cm of the face point holds it (the nudge leaves it);
+        // a box 7 cm or more away still blocks.
+        CHECK(!GI::NudgeBlocked(glm::vec3(5.0f, 0.0f, 5.0f), glm::vec3(5.0f, 0.15f, 5.0f), {S(0.0f, 0.03f, 0.0f, 9.0f, 0.20f, 9.0f)}));  // a floor slab 3 cm above the face
+        CHECK(!GI::NudgeBlocked(glm::vec3(5.0f, 0.0f, 5.0f), glm::vec3(5.0f, 0.15f, 5.0f), {S(0.0f, 0.05f, 0.0f, 9.0f, 0.20f, 9.0f)}));  // 5 cm
+        CHECK(GI::NudgeBlocked(glm::vec3(5.0f, 0.0f, 5.0f), glm::vec3(5.0f, 0.15f, 5.0f), {S(0.0f, 0.07f, 0.0f, 9.0f, 0.20f, 9.0f)}));   // 7 cm: still blocks
+        CHECK(!GI::NudgeBlocked(glm::vec3(9.0f, 4.0f, 25.0f), glm::vec3(8.85f, 4.0f, 25.0f), {S(9.04f, 3.0f, 24.0f, 9.5f, 5.0f, 26.0f)})); // a wall piece 4 cm behind the face
         // Whole volume: 5 x 4 x 5 probes, x faces at +-2. Face probes without a wardrobe all nudge; with one against the +x face the ones behind it stay.
         const GI::Box nbox = GI::Box::FromTransform(glm::mat4(1.0f), glm::vec3(4.0f, 3.0f, 4.0f));
         const glm::ivec3 d = GI::GridDims(nbox.Half, 1.0f);

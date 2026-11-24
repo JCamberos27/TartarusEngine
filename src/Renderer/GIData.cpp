@@ -158,7 +158,10 @@ glm::vec3 FaceProbeNudge(const glm::ivec3& ijk, const glm::ivec3& dims, const gl
 }
 
 bool NudgeBlocked(const glm::vec3& from, const glm::vec3& to, const std::vector<SolidBox>& solids) {
-    constexpr float kEps = 1e-4f; // a point on a box's surface counts as inside it
+    // A box within kHold of the face point counts as holding it: a volume's face sits a few cm off the floor, ceiling or wall slab it is
+    // padded to (2-5 cm either side), and that slab (or the neighbouring piece of it) is what the nudge is meant to leave, not a blocker.
+    // Furniture and doors stand further off (>= ~0.1 m: a wardrobe or closet front) and still block.
+    constexpr float kEps = 1e-4f + 0.06f;
     const glm::vec3 d = to - from;
     for (const SolidBox& b : solids) {
         if (glm::all(glm::greaterThanEqual(from, b.Min - kEps)) && glm::all(glm::lessThanEqual(from, b.Max + kEps))) continue;
