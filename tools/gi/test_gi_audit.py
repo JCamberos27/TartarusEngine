@@ -194,6 +194,85 @@ class CoverageTests(unittest.TestCase):
         self.assertIn("gap", ga.blend_note(0.1, 0.05, 0.05))
         self.assertIn("plateau", ga.blend_note(-0.3, 0.05, 0.05))
 
+    # Two rooms side by side on x, floor y 0..3, z -2..2, Fade 0.1; their meeting plane is x = 0.
+    @staticmethod
+    def _pair(a_hi, b_lo, fade=0.1):
+        def vol(name, lo, hi):
+            return {"name": name, "box": axis_box(((lo + hi) / 2, 1.5, 0), (hi - lo, 3, 4)), "fade": fade,
+                    "spacing": 0.5}
+        return [vol("GI a", -3.0, a_hi), vol("GI b", b_lo, 3.0)]
+
+    def test_margins_doorway(self):
+        # No wall: a doorway. Overlapping by Fade + 0.01 crossfades with wSum >= 1; touching or a gap dips.
+        ok = ga.check_margins(self._pair(0.055, -0.055), [])
+        self.assertEqual([r["verdict"] for r in ok], ["ok"])
+        self.assertEqual(ok[0]["walled_samples"], 0)
+        self.assertGreater(ok[0]["open_samples"], 0)
+        for a_hi, b_lo in ((0.0, 0.0), (-0.05, 0.05)):
+            bad = ga.check_margins(self._pair(a_hi, b_lo), [])
+            self.assertEqual(bad[0]["verdict"], "seam")
+            self.assertLess(bad[0]["open_min_wsum"], 0)
+
+    def test_margins_wall(self):
+        # A 0.2 m wall on the meeting plane. Faces 0.055 m past its mid-plane stay inside it: no leak, both surfaces
+        # covered. Faces 0.245 m past it reach past the far surface's sample point (0.1 + the 0.125 m normal bias): the
+        # far room's weight shows on our side of the wall (a leak).
+        wall = [axis_box((0, 1.5, 0), (0.2, 3, 4))]
+        ok = ga.check_margins(self._pair(0.055, -0.055), wall)
+        self.assertEqual(ok[0]["verdict"], "ok")
+        self.assertEqual(ok[0]["open_samples"], 0)
+        self.assertGreater(ok[0]["walled_samples"], 0)
+        self.assertEqual(ok[0]["wall_leak_max"], 0.0)
+        leak = ga.check_margins(self._pair(0.245, -0.245), wall)
+        self.assertIn("leak", leak[0]["verdict"])
+        # Faces 0.14 m short of the mid-plane: the wall surfaces' samples (pushed 0.125 m into each room) sit in the fade.
+        short = ga.check_margins(self._pair(-0.14, 0.14), wall)
+        self.assertIn("wall-gap", short[0]["verdict"])
+
+    def test_margins_uneven_faces_through_wall(self):
+        # #1205 review: one face inside the wall, the other past its far surface. The midpoint between the faces lands
+        # in room air, so the wall must be found anywhere between them; and a face 0.07 m past the far surface (hidden
+        # from the leak test by the 0.125 m normal bias) still puts its probes in the next room's air.
+        wall = [axis_box((0, 1.5, 0), (0.2, 3, 4))]
+        for a_hi, b_lo in ((0.30, -0.055), (0.17, -0.055), (0.055, -0.17)):
+            r = ga.check_margins(self._pair(a_hi, b_lo), wall)[0]
+            self.assertGreater(r["walled_samples"], 0, (a_hi, b_lo))
+            self.assertEqual(r["open_samples"], 0, (a_hi, b_lo))
+            self.assertIn("through-wall", r["verdict"], (a_hi, b_lo))
+            self.assertAlmostEqual(r["through_wall_max_m"], max(a_hi, -b_lo) - 0.1, places=3)
+        ok = ga.check_margins(self._pair(0.095, -0.055), wall)[0]   # still inside the wall: fine
+        self.assertEqual(ok["verdict"], "ok")
+        # a corner: more wall right past the far surface, so the face sits in wall, not air
+        corner = wall + [axis_box((0.5, 1.5, 0), (0.8, 3, 4))]
+        self.assertNotIn("through-wall", ga.check_margins(self._pair(0.17, -0.055), corner)[0]["verdict"])
+        # one room's two volumes around a wall stub: the air past it is the same room's, no leak
+        same = self._pair(0.17, -0.055)
+        same[0]["name"], same[1]["name"] = "GI hall 1", "GI hall 2"
+        self.assertEqual(ga.check_margins(same, wall)[0]["verdict"], "ok")
+        self.assertEqual(sum(r["through_wall"] for r in ga.face_probe_exposure(same, wall)), 0)
+
+    def test_margins_outer_face_ignored(self):
+        # A small box poking out of a room through an outside opening: its outer face is not part of the meeting.
+        room = {"name": "GI room", "box": axis_box((0, 1.5, 2), (4, 3, 4)), "fade": 0.1, "spacing": 0.5}
+        nook = {"name": "GI nook", "box": axis_box((0, 1.5, -0.1), (1, 3, 0.4)), "fade": 0.1, "spacing": 0.5}
+        rows = ga.check_margins([room, nook], [])
+        self.assertEqual([r["verdict"] for r in rows], ["ok"])
+
+    def test_face_probe_exposure(self):
+        vols = self._pair(0.055, -0.055)
+        wall = [axis_box((0, 1.5, 0), (0.2, 3, 4))]
+        rows = {r["volume"]: r for r in ga.face_probe_exposure(vols, wall)}
+        self.assertGreater(rows["GI a"]["in_wall"], 0)       # its +x face, inside the wall
+        self.assertGreater(rows["GI a"]["exposed"], 0)       # its other faces: open air nothing else covers
+        self.assertEqual(rows["GI a"]["through_wall"], 0)
+        rows = {r["volume"]: r for r in ga.face_probe_exposure(vols, [])}
+        self.assertEqual(rows["GI a"]["in_wall"], 0)
+        self.assertGreater(rows["GI a"]["shared"], 0)        # with no wall, the +x face sits inside GI b
+        # GI a's +x face 0.07 m past the wall's far surface, inside GI b's air: through-wall, not shared
+        rows = {r["volume"]: r for r in ga.face_probe_exposure(self._pair(0.17, -0.055), wall)}
+        self.assertGreater(rows["GI a"]["through_wall"], 0)
+        self.assertEqual(rows["GI b"]["through_wall"], 0)
+
     def test_room_of(self):
         self.assertEqual(ga.room_of("GI living room 10"), "living room")
         self.assertEqual(ga.room_of("GI landing"), "landing")

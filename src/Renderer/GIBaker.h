@@ -37,6 +37,10 @@ public:
         int ProbesPerFrame = 24;    // the frame's own views and shadows cost the same however many probes it does
         float ClipMargin = 8.0f;    // metres round the volumes that the captures still draw (the yard through the windows)
         int SettleFrames = 8;       // frames after a lighting change before capturing
+        // Repeatable bakes: captures take hard LOD switches (RenderFrameContext::GIBakePinClocks). The app pins the
+        // other clocks a capture sees (clouds, stars, sky dither, foliage wind) for the whole --bake-gi run.
+        // TARTARUS_GI_BAKE_LIVE_CLOCKS=1 turns all of it off, for an A/B against the old behaviour.
+        bool PinClocks = true;
         std::string SkipLightPrefix = "Bounce "; // hand-placed fakes of the bounce (house_lights.py FILL_I): never baked
         // The doors, drawers and lids (OpenableComponent) in the captures: as Play starts them (Start Open / Start Ajar
         // open that far, the rest shut), all open, or all shut as authored (before GI Phase 2 every bake saw them shut).
