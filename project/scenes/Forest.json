@@ -385865,7 +385865,7 @@
         "Angular Size": 0.5299999713897705,
         "Bounds": true,
         "Bounds Center": [
-          -32.91,
+          -30.1185,
           4.947000026702881,
           -10.8415
         ],
@@ -385876,12 +385876,12 @@
           -1.0
         ],
         "Bounds Fade -": [
-          -1.0,
+          0.19,
           -1.0,
           -1.0
         ],
         "Bounds Size": [
-          11.5,
+          5.917,
           2.815000057220459,
           6.357
         ],
@@ -385911,6 +385911,75 @@
       "id": 35405,
       "name": "Lamp_stand Lamp_stand 17",
       "order": 107516,
+      "parentId": 35379,
+      "position": [
+        -32.61000061035156,
+        4.763999938964844,
+        -12.754400253295898
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -35.7735,
+          4.947000026702881,
+          -9.9425
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Fade +": [
+          0.19,
+          -1.0,
+          -1.0
+        ],
+        "Bounds Fade -": [
+          -1.0,
+          -1.0,
+          -1.0
+        ],
+        "Bounds Size": [
+          5.773,
+          2.815000057220459,
+          4.559
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.03500000014901161,
+          0.019999999552965164
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 0.5,
+        "Range": 7.570000171661377,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Lamp_stand 17",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 36181,
+      "name": "Lamp_stand Lamp_stand 17 (master)",
+      "order": 268775,
       "parentId": 35379,
       "position": [
         -32.61000061035156,
