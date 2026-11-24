@@ -385029,18 +385029,18 @@
         "Bounds Center": [
           -33.395,
           2.01275,
-          10.680000305175781
+          10.195
         ],
         "Bounds Fade": 0.05000000074505806,
         "Bounds Fade +": [
           -1,
           0.03,
-          -1
+          0.19
         ],
         "Bounds Size": [
           10.53,
           2.7645,
-          5.800000190734863
+          4.83
         ],
         "Cast Shadows": false,
         "Color": [
@@ -385068,6 +385068,75 @@
       "id": 36392,
       "name": "Ceiling Living room",
       "order": 150011,
+      "parentId": 35585,
+      "position": [
+        -29.27463722229004,
+        3.3450000286102295,
+        11.791335105895996
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -34.85,
+          2.01275,
+          13.0
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Fade +": [
+          -1,
+          0.03,
+          -1
+        ],
+        "Bounds Fade -": [
+          -1,
+          -1,
+          0.19
+        ],
+        "Bounds Size": [
+          7.62,
+          2.7645,
+          1.16
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.25,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 88.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 38103,
+      "name": "Ceiling Living room (strip)",
+      "order": 160009,
       "parentId": 35585,
       "position": [
         -29.27463722229004,
@@ -385157,18 +385226,18 @@
         "Bounds Center": [
           -33.395,
           2.01275,
-          10.680000305175781
+          10.195
         ],
         "Bounds Fade": 0.05000000074505806,
         "Bounds Fade +": [
           -1,
           0.03,
-          -1
+          0.19
         ],
         "Bounds Size": [
           10.53,
           2.7645,
-          5.800000190734863
+          4.83
         ],
         "Cast Shadows": false,
         "Color": [
@@ -385196,6 +385265,75 @@
       "id": 36394,
       "name": "Ceiling Living room",
       "order": 150013,
+      "parentId": 35585,
+      "position": [
+        -30.681140899658203,
+        3.3450000286102295,
+        11.791335105895996
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -34.85,
+          2.01275,
+          13.0
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Fade +": [
+          -1,
+          0.03,
+          -1
+        ],
+        "Bounds Fade -": [
+          -1,
+          -1,
+          0.19
+        ],
+        "Bounds Size": [
+          7.62,
+          2.7645,
+          1.16
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.25,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 88.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 38104,
+      "name": "Ceiling Living room (strip)",
+      "order": 160010,
       "parentId": 35585,
       "position": [
         -30.681140899658203,
@@ -387374,13 +387512,18 @@
         "Bounds Center": [
           -33.395,
           2.0380001068115234,
-          10.680000305175781
+          10.195
         ],
         "Bounds Fade": 0.05000000074505806,
+        "Bounds Fade +": [
+          -1,
+          -1,
+          0.19
+        ],
         "Bounds Size": [
           10.53,
           2.815000057220459,
-          5.800000190734863
+          4.83
         ],
         "Cast Shadows": false,
         "Color": [
@@ -387408,6 +387551,70 @@
       "id": 35609,
       "name": "Lamp_table_A Lamp_table_A 15",
       "order": 107514,
+      "parentId": 35585,
+      "position": [
+        -31.175100326538086,
+        1.3937000036239624,
+        12.06089973449707
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -34.85,
+          2.0380001068115234,
+          13.0
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Fade -": [
+          -1,
+          -1,
+          0.19
+        ],
+        "Bounds Size": [
+          7.62,
+          2.815000057220459,
+          1.16
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2700.0,
+        "Culling Mask": -1,
+        "Intensity": 0.3499999940395355,
+        "Range": 8.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Lamp_table_A 15",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 38105,
+      "name": "Lamp_table_A Lamp_table_A 15 (strip)",
+      "order": 160011,
       "parentId": 35585,
       "position": [
         -31.175100326538086,
