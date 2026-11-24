@@ -155,6 +155,20 @@ One table per check: room or doorway, measured value, threshold, PASS/FAIL, pict
 every row passes. Phase 0 produces the same tables with the current values (all expected to fail where the plan's causes
 are real), which is the baseline for each after-pair.
 
+## Phase 1 changes that affect these checks
+
+Phase 1 (Nov 23) changes the direct light and the tooling, not the bake. Rollup rows are added as each PR lands.
+
+* **Bounce tune-down (plan only in Phase 1).** The brighter bounce is brought back toward the Nov 14 look in Phase 3 by
+  per-volume `Intensity`, not an engine change; see `docs/GI_BOUNCE_TUNE_PLAN.md`. Effect on checks: the by-design dark
+  rooms get a **ceiling** (no brighter than their `before_gi` level, within the bake-noise tolerance), not only a floor, and
+  the before/after pairs compare against the P0 pictures, not against the fresh bake.
+* **20 lamps get Cast Shadows** (Atlas, scene PR), **room-aware shadow slots** (Argus), **repeatable bake** (Kronos),
+  **SSAO-off GL bug** (Talos). Rollup: pending, filled in as each PR merges (PR, what changed, evidence, effect on the
+  PROPOSED thresholds).
+* After Kronos's PR the bake noise caveat above can be tightened to the measured spread (target: byte-identical or under
+  0.5% per layer).
+
 ## Open items
 
 * Replace each PROPOSED value with a baseline-derived one once Argus's `REPORT.md` is in; note the source run beside it.

@@ -5,6 +5,8 @@
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "Log.h"
+#include "FrameLoads.h"
+#include <chrono>
 #include "gl.h"
 #include "stb_image.h"
 #include <glm/glm.hpp>
@@ -26,6 +28,7 @@ std::shared_ptr<Cubemap> Cubemap::LoadHdr(const std::string& path, int faceSize,
         return nullptr;
     }
 
+    const auto loadStart = std::chrono::steady_clock::now(); // --perf-bench's per-frame load log
     stbi_set_flip_vertically_on_load(true);
     int w = 0, h = 0, c = 0;
     float* data = stbi_loadf(path.c_str(), &w, &h, &c, 3);
@@ -113,5 +116,7 @@ std::shared_ptr<Cubemap> Cubemap::LoadHdr(const std::string& path, int faceSize,
     auto cube = std::shared_ptr<Cubemap>(new Cubemap());
     cube->m_Tex      = cubeTex;
     cube->m_FaceSize = faceSize;
+    // A 4K .hdr is a decode + upload + 6-face convert on the main thread: a load hitch worth naming.
+    FrameLoads::Note("hdri load", path, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
     return cube;
 }

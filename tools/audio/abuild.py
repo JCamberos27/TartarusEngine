@@ -20,23 +20,24 @@ GR_BUDGET_DB = {"close": 4.0, "sub": 1.0, "tail": 3.0, "far": 3.0, "ambience": 2
 SUSTAINED = ("tail", "far", "ambience", "loop", "ir")
 
 
-def finish(x, layer, ceiling_db=None, max_gr_db=None, trim_edges=True, target=None, loop=False, trim_bleed=False, expand=True):
+def finish(x, layer, ceiling_db=None, max_gr_db=None, trim_edges=True, target=None, loop=False, trim_bleed=False, refinish=False):
     """Bring a rendered one-shot toward its layer's loudness target without breaking the peak ceiling or its transient.
 
     Gain to target; if that pushes the true peak over the ceiling, a limiter takes at most max_gr_db of it (default: the layer's
     GR_BUDGET_DB, 1.5 dB for transient layers) and the rest is plain gain reduction. One-shots also get their noise floor expanded
-    down (anything 50 dB under the peak; expand=False skips it for audio that was already finished once: a second pass pushes a
-    soft attack's first sound later, 1.8 -> 5.9 ms on Impacts/dirt_3), and with trim_bleed a second event of the source that bled
-    into the slice is cut off."""
+    down (anything 50 dB under the peak) and their DC / sub-18 Hz rumble filtered out, and with trim_bleed a second event of the
+    source that bled into the slice is cut off. refinish=True is for audio that was already finished once (eqstage re-levelling
+    after its EQ): only the gain / limiter step runs, since a second floor expansion pushes a soft attack's first sound later
+    (1.8 -> 5.9 ms on Impacts/dirt_3) and a second DC filter stacks into a steeper low cut."""
     ceiling = TARGETS["peak_dbtp_max"] if ceiling_db is None else ceiling_db
     tgt = TARGETS["layers"][layer]["target"] if target is None else target
     if max_gr_db is None:
         max_gr_db = GR_BUDGET_DB.get(layer, 1.5)
     if trim_bleed and not loop and layer not in SUSTAINED:
         x = adsp.trim_secondary(x)
-    if expand and not loop and layer not in SUSTAINED:
+    if not refinish and not loop and layer not in SUSTAINED:
         x = adsp.expand_floor(x)
-    if not loop:                                       # a loop keeps its (circularly continuous) edges untouched
+    if not refinish and not loop:                      # a loop keeps its (circularly continuous) edges untouched
         x = adsp.remove_dc(x)
     if trim_edges and not loop:                        # a click-free start; an end that dies away, never a hard stop
         x = adsp.fade(x, int(0.0008 * adsp.SR), int(min(0.06, 0.2 * len(x) / adsp.SR) * adsp.SR))
