@@ -1,0 +1,95 @@
+{
+ "version": 1,
+ "scene": "scenes/Forest.json",
+ "stillFrames": 0,
+ "player": {
+  "eyeHeight": 1.6,
+  "horizontalFovDeg": 90.0,
+  "verticalFovDeg": 58.72,
+  "walkSpeed": 4.0,
+  "source": "sweep v2: eye 1.6 m; Forest.json Player Spawn FOV"
+ },
+ "doorState": "allOpen",
+ "waypoints": [
+  {
+   "id": "warmup",
+   "room": "master bedroom",
+   "giVolume": "",
+   "kind": "room",
+   "feet": [
+    -11.0,
+    3.1,
+    23.9
+   ],
+   "yawDeg": 138.5,
+   "pitchDeg": -35.0
+  },
+  {
+   "id": "jacob-redroom-metal",
+   "room": "master bedroom",
+   "giVolume": "",
+   "kind": "room",
+   "feet": [
+    -9.3,
+    3.1,
+    24.6
+   ],
+   "yawDeg": 190.0,
+   "pitchDeg": -25.0
+  },
+  {
+   "id": "armchair-rail",
+   "room": "master bedroom",
+   "giVolume": "",
+   "kind": "room",
+   "feet": [
+    -11.0,
+    3.1,
+    23.9
+   ],
+   "yawDeg": 138.5,
+   "pitchDeg": -35.0
+  },
+  {
+   "id": "floorlamp-pole",
+   "room": "master bedroom",
+   "giVolume": "",
+   "kind": "room",
+   "feet": [
+    -9.8,
+    3.1,
+    24.6
+   ],
+   "yawDeg": 153.0,
+   "pitchDeg": -5.0
+  },
+  {
+   "id": "tablelamp-base",
+   "room": "master bedroom",
+   "giVolume": "",
+   "kind": "room",
+   "feet": [
+    -10.6,
+    3.1,
+    23.0
+   ],
+   "yawDeg": 152.0,
+   "pitchDeg": -19.0
+  },
+  {
+   "id": "jlook-kitchen-sink_basin",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 7",
+   "kind": "sweep_basin",
+   "feet": [
+    -12.7,
+    0.194,
+    29.38
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -38.0,
+   "cut": true,
+   "note": "Jacob 4(b): kitchen sink basin, verify the probe recapture"
+  }
+ ]
+}
