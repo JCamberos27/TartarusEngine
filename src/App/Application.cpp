@@ -2117,6 +2117,7 @@ bool AppSession::Frame() {
                                                           : GIBaker::Options::Doors::Start;
                 bo.Emissive = Env::Float(Env::Var::GiBakeEmissive, bo.Emissive); // (a malformed value keeps the default)
                 bo.Bounces = Env::Int(Env::Var::GiBakeBounces, bo.Bounces);
+                bo.FaceNudge = std::max(Env::Float(Env::Var::GiBakeFaceNudge, bo.FaceNudge), 0.0f); // 0 = captured on the face, as before f8c288f1
                 if (Env::Flag(Env::Var::GiBakeTrace))
                     bo.TraceShadowSet = [&] { return DescribeShadowHolders(world, lightGather); };
                 if (!giBaker->Begin(world, bo)) {

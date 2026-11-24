@@ -987,6 +987,31 @@ void GIVolumeLookup() {
         CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 3, 3), d, half, 0.0f), glm::vec3(0.0f)));                 // 0 = off
         CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 3, 3), d, half, 1.0f), glm::vec3(0.0f, -0.45f, 0.0f)));  // clamped to 0.45 cell
     }
+    // The nudge guard: a face probe is nudged only into open air (Jacob: child's bedroom 2, closet doors).
+    {
+        const auto S = [](float x0, float y0, float z0, float x1, float y1, float z1) { return GI::SolidBox{glm::vec3(x0, y0, z0), glm::vec3(x1, y1, z1)}; };
+        const glm::vec3 face(9.42f, 4.0f, 25.0f), nudged(9.27f, 4.0f, 25.0f);
+        CHECK(!GI::NudgeBlocked(face, nudged, {}));                                                  // open air
+        CHECK(GI::NudgeBlocked(face, nudged, {S(8.0f, 3.0f, 24.0f, 9.3f, 5.0f, 26.0f)}));             // a wardrobe whose front is 0.12 m behind the face
+        CHECK(!GI::NudgeBlocked(face, glm::vec3(9.35f, 4.0f, 25.0f), {S(8.0f, 3.0f, 24.0f, 9.3f, 5.0f, 26.0f)})); // the nudge stops short of it
+        CHECK(!GI::NudgeBlocked(face, nudged, {S(8.0f, 3.0f, 20.0f, 9.3f, 5.0f, 21.0f)}));            // a box beside the path
+        CHECK(!GI::NudgeBlocked(glm::vec3(9.0f, 4.0f, 25.0f), glm::vec3(8.85f, 4.0f, 25.0f), {S(8.0f, 3.0f, 24.0f, 9.3f, 5.0f, 26.0f)})); // the face point is already inside it (a slab)
+        CHECK(!GI::NudgeBlocked(glm::vec3(5.0f, 5.0f, 5.0f), glm::vec3(5.0f, 4.85f, 5.0f), {S(0.0f, 4.9f, 0.0f, 9.0f, 5.1f, 9.0f)})); // a ceiling slab: the nudge leaves it
+        CHECK(GI::NudgeBlocked(glm::vec3(5.0f, 5.0f, 5.0f), glm::vec3(5.0f, 4.85f, 5.0f), {S(0.0f, 4.0f, 4.0f, 9.0f, 4.9f, 6.0f)}));   // a fixture hanging 0.1 m below the face
+        // Whole volume: 5 x 4 x 5 probes, x faces at +-2. Face probes without a wardrobe all nudge; with one against the +x face the ones behind it stay.
+        const GI::Box nbox = GI::Box::FromTransform(glm::mat4(1.0f), glm::vec3(4.0f, 3.0f, 4.0f));
+        const glm::ivec3 d = GI::GridDims(nbox.Half, 1.0f);
+        int ok0 = 0, blk0 = 0, ok1 = 0, blk1 = 0;
+        const auto free = GI::PlanFaceNudges(nbox, d, 0.15f, {}, &ok0, &blk0);
+        const auto shut = GI::PlanFaceNudges(nbox, d, 0.15f, {S(1.0f, -1.5f, -2.5f, 1.9f, 1.5f, 2.5f)}, &ok1, &blk1); // a wardrobe whose front is 0.1 m inside the +x face
+        CHECK(blk0 == 0 && ok0 > 0);
+        CHECK(blk1 > 0 && ok1 + blk1 == ok0);                 // every probe it blocked would have nudged
+        CHECK(free.size() == shut.size() && free.size() == (std::size_t)d.x * d.y * d.z);
+        CHECK(shut[GI::ProbeIndex(glm::ivec3(d.x - 1, 2, 2), d)] == glm::vec3(0.0f));       // a +x face probe in front of the wardrobe stays
+        CHECK(free[GI::ProbeIndex(glm::ivec3(d.x - 1, 2, 2), d)] != glm::vec3(0.0f));
+        CHECK(shut[GI::ProbeIndex(glm::ivec3(0, 2, 2), d)] != glm::vec3(0.0f));             // the -x face (open air) still nudges
+        CHECK(GI::PlanFaceNudges(nbox, d, 0.0f, {}, &ok0, &blk0)[0] == glm::vec3(0.0f) && ok0 == 0); // 0 = off
+    }
     // FillInvalid on a face row: a whole invalid ceiling row is filled from the row below, blurred in-plane, so one strongly
     // directional probe under it does not paint a hot spot; and a face probe with a valid in-plane neighbour takes those.
     {

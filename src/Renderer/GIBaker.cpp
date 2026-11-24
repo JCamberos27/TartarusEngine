@@ -1,6 +1,7 @@
 #include "GIBaker.h"
 
 #include "GIVolumes.h"
+#include "Model.h"
 #include "HdrTarget.h"
 #include "ReflectionProbeCapture.h"
 #include "RenderFrameContext.h"
@@ -131,13 +132,13 @@ bool GIBaker::Begin(World& world, const Options& opt) {
             m_ClipMax = glm::max(m_ClipMax, v.Bounds.ToWorld(q));
         }
     PoseDoors(world, opt.DoorPose);
+    PlanNudges(world, opt);
 
     m_ClipMin -= glm::vec3(opt.ClipMargin);
     m_ClipMax += glm::vec3(opt.ClipMargin);
     m_Target = std::make_unique<HdrTarget>();
     m_Faces.assign((std::size_t)opt.FaceSize * opt.FaceSize * 4 * 6, 0.0f);
     m_StartTime = Now();
-    m_Nudged = 0;
     std::string names;
     for (const auto& v : m_Volumes)
         names += (names.empty() ? "" : ", ") + v.Name + " (" + std::to_string(v.Dims.x) + "x" + std::to_string(v.Dims.y) +
@@ -236,6 +237,43 @@ void GIBaker::PoseDoors(World& world, Options::Doors pose) {
     Log::Info("[GI bake] doors: " + line);
     if (m_Opt.TraceShadowSet) Log::Info("[GI trace] doors: " + line);
     world.RebuildWorldTransformCache();
+}
+
+void GIBaker::PlanNudges(World& world, const Options& opt) {
+    world.RebuildWorldTransformCache();
+    std::vector<GI::SolidBox> all; // every visible mesh's world box
+    for (auto [e, tc, r] : world.Registry.view<const TransformComponent, const RenderableComponent>().each()) {
+        if (!r.ModelRef || r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
+        if (world.Registry.any_of<InactiveTag, DeactivatedTag>(e)) continue;
+        const glm::vec3 lo = r.ModelRef->BoundsMin(), hi = r.ModelRef->BoundsMax();
+        if (lo.x > hi.x || lo.y > hi.y || lo.z > hi.z) continue;
+        const glm::mat4 x = world.GetCachedWorldTransform(e);
+        GI::SolidBox b{glm::vec3(1e30f), glm::vec3(-1e30f)};
+        for (int c = 0; c < 8; ++c) {
+            const glm::vec3 w = glm::vec3(x * glm::vec4((c & 1) ? hi.x : lo.x, (c & 2) ? hi.y : lo.y, (c & 4) ? hi.z : lo.z, 1.0f));
+            b.Min = glm::min(b.Min, w);
+            b.Max = glm::max(b.Max, w);
+        }
+        all.push_back(b);
+    }
+    m_Nudged = m_NudgeBlocked = 0;
+    std::vector<std::pair<int, std::string>> blockedBy; // (face probes kept on the face, volume) for the top-10 list
+    for (VolumeJob& v : m_Volumes) {
+        int ok = 0, blocked = 0;
+        v.Nudge = GI::PlanFaceNudges(v.Bounds, v.Dims, opt.FaceNudge, all, &ok, &blocked);
+        m_Nudged += ok;
+        m_NudgeBlocked += blocked;
+        if (blocked > 0) {
+            Log::Info("[GI bake] nudge blocked by geometry in '" + v.Name + "': " + std::to_string(blocked) + " face probes stay on the face");
+            blockedBy.emplace_back(blocked, v.Name);
+        }
+    }
+    std::stable_sort(blockedBy.begin(), blockedBy.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    for (std::size_t i = 0; i < blockedBy.size() && i < 10; ++i)
+        Log::Info("[GI bake] nudge kept on the face, top " + std::to_string(i + 1) + ": '" + blockedBy[i].second + "' " +
+                  std::to_string(blockedBy[i].first));
+    Log::Info("[GI bake] face probes nudged: " + std::to_string(m_Nudged) + ", kept on the face (blocked): " + std::to_string(m_NudgeBlocked) +
+              Fmt(" (%.2f m inward)", opt.FaceNudge));
 }
 
 void GIBaker::RestoreDoors(World& world) {
@@ -337,8 +375,7 @@ bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const R
         const VolumeJob& v = m_Volumes[jobs[k].Vol];
         const int pr = jobs[k].Probe;
         const glm::ivec3 ijk(pr % v.Dims.x, (pr / v.Dims.x) % v.Dims.y, pr / (v.Dims.x * v.Dims.y));
-        const glm::vec3 nudge = GI::FaceProbeNudge(ijk, v.Dims, v.Bounds.Half, m_Opt.FaceNudge);
-        if (!v.ValidKnown && nudge != glm::vec3(0.0f)) ++m_Nudged;
+        const glm::vec3 nudge = pr < (int)v.Nudge.size() ? v.Nudge[pr] : glm::vec3(0.0f);
         const glm::vec3 pos = v.Bounds.ToWorld(GI::ProbeLocal(ijk, v.Dims, v.Bounds.Half) + nudge);
         for (int f = 0; f < 6; ++f) {
             m_Target->BindForRender();
@@ -452,7 +489,6 @@ void GIBaker::EndPass() {
 }
 
 bool GIBaker::Finish(World& world, GIVolumes& gi) {
-    Log::Info("[GI bake] face probes nudged: " + std::to_string(m_Nudged) + Fmt(" (%.2f m inward)", m_Opt.FaceNudge));
     RestoreLighting(world);
     gi.SetOverride(nullptr);
     gi.SetSolo(nullptr);

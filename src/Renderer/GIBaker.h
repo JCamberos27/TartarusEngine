@@ -77,6 +77,10 @@ public:
     // Begin's door step, public for the tests: saves every openable, poses them (start / open / shut / hidden), sets
     // Openable::BakePosed and logs the "[GI bake] doors:" line (and a "[GI trace]" one under TARTARUS_GI_BAKE_TRACE).
     void PoseDoors(World& world, Options::Doors pose);
+    // Begin's nudge step: plans every volume's per-probe capture offset (Options::FaceNudge on the box-face probes, except
+    // where the segment to the nudged point would enter a visible mesh's world box that doesn't hold the face point:
+    // GI::PlanFaceNudges) and logs "[GI bake] face probes nudged: N, kept on the face (blocked): M".
+    void PlanNudges(World& world, const Options& opt);
     // The error path of Step without the GIVolumes reset: sets the error (if none yet), puts the lighting and the doors
     // back, and finishes. Public for the tests.
     void Abort(World& world, const std::string& why);
@@ -94,6 +98,7 @@ private:
         glm::ivec3 Dims{0};
         std::vector<std::string> Layers; // circuit names, "" = Outside
         std::vector<bool> Valid;         // per probe, from the first pass
+        std::vector<glm::vec3> Nudge;    // per probe: the box-local offset it is captured at (GI::FaceProbeNudge, or 0 where geometry blocks it)
         bool ValidKnown = false;
     };
     struct Pass {
@@ -110,7 +115,7 @@ private:
     // Per bounce, the volumes' bakes as they fill (the last bounce is what's written).
     std::vector<std::shared_ptr<GI::BakeFile>> m_Bakes;
     int m_Pass = -1, m_Vol = 0, m_Probe = 0, m_Settle = 0;
-    int m_Nudged = 0;                    // first-pass face probes captured nudged inward (logged at the end of pass 1)
+    int m_Nudged = 0, m_NudgeBlocked = 0; // face probes captured nudged inward / kept on the face because geometry blocks the nudge
     long long m_Done = 0, m_Total = 0;
     std::unique_ptr<HdrTarget> m_Target;
     std::vector<float> m_Faces;

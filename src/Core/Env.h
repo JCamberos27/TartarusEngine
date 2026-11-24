@@ -70,6 +70,7 @@
     X(ProbeDump, "TARTARUS_PROBE_DUMP", Str, "dump reflection probe faces to this folder")                            \
     X(GiBakeEmissive, "TARTARUS_GI_EMISSIVE", Float, "--bake-gi: emission kept in the captures (default 0)")            \
     X(GiBakeBounces, "TARTARUS_GI_BOUNCES", Int, "--bake-gi: light bounces to bake (default 2)")                      \
+    X(GiBakeFaceNudge, "TARTARUS_GI_FACE_NUDGE", Float, "--bake-gi: metres a box-face probe is captured inside (default 0.15; 0 = on the face)") \
     X(GiBakeTrace, "TARTARUS_GI_BAKE_TRACE", Flag, "--bake-gi: log the shadow-slot holders of every probe batch")     \
     X(GiBakeLiveClocks, "TARTARUS_GI_BAKE_LIVE_CLOCKS", Flag, "--bake-gi: leave the clocks running (A/B vs the pinned bake clock)") \
     X(SkinAudit, "TARTARUS_SKIN_AUDIT", Flag, "log skinning audit")                                                   \
