@@ -11,6 +11,17 @@ layout(binding = 6) uniform sampler3D uScatter; // pass 1's output
 
 uniform vec4  uProjParams;  // P[0][0], P[1][1], P[2][0], P[2][1]
 uniform vec4  uSliceParams; // x = near, y = ln(far / near)
+uniform float uInscatterCap; // soft cap on the accumulated in-scatter's luminance (0 = off), VolumetricFog::CapInscatter
+
+// Identity up to cap / 2, then a roll-off that stays below cap (hue kept: the colour is scaled, not clipped).
+vec3 SoftCapLuminance(vec3 c, float cap) {
+    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    float k = cap * 0.5;
+    if (cap <= 0.0 || l <= k) return c;
+    float span = cap - k;
+    float capped = k + span * (1.0 - exp(-(l - k) / span));
+    return c * (capped / l);
+}
 
 void main() {
     ivec3 uGrid = imageSize(uOut); // W, H, D
@@ -34,6 +45,6 @@ void main() {
         float sliceT = exp(-sigmaT * ds);
         scattered += transmittance * (s.rgb - s.rgb * sliceT) / sigmaT;
         transmittance *= sliceT;
-        imageStore(uOut, ivec3(id, k), vec4(scattered, transmittance));
+        imageStore(uOut, ivec3(id, k), vec4(SoftCapLuminance(scattered, uInscatterCap), transmittance));
     }
 }

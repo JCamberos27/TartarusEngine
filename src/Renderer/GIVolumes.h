@@ -47,8 +47,9 @@ public:
     // pixel tests only those (testing all 46 house volumes on every forest pixel cost 2 ms). AllMask(): every volume.
     std::uint64_t MaskFor(const glm::vec3& mn, const glm::vec3& mx) const;
     std::uint64_t AllMask() const { return m_Volumes.empty() ? 0u : (m_Volumes.size() >= 64 ? ~0ull : (1ull << m_Volumes.size()) - 1ull); }
-    // uGIMaskLo / uGIMaskHi (the mask's low and high 32 bits) on a program.
-    static void SetMask(Shader& program, std::uint64_t mask);
+    // uGIMaskLo / uGIMaskHi (the mask's low and high 32 bits) and uGIFlatL1 on a program. flatL1: the draw's directional GI
+    // term is damped (GIVolumes.glsl GI_FLAT_L1_SCALE): openable leaves, which sit in a doorway between two rooms.
+    static void SetMask(Shader& program, std::uint64_t mask, bool flatL1 = false);
     int Count() const { return (int)m_Volumes.size(); }
     void Release();
 
@@ -75,6 +76,7 @@ public:
         GI::Box Bounds;
         glm::ivec3 Dims{0};
         float Fade = 0.05f, Intensity = 1.0f, Spacing = 0.5f;
+        glm::vec3 FadeLo{0.05f}, FadeHi{0.05f}; // the fade of each face (-x/-y/-z, +x/+y/+z): the component's Fade Min / Max, else Fade
         std::shared_ptr<const GI::BakeFile> File;
         const GI::VolumeBake* Bake = nullptr;
         std::vector<int> Layers;      // indices into Bake->Layers, at most kMaxLayers

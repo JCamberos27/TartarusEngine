@@ -64,6 +64,26 @@ void SmallObjectCull() {
     CHECK(!TooSmallOnScreen(lo, hi, glm::vec3(0, 0, 30), 4.0f, 0.004f));
 }
 
+// LightBuffer::BoxWeight (CPU mirror of LightBuffer.glsl LightBoxFade): uniform fade = the old single-fade result;
+// a per-face fade only changes its own face (Bounds Fade - / Bounds Fade +).
+void LightBoundsFaceFade() {
+    const glm::vec3 half(2.0f, 1.0f, 3.0f), f(0.05f);
+    CHECK(LightBuffer::BoxWeight(glm::vec3(0.0f), half, f, f) == 1.0f);
+    CHECK(LightBuffer::BoxWeight(glm::vec3(2.0f, 0, 0), half, f, f) == 0.0f);             // on the +x face
+    CHECK(std::abs(LightBuffer::BoxWeight(glm::vec3(-1.975f, 0, 0), half, f, f) - 0.5f) < 1e-3f); // half way in
+    // +x face widened to 1 m: 0.5 m inside it is half lit; the -x face keeps its 5 cm fade.
+    const glm::vec3 fp(1.0f, 0.05f, 0.05f);
+    CHECK(std::abs(LightBuffer::BoxWeight(glm::vec3(1.5f, 0, 0), half, f, fp) - 0.5f) < 1e-3f);
+    CHECK(LightBuffer::BoxWeight(glm::vec3(-1.5f, 0, 0), half, f, fp) == 1.0f);
+    CHECK(LightBuffer::BoxWeight(glm::vec3(0, 0, 2.99f), half, f, fp) < 0.21f);            // z faces untouched
+    // BoundLast: < 0 = the light's Bounds Fade, else the face's own (>= 1 mm).
+    LightBuffer lb;
+    lb.AddPoint(glm::vec3(0.0f), glm::vec3(1.0f), 1.0f, 5.0f);
+    lb.BoundLast(glm::mat3(1.0f), glm::vec3(0.0f), half, 0.05f, glm::vec3(-1.0f, 0.3f, -1.0f), glm::vec3(0.0f, -1.0f, -1.0f));
+    CHECK(lb.FaceFadeOfLast(false) == glm::vec3(0.05f, 0.3f, 0.05f));
+    CHECK(lb.FaceFadeOfLast(true) == glm::vec3(1e-3f, 0.05f, 0.05f));
+}
+
 // LightBuffer::DistanceFade: full strength near and inside the range sphere, a smooth monotonic fall by projected
 // size, nothing once the sphere is a few pixels; the same at any distance for the same size.
 void LightDistanceFade() {
@@ -442,6 +462,17 @@ void InstanceImportId() {
 // The froxel jitter's blue noise: every one of the 1024 ranks exactly once, and an even scatter -
 // the first eighth of the ranks never has two points as neighbours (a white-noise pick of 128 out
 // of 1024 cells almost surely would).
+void VolumetricInscatterCap() {
+    CHECK(VolumetricFog::CapInscatter(0.3f, 2.0f) == 0.3f && VolumetricFog::CapInscatter(1.0f, 2.0f) == 1.0f); // below the knee: untouched
+    CHECK(VolumetricFog::CapInscatter(50.0f, 0.0f) == 50.0f);                                                   // 0 = off
+    float prev = 1.0f;
+    for (float l = 1.0f; l < 1000.0f; l *= 1.3f) {
+        const float c = VolumetricFog::CapInscatter(l, 2.0f);
+        CHECK(c >= prev - 1e-6f && c <= 2.0f && c <= l + 1e-6f); // monotone, bounded by the cap, never brighter than the input
+        prev = c;
+    }
+    CHECK(std::fabs(VolumetricFog::CapInscatter(1.0001f, 2.0f) - VolumetricFog::CapInscatter(0.9999f, 2.0f)) < 1e-3f); // continuous at the knee
+}
 void VolumetricBlueNoise() {
     unsigned short ranks[32 * 32];
     VolumetricFog::BuildBlueNoise(ranks);
@@ -897,6 +928,18 @@ void ShaderConstantsMatch() {
         CHECK(has(*text, "uniform float uPointShadowWeight[" + n(PointShadowMap::kMaxPoints) + "];"));
         CHECK(has(*text, "uniform float uSpotShadowWeight[" + n(SpotShadowMap::kMaxSpots) + "];"));
     }
+    // S2 point PCF: the per-slot kernel array SceneRenderer uploads, and the hard path for Softness 0 kept.
+    CHECK(has(shading, "uniform float uPointShadowSoftness[" + n(PointShadowMap::kMaxPoints) + "];"));
+    CHECK(has(shading, "float soft = kernel > 0.0 ? smoothstep(0.03, 0.10, nlG) : 0.0;"));
+    CHECK(has(shading, "bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance)"));
+    CHECK(has(shading, "float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float texelW, float kernel, float biasW, float far) {"));
+    // Tent PCF: 4x4 grid, binomial weights, spacing <= 1 texel (continuous penumbra: no bands, no grain).
+    CHECK(has(shading, "float h = clamp((kernel - 1.0) / 1.5, 0.0, 1.0) * texelW;")); // taps <= 1 texel apart
+    CHECK(has(shading, "const float kTentW[4] = float[](1.0, 3.0, 3.0, 1.0);"));
+    // fix-3 spot PCF: SpotShadow takes the geometric normal and the shared PCF (kind 1).
+    CHECK(has(shading, "float SpotShadow(int slot, vec3 worldPos, vec3 N, vec3 geoN) {"));
+    CHECK(has(shading, "ShadowPlanePCF(1, slot, biasedPos - uSpotShadowPos[slot], d, geoN, texelW, kernel, biasW, far)"));
+    CHECK(!has(shading, "kPoisson16[k] * radiusW")); // the equal-weight Poisson disk is gone from the point/spot PCF
 }
 
 void GIVolumeLookup() {
@@ -911,6 +954,14 @@ void GIVolumeLookup() {
     CHECK(box.Fade({2, 1, -3 + 2.0f - 0.15f}, 0.3f) > 0.45f);   // half way through the fade (local x is world -z)
     CHECK(box.Fade({2, 1, -3 + 2.0f - 0.15f}, 0.3f) < 0.55f);
     CHECK(box.Fade({2, 1, -3 + 2.5f}, 0.3f) == 0.0f);          // outside
+    // A fade per face (local x is world -z, so the +x face is at world z -5 and the -x face at z -1).
+    const glm::vec3 half3(0.3f);
+    CHECK(box.FadeFaces({2, 1, -3 + 2.0f - 0.15f}, half3, half3) == box.Fade({2, 1, -3 + 2.0f - 0.15f}, 0.3f)); // equal faces = the scalar
+    CHECK(box.FadeFaces({2, 1, -3}, half3, half3) == 1.0f && box.FadeFaces({2, 1, -3 + 2.5f}, half3, half3) == 0.0f);
+    const glm::vec3 lo(0.3f), hi(1.0f, 0.3f, 0.3f); // a wide fade on the +x face only
+    CHECK(std::fabs(box.FadeFaces({2, 1, -3 - 1.85f}, lo, hi) - 0.15f) < 1e-4f); // 0.15 m inside the +x face: 0.15 / 1.0
+    CHECK(std::fabs(box.FadeFaces({2, 1, -3 + 1.85f}, lo, hi) - 0.50f) < 1e-4f); // the -x face keeps 0.3: 0.15 / 0.3
+    CHECK(box.FadeFaces({2, 1, -3 - 2.05f}, lo, glm::vec3(0.0f)) == 0.0f && box.FadeFaces({2, 1, -3 - 1.99f}, lo, glm::vec3(0.0f)) == 1.0f); // 0 = hard edge
     const glm::ivec3 dims = GI::GridDims(box.Half, 0.5f);
     CHECK(glm::length(GI::ProbeLocal({0, 0, 0}, dims, box.Half) + box.Half) < 1e-5f);
     CHECK(glm::length(GI::ProbeLocal(dims - 1, dims, box.Half) - box.Half) < 1e-5f);
@@ -972,6 +1023,88 @@ void GIVolumeLookup() {
         GI::FillInvalid(chain, {true, false, false, false}, glm::ivec3(4, 1, 1));
         CHECK(std::abs(chain[3].c[2].x - 4.0f) < 1e-6f); // spreads until every reachable probe is filled
     }
+
+    // Face probes (in the wall / ceiling slab) are captured nudged inward (Jacob #5: the ceiling ring around a fixture).
+    {
+        const glm::ivec3 d(5, 4, 6);
+        const glm::vec3 half(2.0f, 1.5f, 2.5f); // cell 1 m on every axis
+        const auto near3 = [](const glm::vec3& a, const glm::vec3& b) { return glm::length(a - b) < 1e-6f; };
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 1, 3), d, half, 0.15f), glm::vec3(0.0f)));            // interior: none
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 3, 3), d, half, 0.15f), glm::vec3(0.0f, -0.15f, 0.0f))); // ceiling row: down
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 0, 3), d, half, 0.15f), glm::vec3(0.0f, 0.15f, 0.0f)));  // floor row: up
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(0, 0, 0), d, half, 0.15f), glm::vec3(0.15f)));              // corner: 3 axes
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(4, 3, 5), d, half, 0.15f), glm::vec3(-0.15f)));
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(1, 0, 1), glm::ivec3(3, 1, 3), half, 0.15f), glm::vec3(0.0f))); // 1 probe on an axis: no face
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 3, 3), d, half, 0.0f), glm::vec3(0.0f)));                 // 0 = off
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 3, 3), d, half, 1.0f), glm::vec3(0.0f, -0.45f, 0.0f)));  // clamped to 0.45 cell
+    }
+    // The nudge guard: a face probe is nudged only into open air (Jacob: child's bedroom 2, closet doors).
+    {
+        const auto S = [](float x0, float y0, float z0, float x1, float y1, float z1) { return GI::SolidBox{glm::vec3(x0, y0, z0), glm::vec3(x1, y1, z1)}; };
+        const glm::vec3 face(9.42f, 4.0f, 25.0f), nudged(9.27f, 4.0f, 25.0f);
+        CHECK(!GI::NudgeBlocked(face, nudged, {}));                                                  // open air
+        CHECK(GI::NudgeBlocked(face, nudged, {S(8.0f, 3.0f, 24.0f, 9.3f, 5.0f, 26.0f)}));             // a wardrobe whose front is 0.12 m behind the face
+        CHECK(!GI::NudgeBlocked(face, glm::vec3(9.35f, 4.0f, 25.0f), {S(8.0f, 3.0f, 24.0f, 9.3f, 5.0f, 26.0f)})); // the nudge stops short of it
+        CHECK(!GI::NudgeBlocked(face, nudged, {S(8.0f, 3.0f, 20.0f, 9.3f, 5.0f, 21.0f)}));            // a box beside the path
+        CHECK(!GI::NudgeBlocked(glm::vec3(9.0f, 4.0f, 25.0f), glm::vec3(8.85f, 4.0f, 25.0f), {S(8.0f, 3.0f, 24.0f, 9.3f, 5.0f, 26.0f)})); // the face point is already inside it (a slab)
+        CHECK(!GI::NudgeBlocked(glm::vec3(5.0f, 5.0f, 5.0f), glm::vec3(5.0f, 4.85f, 5.0f), {S(0.0f, 4.9f, 0.0f, 9.0f, 5.1f, 9.0f)})); // a ceiling slab: the nudge leaves it
+        CHECK(GI::NudgeBlocked(glm::vec3(5.0f, 5.0f, 5.0f), glm::vec3(5.0f, 4.85f, 5.0f), {S(0.0f, 4.0f, 4.0f, 9.0f, 4.9f, 6.0f)}));   // a fixture hanging 0.1 m below the face
+        // A volume's face sits 2-5 cm off the slab it is padded to: a slab within 6 cm of the face point holds it (the nudge leaves it);
+        // a box 7 cm or more away still blocks.
+        CHECK(!GI::NudgeBlocked(glm::vec3(5.0f, 0.0f, 5.0f), glm::vec3(5.0f, 0.15f, 5.0f), {S(0.0f, 0.03f, 0.0f, 9.0f, 0.20f, 9.0f)}));  // a floor slab 3 cm above the face
+        CHECK(!GI::NudgeBlocked(glm::vec3(5.0f, 0.0f, 5.0f), glm::vec3(5.0f, 0.15f, 5.0f), {S(0.0f, 0.05f, 0.0f, 9.0f, 0.20f, 9.0f)}));  // 5 cm
+        CHECK(GI::NudgeBlocked(glm::vec3(5.0f, 0.0f, 5.0f), glm::vec3(5.0f, 0.15f, 5.0f), {S(0.0f, 0.07f, 0.0f, 9.0f, 0.20f, 9.0f)}));   // 7 cm: still blocks
+        CHECK(!GI::NudgeBlocked(glm::vec3(9.0f, 4.0f, 25.0f), glm::vec3(8.85f, 4.0f, 25.0f), {S(9.04f, 3.0f, 24.0f, 9.5f, 5.0f, 26.0f)})); // a wall piece 4 cm behind the face
+        // Whole volume: 5 x 4 x 5 probes, x faces at +-2. Face probes without a wardrobe all nudge; with one against the +x face the ones behind it stay.
+        const GI::Box nbox = GI::Box::FromTransform(glm::mat4(1.0f), glm::vec3(4.0f, 3.0f, 4.0f));
+        const glm::ivec3 d = GI::GridDims(nbox.Half, 1.0f);
+        int ok0 = 0, blk0 = 0, ok1 = 0, blk1 = 0;
+        const auto free = GI::PlanFaceNudges(nbox, d, 0.15f, {}, &ok0, &blk0);
+        const auto shut = GI::PlanFaceNudges(nbox, d, 0.15f, {S(1.0f, -1.5f, -2.5f, 1.9f, 1.5f, 2.5f)}, &ok1, &blk1); // a wardrobe whose front is 0.1 m inside the +x face
+        CHECK(blk0 == 0 && ok0 > 0);
+        CHECK(blk1 > 0 && ok1 + blk1 == ok0);                 // every probe it blocked would have nudged
+        CHECK(free.size() == shut.size() && free.size() == (std::size_t)d.x * d.y * d.z);
+        CHECK(shut[GI::ProbeIndex(glm::ivec3(d.x - 1, 2, 2), d)] == glm::vec3(0.0f));       // a +x face probe in front of the wardrobe stays
+        CHECK(free[GI::ProbeIndex(glm::ivec3(d.x - 1, 2, 2), d)] != glm::vec3(0.0f));
+        CHECK(shut[GI::ProbeIndex(glm::ivec3(0, 2, 2), d)] != glm::vec3(0.0f));             // the -x face (open air) still nudges
+        CHECK(GI::PlanFaceNudges(nbox, d, 0.0f, {}, &ok0, &blk0)[0] == glm::vec3(0.0f) && ok0 == 0); // 0 = off
+    }
+    // FillInvalid on a face row: a whole invalid ceiling row is filled from the row below, blurred in-plane, so one strongly
+    // directional probe under it does not paint a hot spot; and a face probe with a valid in-plane neighbour takes those.
+    {
+        const glm::ivec3 big(5, 3, 5); // the top plane's inner 3x3 probes lie on ONE face (the ceiling) only
+        std::vector<GI::ProbeSH> pr(75);
+        std::vector<bool> valid(75, true);
+        for (int z = 0; z < 5; ++z)
+            for (int y = 0; y < 3; ++y)
+                for (int x = 0; x < 5; ++x) {
+                    const int i = GI::ProbeIndex(glm::ivec3(x, y, z), big);
+                    valid[i] = y < 2;
+                    pr[i].c[0].x = (y == 1 && x == 2 && z == 2) ? 9.0f : 1.0f; // one strongly directional probe under the ceiling
+                }
+        GI::FillInvalid(pr, valid, big);
+        float mean = 0.0f, mx = 0.0f;
+        for (int z = 1; z <= 3; ++z)
+            for (int x = 1; x <= 3; ++x) {
+                const float v = pr[GI::ProbeIndex(glm::ivec3(x, 2, z), big)].c[0].x;
+                mean += v / 9.0f;
+                mx = std::max(mx, v);
+            }
+        const float inplaneMean = (9.0f + 8.0f) / 9.0f; // the inner 3x3 of the row below
+        CHECK(std::abs(mean - inplaneMean) < 0.25f * inplaneMean);
+        CHECK(mx < 4.0f); // the old 6-neighbour average copied the 9 straight up
+        const glm::ivec3 d(3, 3, 3);
+        std::vector<GI::ProbeSH> q(27);
+        std::vector<bool> v2(27, true);
+        for (auto& p : q) p.c[0].x = 100.0f;                         // the inward row is hot
+        for (int z = 0; z < 3; ++z)
+            for (int x = 0; x < 3; ++x) q[GI::ProbeIndex(glm::ivec3(x, 2, z), d)].c[0].x = 5.0f; // the ceiling row is 5
+        const int top = GI::ProbeIndex(glm::ivec3(1, 2, 1), d);
+        v2[top] = false;
+        q[top].c[0].x = -7.0f;
+        GI::FillInvalid(q, v2, d);
+        CHECK(std::abs(q[top].c[0].x - 5.0f) < 1e-5f); // in-plane first, not the inward neighbour
+    }
     CHECK((GI::SplitCircuits(" Living ; Hall,,Living;") == std::vector<std::string>{"Living", "Hall"}));
 
     // Atlas packing: rows along x up to the width, then along z.
@@ -1004,6 +1137,13 @@ void GIVolumeLookup() {
     gi.SetOverride(std::make_shared<GI::BakeFile>(synth));
     gi.Gather(world);
     CHECK(gi.Count() == 1 && gi.Volumes()[0].ReplacesSky);
+    CHECK(gi.Volumes()[0].FadeLo == glm::vec3(gc.Fade) && gi.Volumes()[0].FadeHi == glm::vec3(gc.Fade)); // no per-face fade: the volume's
+    gc.FadeMax = glm::vec3(0.0f, 0.0f, 0.4f);
+    gc.FadeMin = glm::vec3(0.25f, 0.0f, 0.0f);
+    gi.Gather(world);
+    CHECK(gi.Volumes()[0].FadeHi == glm::vec3(gc.Fade, gc.Fade, 0.4f) && gi.Volumes()[0].FadeLo == glm::vec3(0.25f, gc.Fade, gc.Fade));
+    gc.FadeMax = gc.FadeMin = glm::vec3(0.0f);
+    gi.Gather(world);
     CHECK(gi.Volumes()[0].Weights == (std::vector<float>{1.0f, 1.0f}));
     float fade = 0.0f;
     const glm::vec3 lit = gi.SampleCPU({1.5f, 0, 0}, {0, 1, 0}, &fade);
@@ -1108,9 +1248,9 @@ void TestOpaqueBatchKey() {
     b = a;
     b.ProbeKey = (1u << 30) | (a.ProbeKey & 0x3FFFFFFFu); // one probe instead of two: bits 30-31 only
     CHECK(K::Object(b) != ka);
-    for (int f = 0; f < 5; ++f) { // each flag still splits
+    for (int f = 0; f < 6; ++f) { // each flag still splits
         b = a;
-        bool* flags[5] = {&b.ReceiveShadows, &b.StaticReceiver, &b.NoSsao, &b.DoubleSided, &b.Prepassed};
+        bool* flags[6] = {&b.ReceiveShadows, &b.StaticReceiver, &b.NoSsao, &b.DoubleSided, &b.Prepassed, &b.GIFlatL1};
         *flags[f] = !*flags[f];
         CHECK(K::Object(b) != ka);
     }
@@ -2285,6 +2425,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Reflection probe captures + puddle SSR setting", ProbeCaptureAndPuddleSsr});
     tests.push_back({"Small-object cull: projected bounding-sphere height", SmallObjectCull});
     tests.push_back({"Light distance fade: by projected size, smooth, then dropped", LightDistanceFade});
+    tests.push_back({"Light bounds: per-face fade (Bounds Fade - / +), uniform = the old single fade", LightBoundsFaceFade});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
     tests.push_back({"GatherPatch", GatherPatch});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
@@ -2299,6 +2440,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Scene wind: settings round-trip, old-scene defaults, one bearing convention", SceneWindSettings});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});
+    tests.push_back({"Volumetric fog: the in-scatter soft cap is identity below the knee, monotone and bounded", VolumetricInscatterCap});
     tests.push_back({"Volumetric fog: settings and Volumetric Intensity round-trip; old scenes default off / 1", VolumetricSettingsRoundTrip});
     tests.push_back({"TAA mode + rain wetness round-trip; old scenes keep MSAA/FXAA and stay dry; jitter un-jitters", TaaAndWetnessRoundTrip});
     tests.push_back({"Fur: shell count follows the hair's size on screen", FurShellLod});

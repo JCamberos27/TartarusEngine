@@ -5,6 +5,11 @@
 #include <algorithm>
 #include <string>
 
+float SpotShadowMap::KernelTexels(float softness) {
+    if (!(softness > 0.0f)) return 0.0f;
+    return std::clamp(softness * kKernelPerSoftness, kKernelMinTexels, kKernelMaxTexels);
+}
+
 void SpotShadowMap::Configure(int resolution, int layers) {
     resolution = std::clamp(resolution, 256, 4096);
     layers = std::clamp(layers, 1, kMaxSpots);

@@ -37,6 +37,12 @@ class MathTests(unittest.TestCase):
         self.assertAlmostEqual(b.fade((0.975, 0, 0), 0.05), 0.5, places=6)
         self.assertEqual(b.fade((1.2, 0, 0), 0.05), 0.0)
         self.assertEqual(b.fade((1.0, 0, 0), 0.0), 1.0)  # hard edge: the face itself is inside
+        # a fade per face (GI::Box::FadeFaces): wide on +x only, hard on -x
+        lo, hi = (0.0, 0.05, 0.05), (0.5, 0.05, 0.05)
+        self.assertAlmostEqual(b.fade_faces((0.75, 0, 0), lo, hi), 0.5, places=6)   # 0.25 m inside the +x face: 0.25 / 0.5
+        self.assertEqual(b.fade_faces((-0.99, 0, 0), lo, hi), 1.0)                  # the -x face is a hard edge
+        self.assertEqual(b.fade_faces((-1.01, 0, 0), lo, hi), 0.0)
+        self.assertEqual(b.fade_faces((0.975, 0, 0), (0.05,) * 3, (0.05,) * 3), b.fade((0.975, 0, 0), 0.05))
 
     def test_grid_dims_matches_cpp(self):
         # GridDims: ceil(2h/s - 1e-4) + 1, clamped 2..256.

@@ -54,6 +54,12 @@ struct OpenableComponent {
         SlideRight = 7, // ... toward local +X
     };
     int Motion = 0;          // MotionKind
+    // A door leaf (hinged or sliding), as opposed to a lid, flap or drawer. Leaves sit in a doorway between two rooms:
+    // the renderer damps their GI's directional term (GIVolumes::SetMask flatL1) so the face toward the other room isn't black.
+    bool IsLeaf() const {
+        const MotionKind m = (MotionKind)Motion;
+        return m == MotionKind::HingeLeft || m == MotionKind::HingeRight || m == MotionKind::SlideLeft || m == MotionKind::SlideRight;
+    }
     float Amount = 0.0f;     // degrees for a hinge, metres for a slide; 0 = the motion's usual amount
     float OpenTime = 0.5f;   // seconds from shut to open
     bool StartOpen = false;

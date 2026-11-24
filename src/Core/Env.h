@@ -28,6 +28,7 @@
     X(LightsOn, "TARTARUS_LIGHTS_ON", Flag, "smoke shots: 1 = every light circuit on, 0 = as the switches start")     \
     X(LightsOnly, "TARTARUS_LIGHTS_ONLY", Str, "smoke shots: only these ';'-separated light circuits on (leak checks)") \
     X(TourMaxPoints, "TARTARUS_TOUR_MAX_POINTS", Int, "--gi-tour: the scene's Max point shadows for this run (perf sweeps)") \
+    X(VolInscatterCap, "TARTARUS_VOL_INSCATTER_CAP", Float, "volumetric fog: soft cap on the integrated in-scatter luminance (A/B; 0 = off)") \
     X(ShotCameras, "TARTARUS_SHOT_CAMERAS", List, "--smoke-shots: 'name:x,y,z,yaw,pitch;...' poses to capture")  \
     X(ShotStart, "TARTARUS_SHOT_START", Int, "--smoke-shots: frame of the first shot-camera capture (default 40)")    \
     X(ShotFov, "TARTARUS_SHOT_FOV", Float, "--smoke-shots: Scene-view FOV for shot cameras")                          \
@@ -70,6 +71,7 @@
     X(ProbeDump, "TARTARUS_PROBE_DUMP", Str, "dump reflection probe faces to this folder")                            \
     X(GiBakeEmissive, "TARTARUS_GI_EMISSIVE", Float, "--bake-gi: emission kept in the captures (default 0)")            \
     X(GiBakeBounces, "TARTARUS_GI_BOUNCES", Int, "--bake-gi: light bounces to bake (default 2)")                      \
+    X(GiBakeFaceNudge, "TARTARUS_GI_FACE_NUDGE", Float, "--bake-gi: metres a box-face probe is captured inside (default 0.15; 0 = on the face)") \
     X(GiBakeTrace, "TARTARUS_GI_BAKE_TRACE", Flag, "--bake-gi: log the shadow-slot holders of every probe batch")     \
     X(GiBakeLiveClocks, "TARTARUS_GI_BAKE_LIVE_CLOCKS", Flag, "--bake-gi: leave the clocks running (A/B vs the pinned bake clock)") \
     X(SkinAudit, "TARTARUS_SKIN_AUDIT", Flag, "log skinning audit")                                                   \

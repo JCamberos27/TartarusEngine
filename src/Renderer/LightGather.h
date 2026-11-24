@@ -62,6 +62,7 @@ struct FrameLights {
     float PointNear[ShadowLimits::kMaxPoints] = {};
     float PointBias[ShadowLimits::kMaxPoints] = {};
     float PointNormalBias[ShadowLimits::kMaxPoints] = {};
+    float PointSoftness[ShadowLimits::kMaxPoints] = {}; // the light's Shadow Softness (S2: point PCF radius)
     float PointWeight[ShadowLimits::kMaxPoints] = {};
 
     int ShadowRoom = -1; // the room (GI Volume group) the slots were scored for, -1 outside them all (traces)

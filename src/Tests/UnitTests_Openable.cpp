@@ -290,12 +290,169 @@ void GIBakerDoorsRestoreAfterFailure() {
         CHECK(!Openable::BakePosed() && baker.Failed());
     }
 }
+
+// --bake-gi-doors hidden (Jacob #2, the dark strip on the tile inside a shut door's jamb; Argus's design): a door-sized
+// hinged or sliding leaf whose two sides are both in a baked room. The test leaves are the 2 x 2 m quad stood upright
+// (90 degrees about X: its thin axis is world Z) and scaled to size.
+struct HiddenDoorsScene {
+    World w;
+    entt::entity door = entt::null, knob = entt::null, cabinet = entt::null, drawer = entt::null, exterior = entt::null,
+                 off = entt::null, room = entt::null;
+    bool Build(const std::shared_ptr<Model>& model) {
+        auto leaf = [&](const glm::vec3& at, float width, float height, Kind k, const char* name) {
+            const entt::entity e = w.CreateModelEntity(model, at, glm::vec3(90.0f, 0.0f, 0.0f),
+                                                       glm::vec3(width * 0.5f, 1.0f, height * 0.5f), name);
+            w.Registry.emplace<OpenableComponent>(e).Motion = (int)k;
+            return e;
+        };
+        room = w.CreateEmptyEntity(glm::vec3(0.0f, 1.5f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "GI room");
+        w.Registry.emplace<GIVolumeComponent>(room).Size = glm::vec3(10.0f, 3.0f, 10.0f);
+        door = leaf(glm::vec3(0.0f, 1.0f, -1.5f), 0.9f, 2.0f, Kind::HingeLeft, "Bathroom door");
+        knob = w.CreateEmptyEntity(glm::vec3(0.4f, 0.0f, 0.05f), glm::vec3(0.0f), glm::vec3(1.0f), "Knob");
+        w.SetParent(knob, door);
+        cabinet = leaf(glm::vec3(2.0f, 1.0f, -1.5f), 0.7f, 0.5f, Kind::HingeLeft, "Cabinet door");
+        drawer = leaf(glm::vec3(-2.0f, 1.0f, -1.5f), 0.9f, 2.0f, Kind::SlideOut, "Drawer");
+        exterior = leaf(glm::vec3(0.0f, 1.0f, 4.8f), 0.9f, 2.0f, Kind::HingeRight, "Front door"); // +Z side outdoors
+        off = leaf(glm::vec3(3.0f, 1.0f, -1.5f), 0.9f, 2.0f, Kind::SlideRight, "Inactive door");
+        w.Registry.emplace<DeactivatedTag>(off); // authored "active: false"
+        w.RebuildWorldTransformCache();
+        w.SyncActiveInHierarchy();
+        return w.Registry.all_of<InactiveTag>(off) && !w.Registry.all_of<InactiveTag>(knob);
+    }
+    bool Tagged(entt::entity e) const { return w.Registry.all_of<DeactivatedTag>(e); }
+    bool Inactive(entt::entity e) const { return w.Registry.all_of<InactiveTag>(e); }
+};
+
+std::shared_ptr<Model> QuadModel(const char* test) {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        Log::Info(std::string(test) + ": no test model - skipped.");
+        return nullptr;
+    }
+    auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    return model;
+}
+
+// (1) The filter: only the interior door-sized hinged / sliding leaf is hidden (its knob with it); the cabinet door
+// (too small), the drawer (Slide Out), the exterior door (a side outdoors) and the inactive door are not.
+void OpenableHideDoorLeaves() {
+    const auto model = QuadModel("OpenableHideDoorLeaves");
+    if (!model) return;
+    HiddenDoorsScene s;
+    CHECK(s.Build(model));
+    World& w = s.w;
+    const glm::vec3 c(0.0f, 1.5f, 0.0f), half(5.0f, 1.5f, 5.0f);
+    auto indoors = [&](const glm::vec3& p) { return glm::all(glm::lessThanEqual(glm::abs(p - c), half)); };
+
+    const auto saved = Openable::Save(w);
+    const auto hidden = Openable::HideDoorLeaves(w, indoors);
+    CHECK(hidden.Leaves.size() == 1 && hidden.Leaves[0] == "Bathroom door");
+    CHECK(hidden.Exterior.size() == 1 && hidden.Exterior[0] == "Front door");
+    CHECK(hidden.Other == 3); // cabinet, drawer, inactive
+    w.SyncActiveInHierarchy();
+    CHECK(s.Tagged(s.door) && s.Inactive(s.door) && s.Inactive(s.knob));
+    CHECK(!s.Tagged(s.cabinet) && !s.Tagged(s.drawer) && !s.Tagged(s.exterior) && s.Tagged(s.off));
+    // No room at all: every door-sized leaf counts as exterior and keeps its leaf.
+    Openable::Restore(w, saved);
+    w.SyncActiveInHierarchy();
+    const auto none = Openable::HideDoorLeaves(w, [](const glm::vec3&) { return false; });
+    CHECK(none.Leaves.empty() && none.Exterior.size() == 2 && !s.Tagged(s.door));
+    Openable::Restore(w, saved);
+    w.SyncActiveInHierarchy();
+
+    // Through the baker: flagged posed, the same leaf hidden (the room from the scene's own GI Volume).
+    GIBaker baker;
+    baker.PoseDoors(w, GIBaker::Options::Doors::Hidden);
+    CHECK(baker.DoorsPosed() && Openable::BakePosed());
+    CHECK(s.Tagged(s.door) && s.Inactive(s.knob) && !s.Tagged(s.cabinet) && !s.Tagged(s.drawer) && !s.Tagged(s.exterior));
+    baker.RestoreDoors(w);
+    CHECK(!s.Tagged(s.door) && !s.Inactive(s.door) && !s.Inactive(s.knob) && s.Tagged(s.off) && s.Inactive(s.off));
+    CHECK(!Openable::BakePosed());
+}
+
+// (2) The exits: Abort (the error path) and RestoreDoors (shutdown / emergency) put every tag, transform and state back
+// exactly, the scene saves the same text as before, and the flags come down. An inactive door stays inactive.
+void GIBakerHiddenDoorsRestore() {
+    const auto model = QuadModel("GIBakerHiddenDoorsRestore");
+    if (!model) return;
+    HiddenDoorsScene s;
+    CHECK(s.Build(model));
+    World& w = s.w;
+    const std::string before = SceneSerializer::SaveToString(w);
+    const TransformComponent t0 = w.Registry.get<TransformComponent>(s.door);
+    auto back = [&] {
+        const auto& t = w.Registry.get<TransformComponent>(s.door);
+        const auto& o = w.Registry.get<OpenableComponent>(s.door);
+        return !s.Tagged(s.door) && !s.Inactive(s.door) && !s.Inactive(s.knob) && s.Tagged(s.off) && s.Inactive(s.off) &&
+               std::memcmp(&t.Position, &t0.Position, sizeof(glm::vec3)) == 0 &&
+               std::memcmp(&t.Rotation, &t0.Rotation, sizeof(glm::quat)) == 0 && !o.Started && o.Progress == 0.0f &&
+               SceneSerializer::SaveToString(w) == before;
+    };
+    {
+        GIBaker baker;
+        baker.PoseDoors(w, GIBaker::Options::Doors::Hidden);
+        CHECK(s.Tagged(s.door) && SceneSerializer::SaveToString(w) != before); // hidden: would save as inactive
+        baker.Abort(w, "test failure");
+        CHECK(back() && !baker.DoorsPosed() && !Openable::BakePosed() && baker.Failed());
+        baker.RestoreDoors(w); // a second put-back is a no-op
+        CHECK(back());
+    }
+    {
+        GIBaker baker;
+        baker.PoseDoors(w, GIBaker::Options::Doors::Hidden);
+        baker.RestoreDoors(w);
+        CHECK(back() && !baker.DoorsPosed() && !Openable::BakePosed());
+    }
+    // A door the scene itself has switched off is still off after the bake (the put-back is "as saved", not "shown").
+    w.Registry.emplace<DeactivatedTag>(s.door);
+    w.SyncActiveInHierarchy();
+    {
+        GIBaker baker;
+        baker.PoseDoors(w, GIBaker::Options::Doors::Hidden);
+        baker.Abort(w, "");
+        CHECK(s.Tagged(s.door) && s.Inactive(s.knob) && !Openable::BakePosed());
+    }
+}
+
+// (3) The guards: while the leaves are hidden the scene counts as posed (the editor's undo, autosave, recovery and
+// crash-save paths all refuse on Openable::BakePosed), and posing again saves the scene as loaded, not the hidden one.
+void GIBakerHiddenDoorsGuard() {
+    const auto model = QuadModel("GIBakerHiddenDoorsGuard");
+    if (!model) return;
+    HiddenDoorsScene s;
+    CHECK(s.Build(model));
+    World& w = s.w;
+    const std::string before = SceneSerializer::SaveToString(w);
+    GIBaker baker;
+    CHECK(!Openable::BakePosed());
+    baker.PoseDoors(w, GIBaker::Options::Doors::Hidden);
+    CHECK(Openable::BakePosed());
+    baker.PoseDoors(w, GIBaker::Options::Doors::Hidden); // re-entry
+    CHECK(Openable::BakePosed() && s.Tagged(s.door));
+    baker.PoseDoors(w, GIBaker::Options::Doors::Shut); // another pose: the hidden leaf comes back first
+    CHECK(Openable::BakePosed() && !s.Tagged(s.door) && !s.Inactive(s.knob));
+    baker.PoseDoors(w, GIBaker::Options::Doors::Hidden);
+    baker.RestoreDoors(w);
+    CHECK(!Openable::BakePosed() && !s.Tagged(s.door) && SceneSerializer::SaveToString(w) == before);
+}
 } // namespace
 
+void OpenableIsLeaf() { // the draw flag for the doorway GI fix: hinge / slide leaves only
+    using M = OpenableComponent::MotionKind;
+    OpenableComponent o;
+    for (M m : {M::HingeLeft, M::HingeRight, M::SlideLeft, M::SlideRight}) { o.Motion = (int)m; CHECK(o.IsLeaf()); }
+    for (M m : {M::Lid, M::FlapDown, M::FlapUp, M::SlideOut}) { o.Motion = (int)m; CHECK(!o.IsLeaf()); }
+}
+
 void RegisterOpenableTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"Openable: IsLeaf is hinge / slide doors only (the GI flat-L1 draw flag)", OpenableIsLeaf});
     tests.push_back({"Openable: each motion keeps its hinge and opens out the front", OpenablePoses});
     tests.push_back({"Openable: ray against a placed box", OpenableRayBox});
     tests.push_back({"Openable: scene block, Interact toggles, reach, SetAll, Start Open / Ajar", OpenableInWorld});
     tests.push_back({"Openable: PoseStart opens only Start Open doors, Restore puts them back bit for bit", OpenablePoseStartRestore});
     tests.push_back({"GIBaker: posed doors come back bit for bit after a failure, at shutdown and on re-entry", GIBakerDoorsRestoreAfterFailure});
+    tests.push_back({"Openable: HideDoorLeaves hides interior door leaves only (not cabinets, drawers, exterior)", OpenableHideDoorLeaves});
+    tests.push_back({"GIBaker: hidden door leaves come back exactly after Abort and RestoreDoors", GIBakerHiddenDoorsRestore});
+    tests.push_back({"GIBaker: hidden doors keep the scene posed; posing twice saves the scene as loaded", GIBakerHiddenDoorsGuard});
 }

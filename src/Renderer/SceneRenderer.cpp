@@ -701,7 +701,11 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         program.SetFloatArray("uSpotShadowHalfTan[0]",    fs.spotCountForView, in.spotShadowHalfTan);
         program.SetFloatArray("uSpotShadowBias[0]",       fs.spotCountForView, in.spotShadowBias);
         program.SetFloatArray("uSpotShadowNormalBias[0]", fs.spotCountForView, in.spotShadowNormalBias);
-        program.SetFloatArray("uSpotShadowSoftness[0]",   fs.spotCountForView, in.spotShadowSoftness);
+        // fix-3 spot PCF: the radius in spot-map texels per slot (SpotShadowMap::KernelTexels), 0 = one hard compare.
+        std::array<float, SpotShadowMap::kMaxSpots> spotKernel{};
+        for (int i = 0; i < fs.spotCountForView && i < SpotShadowMap::kMaxSpots; ++i)
+            spotKernel[i] = in.spotShadowSoftness ? SpotShadowMap::KernelTexels(in.spotShadowSoftness[i]) : 0.0f;
+        program.SetFloatArray("uSpotShadowSoftness[0]",   fs.spotCountForView, spotKernel.data());
         program.SetFloatArray("uSpotShadowWeight[0]",     fs.spotCountForView, ShadowWeightsOrFull(in.spotShadowWeight));
     }
     program.SetInt("uSpotShadowMap", 9);
@@ -713,6 +717,11 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         program.SetFloatArray("uPointShadowFar[0]",        fs.pointCountForView, in.pointShadowFar);
         program.SetFloatArray("uPointShadowBias[0]",       fs.pointCountForView, in.pointShadowBias);
         program.SetFloatArray("uPointShadowNormalBias[0]", fs.pointCountForView, in.pointShadowNormalBias);
+        // S2: the PCF radius in cube texels per slot (PointShadowMap::KernelTexels), 0 = the hard single compare.
+        std::array<float, PointShadowMap::kMaxPoints> kernel{};
+        for (int i = 0; i < fs.pointCountForView && i < PointShadowMap::kMaxPoints; ++i)
+            kernel[i] = in.pointShadowSoftness ? PointShadowMap::KernelTexels(in.pointShadowSoftness[i]) : 0.0f;
+        program.SetFloatArray("uPointShadowSoftness[0]",   fs.pointCountForView, kernel.data());
         program.SetFloatArray("uPointShadowWeight[0]",     fs.pointCountForView, ShadowWeightsOrFull(in.pointShadowWeight));
     }
     program.SetInt("uPointShadowMap", 10);

@@ -24,7 +24,7 @@
 // non-directional ones by type (#188).
 class LightBuffer {
 public:
-    // Forward path cap. Raised once clustered culling is in; 256 * 128B = 32 KB, trivial.
+    // Forward path cap. Raised once clustered culling is in; 256 * 160B = 40 KB, trivial.
     static constexpr int kMaxLights = 256;
 
     enum class Type : int { Directional = 0, Point = 1, Spot = 2 };
@@ -57,7 +57,16 @@ public:
     // Keeps the light just added (a point or spot) inside an oriented box: `axes` its unit axes (world), `centre` and
     // `half` its centre and half extents (world metres), fading to nothing over `fade` metres inside each face. The
     // cluster cull skips froxels outside the box; the shaders end the light at its faces (walls, floors, ceilings).
-    void BoundLast(const glm::mat3& axes, const glm::vec3& centre, const glm::vec3& half, float fade);
+    // `fadeNeg` / `fadePos`: per-face fades for the -/+ faces along each axis (< 0 = `fade`).
+    void BoundLast(const glm::mat3& axes, const glm::vec3& centre, const glm::vec3& half, float fade,
+                   const glm::vec3& fadeNeg = glm::vec3(-1.0f), const glm::vec3& fadePos = glm::vec3(-1.0f));
+    // The bounds weight at box coordinate q (the point projected on the box axes, centre at 0): the CPU mirror of
+    // LightBuffer.glsl LightBoxFade. 1 well inside, 0 at and past a face, linear over that face's own fade.
+    static float BoxWeight(const glm::vec3& q, const glm::vec3& half, const glm::vec3& fadeNeg, const glm::vec3& fadePos);
+    // The per-face fades BoundLast stored on the last light (+faces when `pos`), for tests.
+    glm::vec3 FaceFadeOfLast(bool pos) const {
+        return m_Lights.empty() ? glm::vec3(0.0f) : glm::vec3(pos ? m_Lights.back().BoxFadePos : m_Lights.back().BoxFadeNeg);
+    }
 
     // Orders the point/spot lights nearest-first (by the gap from `eye` to each light's range sphere), so a froxel
     // over the cluster cull's per-cluster cap (ClusterCull.comp.glsl MAX_PER_CLUSTER) keeps the near lights and
@@ -108,6 +117,8 @@ private:
                                 // w = volumetric fog multiplier (VolumetricFog)
         glm::vec4 BoxX, BoxY, BoxZ; // light bounds: rows world -> box (xyz = unit axis, w = -dot(axis, centre))
         glm::vec4 BoxHalf;          // xyz = half extents; w = fade metres (< 0: unbounded)
+        glm::vec4 BoxFadeNeg;       // xyz = fade metres at the -x/-y/-z faces (BoundLast; unbounded: unused)
+        glm::vec4 BoxFadePos;       // xyz = fade metres at the +x/+y/+z faces
     };
 
     std::vector<GpuLight> m_Lights;

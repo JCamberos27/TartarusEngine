@@ -30,7 +30,8 @@ void BoundLight(LightBuffer& buffer, World& world, entt::entity e, const LightCo
         axes[i] = s > 1e-8f ? col / s : glm::vec3(i == 0, i == 1, i == 2);
         half[i] = 0.5f * std::abs(lc.BoundsSize[i]) * (s > 1e-8f ? s : 1.0f);
     }
-    buffer.BoundLast(axes, glm::vec3(parent * glm::vec4(lc.BoundsCenter, 1.0f)), half, lc.BoundsFade);
+    buffer.BoundLast(axes, glm::vec3(parent * glm::vec4(lc.BoundsCenter, 1.0f)), half, lc.BoundsFade, lc.BoundsFadeNeg,
+                     lc.BoundsFadePos);
 }
 }
 
@@ -295,6 +296,7 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
                 out.PointNear[slot] = std::max(lc.Shadow.NearPlane, 1e-3f);
                 out.PointBias[slot] = lc.Shadow.Bias;
                 out.PointNormalBias[slot] = lc.Shadow.NormalBias;
+                out.PointSoftness[slot] = lc.Shadow.Softness;
             }
             lightBuffer.AddPoint(pos, lc.Color, localIntensity, lc.Range, slot, ~(std::uint32_t)lc.CullingMask,
                                  lc.VolumetricIntensity); // #203

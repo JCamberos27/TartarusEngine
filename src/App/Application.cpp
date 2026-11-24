@@ -2033,6 +2033,7 @@ bool AppSession::Frame() {
     sceneInputs.pointShadowFar        = frameLights.PointFar;
     sceneInputs.pointShadowBias       = frameLights.PointBias;
     sceneInputs.pointShadowNormalBias = frameLights.PointNormalBias;
+    sceneInputs.pointShadowSoftness   = frameLights.PointSoftness;
     sceneInputs.pointShadowWeight     = frameLights.PointWeight;
     sceneInputs.shadowsEnabled   = world.Render.ShadowsEnabled;
     sceneInputs.ssaoEnabled      = world.Render.SsaoEnabled;
@@ -2112,10 +2113,12 @@ bool AppSession::Frame() {
                 bo.Only = opt.bakeGiOnly;
                 bo.PinClocks = giPinClocks;
                 bo.DoorPose = opt.bakeGiDoors == "open"   ? GIBaker::Options::Doors::Open
-                            : opt.bakeGiDoors == "shut" ? GIBaker::Options::Doors::Shut
-                                                        : GIBaker::Options::Doors::Start;
+                            : opt.bakeGiDoors == "shut"   ? GIBaker::Options::Doors::Shut
+                            : opt.bakeGiDoors == "hidden" ? GIBaker::Options::Doors::Hidden
+                                                          : GIBaker::Options::Doors::Start;
                 bo.Emissive = Env::Float(Env::Var::GiBakeEmissive, bo.Emissive); // (a malformed value keeps the default)
                 bo.Bounces = Env::Int(Env::Var::GiBakeBounces, bo.Bounces);
+                bo.FaceNudge = std::max(Env::Float(Env::Var::GiBakeFaceNudge, bo.FaceNudge), 0.0f); // 0 = captured on the face, as before f8c288f1
                 if (Env::Flag(Env::Var::GiBakeTrace))
                     bo.TraceShadowSet = [&] { return DescribeShadowHolders(world, lightGather); };
                 if (!giBaker->Begin(world, bo)) {
