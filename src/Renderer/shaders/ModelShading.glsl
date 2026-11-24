@@ -596,7 +596,7 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
     return vis;
 }
 
-float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float radiusW, float biasW, float far);
+float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float texelW, float kernel, float biasW, float far);
 
 // Visibility from a spot light's shadow map. 1 = lit, 0 = shadowed. The map stores LINEAR
 // distance-to-light / far, so the compare reference is distance(fragment, light) / far and a
@@ -634,15 +634,14 @@ float SpotShadow(int slot, vec3 worldPos, vec3 N, vec3 geoN) {
     float vis = 1.0;
     if (soft < 1.0) vis = texture(uSpotShadowMap, vec4(p.xy, float(slot), (d - biasW) / far));
     if (soft > 0.0)
-        vis = mix(vis, ShadowPlanePCF(1, slot, biasedPos - uSpotShadowPos[slot], d, geoN, kernel * texelW, biasW, far), soft);
+        vis = mix(vis, ShadowPlanePCF(1, slot, biasedPos - uSpotShadowPos[slot], d, geoN, texelW, kernel, biasW, far), soft);
     return mix(1.0, vis, uSpotShadowWeight[slot]);
 }
 
-// Point PCF (fix-3 S2): a fixed Poisson disk of radius `radiusW` (world units at the receiver) in the plane
-// perpendicular to the light->receiver direction `dir` (length d). Each tap compares against the distance from the
-// light to the RECEIVER'S PLANE along that tap's own direction (receiver-plane depth), not against d: a tilted wall
-// is then not shadowed by itself across the kernel, so no kernel-sized bias (and no peter-panning) is needed. Same
-// 4-probe early-out as SampleCascade: fully lit or fully shadowed pixels cost 4 taps, only the penumbra 16.
+// Point/spot PCF (fix-3): taps across the light->receiver direction `dir` (length d); each compares against the
+// distance from the light to the RECEIVER'S PLANE along its own ray (receiver-plane depth), not against d, so a tilted
+// wall is not shadowed by itself across the kernel and no kernel-sized bias (or peter-panning) is needed. 4-corner
+// early-out: fully lit or fully shadowed pixels cost 4 taps, only the penumbra 16.
 // One tap of the shared PCF: `u` is the light->tap world vector, `ref` the compare distance / far. Spot taps outside
 // the cone or behind the light count as lit, as SpotShadow's own early-outs do.
 float ShadowTap(int kind, int slot, vec3 u, float ref) {
@@ -655,29 +654,40 @@ float ShadowTap(int kind, int slot, vec3 u, float ref) {
 }
 
 // kind 0 = a point light's cube, 1 = a spot's map (fix-3: the spots' 4-tap filter left ~6 cm stair-stepped edges).
-float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float radiusW, float biasW, float far) {
+// Tent PCF (fix-3): a 4x4 GRID of taps with binomial weights (1,3,3,1) x (1,3,3,1) / 64, spaced h map texels apart
+// across the light direction. Every tap is a hardware 2x2 bilinear compare (DepthArrayTarget: GL_LINEAR + compare), i.e.
+// a 2-texel-wide ramp; with h <= 2 the ramps overlap, so the weighted sum is ONE continuous bell-shaped penumbra: no
+// 16-level bands (the equal-weight 16-tap Poisson disk showed separate edge copies on grazing walls, hall spot wedge)
+// and no per-pixel grain. h = (kernel - 1) / 1.5 puts the filter's reach (1.5 h + 1 texels) at `kernel` texels and moves
+// continuously with Softness (kernel <= 1: one bilinear tap). texelW = the map texel's world size at the receiver.
+// Each tap compares against the receiver plane's distance along its own ray (geometric N), as before.
+const ivec2 kTentOrder[16] = ivec2[](ivec2(0, 0), ivec2(3, 0), ivec2(0, 3), ivec2(3, 3), // corners first: early-out
+    ivec2(1, 0), ivec2(2, 0), ivec2(0, 1), ivec2(1, 1), ivec2(2, 1), ivec2(3, 1),
+    ivec2(0, 2), ivec2(1, 2), ivec2(2, 2), ivec2(3, 2), ivec2(1, 3), ivec2(2, 3));
+const float kTentW[4] = float[](1.0, 3.0, 3.0, 1.0);
+float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float texelW, float kernel, float biasW, float far) {
     vec3 w = dir / d;
     vec3 t = normalize(cross(abs(w.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), w));
     vec3 b = cross(w, t);
-    // A FIXED disk, not the sun's per-pixel random rotation: with MSAA and no TAA nothing averages the rotation's
-    // per-pixel noise, so the penumbra showed as grain (fix-3 PCF check, den 35599). 16 fixed taps over a few cube
-    // texels, each a 2x2 hardware compare, give a smooth gradient instead.
+    float h = clamp((kernel - 1.0) / 1.5, 0.0, 2.0) * texelW; // tap spacing, world units at the receiver
     float pn = dot(dir, N); // light->receiver . N (the geometric normal): < 0 here (callers blend in at N.L >= 0.03)
+    if (h <= 0.0) return ShadowTap(kind, slot, dir, (d - biasW) / far);
     float vis = 0.0;
     for (int i = 0; i < 16; ++i) {
-        int k = (i < 4) ? i * 4 : ((i - 4) / 3) * 4 + 1 + (i - 4) % 3; // probes 0,4,8,12 first, then the rest
-        vec2 o = kPoisson16[k] * radiusW;
+        ivec2 g = kTentOrder[i];
+        vec2 o = (vec2(g) - 1.5) * h;
         vec3 u = dir + t * o.x + b * o.y;
         float un = dot(u, N);
         // Receiver-plane distance along u: d * (pn / un) * |u| / d; clamp so a near-parallel tap can't run away.
         float tPlane = (un < -1e-4) ? clamp(pn / un, 0.5, 2.0) * length(u) : d;
-        vis += ShadowTap(kind, slot, u, (tPlane - biasW) / far);
-        if (i == 3) {
-            if (vis <= 0.0) return 0.0; // all 4 probes shadowed
-            if (vis >= 4.0) return 1.0; // all 4 probes lit
+        float v = ShadowTap(kind, slot, u, (tPlane - biasW) / far);
+        vis += v * kTentW[g.x] * kTentW[g.y] * (1.0 / 64.0);
+        if (i == 3) { // the 4 corners carry 4/64 of the weight: all lit or all shadowed -> no edge in reach
+            if (vis <= 0.0) return 0.0;
+            if (vis >= 4.0 / 64.0 - 1e-6) return 1.0;
         }
     }
-    return vis / 16.0;
+    return vis;
 }
 
 // Visibility from a point light's depth cube. 1 = lit, 0 = shadowed. Cube stores linear
@@ -705,7 +715,11 @@ float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N, vec3 geoN) {
     float vis = 1.0;
     if (soft < 1.0) vis = texture(uPointShadowMap, vec4(dir, float(slot)), (d - biasW) / far);
     if (soft > 0.0)
-        vis = mix(vis, ShadowPlanePCF(0, slot, dir, d, geoN, kernel * 2.0 * d / uPointShadowMapResolution, biasW, far), soft);
+        // A cube texel's world size shrinks toward the face corners by 1 + s^2 + t^2 (s, t = the face coordinates):
+        // scale the tap spacing with it, or the taps sit > 2 texels apart near the corners (Argus's review).
+        vec3 r = abs(dir) / max(max(abs(dir.x), abs(dir.y)), max(abs(dir.z), 1e-6));
+        float faceTexelW = 2.0 * d / uPointShadowMapResolution / dot(r, r);
+        vis = mix(vis, ShadowPlanePCF(0, slot, dir, d, geoN, faceTexelW, kernel, biasW, far), soft);
     return mix(1.0, vis, uPointShadowWeight[slot]);
 }
 

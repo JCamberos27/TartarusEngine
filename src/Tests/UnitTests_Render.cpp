@@ -932,11 +932,14 @@ void ShaderConstantsMatch() {
     CHECK(has(shading, "uniform float uPointShadowSoftness[" + n(PointShadowMap::kMaxPoints) + "];"));
     CHECK(has(shading, "float soft = kernel > 0.0 ? smoothstep(0.03, 0.10, nlG) : 0.0;"));
     CHECK(has(shading, "bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance)"));
-    CHECK(has(shading, "float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float radiusW, float biasW, float far) {"));
+    CHECK(has(shading, "float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float texelW, float kernel, float biasW, float far) {"));
+    // Tent PCF: 4x4 grid, binomial weights, spacing <= 2 texels (continuous penumbra: no bands, no grain).
+    CHECK(has(shading, "float h = clamp((kernel - 1.0) / 1.5, 0.0, 2.0) * texelW;"));
+    CHECK(has(shading, "const float kTentW[4] = float[](1.0, 3.0, 3.0, 1.0);"));
     // fix-3 spot PCF: SpotShadow takes the geometric normal and the shared PCF (kind 1).
     CHECK(has(shading, "float SpotShadow(int slot, vec3 worldPos, vec3 N, vec3 geoN) {"));
-    CHECK(has(shading, "ShadowPlanePCF(1, slot, biasedPos - uSpotShadowPos[slot], d, geoN, kernel * texelW, biasW, far)"));
-    CHECK(has(shading, "        vec2 o = kPoisson16[k] * radiusW;")); // a fixed disk: no per-pixel rotation grain
+    CHECK(has(shading, "ShadowPlanePCF(1, slot, biasedPos - uSpotShadowPos[slot], d, geoN, texelW, kernel, biasW, far)"));
+    CHECK(!has(shading, "kPoisson16[k] * radiusW")); // the equal-weight Poisson disk is gone from the point/spot PCF
 }
 
 void GIVolumeLookup() {
