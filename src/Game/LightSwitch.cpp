@@ -93,8 +93,9 @@ void PoseRocker(World& world, LightSwitchComponent& s) {
     t->Rotation = s.RockerBase * glm::angleAxis(glm::radians(s.On ? -s.RockerAngle : s.RockerAngle), glm::vec3(0, 0, 1));
 }
 
-// Starts whatever hasn't started; a circuit's first-found switch decides the state it starts in.
-void StartAll(World& world) {
+// Starts whatever hasn't started; a circuit's first-found switch decides the state it starts in. True when it started
+// something (the circuits took their start state this call).
+bool StartAll(World& world) {
     {   // the usual frame: everything started - nothing to build
         bool pending = false;
         for (auto e : world.Registry.view<LightSwitchComponent>())
@@ -102,7 +103,7 @@ void StartAll(World& world) {
         if (!pending)
             for (auto e : world.Registry.view<LightCircuitComponent>())
                 if (!world.Registry.get<LightCircuitComponent>(e).Started) { pending = true; break; }
-        if (!pending) return;
+        if (!pending) return false;
     }
     std::unordered_map<std::string, bool> start;
     std::unordered_map<std::string, entt::entity> decider; // each circuit's first-found switch
@@ -148,7 +149,7 @@ void StartAll(World& world) {
             any = true;
         }
     }
-    if (!any) return;
+    if (!any) return false;
     for (const auto& [name, on] : start) Set(world, name, on);
     // Every switch takes its circuit's state (several switches on one circuit flip together).
     auto v = world.Registry.view<LightSwitchComponent>();
@@ -157,6 +158,7 @@ void StartAll(World& world) {
         s.On = IsOn(world, s.Circuit);
         PoseRocker(world, s);
     }
+    return true;
 }
 
 } // namespace
@@ -238,7 +240,9 @@ entt::entity Pick(World& world, const glm::vec3& eye, const glm::vec3& forward, 
 }
 
 void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool interact) {
-    StartAll(world);
+    // The circuits just took their Start On state: every room capture so far saw the authored lighting (fittings unlit,
+    // the mirrors' cubes dark), so every probe is retaken now, not only the ones near a switch that gets flipped later.
+    if (StartAll(world)) ReflectionProbeCapture::RequestRecapture();
     if (!interact) return;
     const entt::entity e = Pick(world, eye, forward);
     if (e == entt::null) return;
