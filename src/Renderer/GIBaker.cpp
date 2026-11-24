@@ -283,6 +283,7 @@ bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const R
             ctx.ProbeCapture = true;
             ctx.GIBake = pass.Circuit.empty() ? 2 : 1;
             ctx.GIBakeEmissive = m_Opt.Emissive;
+            ctx.GIBakePinClocks = m_Opt.PinClocks;
             ctx.GIBakeClipMin = m_ClipMin;
             ctx.GIBakeClipMax = m_ClipMax;
             draw(ctx);

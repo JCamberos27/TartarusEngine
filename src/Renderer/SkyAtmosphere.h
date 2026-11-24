@@ -93,6 +93,11 @@ public:
     // the caller can spread over a few frames.
     bool EnvironmentUrgent() const { return m_EnvUrgent; }
     void ForceEnvironmentCapture() { m_ForceCapture = true; }
+    // --bake-gi: the sky holds still for the whole run, so every capture sees the same sky whatever the wall clock
+    // did. The clouds don't drift, the time of day stays the authored one, the stars don't twinkle, the sky and
+    // cloud dither use one fixed frame, and the clouds keep no temporal history between views.
+    void SetBakeClock(bool on) { m_BakeClock = on; }
+    bool BakeClock() const { return m_BakeClock; }
 
     // Prepares one view's sky: its sky-view LUTs, aerial-perspective volume and clouds (compute
     // only). `viewKey` identifies the view across frames (for the clouds' temporal history); any
@@ -210,4 +215,5 @@ private:
 
     float m_ClockOffsetHours = 0.0f;
     bool m_WasPlaying = false;
+    bool m_BakeClock = false; // SetBakeClock
 };

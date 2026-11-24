@@ -14,6 +14,9 @@
 #include "../Renderer/AssetCost.h"
 #include "../Renderer/SceneViewPass.h"
 #include "../Renderer/SkyAtmosphere.h"
+#include "../Renderer/Material.h"
+#include "../Renderer/RenderFrameContext.h"
+#include "../Core/TimeService.h"
 #include "../Renderer/Camera.h"
 #include "../Game/SkySettings.h"
 #include "../Core/AtomicFile.h"
@@ -2087,6 +2090,43 @@ void TestPhysicalSky() {
         }
         CHECK(worstStep < 1e-3f);                  // no jumps
         CHECK(near(travelled, 0.08f, 0.004f));     // 8 m/s for 10 s
+    }
+
+    // --bake-gi pins the clocks a GI capture sees (SkyAtmosphere::SetBakeClock, Material::PinWindTime,
+    // RenderFrameContext::GIBakePinClocks). All three are OFF by default, so Play, the editor and --gi-tour keep their
+    // drifting clouds, running clock and swaying leaves; ON, a second of frames moves nothing.
+    {
+        SkySettings w;
+        w.CloudWindSpeed = 4.0f;
+        w.TimeOfDayHours = 18.8f;
+        w.DayLengthMinutes = 1.0f; // 24 h a minute: 1 s moves the clock 0.4 h
+        w.AnimateInEditor = true;
+        auto run = [&](SkyAtmosphere& sky) {
+            for (int i = 0; i < 60; ++i) sky.Tick(w, 1.0f / 60.0f, false);
+            return sky.ResolveLighting(w, glm::vec3(0, -1, 0), glm::vec3(5.0f), 0.53f, glm::vec3(0.0f)).ClockHours;
+        };
+        SkyAtmosphere live;
+        CHECK(!live.BakeClock());
+        const glm::vec2 liveStart = live.Clouds().WeatherOffset();
+        const float liveHours = run(live);
+        CHECK(glm::length(live.Clouds().WeatherOffset() - liveStart) > 1e-3f); // 4 m/s for 1 s = 0.004 km
+        CHECK(near(liveHours, 19.2f, 1e-3f));
+        SkyAtmosphere baking;
+        baking.SetBakeClock(true);
+        const glm::vec2 bakeStart = baking.Clouds().WeatherOffset();
+        const float bakeHours = run(baking);
+        CHECK(baking.Clouds().WeatherOffset() == bakeStart);
+        CHECK(near(bakeHours, 18.8f, 1e-5f));
+
+        CHECK(!RenderFrameContext{}.GIBakePinClocks);
+        Material::NextHashFrame();
+        CHECK(Material::WindTime() == (float)Time::UnscaledTimeSinceStartup());
+        Material::PinWindTime(true);
+        Material::NextHashFrame();
+        CHECK(Material::WindTime() == 0.0f && Material::PrevWindTime() == 0.0f);
+        Material::PinWindTime(false);
+        Material::NextHashFrame();
+        CHECK(Material::WindTime() == (float)Time::UnscaledTimeSinceStartup());
     }
 
     // Presets change the look but keep the location and quality; the timed ones land where named.
