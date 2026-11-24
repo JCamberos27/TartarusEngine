@@ -37,6 +37,7 @@ Run from a worktree root at the sha to sweep (it needs `tools/gi/gi_audit.py` an
 `python -I tools/descent/briareos/make_sweep_tour_v2.py --out <gen dir> [--bounds <audit.json>] [--descent-root <team folder>]` writes `sweep_tour_open.json`
 (doors all open: room spots x (4 walls, ceiling, floor), thresholds, doors both sides near/far, outside, stairs, the look poses; ~370 shots),
 `sweep_tour_shut.json` (doors as authored, ~97 shots), `sweep_plan.json` and a dry check (`SWEEP_DRYCHECK.md`). Not committed: regenerate.
+`make_bridge_tour.py --scene <Forest.json that HAS the bridges> --out bridges.json` finds the "GI bridge ..." volumes BY NAME and writes two look poses per bridge (use it as an `--extra` of the next tool).
 `make_look_tour.py --gen <gen dir> --out <dir>/sweep_tour_look4.json [--extra more.json]` picks the compact LOOK tour (master ceiling line, south wall fade, hall
 line, the three known seams by position, plus the `--extra` tours, e.g. `sweep_tour_opt_bathdoor_hall.json`) and writes `<out>_groups.json`.
 
