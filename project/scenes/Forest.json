@@ -389367,7 +389367,7 @@
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05000000074505806,
         "Shadow Normal Bias": 1.0,
-        "Shadow Softness": 1.2999999523162842,
+        "Shadow Softness": 2.5,
         "Spot Angle": 80.0,
         "Type": "Spot",
         "Volumetric Intensity": 0.0
@@ -389449,7 +389449,7 @@
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05000000074505806,
         "Shadow Normal Bias": 1.0,
-        "Shadow Softness": 1.2999999523162842,
+        "Shadow Softness": 2.5,
         "Spot Angle": 80.0,
         "Type": "Spot",
         "Volumetric Intensity": 0.0
