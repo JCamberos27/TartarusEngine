@@ -39,6 +39,14 @@ void GiTourParse() {
     CHECK(t.DoorState == "allOpen"); // the default
     CHECK(GiTour::Parse(R"({"scene":"s","doorState":"authored","waypoints":[{"id":"a","feet":[0,0,0]}]})", t, err) &&
           t.DoorState == "authored");
+    CHECK(GiTour::Parse(R"({"scene":"s","stillFrames":0,"waypoints":[{"id":"a","feet":[0,0,0]},{"id":"b","feet":[1,0,0],"cut":true}]})", t, err) && t.StillFrames == 0);
+    {   // stillFrames 0: no still frames, the other holds unchanged
+        const std::vector<GiTour::Frame> nf = GiTour::BuildTimeline(t, GiTour::TimelineOptions{});
+        int stills = 0, shots = 0;
+        for (const GiTour::Frame& x : nf) { if (x.Kind == GiTour::Step::Still) ++stills; if (x.Kind == GiTour::Step::ShotFull || x.Kind == GiTour::Step::ShotGi) ++shots; }
+        CHECK(stills == 0 && shots == 4);
+    }
+    CHECK(!GiTour::Parse(R"({"scene":"s","stillFrames":-1,"waypoints":[{"id":"a","feet":[0,0,0]}]})", t, err) && err.find("stillFrames") != std::string::npos);
     CHECK(!GiTour::Parse(R"({"scene":"s","doorState":"ajar","waypoints":[{"id":"a","feet":[0,0,0]}]})", t, err) &&
           err.find("doorState") != std::string::npos);
 }

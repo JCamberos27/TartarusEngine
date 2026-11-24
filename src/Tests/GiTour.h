@@ -44,6 +44,9 @@ struct Tour {
     // "doorState": "allOpen" (the default: every Openable fully open for the whole tour, deterministic and how the
     // house is walked) or "authored" (left as the scene saved them, shut).
     std::string DoorState = "allOpen";
+    // "stillFrames": the stationary control held after each waypoint's shots (default -1 = TimelineOptions::StillFrames, 2 s).
+    // 0 skips it: a stills-only sweep (many waypoints, PNGs wanted, no still CSV rows) saves 44% of its frames.
+    int StillFrames = -1;
     std::vector<Waypoint> Waypoints;
     std::vector<Route> Routes;
 };
