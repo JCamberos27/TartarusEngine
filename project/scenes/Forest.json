@@ -1100404,6 +1100404,11 @@
       "static": true
     },
     {
+      "Light Circuit": {
+        "Circuit": "Lamp_stand 14",
+        "Glow": 0.2,
+        "Glow When Off": false
+      },
       "Light Switch": {
         "Circuit": "Lamp_stand 14",
         "Off Sound": "assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/switch_off_2.wav;assets/Audio/Foley/door/switch_off_3.wav",
@@ -1100412,6 +1100417,7 @@
         "Rocker Angle": 0.0,
         "Start On": true
       },
+      "castShadows": 0,
       "collider": {
         "center": [
           0.0013729999773204327,
@@ -1100428,8 +1100434,8 @@
       "id": 20858,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_stand",
@@ -1100452,8 +1100458,7 @@
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "id": 20859,
@@ -1105799,11 +1105804,17 @@
       ]
     },
     {
+      "Light Circuit": {
+        "Circuit": "Master bedroom",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
       "id": 20998,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_ceiling_circle (4)",
@@ -1105826,8 +1105837,7 @@
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "id": 20999,
@@ -1107183,11 +1107193,17 @@
       ]
     },
     {
+      "Light Circuit": {
+        "Circuit": "Master bedroom",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
       "id": 21034,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_ceiling_circle (2)",
@@ -1107210,8 +1107226,7 @@
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "id": 21035,
@@ -1110507,11 +1110522,17 @@
       "static": true
     },
     {
+      "Light Circuit": {
+        "Circuit": "Master bedroom",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
       "id": 21121,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_ceiling_circle (3)",
@@ -1110534,8 +1110555,7 @@
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "id": 21122,
@@ -1111861,11 +1111881,17 @@
       "static": true
     },
     {
+      "Light Circuit": {
+        "Circuit": "Closet",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
       "id": 21158,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_bedroom (4)",
@@ -1111888,8 +1111914,7 @@
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "collider": {
@@ -1151947,6 +1151972,222 @@
         0.800000011920929,
         0.800000011920929,
         0.800000011920929
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Hall",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
+      "id": 36376,
+      "materials": [
+        {
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
+        }
+      ],
+      "name": "Lamp_ceiling_circle (fixture for Ceiling Back hall)",
+      "order": 145816,
+      "parentId": 35187,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_ceiling_circle.FBX",
+      "pathGuid": "802ec77ee2406ca4",
+      "position": [
+        -34.900047302246094,
+        3.3949999809265137,
+        -4.300005912780762
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Hall",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
+      "id": 36377,
+      "materials": [
+        {
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
+        }
+      ],
+      "name": "Lamp_ceiling_circle (fixture for Ceiling Back hall)",
+      "order": 145817,
+      "parentId": 35187,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_ceiling_circle.FBX",
+      "pathGuid": "802ec77ee2406ca4",
+      "position": [
+        -36.60004425048828,
+        3.3949999809265137,
+        -1.4000017642974854
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Storeroom",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
+      "id": 36378,
+      "materials": [
+        {
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
+        }
+      ],
+      "name": "Lamp_bedroom (fixture for Ceiling Storeroom)",
+      "order": 145818,
+      "parentId": 35187,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_bedroom.FBX",
+      "pathGuid": "d83d9ef74cbe6a0a",
+      "position": [
+        -37.300048828125,
+        3.3949999809265137,
+        -5.300006866455078
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
+      "id": 36379,
+      "materials": [
+        {
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
+        }
+      ],
+      "name": "Lamp_ceiling_circle (fixture for Ceiling Living room)",
+      "order": 145819,
+      "parentId": 35187,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_ceiling_circle.FBX",
+      "pathGuid": "802ec77ee2406ca4",
+      "position": [
+        -36.300045013427734,
+        3.3949999809265137,
+        5.8000078201293945
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Downstairs bathroom",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
+      "id": 36380,
+      "materials": [
+        {
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
+        }
+      ],
+      "name": "Lamp_ceiling_circle (fixture for Ceiling Downstairs bathroom)",
+      "order": 145820,
+      "parentId": 35187,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_ceiling_circle.FBX",
+      "pathGuid": "802ec77ee2406ca4",
+      "position": [
+        -32.50004196166992,
+        3.3949999809265137,
+        5.100006580352783
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light Circuit": {
+        "Circuit": "Box room",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
+      "id": 36381,
+      "materials": [
+        {
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
+        }
+      ],
+      "name": "Lamp_bedroom (fixture for Ceiling Box room)",
+      "order": 145821,
+      "parentId": 35187,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_bedroom.FBX",
+      "pathGuid": "d83d9ef74cbe6a0a",
+      "position": [
+        -35.800045013427734,
+        6.304999828338623,
+        -13.800018310546875
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
       ]
     }
   ],
