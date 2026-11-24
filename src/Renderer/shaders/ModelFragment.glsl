@@ -526,6 +526,10 @@ void main() {
 
         vec3 R = reflect(-V, N);
         vec3 prefiltered = textureLod(uPrefilteredMap, R, roughness * uIBLSpecularMaxLod).rgb;
+        // How much of `prefiltered` came from a captured room's own cube (0..1). The sky's Ambient intensity scales the
+        // SKY's specular only: a room cube is the scene's own radiance (lamps, lit walls), so scaling it by 0.08 left every
+        // metal and mirror in a lit room near black (the kitchen sink, the bathroom mirrors).
+        float roomSpecW = 0.0;
 #ifdef _REFLECTION_PROBES
         // Parallax box projection: for each bound probe, clip R to the probe box and sample
         // the sky specular cube with the corrected direction, then blend by weight.
@@ -549,22 +553,28 @@ void main() {
                 float fa = max(min(min(rbminmax.x, rbminmax.y), rbminmax.z), 0.0);
                 vec3 intersect = vWorldPos + R * fa;
                 vec3 correctedR = normalize(intersect - uProbeCenter[pi]);
-                // A captured room (its own prefiltered cube) or the sky's - one fetch, not both (a ?: of two fetches
-                // runs both). Leaves keep the sky's: a canopy's inside never sees the lit street the probe saw, and
-                // the room's average on every leaf greyed the night trees.
-                vec3 probeSpec;
-                if (uProbeLayer[pi] >= 0 && uFoliageSurface == 0 && uGIBake == 0)
-                    probeSpec = textureLod(uProbeCubes, vec4(correctedR, float(uProbeLayer[pi])), roughness * uIBLSpecularMaxLod).rgb;
-                else
-                    probeSpec = textureLod(uPrefilteredMap, correctedR, roughness * uIBLSpecularMaxLod).rgb;
+                // A captured room's cube only lights a surface that faces INTO the room: the siding outside a probe's box
+                // (or inside its core, as the front wall inside the House probe) looks away from the probe's centre and keeps
+                // the sky's - the room's lit interior is not what an exterior wall sees. roomFace is 1 facing the centre, 0
+                // looking away (a smooth step on the angle, per pixel). Leaves keep the sky's: a canopy's inside never sees
+                // the lit street the probe saw, and the room's average on every leaf greyed the night trees.
+                float roomFace = 0.0;
+                if (uProbeLayer[pi] >= 0 && uFoliageSurface == 0 && uGIBake == 0) {
+                    vec3 toCentre = uProbeCenter[pi] - vWorldPos;
+                    roomFace = smoothstep(-0.15, 0.05, dot(N, toCentre) / max(length(toCentre), 1e-3));
+                }
+                vec3 probeSpec = textureLod(uPrefilteredMap, correctedR, roughness * uIBLSpecularMaxLod).rgb;
+                if (roomFace > 0.0)
+                    probeSpec = mix(probeSpec, textureLod(uProbeCubes, vec4(correctedR, float(uProbeLayer[pi])), roughness * uIBLSpecularMaxLod).rgb, roomFace);
                 blendedPrefilter += probeSpec * uProbeBlend[pi];
+                roomSpecW += uProbeBlend[pi] * roomFace;
                 // Room diffuse (a stand-in for baked GI): the captured room's widest GGX mip along N is close to its
                 // cosine-weighted irradiance - the lamps, the lit walls and the windows, not the open sky. It is the
                 // scene's own radiance, so the sky's Ambient intensity does not scale it. Full weight in the box's
                 // core, fading to the sky's over its outer 20% so an outdoor neighbour shows no seam.
-                if (uProbeLayer[pi] >= 0 && uFoliageSurface == 0 && uGIBake == 0) {
+                if (roomFace > 0.0) {
                     vec3 q = abs(vWorldPos - uProbeCenter[pi]) / max(uProbeHalfSize[pi], vec3(1e-3));
-                    float inBox = 1.0 - smoothstep(0.8, 1.0, max(q.x, max(q.y, q.z)));
+                    float inBox = (1.0 - smoothstep(0.8, 1.0, max(q.x, max(q.y, q.z)))) * roomFace;
                     if (inBox > 0.0) {
                         vec3 roomIrr = textureLod(uProbeCubes, vec4(N, float(uProbeLayer[pi])), uIBLSpecularMaxLod).rgb;
                         roomIrradiance += roomIrr * uProbeBlend[pi] * inBox;
@@ -595,13 +605,14 @@ void main() {
         vec3 specularIBL = uNoGlossyReflections == 1 ? vec3(0.0) : prefiltered * specW;
 
         vec3 diffuseIBL = irradiance * albedo; // already in Ambient-intensity terms (see above)
-        ambient = (kD * diffuseIBL + specularIBL * uIBLIntensity) * ao;
+        const float specIntensity = mix(uIBLIntensity, 1.0, clamp(roomSpecW, 0.0, 1.0)); // the sky's share keeps Ambient intensity
+        ambient = (kD * diffuseIBL + specularIBL * specIntensity) * ao;
         // Puddle SSR: where the traced ray found the scene, its radiance replaces the probe / sky reflection (which is
         // in ambient's ao * intensity terms; the trace is already radiance). Rough water fades back to the probe.
         if (uSsrEnabled == 1 && gPuddle > 0.0 && uNoGlossyReflections == 0) {
             vec4 ssr = texture(uSsrMap, gl_FragCoord.xy / uScreenSize);
             float w = ssr.a * gPuddle * (1.0 - smoothstep(0.08, 0.3, roughness));
-            if (w > 0.0 && !any(isnan(ssr.rgb)) && !any(isinf(ssr.rgb))) ssrAdd = (ssr.rgb - prefiltered * ao * uIBLIntensity * ssaoFactor) * specW * w;
+            if (w > 0.0 && !any(isnan(ssr.rgb)) && !any(isinf(ssr.rgb))) ssrAdd = (ssr.rgb - prefiltered * ao * specIntensity * ssaoFactor) * specW * w;
         }
     } else {
         ambient = vec3(0.03) * albedo * ao;

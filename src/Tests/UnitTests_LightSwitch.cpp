@@ -4,6 +4,7 @@
 #include "../Game/Components.h"
 #include "../Game/SceneSerializer.h"
 #include "../Renderer/Model.h"
+#include "../Renderer/ReflectionProbeCapture.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Core/Paths.h"
 #include "../Core/Log.h"
@@ -292,6 +293,24 @@ void LightSwitchStartOnDisagreement() {
     w.Registry.get<LightSwitchComponent>(h2).StartOn = true;
     CHECK(LightSwitch::StartOnConflicts(w).empty());
 }
+// The circuits taking their Start On state (first Update of a Play start) retakes every reflection probe once: the captures
+// made before it saw the authored lighting (fittings unlit), so the bathroom mirrors' cubes were dark. Later frames don't.
+void LightSwitchStartRetakesProbes() {
+    using Json = nlohmann::json;
+    World world;
+    AssetLibrary assets;
+    const Json sw = {{"id", 0}, {"name", "Switch"}, {"Light Switch", {{"Circuit", "Hall"}, {"Start On", true}}}};
+    const Json lamp = {{"id", 1}, {"name", "Lamp"}, {"Light Circuit", {{"Circuit", "Hall"}, {"Glow", 2.0}}}};
+    CHECK(SceneSerializer::LoadFromString(world, assets, Json{{"formatVersion", 4}, {"empties", Json::array({sw, lamp})}}.dump()));
+    ReflectionProbeCapture::TakeRecaptureRequest(); // clear anything left by another test
+    const glm::vec3 aim(0.0f, 0.0f, -1.0f);
+    LightSwitch::Update(world, glm::vec3(0.0f), aim, false);
+    CHECK(ReflectionProbeCapture::TakeRecaptureRequest()); // the start retook them
+    LightSwitch::Update(world, glm::vec3(0.0f), aim, false);
+    CHECK(!ReflectionProbeCapture::TakeRecaptureRequest()); // nothing new started: no more
+    LightSwitch::SetAll(world, false);
+    CHECK(!ReflectionProbeCapture::TakeRecaptureRequest()); // the GI bake's passes never queue captures
+}
 } // namespace
 
 void RegisterLightSwitchTests(UnitTestSupport::TestList& tests) {
@@ -301,4 +320,5 @@ void RegisterLightSwitchTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"LightSwitch: scene blocks load and save", LightSwitchSceneBlocks});
     tests.push_back({"LightSwitch: start state, Interact flips the light and the fitting's glow", LightSwitchCircuit});
     tests.push_back({"LightSwitch: a fitting drawing its imported materials loses its glow when off", LightSwitchImportedGlow});
+    tests.push_back({"LightSwitch: the circuits' Start On retakes every reflection probe once", LightSwitchStartRetakesProbes});
 }
