@@ -1,0 +1,6434 @@
+{
+ "version": 1,
+ "scene": "scenes/Forest.json",
+ "stillFrames": 0,
+ "player": {
+  "eyeHeight": 1.6,
+  "horizontalFovDeg": 90.0,
+  "verticalFovDeg": 58.72,
+  "walkSpeed": 4.0,
+  "source": "sweep v2: eye 1.6 m; Forest.json Player Spawn FOV"
+ },
+ "doorState": "allOpen",
+ "waypoints": [
+  {
+   "id": "dining-bay_ceil",
+   "room": "dining bay",
+   "giVolume": "GI dining bay",
+   "kind": "sweep_ceil",
+   "feet": [
+    -9.3,
+    0.194,
+    20.39
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 60.0
+  },
+  {
+   "id": "dining-bay_floor",
+   "room": "dining bay",
+   "giVolume": "GI dining bay",
+   "kind": "sweep_floor",
+   "feet": [
+    -9.3,
+    0.194,
+    20.39
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "dining-bay_wall-xp",
+   "room": "dining bay",
+   "giVolume": "GI dining bay",
+   "kind": "sweep_wall",
+   "feet": [
+    -9.3,
+    0.194,
+    20.39
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "dining-bay_wall-xn",
+   "room": "dining bay",
+   "giVolume": "GI dining bay",
+   "kind": "sweep_wall",
+   "feet": [
+    -9.3,
+    0.194,
+    20.39
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "dining-bay_wall-zp",
+   "room": "dining bay",
+   "giVolume": "GI dining bay",
+   "kind": "sweep_wall",
+   "feet": [
+    -9.3,
+    0.194,
+    20.39
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "dining-bay_wall-zn",
+   "room": "dining bay",
+   "giVolume": "GI dining bay",
+   "kind": "sweep_wall",
+   "feet": [
+    -9.3,
+    0.194,
+    20.39
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "downstairs-bathroom_ceil",
+   "room": "downstairs bathroom",
+   "giVolume": "GI downstairs bathroom 1",
+   "kind": "sweep_ceil",
+   "feet": [
+    6.19,
+    0.194,
+    25.832
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "downstairs-bathroom_floor",
+   "room": "downstairs bathroom",
+   "giVolume": "GI downstairs bathroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    6.19,
+    0.194,
+    25.832
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "downstairs-bathroom_wall-xp",
+   "room": "downstairs bathroom",
+   "giVolume": "GI downstairs bathroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    6.19,
+    0.194,
+    25.832
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "downstairs-bathroom_wall-xn",
+   "room": "downstairs bathroom",
+   "giVolume": "GI downstairs bathroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    6.19,
+    0.194,
+    25.832
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "downstairs-bathroom_wall-zp",
+   "room": "downstairs bathroom",
+   "giVolume": "GI downstairs bathroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    6.19,
+    0.194,
+    25.832
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "downstairs-bathroom_wall-zn",
+   "room": "downstairs bathroom",
+   "giVolume": "GI downstairs bathroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    6.19,
+    0.194,
+    25.832
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall_ceil",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 1",
+   "kind": "sweep_ceil",
+   "feet": [
+    1.435,
+    0.194,
+    25.53
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall_floor",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 1",
+   "kind": "sweep_floor",
+   "feet": [
+    1.435,
+    0.194,
+    25.53
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall_wall-xp",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 1",
+   "kind": "sweep_wall",
+   "feet": [
+    1.435,
+    0.194,
+    25.53
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall_wall-xn",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 1",
+   "kind": "sweep_wall",
+   "feet": [
+    1.435,
+    0.194,
+    25.53
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall_wall-zp",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 1",
+   "kind": "sweep_wall",
+   "feet": [
+    1.435,
+    0.194,
+    25.53
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall_wall-zn",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 1",
+   "kind": "sweep_wall",
+   "feet": [
+    1.435,
+    0.194,
+    25.53
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall-spot2_ceil",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 2",
+   "kind": "sweep_ceil",
+   "feet": [
+    -4.865,
+    0.194,
+    25.53
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall-spot2_floor",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 2",
+   "kind": "sweep_floor",
+   "feet": [
+    -4.865,
+    0.194,
+    25.53
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall-spot2_wall-xp",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 2",
+   "kind": "sweep_wall",
+   "feet": [
+    -4.865,
+    0.194,
+    25.53
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall-spot2_wall-xn",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 2",
+   "kind": "sweep_wall",
+   "feet": [
+    -4.865,
+    0.194,
+    25.53
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall-spot2_wall-zp",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 2",
+   "kind": "sweep_wall",
+   "feet": [
+    -4.865,
+    0.194,
+    25.53
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall-spot2_wall-zn",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 2",
+   "kind": "sweep_wall",
+   "feet": [
+    -4.865,
+    0.194,
+    25.53
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall-spot3_ceil",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 4",
+   "kind": "sweep_ceil",
+   "feet": [
+    4.035,
+    0.194,
+    27.93
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall-spot3_floor",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 4",
+   "kind": "sweep_floor",
+   "feet": [
+    4.035,
+    0.194,
+    27.93
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall-spot3_wall-xp",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 4",
+   "kind": "sweep_wall",
+   "feet": [
+    4.035,
+    0.194,
+    27.93
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall-spot3_wall-xn",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 4",
+   "kind": "sweep_wall",
+   "feet": [
+    4.035,
+    0.194,
+    27.93
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall-spot3_wall-zp",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 4",
+   "kind": "sweep_wall",
+   "feet": [
+    4.035,
+    0.194,
+    27.93
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "entrance-hall-spot3_wall-zn",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 4",
+   "kind": "sweep_wall",
+   "feet": [
+    4.035,
+    0.194,
+    27.93
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining_ceil",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_ceil",
+   "feet": [
+    -8.928,
+    0.194,
+    27.03
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining_floor",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_floor",
+   "feet": [
+    -8.928,
+    0.194,
+    27.03
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining_wall-xp",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_wall",
+   "feet": [
+    -8.928,
+    0.194,
+    27.03
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining_wall-xn",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_wall",
+   "feet": [
+    -8.928,
+    0.194,
+    27.03
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining_wall-zp",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_wall",
+   "feet": [
+    -8.928,
+    0.194,
+    27.03
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining_wall-zn",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_wall",
+   "feet": [
+    -8.928,
+    0.194,
+    27.03
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot2_ceil",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 6",
+   "kind": "sweep_ceil",
+   "feet": [
+    -0.228,
+    0.194,
+    28.63
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot2_floor",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 6",
+   "kind": "sweep_floor",
+   "feet": [
+    -0.228,
+    0.194,
+    28.63
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot2_wall-xp",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 6",
+   "kind": "sweep_wall",
+   "feet": [
+    -0.228,
+    0.194,
+    28.63
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot2_wall-xn",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 6",
+   "kind": "sweep_wall",
+   "feet": [
+    -0.228,
+    0.194,
+    28.63
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot2_wall-zp",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 6",
+   "kind": "sweep_wall",
+   "feet": [
+    -0.228,
+    0.194,
+    28.63
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot2_wall-zn",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 6",
+   "kind": "sweep_wall",
+   "feet": [
+    -0.228,
+    0.194,
+    28.63
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot3_ceil",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_ceil",
+   "feet": [
+    -11.328,
+    0.194,
+    21.63
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot3_floor",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -11.328,
+    0.194,
+    21.63
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot3_wall-xp",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -11.328,
+    0.194,
+    21.63
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot3_wall-xn",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -11.328,
+    0.194,
+    21.63
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot3_wall-zp",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -11.328,
+    0.194,
+    21.63
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot3_wall-zn",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -11.328,
+    0.194,
+    21.63
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot4_ceil",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_ceil",
+   "feet": [
+    -12.528,
+    0.194,
+    26.93
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot4_floor",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_floor",
+   "feet": [
+    -12.528,
+    0.194,
+    26.93
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot4_wall-xp",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_wall",
+   "feet": [
+    -12.528,
+    0.194,
+    26.93
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot4_wall-xn",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_wall",
+   "feet": [
+    -12.528,
+    0.194,
+    26.93
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot4_wall-zp",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_wall",
+   "feet": [
+    -12.528,
+    0.194,
+    26.93
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot4_wall-zn",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_wall",
+   "feet": [
+    -12.528,
+    0.194,
+    26.93
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot5_ceil",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_ceil",
+   "feet": [
+    -8.028,
+    0.194,
+    23.63
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot5_floor",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -8.028,
+    0.194,
+    23.63
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot5_wall-xp",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -8.028,
+    0.194,
+    23.63
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot5_wall-xn",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -8.028,
+    0.194,
+    23.63
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot5_wall-zp",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -8.028,
+    0.194,
+    23.63
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot5_wall-zn",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -8.028,
+    0.194,
+    23.63
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot6_ceil",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 5",
+   "kind": "sweep_ceil",
+   "feet": [
+    -4.628,
+    0.194,
+    27.83
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot6_floor",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 5",
+   "kind": "sweep_floor",
+   "feet": [
+    -4.628,
+    0.194,
+    27.83
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot6_wall-xp",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 5",
+   "kind": "sweep_wall",
+   "feet": [
+    -4.628,
+    0.194,
+    27.83
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot6_wall-xn",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 5",
+   "kind": "sweep_wall",
+   "feet": [
+    -4.628,
+    0.194,
+    27.83
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot6_wall-zp",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 5",
+   "kind": "sweep_wall",
+   "feet": [
+    -4.628,
+    0.194,
+    27.83
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "kitchen-dining-spot6_wall-zn",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 5",
+   "kind": "sweep_wall",
+   "feet": [
+    -4.628,
+    0.194,
+    27.83
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room_ceil",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_ceil",
+   "feet": [
+    10.33,
+    0.194,
+    27.522
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "living-room_floor",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_floor",
+   "feet": [
+    10.33,
+    0.194,
+    27.522
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "living-room_wall-xp",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_wall",
+   "feet": [
+    10.33,
+    0.194,
+    27.522
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room_wall-xn",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_wall",
+   "feet": [
+    10.33,
+    0.194,
+    27.522
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room_wall-zp",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_wall",
+   "feet": [
+    10.33,
+    0.194,
+    27.522
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room_wall-zn",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_wall",
+   "feet": [
+    10.33,
+    0.194,
+    27.522
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot2_ceil",
+   "room": "living room",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_ceil",
+   "feet": [
+    6.03,
+    0.194,
+    29.422
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot2_floor",
+   "room": "living room",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_floor",
+   "feet": [
+    6.03,
+    0.194,
+    29.422
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot2_wall-xp",
+   "room": "living room",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_wall",
+   "feet": [
+    6.03,
+    0.194,
+    29.422
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot2_wall-xn",
+   "room": "living room",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_wall",
+   "feet": [
+    6.03,
+    0.194,
+    29.422
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot2_wall-zp",
+   "room": "living room",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_wall",
+   "feet": [
+    6.03,
+    0.194,
+    29.422
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot2_wall-zn",
+   "room": "living room",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_wall",
+   "feet": [
+    6.03,
+    0.194,
+    29.422
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot3_ceil",
+   "room": "living room",
+   "giVolume": "GI living room 4",
+   "kind": "sweep_ceil",
+   "feet": [
+    12.03,
+    0.194,
+    22.322
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot3_floor",
+   "room": "living room",
+   "giVolume": "GI living room 4",
+   "kind": "sweep_floor",
+   "feet": [
+    12.03,
+    0.194,
+    22.322
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot3_wall-xp",
+   "room": "living room",
+   "giVolume": "GI living room 4",
+   "kind": "sweep_wall",
+   "feet": [
+    12.03,
+    0.194,
+    22.322
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot3_wall-xn",
+   "room": "living room",
+   "giVolume": "GI living room 4",
+   "kind": "sweep_wall",
+   "feet": [
+    12.03,
+    0.194,
+    22.322
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot3_wall-zp",
+   "room": "living room",
+   "giVolume": "GI living room 4",
+   "kind": "sweep_wall",
+   "feet": [
+    12.03,
+    0.194,
+    22.322
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot3_wall-zn",
+   "room": "living room",
+   "giVolume": "GI living room 4",
+   "kind": "sweep_wall",
+   "feet": [
+    12.03,
+    0.194,
+    22.322
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot4_ceil",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_ceil",
+   "feet": [
+    13.33,
+    0.194,
+    25.622
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot4_floor",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_floor",
+   "feet": [
+    13.33,
+    0.194,
+    25.622
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot4_wall-xp",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_wall",
+   "feet": [
+    13.33,
+    0.194,
+    25.622
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot4_wall-xn",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_wall",
+   "feet": [
+    13.33,
+    0.194,
+    25.622
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot4_wall-zp",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_wall",
+   "feet": [
+    13.33,
+    0.194,
+    25.622
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot4_wall-zn",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_wall",
+   "feet": [
+    13.33,
+    0.194,
+    25.622
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot5_ceil",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_ceil",
+   "feet": [
+    11.53,
+    0.194,
+    30.822
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot5_floor",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_floor",
+   "feet": [
+    11.53,
+    0.194,
+    30.822
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot5_wall-xp",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_wall",
+   "feet": [
+    11.53,
+    0.194,
+    30.822
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot5_wall-xn",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_wall",
+   "feet": [
+    11.53,
+    0.194,
+    30.822
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot5_wall-zp",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_wall",
+   "feet": [
+    11.53,
+    0.194,
+    30.822
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "living-room-spot5_wall-zn",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_wall",
+   "feet": [
+    11.53,
+    0.194,
+    30.822
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "stair-storeroom_ceil",
+   "room": "stair storeroom",
+   "giVolume": "GI stair storeroom",
+   "kind": "sweep_ceil",
+   "feet": [
+    -3.765,
+    0.194,
+    30.285
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "stair-storeroom_floor",
+   "room": "stair storeroom",
+   "giVolume": "GI stair storeroom",
+   "kind": "sweep_floor",
+   "feet": [
+    -3.765,
+    0.194,
+    30.285
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "stair-storeroom_wall-xp",
+   "room": "stair storeroom",
+   "giVolume": "GI stair storeroom",
+   "kind": "sweep_wall",
+   "feet": [
+    -3.765,
+    0.194,
+    30.285
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "stair-storeroom_wall-xn",
+   "room": "stair storeroom",
+   "giVolume": "GI stair storeroom",
+   "kind": "sweep_wall",
+   "feet": [
+    -3.765,
+    0.194,
+    30.285
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "stair-storeroom_wall-zp",
+   "room": "stair storeroom",
+   "giVolume": "GI stair storeroom",
+   "kind": "sweep_wall",
+   "feet": [
+    -3.765,
+    0.194,
+    30.285
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "stair-storeroom_wall-zn",
+   "room": "stair storeroom",
+   "giVolume": "GI stair storeroom",
+   "kind": "sweep_wall",
+   "feet": [
+    -3.765,
+    0.194,
+    30.285
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "stairwell-low_ceil",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_ceil",
+   "feet": [
+    2.8,
+    0.194,
+    29.615
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "stairwell-low_floor",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_floor",
+   "feet": [
+    2.8,
+    0.194,
+    29.615
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "stairwell-low_wall-xp",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_wall",
+   "feet": [
+    2.8,
+    0.194,
+    29.615
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "stairwell-low_wall-xn",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_wall",
+   "feet": [
+    2.8,
+    0.194,
+    29.615
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "stairwell-low_wall-zp",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_wall",
+   "feet": [
+    2.8,
+    0.194,
+    29.615
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "stairwell-low_wall-zn",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_wall",
+   "feet": [
+    2.8,
+    0.194,
+    29.615
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "box-room_ceil",
+   "room": "box room",
+   "giVolume": "GI box room",
+   "kind": "sweep_ceil",
+   "feet": [
+    -12.728,
+    3.104,
+    28.775
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "box-room_floor",
+   "room": "box room",
+   "giVolume": "GI box room",
+   "kind": "sweep_floor",
+   "feet": [
+    -12.728,
+    3.104,
+    28.775
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "box-room_wall-xp",
+   "room": "box room",
+   "giVolume": "GI box room",
+   "kind": "sweep_wall",
+   "feet": [
+    -12.728,
+    3.104,
+    28.775
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "box-room_wall-xn",
+   "room": "box room",
+   "giVolume": "GI box room",
+   "kind": "sweep_wall",
+   "feet": [
+    -12.728,
+    3.104,
+    28.775
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "box-room_wall-zp",
+   "room": "box room",
+   "giVolume": "GI box room",
+   "kind": "sweep_wall",
+   "feet": [
+    -12.728,
+    3.104,
+    28.775
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "box-room_wall-zn",
+   "room": "box room",
+   "giVolume": "GI box room",
+   "kind": "sweep_wall",
+   "feet": [
+    -12.728,
+    3.104,
+    28.775
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "child-s-bedroom_ceil",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_ceil",
+   "feet": [
+    10.97,
+    3.104,
+    27.632
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "child-s-bedroom_floor",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    10.97,
+    3.104,
+    27.632
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "child-s-bedroom_wall-xp",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    10.97,
+    3.104,
+    27.632
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "child-s-bedroom_wall-xn",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    10.97,
+    3.104,
+    27.632
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "child-s-bedroom_wall-zp",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    10.97,
+    3.104,
+    27.632
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "child-s-bedroom_wall-zn",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    10.97,
+    3.104,
+    27.632
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "child-s-bedroom-spot2_ceil",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_ceil",
+   "feet": [
+    13.67,
+    3.104,
+    25.332
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "child-s-bedroom-spot2_floor",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    13.67,
+    3.104,
+    25.332
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "child-s-bedroom-spot2_wall-xp",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    13.67,
+    3.104,
+    25.332
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "child-s-bedroom-spot2_wall-xn",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    13.67,
+    3.104,
+    25.332
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "child-s-bedroom-spot2_wall-zp",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    13.67,
+    3.104,
+    25.332
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "child-s-bedroom-spot2_wall-zn",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    13.67,
+    3.104,
+    25.332
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "closet-room_ceil",
+   "room": "closet room",
+   "giVolume": "GI closet room",
+   "kind": "sweep_ceil",
+   "feet": [
+    11.64,
+    3.104,
+    30.17
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "closet-room_floor",
+   "room": "closet room",
+   "giVolume": "GI closet room",
+   "kind": "sweep_floor",
+   "feet": [
+    11.64,
+    3.104,
+    30.17
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "closet-room_wall-xp",
+   "room": "closet room",
+   "giVolume": "GI closet room",
+   "kind": "sweep_wall",
+   "feet": [
+    11.64,
+    3.104,
+    30.17
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "closet-room_wall-xn",
+   "room": "closet room",
+   "giVolume": "GI closet room",
+   "kind": "sweep_wall",
+   "feet": [
+    11.64,
+    3.104,
+    30.17
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "closet-room_wall-zp",
+   "room": "closet room",
+   "giVolume": "GI closet room",
+   "kind": "sweep_wall",
+   "feet": [
+    11.64,
+    3.104,
+    30.17
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "closet-room_wall-zn",
+   "room": "closet room",
+   "giVolume": "GI closet room",
+   "kind": "sweep_wall",
+   "feet": [
+    11.64,
+    3.104,
+    30.17
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "landing_ceil",
+   "room": "landing",
+   "giVolume": "GI landing",
+   "kind": "sweep_ceil",
+   "feet": [
+    7.345,
+    3.104,
+    29.445
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "landing_floor",
+   "room": "landing",
+   "giVolume": "GI landing",
+   "kind": "sweep_floor",
+   "feet": [
+    7.345,
+    3.104,
+    29.445
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "landing_wall-xp",
+   "room": "landing",
+   "giVolume": "GI landing",
+   "kind": "sweep_wall",
+   "feet": [
+    7.345,
+    3.104,
+    29.445
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "landing_wall-xn",
+   "room": "landing",
+   "giVolume": "GI landing",
+   "kind": "sweep_wall",
+   "feet": [
+    7.345,
+    3.104,
+    29.445
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "landing_wall-zp",
+   "room": "landing",
+   "giVolume": "GI landing",
+   "kind": "sweep_wall",
+   "feet": [
+    7.345,
+    3.104,
+    29.445
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "landing_wall-zn",
+   "room": "landing",
+   "giVolume": "GI landing",
+   "kind": "sweep_wall",
+   "feet": [
+    7.345,
+    3.104,
+    29.445
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom_ceil",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_ceil",
+   "feet": [
+    -9.27,
+    3.104,
+    25.752
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom_floor",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -9.27,
+    3.104,
+    25.752
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom_wall-xp",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -9.27,
+    3.104,
+    25.752
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom_wall-xn",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -9.27,
+    3.104,
+    25.752
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom_wall-zp",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -9.27,
+    3.104,
+    25.752
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom_wall-zn",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -9.27,
+    3.104,
+    25.752
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot2_ceil",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_ceil",
+   "feet": [
+    -11.47,
+    3.104,
+    21.852
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot2_floor",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -11.47,
+    3.104,
+    21.852
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot2_wall-xp",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -11.47,
+    3.104,
+    21.852
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot2_wall-xn",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -11.47,
+    3.104,
+    21.852
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot2_wall-zp",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -11.47,
+    3.104,
+    21.852
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot2_wall-zn",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -11.47,
+    3.104,
+    21.852
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot3_ceil",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 3",
+   "kind": "sweep_ceil",
+   "feet": [
+    -8.37,
+    3.104,
+    30.052
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot3_floor",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 3",
+   "kind": "sweep_floor",
+   "feet": [
+    -8.37,
+    3.104,
+    30.052
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot3_wall-xp",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 3",
+   "kind": "sweep_wall",
+   "feet": [
+    -8.37,
+    3.104,
+    30.052
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot3_wall-xn",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 3",
+   "kind": "sweep_wall",
+   "feet": [
+    -8.37,
+    3.104,
+    30.052
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot3_wall-zp",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 3",
+   "kind": "sweep_wall",
+   "feet": [
+    -8.37,
+    3.104,
+    30.052
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot3_wall-zn",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 3",
+   "kind": "sweep_wall",
+   "feet": [
+    -8.37,
+    3.104,
+    30.052
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot4_ceil",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_ceil",
+   "feet": [
+    -7.97,
+    3.104,
+    21.252
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot4_floor",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -7.97,
+    3.104,
+    21.252
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot4_wall-xp",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -7.97,
+    3.104,
+    21.252
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot4_wall-xn",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -7.97,
+    3.104,
+    21.252
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot4_wall-zp",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -7.97,
+    3.104,
+    21.252
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "master-bedroom-spot4_wall-zn",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -7.97,
+    3.104,
+    21.252
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "stairwell-top_ceil",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_ceil",
+   "feet": [
+    3.0,
+    3.104,
+    29.815
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "stairwell-top_floor",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_floor",
+   "feet": [
+    3.0,
+    3.104,
+    29.815
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "stairwell-top_wall-xp",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_wall",
+   "feet": [
+    3.0,
+    3.104,
+    29.815
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "stairwell-top_wall-xn",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_wall",
+   "feet": [
+    3.0,
+    3.104,
+    29.815
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "stairwell-top_wall-zp",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_wall",
+   "feet": [
+    3.0,
+    3.104,
+    29.815
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "stairwell-top_wall-zn",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_wall",
+   "feet": [
+    3.0,
+    3.104,
+    29.815
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-bathroom_ceil",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_ceil",
+   "feet": [
+    -4.665,
+    3.104,
+    26.332
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-bathroom_floor",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -4.665,
+    3.104,
+    26.332
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-bathroom_wall-xp",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -4.665,
+    3.104,
+    26.332
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-bathroom_wall-xn",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -4.665,
+    3.104,
+    26.332
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-bathroom_wall-zp",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -4.665,
+    3.104,
+    26.332
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-bathroom_wall-zn",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_wall",
+   "feet": [
+    -4.665,
+    3.104,
+    26.332
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-den_ceil",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_ceil",
+   "feet": [
+    -3.065,
+    3.104,
+    30.115
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-den_floor",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_floor",
+   "feet": [
+    -3.065,
+    3.104,
+    30.115
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-den_wall-xp",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_wall",
+   "feet": [
+    -3.065,
+    3.104,
+    30.115
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-den_wall-xn",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_wall",
+   "feet": [
+    -3.065,
+    3.104,
+    30.115
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-den_wall-zp",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_wall",
+   "feet": [
+    -3.065,
+    3.104,
+    30.115
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-den_wall-zn",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_wall",
+   "feet": [
+    -3.065,
+    3.104,
+    30.115
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-den-spot2_ceil",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_ceil",
+   "feet": [
+    1.035,
+    3.104,
+    29.615
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-den-spot2_floor",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_floor",
+   "feet": [
+    1.035,
+    3.104,
+    29.615
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-den-spot2_wall-xp",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_wall",
+   "feet": [
+    1.035,
+    3.104,
+    29.615
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-den-spot2_wall-xn",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_wall",
+   "feet": [
+    1.035,
+    3.104,
+    29.615
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-den-spot2_wall-zp",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_wall",
+   "feet": [
+    1.035,
+    3.104,
+    29.615
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-den-spot2_wall-zn",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_wall",
+   "feet": [
+    1.035,
+    3.104,
+    29.615
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-hall_ceil",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_ceil",
+   "feet": [
+    4.44,
+    3.104,
+    26.232
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-hall_floor",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_floor",
+   "feet": [
+    4.44,
+    3.104,
+    26.232
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-hall_wall-xp",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_wall",
+   "feet": [
+    4.44,
+    3.104,
+    26.232
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-hall_wall-xn",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_wall",
+   "feet": [
+    4.44,
+    3.104,
+    26.232
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-hall_wall-zp",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_wall",
+   "feet": [
+    4.44,
+    3.104,
+    26.232
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-hall_wall-zn",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_wall",
+   "feet": [
+    4.44,
+    3.104,
+    26.232
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-hall-spot2_ceil",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_ceil",
+   "feet": [
+    1.04,
+    3.104,
+    25.032
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 60.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-hall-spot2_floor",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_floor",
+   "feet": [
+    1.04,
+    3.104,
+    25.032
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -60.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-hall-spot2_wall-xp",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_wall",
+   "feet": [
+    1.04,
+    3.104,
+    25.032
+   ],
+   "yawDeg": 0,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-hall-spot2_wall-xn",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_wall",
+   "feet": [
+    1.04,
+    3.104,
+    25.032
+   ],
+   "yawDeg": -180,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-hall-spot2_wall-zp",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_wall",
+   "feet": [
+    1.04,
+    3.104,
+    25.032
+   ],
+   "yawDeg": 90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "upstairs-hall-spot2_wall-zn",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_wall",
+   "feet": [
+    1.04,
+    3.104,
+    25.032
+   ],
+   "yawDeg": -90,
+   "pitchDeg": 0.0,
+   "cut": true
+  },
+  {
+   "id": "door20753_a-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_a",
+   "feet": [
+    -4.334,
+    3.104,
+    26.419
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20753 interior side a 1.5 m (GI upstairs bathroom 1)"
+  },
+  {
+   "id": "door20753_a-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI upstairs bathroom 3",
+   "kind": "sweep_a",
+   "feet": [
+    -4.334,
+    3.104,
+    25.219
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -11.5,
+   "cut": true,
+   "note": "door 20753 interior side a 2.7 m (GI upstairs bathroom 3)"
+  },
+  {
+   "id": "door20753_b-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI upstairs den 1",
+   "kind": "sweep_b",
+   "feet": [
+    -4.334,
+    3.104,
+    29.419
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20753 interior side b 1.5 m (GI upstairs den 1)"
+  },
+  {
+   "id": "door20753_b-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI upstairs den 1",
+   "kind": "sweep_b",
+   "feet": [
+    -4.334,
+    3.104,
+    30.919
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "note": "door 20753 interior side b 3.0 m (GI upstairs den 1)"
+  },
+  {
+   "id": "door20754_a-near",
+   "room": "Door_exterior_white_mesh",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_a",
+   "feet": [
+    13.08,
+    0.194,
+    25.979
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20754 EXTERIOR side a 1.5 m (GI living room 1)"
+  },
+  {
+   "id": "door20754_a-far",
+   "room": "Door_exterior_white_mesh",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_a",
+   "feet": [
+    11.58,
+    0.194,
+    25.979
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "note": "door 20754 EXTERIOR side a 3.0 m (GI living room 1)"
+  },
+  {
+   "id": "door20754_b-near",
+   "room": "Door_exterior_white_mesh",
+   "giVolume": "",
+   "kind": "sweep_b",
+   "feet": [
+    16.08,
+    0.194,
+    25.979
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "outside": true,
+   "note": "door 20754 EXTERIOR side b 1.5 m (outside)"
+  },
+  {
+   "id": "door20754_b-far",
+   "room": "Door_exterior_white_mesh",
+   "giVolume": "",
+   "kind": "sweep_b",
+   "feet": [
+    17.58,
+    0.194,
+    25.979
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "outside": true,
+   "note": "door 20754 EXTERIOR side b 3.0 m (outside)"
+  },
+  {
+   "id": "door20755_a-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI box room",
+   "kind": "sweep_a",
+   "feet": [
+    -12.624,
+    3.104,
+    27.436
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20755 interior side a 1.5 m (GI box room)"
+  },
+  {
+   "id": "door20755_a-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI box room",
+   "kind": "sweep_a",
+   "feet": [
+    -13.824,
+    3.104,
+    27.436
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -11.5,
+   "cut": true,
+   "note": "door 20755 interior side a 2.7 m (GI box room)"
+  },
+  {
+   "id": "door20755_b-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI master bedroom 2",
+   "kind": "sweep_b",
+   "feet": [
+    -9.624,
+    3.104,
+    27.436
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20755 interior side b 1.5 m (GI master bedroom 2)"
+  },
+  {
+   "id": "door20755_b-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI master bedroom 2",
+   "kind": "sweep_b",
+   "feet": [
+    -8.124,
+    3.104,
+    27.436
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "note": "door 20755 interior side b 3.0 m (GI master bedroom 2)"
+  },
+  {
+   "id": "door20756_a-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI stair storeroom",
+   "kind": "sweep_a",
+   "feet": [
+    -3.411,
+    0.194,
+    30.344
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20756 interior side a 1.5 m (GI stair storeroom)"
+  },
+  {
+   "id": "door20756_a-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI stair storeroom",
+   "kind": "sweep_a",
+   "feet": [
+    -4.911,
+    0.194,
+    30.344
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "note": "door 20756 interior side a 3.0 m (GI stair storeroom)"
+  },
+  {
+   "id": "door20756_b-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI kitchen-dining 6",
+   "kind": "sweep_b",
+   "feet": [
+    -0.411,
+    0.194,
+    30.344
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20756 interior side b 1.5 m (GI kitchen-dining 6)"
+  },
+  {
+   "id": "door20756_b-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_b",
+   "feet": [
+    1.089,
+    0.194,
+    30.344
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "note": "door 20756 interior side b 3.0 m (GI stairwell)"
+  },
+  {
+   "id": "door20757_a-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_a",
+   "feet": [
+    4.394,
+    3.104,
+    26.421
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20757 interior side a 1.5 m (GI upstairs hall)"
+  },
+  {
+   "id": "door20757_a-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_a",
+   "feet": [
+    4.394,
+    3.104,
+    25.221
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -11.5,
+   "cut": true,
+   "note": "door 20757 interior side a 2.7 m (GI upstairs hall)"
+  },
+  {
+   "id": "door20757_b-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_b",
+   "feet": [
+    4.394,
+    3.104,
+    29.421
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20757 interior side b 1.5 m (GI stairwell)"
+  },
+  {
+   "id": "door20757_b-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_b",
+   "feet": [
+    4.394,
+    3.104,
+    30.921
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "note": "door 20757 interior side b 3.0 m (GI stairwell)"
+  },
+  {
+   "id": "door20758_a-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI master bedroom 2",
+   "kind": "sweep_a",
+   "feet": [
+    -8.259,
+    3.104,
+    26.466
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20758 interior side a 1.5 m (GI master bedroom 2)"
+  },
+  {
+   "id": "door20758_a-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI master bedroom 2",
+   "kind": "sweep_a",
+   "feet": [
+    -9.759,
+    3.104,
+    26.466
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "note": "door 20758 interior side a 3.0 m (GI master bedroom 2)"
+  },
+  {
+   "id": "door20758_b-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_b",
+   "feet": [
+    -5.259,
+    3.104,
+    26.466
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20758 interior side b 1.5 m (GI upstairs bathroom 1)"
+  },
+  {
+   "id": "door20758_b-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_b",
+   "feet": [
+    -3.759,
+    3.104,
+    26.466
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "note": "door 20758 interior side b 3.0 m (GI upstairs bathroom 1)"
+  },
+  {
+   "id": "door20759_a-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI master bedroom 3",
+   "kind": "sweep_a",
+   "feet": [
+    -8.261,
+    3.104,
+    29.374
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20759 interior side a 1.5 m (GI master bedroom 3)"
+  },
+  {
+   "id": "door20759_a-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI master bedroom 3",
+   "kind": "sweep_a",
+   "feet": [
+    -9.761,
+    3.104,
+    29.374
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "note": "door 20759 interior side a 3.0 m (GI master bedroom 3)"
+  },
+  {
+   "id": "door20759_b-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI upstairs den 1",
+   "kind": "sweep_b",
+   "feet": [
+    -5.261,
+    3.104,
+    29.374
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20759 interior side b 1.5 m (GI upstairs den 1)"
+  },
+  {
+   "id": "door20759_b-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI upstairs den 1",
+   "kind": "sweep_b",
+   "feet": [
+    -3.761,
+    3.104,
+    29.374
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "note": "door 20759 interior side b 3.0 m (GI upstairs den 1)"
+  },
+  {
+   "id": "door20760_a-near",
+   "room": "Door_exterior_paneled_mesh",
+   "giVolume": "",
+   "kind": "sweep_a",
+   "feet": [
+    1.0,
+    0.194,
+    22.54
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "outside": true,
+   "note": "door 20760 EXTERIOR side a 1.5 m (outside)"
+  },
+  {
+   "id": "door20760_a-far",
+   "room": "Door_exterior_paneled_mesh",
+   "giVolume": "",
+   "kind": "sweep_a",
+   "feet": [
+    1.0,
+    0.194,
+    21.04
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "outside": true,
+   "note": "door 20760 EXTERIOR side a 3.0 m (outside)"
+  },
+  {
+   "id": "door20760_b-near",
+   "room": "Door_exterior_paneled_mesh",
+   "giVolume": "GI entrance hall 1",
+   "kind": "sweep_b",
+   "feet": [
+    1.0,
+    0.194,
+    25.54
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20760 EXTERIOR side b 1.5 m (GI entrance hall 1)"
+  },
+  {
+   "id": "door20760_b-far",
+   "room": "Door_exterior_paneled_mesh",
+   "giVolume": "GI entrance hall 1",
+   "kind": "sweep_b",
+   "feet": [
+    1.0,
+    0.194,
+    26.44
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -12.9,
+   "cut": true,
+   "note": "door 20760 EXTERIOR side b 2.4 m (GI entrance hall 1)"
+  },
+  {
+   "id": "door20761_a-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI landing",
+   "kind": "sweep_a",
+   "feet": [
+    7.744,
+    3.104,
+    28.404
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20761 interior side a 1.5 m (GI landing)"
+  },
+  {
+   "id": "door20761_a-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI landing",
+   "kind": "sweep_a",
+   "feet": [
+    6.244,
+    3.104,
+    28.404
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "note": "door 20761 interior side a 3.0 m (GI landing)"
+  },
+  {
+   "id": "door20761_b-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_b",
+   "feet": [
+    10.744,
+    3.104,
+    28.404
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20761 interior side b 1.5 m (GI child's bedroom 1)"
+  },
+  {
+   "id": "door20761_b-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_b",
+   "feet": [
+    12.244,
+    3.104,
+    28.404
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "note": "door 20761 interior side b 3.0 m (GI child's bedroom 1)"
+  },
+  {
+   "id": "door20762_a-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI downstairs bathroom 1",
+   "kind": "sweep_a",
+   "feet": [
+    6.336,
+    0.194,
+    25.449
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20762 interior side a 1.5 m (GI downstairs bathroom 1)"
+  },
+  {
+   "id": "door20762_b-near",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_b",
+   "feet": [
+    6.336,
+    0.194,
+    28.449
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -20.1,
+   "cut": true,
+   "note": "door 20762 interior side b 1.5 m (GI living room 3)"
+  },
+  {
+   "id": "door20762_b-far",
+   "room": "Door_interior_mesh",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_b",
+   "feet": [
+    6.336,
+    0.194,
+    29.949
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -10.4,
+   "cut": true,
+   "note": "door 20762 interior side b 3.0 m (GI living room 3)"
+  },
+  {
+   "id": "out-door20754_near",
+   "room": "Door_exterior_white_mesh (outside)",
+   "giVolume": "",
+   "kind": "sweep_near",
+   "feet": [
+    17.08,
+    0.194,
+    25.979
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "outside": true,
+   "note": "facade: the door"
+  },
+  {
+   "id": "out-door20754_ceil",
+   "room": "Door_exterior_white_mesh (outside)",
+   "giVolume": "",
+   "kind": "sweep_ceil",
+   "feet": [
+    15.98,
+    0.194,
+    25.979
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 55.0,
+   "cut": true,
+   "outside": true,
+   "note": "porch / lintel ceiling"
+  },
+  {
+   "id": "out-door20754_left",
+   "room": "Door_exterior_white_mesh (outside)",
+   "giVolume": "",
+   "kind": "sweep_left",
+   "feet": [
+    19.58,
+    0.194,
+    27.979
+   ],
+   "yawDeg": 155.0,
+   "pitchDeg": 5.0,
+   "cut": true,
+   "outside": true,
+   "note": "oblique facade"
+  },
+  {
+   "id": "out-door20754_right",
+   "room": "Door_exterior_white_mesh (outside)",
+   "giVolume": "",
+   "kind": "sweep_right",
+   "feet": [
+    19.58,
+    0.194,
+    23.979
+   ],
+   "yawDeg": -155.0,
+   "pitchDeg": 5.0,
+   "cut": true,
+   "outside": true,
+   "note": "oblique facade"
+  },
+  {
+   "id": "out-door20754_far",
+   "room": "Door_exterior_white_mesh (outside)",
+   "giVolume": "",
+   "kind": "sweep_far",
+   "feet": [
+    23.58,
+    0.194,
+    25.979
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 3.0,
+   "cut": true,
+   "outside": true,
+   "note": "whole facade"
+  },
+  {
+   "id": "out-door20760_near",
+   "room": "Door_exterior_paneled_mesh (outside)",
+   "giVolume": "",
+   "kind": "sweep_near",
+   "feet": [
+    1.0,
+    0.194,
+    21.54
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "outside": true,
+   "note": "facade: the door"
+  },
+  {
+   "id": "out-door20760_ceil",
+   "room": "Door_exterior_paneled_mesh (outside)",
+   "giVolume": "",
+   "kind": "sweep_ceil",
+   "feet": [
+    1.0,
+    0.194,
+    22.64
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 55.0,
+   "cut": true,
+   "outside": true,
+   "note": "porch / lintel ceiling"
+  },
+  {
+   "id": "out-door20760_left",
+   "room": "Door_exterior_paneled_mesh (outside)",
+   "giVolume": "",
+   "kind": "sweep_left",
+   "feet": [
+    3.0,
+    0.194,
+    19.04
+   ],
+   "yawDeg": 65.0,
+   "pitchDeg": 5.0,
+   "cut": true,
+   "outside": true,
+   "note": "oblique facade"
+  },
+  {
+   "id": "out-door20760_right",
+   "room": "Door_exterior_paneled_mesh (outside)",
+   "giVolume": "",
+   "kind": "sweep_right",
+   "feet": [
+    -1.0,
+    0.194,
+    19.04
+   ],
+   "yawDeg": 115.0,
+   "pitchDeg": 5.0,
+   "cut": true,
+   "outside": true,
+   "note": "oblique facade"
+  },
+  {
+   "id": "out-door20760_far",
+   "room": "Door_exterior_paneled_mesh (outside)",
+   "giVolume": "",
+   "kind": "sweep_far",
+   "feet": [
+    1.0,
+    0.194,
+    15.04
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 3.0,
+   "cut": true,
+   "outside": true,
+   "note": "whole facade"
+  },
+  {
+   "id": "out-door20760_fitting1",
+   "room": "Porch Bulb L",
+   "giVolume": "",
+   "kind": "sweep_fitting1",
+   "feet": [
+    -0.018,
+    0.194,
+    21.703
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 3.1,
+   "cut": true,
+   "outside": true,
+   "note": "fixture Porch Bulb L at -0.0, 1.9, 23.9"
+  },
+  {
+   "id": "stairs-foot_along-up",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_along",
+   "feet": [
+    1.4,
+    0.194,
+    30.75
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 35.0,
+   "cut": true,
+   "note": "Phase 0 stairs point stairs_foot"
+  },
+  {
+   "id": "stairs-foot_along-down",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_along",
+   "feet": [
+    1.4,
+    0.194,
+    30.75
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -35.0,
+   "cut": true,
+   "note": "Phase 0 stairs point stairs_foot"
+  },
+  {
+   "id": "stairs-foot_back-up",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_back",
+   "feet": [
+    1.4,
+    0.194,
+    30.75
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 35.0,
+   "cut": true,
+   "note": "Phase 0 stairs point stairs_foot"
+  },
+  {
+   "id": "stairs-foot_back-down",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_back",
+   "feet": [
+    1.4,
+    0.194,
+    30.75
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -35.0,
+   "cut": true,
+   "note": "Phase 0 stairs point stairs_foot"
+  },
+  {
+   "id": "stairs-mid_along-up",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_along",
+   "feet": [
+    3.65,
+    1.638,
+    30.75
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 35.0,
+   "cut": true,
+   "note": "Phase 0 stairs point stairs_mid"
+  },
+  {
+   "id": "stairs-mid_along-down",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_along",
+   "feet": [
+    3.65,
+    1.638,
+    30.75
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -35.0,
+   "cut": true,
+   "note": "Phase 0 stairs point stairs_mid"
+  },
+  {
+   "id": "stairs-mid_back-up",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_back",
+   "feet": [
+    3.65,
+    1.638,
+    30.75
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 35.0,
+   "cut": true,
+   "note": "Phase 0 stairs point stairs_mid"
+  },
+  {
+   "id": "stairs-mid_back-down",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_back",
+   "feet": [
+    3.65,
+    1.638,
+    30.75
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -35.0,
+   "cut": true,
+   "note": "Phase 0 stairs point stairs_mid"
+  },
+  {
+   "id": "stairs-top_along-up",
+   "room": "stairwell",
+   "giVolume": "GI landing",
+   "kind": "sweep_along",
+   "feet": [
+    6.05,
+    3.104,
+    30.75
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 35.0,
+   "cut": true,
+   "note": "Phase 0 stairs point stairs_top"
+  },
+  {
+   "id": "stairs-top_along-down",
+   "room": "stairwell",
+   "giVolume": "GI landing",
+   "kind": "sweep_along",
+   "feet": [
+    6.05,
+    3.104,
+    30.75
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -35.0,
+   "cut": true,
+   "note": "Phase 0 stairs point stairs_top"
+  },
+  {
+   "id": "stairs-top_back-up",
+   "room": "stairwell",
+   "giVolume": "GI landing",
+   "kind": "sweep_back",
+   "feet": [
+    6.05,
+    3.104,
+    30.75
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 35.0,
+   "cut": true,
+   "note": "Phase 0 stairs point stairs_top"
+  },
+  {
+   "id": "stairs-top_back-down",
+   "room": "stairwell",
+   "giVolume": "GI landing",
+   "kind": "sweep_back",
+   "feet": [
+    6.05,
+    3.104,
+    30.75
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -35.0,
+   "cut": true,
+   "note": "Phase 0 stairs point stairs_top"
+  },
+  {
+   "id": "thr01-entrance-hall_look-neg",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 2",
+   "kind": "sweep_look",
+   "feet": [
+    -4.856,
+    0.194,
+    26.842
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 2 | GI entrance hall 5, overlap -0.33 m, ground"
+  },
+  {
+   "id": "thr01-entrance-hall_look-pos",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 2",
+   "kind": "sweep_look",
+   "feet": [
+    -4.856,
+    0.194,
+    26.842
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 2 | GI entrance hall 5, overlap -0.33 m, ground"
+  },
+  {
+   "id": "thr02-entrance-hall_look-neg",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 1",
+   "kind": "sweep_look",
+   "feet": [
+    -0.95,
+    0.194,
+    25.532
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 2 | GI entrance hall 1, overlap -0.14 m, ground"
+  },
+  {
+   "id": "thr02-entrance-hall_look-pos",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 1",
+   "kind": "sweep_look",
+   "feet": [
+    -0.95,
+    0.194,
+    25.532
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 2 | GI entrance hall 1, overlap -0.14 m, ground"
+  },
+  {
+   "id": "thr03-entrance-hall_look-neg",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 3",
+   "kind": "sweep_look",
+   "feet": [
+    2.395,
+    0.194,
+    26.893
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 1 | GI entrance hall 3, overlap -0.22 m, ground"
+  },
+  {
+   "id": "thr03-entrance-hall_look-pos",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 3",
+   "kind": "sweep_look",
+   "feet": [
+    2.395,
+    0.194,
+    26.893
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 1 | GI entrance hall 3, overlap -0.22 m, ground"
+  },
+  {
+   "id": "thr04-entrance-hall-stairwell_look-neg",
+   "room": "entrance hall",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_look",
+   "feet": [
+    2.395,
+    0.194,
+    27.943
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 3 | GI stairwell, overlap -0.16 m, ground"
+  },
+  {
+   "id": "thr04-entrance-hall-stairwell_look-pos",
+   "room": "entrance hall",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_look",
+   "feet": [
+    2.395,
+    0.194,
+    27.943
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 3 | GI stairwell, overlap -0.16 m, ground"
+  },
+  {
+   "id": "thr05-entrance-hall_look-neg",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 3",
+   "kind": "sweep_look",
+   "feet": [
+    3.45,
+    0.194,
+    27.445
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 3 | GI entrance hall 4, overlap -0.14 m, ground"
+  },
+  {
+   "id": "thr05-entrance-hall_look-pos",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 3",
+   "kind": "sweep_look",
+   "feet": [
+    3.45,
+    0.194,
+    27.445
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 3 | GI entrance hall 4, overlap -0.14 m, ground"
+  },
+  {
+   "id": "thr06-entrance-hall-stairwell_look-neg",
+   "room": "entrance hall",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_look",
+   "feet": [
+    3.93,
+    0.194,
+    27.943
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 4 | GI stairwell, overlap -0.15 m, ground"
+  },
+  {
+   "id": "thr06-entrance-hall-stairwell_look-pos",
+   "room": "entrance hall",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_look",
+   "feet": [
+    3.93,
+    0.194,
+    27.943
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 4 | GI stairwell, overlap -0.15 m, ground"
+  },
+  {
+   "id": "thr07-kitchen-dining_look-neg",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_look",
+   "feet": [
+    -12.428,
+    0.194,
+    28.9
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 3 | GI kitchen-dining 7, overlap -0.11 m, ground"
+  },
+  {
+   "id": "thr07-kitchen-dining_look-pos",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_look",
+   "feet": [
+    -12.428,
+    0.194,
+    28.9
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 3 | GI kitchen-dining 7, overlap -0.11 m, ground"
+  },
+  {
+   "id": "thr08-kitchen-dining_look-neg",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_look",
+   "feet": [
+    -11.228,
+    0.194,
+    25.0
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 1 | GI kitchen-dining 3, overlap -0.11 m, ground"
+  },
+  {
+   "id": "thr08-kitchen-dining_look-pos",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_look",
+   "feet": [
+    -11.228,
+    0.194,
+    25.0
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 1 | GI kitchen-dining 3, overlap -0.11 m, ground"
+  },
+  {
+   "id": "thr09-kitchen-dining-dining-bay_look-neg",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_look",
+   "feet": [
+    -9.2,
+    0.194,
+    20.315
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI dining bay | GI kitchen-dining 1, overlap -0.27 m, ground"
+  },
+  {
+   "id": "thr09-kitchen-dining-dining-bay_look-pos",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_look",
+   "feet": [
+    -9.2,
+    0.194,
+    20.315
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI dining bay | GI kitchen-dining 1, overlap -0.27 m, ground"
+  },
+  {
+   "id": "thr10-kitchen-dining_look-neg",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_look",
+   "feet": [
+    -8.55,
+    0.194,
+    26.995
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 3 | GI kitchen-dining 2, overlap -0.14 m, ground"
+  },
+  {
+   "id": "thr10-kitchen-dining_look-pos",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_look",
+   "feet": [
+    -8.55,
+    0.194,
+    26.995
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 3 | GI kitchen-dining 2, overlap -0.14 m, ground"
+  },
+  {
+   "id": "thr11-kitchen-dining_look-neg",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 2",
+   "kind": "sweep_look",
+   "feet": [
+    -8.55,
+    0.194,
+    30.295
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 7 | GI kitchen-dining 2, overlap -0.14 m, ground"
+  },
+  {
+   "id": "thr11-kitchen-dining_look-pos",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 2",
+   "kind": "sweep_look",
+   "feet": [
+    -8.55,
+    0.194,
+    30.295
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 7 | GI kitchen-dining 2, overlap -0.14 m, ground"
+  },
+  {
+   "id": "thr12-kitchen-dining_look-neg",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 4",
+   "kind": "sweep_look",
+   "feet": [
+    -6.813,
+    0.194,
+    27.945
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 2 | GI kitchen-dining 4, overlap -0.21 m, ground"
+  },
+  {
+   "id": "thr12-kitchen-dining_look-pos",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 4",
+   "kind": "sweep_look",
+   "feet": [
+    -6.813,
+    0.194,
+    27.945
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 2 | GI kitchen-dining 4, overlap -0.21 m, ground"
+  },
+  {
+   "id": "thr13-kitchen-dining-entrance-hall_look-neg",
+   "room": "kitchen-dining",
+   "giVolume": "GI entrance hall 5",
+   "kind": "sweep_look",
+   "feet": [
+    -4.965,
+    0.194,
+    26.95
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 2 | GI kitchen-dining 4, overlap -0.11 m, ground"
+  },
+  {
+   "id": "thr13-kitchen-dining-entrance-hall_look-pos",
+   "room": "kitchen-dining",
+   "giVolume": "GI entrance hall 5",
+   "kind": "sweep_look",
+   "feet": [
+    -4.965,
+    0.194,
+    26.95
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 2 | GI kitchen-dining 4, overlap -0.11 m, ground"
+  },
+  {
+   "id": "thr14-kitchen-dining_look-neg",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 4",
+   "kind": "sweep_look",
+   "feet": [
+    -4.956,
+    0.194,
+    27.007
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 10 | GI kitchen-dining 4, overlap -0.23 m, ground"
+  },
+  {
+   "id": "thr14-kitchen-dining_look-pos",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 4",
+   "kind": "sweep_look",
+   "feet": [
+    -4.956,
+    0.194,
+    27.007
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 10 | GI kitchen-dining 4, overlap -0.23 m, ground"
+  },
+  {
+   "id": "thr15-kitchen-dining_look-neg",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 5",
+   "kind": "sweep_look",
+   "feet": [
+    -4.85,
+    0.194,
+    27.945
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 4 | GI kitchen-dining 5, overlap -0.14 m, ground"
+  },
+  {
+   "id": "thr15-kitchen-dining_look-pos",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 5",
+   "kind": "sweep_look",
+   "feet": [
+    -4.85,
+    0.194,
+    27.945
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 4 | GI kitchen-dining 5, overlap -0.14 m, ground"
+  },
+  {
+   "id": "thr16-kitchen-dining_look-neg",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 5",
+   "kind": "sweep_look",
+   "feet": [
+    -1.673,
+    0.194,
+    27.945
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 5 | GI kitchen-dining 6, overlap -0.58 m, ground"
+  },
+  {
+   "id": "thr16-kitchen-dining_look-pos",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 5",
+   "kind": "sweep_look",
+   "feet": [
+    -1.673,
+    0.194,
+    27.945
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 5 | GI kitchen-dining 6, overlap -0.58 m, ground"
+  },
+  {
+   "id": "thr17-kitchen-dining_look-neg",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 6",
+   "kind": "sweep_look",
+   "feet": [
+    -1.515,
+    0.194,
+    28.763
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 5 | GI kitchen-dining 9, overlap -0.37 m, ground"
+  },
+  {
+   "id": "thr17-kitchen-dining_look-pos",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 6",
+   "kind": "sweep_look",
+   "feet": [
+    -1.515,
+    0.194,
+    28.763
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 5 | GI kitchen-dining 9, overlap -0.37 m, ground"
+  },
+  {
+   "id": "thr18-kitchen-dining-stairwell_look-neg",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 6",
+   "kind": "sweep_look",
+   "feet": [
+    0.703,
+    0.194,
+    29.815
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 6 | GI stairwell, overlap -1.30 m, ground"
+  },
+  {
+   "id": "thr18-kitchen-dining-stairwell_look-pos",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 6",
+   "kind": "sweep_look",
+   "feet": [
+    0.703,
+    0.194,
+    29.815
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 6 | GI stairwell, overlap -1.30 m, ground"
+  },
+  {
+   "id": "thr19-kitchen-dining-entrance-hall_look-neg",
+   "room": "kitchen-dining",
+   "giVolume": "GI entrance hall 3",
+   "kind": "sweep_look",
+   "feet": [
+    1.3,
+    0.194,
+    27.445
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 6 | GI entrance hall 3, overlap -0.11 m, ground"
+  },
+  {
+   "id": "thr19-kitchen-dining-entrance-hall_look-pos",
+   "room": "kitchen-dining",
+   "giVolume": "GI entrance hall 3",
+   "kind": "sweep_look",
+   "feet": [
+    1.3,
+    0.194,
+    27.445
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI kitchen-dining 6 | GI entrance hall 3, overlap -0.11 m, ground"
+  },
+  {
+   "id": "thr20-living-room-entrance-hall_look-neg",
+   "room": "living room",
+   "giVolume": "GI living room 6",
+   "kind": "sweep_look",
+   "feet": [
+    4.535,
+    0.194,
+    27.445
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 4 | GI living room 6, overlap -0.11 m, ground"
+  },
+  {
+   "id": "thr20-living-room-entrance-hall_look-pos",
+   "room": "living room",
+   "giVolume": "GI living room 6",
+   "kind": "sweep_look",
+   "feet": [
+    4.535,
+    0.194,
+    27.445
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI entrance hall 4 | GI living room 6, overlap -0.11 m, ground"
+  },
+  {
+   "id": "thr21-living-room-stairwell_look-neg",
+   "room": "living room",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_look",
+   "feet": [
+    5.85,
+    0.194,
+    29.815
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI stairwell | GI living room 3, overlap -0.11 m, ground"
+  },
+  {
+   "id": "thr21-living-room-stairwell_look-pos",
+   "room": "living room",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_look",
+   "feet": [
+    5.85,
+    0.194,
+    29.815
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI stairwell | GI living room 3, overlap -0.11 m, ground"
+  },
+  {
+   "id": "thr22-living-room_look-neg",
+   "room": "living room",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_look",
+   "feet": [
+    7.79,
+    0.194,
+    29.345
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI living room 3 | GI living room 2, overlap -0.11 m, ground"
+  },
+  {
+   "id": "thr22-living-room_look-pos",
+   "room": "living room",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_look",
+   "feet": [
+    7.79,
+    0.194,
+    29.345
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI living room 3 | GI living room 2, overlap -0.11 m, ground"
+  },
+  {
+   "id": "thr23-living-room_look-neg",
+   "room": "living room",
+   "giVolume": "GI living room 2",
+   "kind": "sweep_look",
+   "feet": [
+    8.813,
+    0.194,
+    29.345
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI living room 2 | GI living room 1, overlap -0.21 m, ground"
+  },
+  {
+   "id": "thr23-living-room_look-pos",
+   "room": "living room",
+   "giVolume": "GI living room 2",
+   "kind": "sweep_look",
+   "feet": [
+    8.813,
+    0.194,
+    29.345
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI living room 2 | GI living room 1, overlap -0.21 m, ground"
+  },
+  {
+   "id": "thr24-living-room_look-neg",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_look",
+   "feet": [
+    11.158,
+    0.194,
+    24.204
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI living room 4 | GI living room 1, overlap -0.23 m, ground"
+  },
+  {
+   "id": "thr24-living-room_look-pos",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_look",
+   "feet": [
+    11.158,
+    0.194,
+    24.204
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI living room 4 | GI living room 1, overlap -0.23 m, ground"
+  },
+  {
+   "id": "thr25-child-s-bedroom-closet-room_look-neg",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_look",
+   "feet": [
+    11.48,
+    3.104,
+    29.375
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI child's bedroom 1 | GI closet room, overlap -0.11 m, upstairs"
+  },
+  {
+   "id": "thr25-child-s-bedroom-closet-room_look-pos",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_look",
+   "feet": [
+    11.48,
+    3.104,
+    29.375
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI child's bedroom 1 | GI closet room, overlap -0.11 m, upstairs"
+  },
+  {
+   "id": "thr26-landing-stairwell_look-neg",
+   "room": "landing",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_look",
+   "feet": [
+    5.85,
+    3.104,
+    29.815
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI stairwell | GI landing, overlap -0.11 m, upstairs"
+  },
+  {
+   "id": "thr26-landing-stairwell_look-pos",
+   "room": "landing",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_look",
+   "feet": [
+    5.85,
+    3.104,
+    29.815
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI stairwell | GI landing, overlap -0.11 m, upstairs"
+  },
+  {
+   "id": "thr27-master-bedroom_look-neg",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 2",
+   "kind": "sweep_look",
+   "feet": [
+    -8.93,
+    3.104,
+    25.908
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI master bedroom 1 | GI master bedroom 2, overlap -0.25 m, upstairs"
+  },
+  {
+   "id": "thr27-master-bedroom_look-pos",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 2",
+   "kind": "sweep_look",
+   "feet": [
+    -8.93,
+    3.104,
+    25.908
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI master bedroom 1 | GI master bedroom 2, overlap -0.25 m, upstairs"
+  },
+  {
+   "id": "thr28-master-bedroom_look-neg",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 3",
+   "kind": "sweep_look",
+   "feet": [
+    -8.93,
+    3.104,
+    27.45
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI master bedroom 2 | GI master bedroom 3, overlap -0.14 m, upstairs"
+  },
+  {
+   "id": "thr28-master-bedroom_look-pos",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 3",
+   "kind": "sweep_look",
+   "feet": [
+    -8.93,
+    3.104,
+    27.45
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI master bedroom 2 | GI master bedroom 3, overlap -0.14 m, upstairs"
+  },
+  {
+   "id": "thr29-upstairs-bathroom_look-neg",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_look",
+   "feet": [
+    -5.265,
+    3.104,
+    25.45
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI upstairs bathroom 3 | GI upstairs bathroom 1, overlap -0.14 m, upstairs"
+  },
+  {
+   "id": "thr29-upstairs-bathroom_look-pos",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_look",
+   "feet": [
+    -5.265,
+    3.104,
+    25.45
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI upstairs bathroom 3 | GI upstairs bathroom 1, overlap -0.14 m, upstairs"
+  },
+  {
+   "id": "thr30-upstairs-bathroom_look-neg",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 2",
+   "kind": "sweep_look",
+   "feet": [
+    -3.85,
+    3.104,
+    25.34
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI upstairs bathroom 3 | GI upstairs bathroom 2, overlap -0.11 m, upstairs"
+  },
+  {
+   "id": "thr30-upstairs-bathroom_look-pos",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 2",
+   "kind": "sweep_look",
+   "feet": [
+    -3.85,
+    3.104,
+    25.34
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI upstairs bathroom 3 | GI upstairs bathroom 2, overlap -0.11 m, upstairs"
+  },
+  {
+   "id": "thr31-upstairs-bathroom_look-neg",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 2",
+   "kind": "sweep_look",
+   "feet": [
+    -3.392,
+    3.104,
+    25.332
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI upstairs bathroom 5 | GI upstairs bathroom 2, overlap -1.03 m, upstairs"
+  },
+  {
+   "id": "thr31-upstairs-bathroom_look-pos",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 2",
+   "kind": "sweep_look",
+   "feet": [
+    -3.392,
+    3.104,
+    25.332
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI upstairs bathroom 5 | GI upstairs bathroom 2, overlap -1.03 m, upstairs"
+  },
+  {
+   "id": "thr32-upstairs-bathroom_look-neg",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 2",
+   "kind": "sweep_look",
+   "feet": [
+    -3.355,
+    3.104,
+    25.45
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI upstairs bathroom 5 | GI upstairs bathroom 1, overlap -0.14 m, upstairs"
+  },
+  {
+   "id": "thr32-upstairs-bathroom_look-pos",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 2",
+   "kind": "sweep_look",
+   "feet": [
+    -3.355,
+    3.104,
+    25.45
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI upstairs bathroom 5 | GI upstairs bathroom 1, overlap -0.14 m, upstairs"
+  },
+  {
+   "id": "thr33-upstairs-den_look-neg",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 1",
+   "kind": "sweep_look",
+   "feet": [
+    -3.35,
+    3.104,
+    29.815
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI upstairs den 1 | GI upstairs den 2, overlap -0.14 m, upstairs"
+  },
+  {
+   "id": "thr33-upstairs-den_look-pos",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 1",
+   "kind": "sweep_look",
+   "feet": [
+    -3.35,
+    3.104,
+    29.815
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI upstairs den 1 | GI upstairs den 2, overlap -0.14 m, upstairs"
+  },
+  {
+   "id": "thr34-upstairs-den-stairwell_look-neg",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_look",
+   "feet": [
+    0.585,
+    3.104,
+    29.815
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI upstairs den 2 | GI stairwell, overlap -1.07 m, upstairs"
+  },
+  {
+   "id": "thr34-upstairs-den-stairwell_look-pos",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_look",
+   "feet": [
+    0.585,
+    3.104,
+    29.815
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "GI upstairs den 2 | GI stairwell, overlap -1.07 m, upstairs"
+  },
+  {
+   "id": "bounds-35586_nz",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_nz",
+   "feet": [
+    -10.449,
+    0.194,
+    22.2
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35586 Lamp_chandelier Kitchen: bounds face -z at 19.700 (OVER), 2.5 m back, light at -9.25, 2.06, 21.88"
+  },
+  {
+   "id": "bounds-35588_px",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 2",
+   "kind": "sweep_px",
+   "feet": [
+    -7.45,
+    0.194,
+    30.266
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35588 Ceiling Kitchen: bounds face +x at -4.950 (OVER), 2.5 m back, light at -11.10, 2.86, 30.27"
+  },
+  {
+   "id": "bounds-35588_nz",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_nz",
+   "feet": [
+    -11.101,
+    0.194,
+    22.8
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35588 Ceiling Kitchen: bounds face -z at 20.300 (OPEN), 2.5 m back, light at -11.10, 2.86, 30.27"
+  },
+  {
+   "id": "bounds-35591_nx",
+   "room": "living room",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_nx",
+   "feet": [
+    6.937,
+    0.194,
+    29.406
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35591 Lamp_chandelier Living room: bounds face -x at 4.437 (OPEN), 2.5 m back, light at 11.24, 2.06, 29.41"
+  },
+  {
+   "id": "bounds-36390_nx",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_nx",
+   "feet": [
+    11.28,
+    0.194,
+    30.117
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36390 Ceiling Living room: bounds face -x at 8.780 (OPEN), 2.5 m back, light at 12.79, 2.86, 30.12"
+  },
+  {
+   "id": "bounds-36391_nx",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_nx",
+   "feet": [
+    11.28,
+    0.194,
+    30.117
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36391 Ceiling Living room: bounds face -x at 8.780 (OPEN), 2.5 m back, light at 9.54, 2.86, 30.12"
+  },
+  {
+   "id": "bounds-36392_nx",
+   "room": "living room",
+   "giVolume": "GI living room 4",
+   "kind": "sweep_nx",
+   "feet": [
+    11.28,
+    0.194,
+    22.275
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36392 Ceiling Living room: bounds face -x at 8.780 (OPEN), 2.5 m back, light at 12.79, 2.86, 22.27"
+  },
+  {
+   "id": "bounds-36393_nx",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_nx",
+   "feet": [
+    11.28,
+    0.194,
+    27.658
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36393 Ceiling Living room: bounds face -x at 8.780 (OPEN), 2.5 m back, light at 12.79, 2.86, 27.66"
+  },
+  {
+   "id": "bounds-36394_nx",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_nx",
+   "feet": [
+    11.28,
+    0.194,
+    24.281
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36394 Ceiling Living room: bounds face -x at 8.780 (OPEN), 2.5 m back, light at 12.79, 2.86, 23.68"
+  },
+  {
+   "id": "bounds-35592_pz",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_pz",
+   "feet": [
+    10.946,
+    0.194,
+    29.16
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35592 Lamp_chandelier Living room: bounds face +z at 31.660 (OVER), 2.5 m back, light at 10.95, 2.06, 22.76"
+  },
+  {
+   "id": "bounds-36373_nz",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 2",
+   "kind": "sweep_nz",
+   "feet": [
+    -8.783,
+    3.104,
+    26.53
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36373 Ceiling Master bedroom: bounds face -z at 24.030 (OPEN), 2.5 m back, light at -8.78, 5.77, 28.89"
+  },
+  {
+   "id": "bounds-36401_nz",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 2",
+   "kind": "sweep_nz",
+   "feet": [
+    -8.783,
+    3.104,
+    26.53
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36401 Ceiling Master bedroom: bounds face -z at 24.030 (OPEN), 2.5 m back, light at -8.78, 5.77, 26.60"
+  },
+  {
+   "id": "bounds-36400_nz",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 2",
+   "kind": "sweep_nz",
+   "feet": [
+    -8.783,
+    3.104,
+    26.53
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36400 Ceiling Master bedroom: bounds face -z at 24.030 (OPEN), 2.5 m back, light at -8.78, 5.77, 27.80"
+  },
+  {
+   "id": "bounds-36370_nx",
+   "room": "living room",
+   "giVolume": "GI living room 3",
+   "kind": "sweep_nx",
+   "feet": [
+    7.545,
+    0.194,
+    29.3
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36370 Ceiling Living room: bounds face -x at 5.045 (OPEN), 2.5 m back, light at 6.80, 2.86, 29.30"
+  },
+  {
+   "id": "bounds-36368_px",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_px",
+   "feet": [
+    1.855,
+    0.194,
+    29.6
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36368 Ceiling Back hall: bounds face +x at 4.355 (OPEN), 2.5 m back, light at -0.40, 2.86, 29.60"
+  },
+  {
+   "id": "bounds-36367_px",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 5",
+   "kind": "sweep_px",
+   "feet": [
+    -3.88,
+    0.194,
+    27.9
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36367 Ceiling Back hall: bounds face +x at -1.380 (OPEN), 2.5 m back, light at -3.30, 2.86, 27.90"
+  },
+  {
+   "id": "bounds-35600_nx",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 2",
+   "kind": "sweep_nx",
+   "feet": [
+    -1.82,
+    3.104,
+    25.025
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35600 Ceiling Upstairs bathroom: bounds face -x at -2.820 (SHORT), 1.0 m back, light at -1.00, 5.77, 25.02"
+  },
+  {
+   "id": "bounds-36405_nx",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_nx",
+   "feet": [
+    0.18,
+    3.104,
+    24.537
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36405 Ceiling Upstairs bathroom: bounds face -x at -2.820 (SHORT), 3.0 m back, light at -1.00, 5.77, 25.74"
+  },
+  {
+   "id": "bounds-35601_px",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_px",
+   "feet": [
+    -3.98,
+    3.104,
+    25.653
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35601 Lamp_wall_toilet Upstairs bathroom: bounds face +x at -1.480 (SHORT), 2.5 m back, light at -5.49, 5.11, 24.45"
+  },
+  {
+   "id": "bounds-36406_px",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_px",
+   "feet": [
+    -3.98,
+    3.104,
+    25.653
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36406 Lamp_wall_toilet Upstairs bathroom: bounds face +x at -1.480 (SHORT), 2.5 m back, light at -4.55, 5.11, 24.45"
+  },
+  {
+   "id": "bounds-35602_nx",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_nx",
+   "feet": [
+    11.78,
+    3.104,
+    27.057
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35602 Lamp_bedroom Child's bedroom: bounds face -x at 9.280 (SHORT), 2.5 m back, light at 12.18, 5.62, 27.06"
+  },
+  {
+   "id": "bounds-35604_px",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_px",
+   "feet": [
+    5.248,
+    3.104,
+    29.589
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35604 Stairwell Stairs: bounds face +x at 7.748 (OPEN), 2.5 m back, light at 4.75, 5.62, 29.59"
+  },
+  {
+   "id": "bounds-36395_nx",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_nx",
+   "feet": [
+    2.55,
+    0.194,
+    28.862
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36395 Ceiling Under stairs: bounds face -x at 0.050 (OPEN), 2.5 m back, light at 4.75, 2.71, 28.86"
+  },
+  {
+   "id": "bounds-36395_px",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_px",
+   "feet": [
+    5.248,
+    0.194,
+    28.862
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36395 Ceiling Under stairs: bounds face +x at 7.748 (OPEN), 2.5 m back, light at 4.75, 2.71, 28.86"
+  },
+  {
+   "id": "bounds-35605_pz",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_pz",
+   "feet": [
+    10.854,
+    3.104,
+    24.92
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35605 Lamp_stand Lamp_stand 10: bounds face +z at 26.920 (OPEN), 2.0 m back, light at 11.45, 4.28, 24.45"
+  },
+  {
+   "id": "bounds-36371_nz",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_nz",
+   "feet": [
+    12.478,
+    0.194,
+    26.588
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 36371 Lamp_stand Lamp_stand 14: bounds face -z at 24.088 (OPEN), 2.5 m back, light at 11.88, 1.41, 26.57"
+  },
+  {
+   "id": "bounds-35607_nx",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_nx",
+   "feet": [
+    11.78,
+    3.104,
+    28.537
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35607 Lamp_wall_desk Lamp_wall_desk 12: bounds face -x at 9.280 (SHORT), 2.5 m back, light at 14.17, 4.61, 28.54"
+  },
+  {
+   "id": "bounds-35609_nx",
+   "room": "living room",
+   "giVolume": "GI living room 4",
+   "kind": "sweep_nx",
+   "feet": [
+    11.28,
+    0.194,
+    24.175
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35609 Lamp_table_A Lamp_table_A 15: bounds face -x at 8.780 (OPEN), 2.5 m back, light at 13.06, 0.91, 24.18"
+  },
+  {
+   "id": "bounds-35610_nx",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_nx",
+   "feet": [
+    2.55,
+    0.194,
+    29.904
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35610 Lamp_table_A Lamp_table_A 16: bounds face -x at 0.050 (OPEN), 2.5 m back, light at 4.47, 1.25, 29.90"
+  },
+  {
+   "id": "bounds-35610_px",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_px",
+   "feet": [
+    3.4,
+    0.194,
+    29.904
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35610 Lamp_table_A Lamp_table_A 16: bounds face +x at 5.900 (OPEN), 2.5 m back, light at 4.47, 1.25, 29.90"
+  },
+  {
+   "id": "bounds-35610_nz",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_nz",
+   "feet": [
+    4.469,
+    0.194,
+    30.45
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35610 Lamp_table_A Lamp_table_A 16: bounds face -z at 27.950 (SHORT), 2.5 m back, light at 4.47, 1.25, 29.90"
+  },
+  {
+   "id": "bounds-35614_nx",
+   "room": "landing",
+   "giVolume": "GI landing",
+   "kind": "sweep_nx",
+   "feet": [
+    8.38,
+    3.104,
+    30.39
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "light 35614 Lamp_floor Lamp_floor 20: bounds face -x at 5.880 (OPEN), 2.5 m back, light at 8.87, 3.98, 30.39"
+  },
+  {
+   "id": "jlook-facade-s_x-9",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_x",
+   "feet": [
+    -9,
+    0.194,
+    12.0
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: S facade siding at night, 8 m back"
+  },
+  {
+   "id": "jlook-facade-s_x+0",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_x+0",
+   "feet": [
+    0,
+    0.194,
+    12.0
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: S facade siding at night, 8 m back"
+  },
+  {
+   "id": "jlook-facade-s_x+9",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_x+9",
+   "feet": [
+    9,
+    0.194,
+    12.0
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: S facade siding at night, 8 m back"
+  },
+  {
+   "id": "jlook-facade-n_x-9",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_x",
+   "feet": [
+    -9,
+    0.194,
+    40.0
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: N facade siding at night, 8 m back"
+  },
+  {
+   "id": "jlook-facade-n_x+0",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_x+0",
+   "feet": [
+    0,
+    0.194,
+    40.0
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: N facade siding at night, 8 m back"
+  },
+  {
+   "id": "jlook-facade-n_x+9",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_x+9",
+   "feet": [
+    9,
+    0.194,
+    40.0
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: N facade siding at night, 8 m back"
+  },
+  {
+   "id": "jlook-facade-w_z23",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_z23",
+   "feet": [
+    -22.5,
+    0.194,
+    23.0
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: W facade siding at night, 8 m back"
+  },
+  {
+   "id": "jlook-facade-w_z28",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_z28",
+   "feet": [
+    -22.5,
+    0.194,
+    28.5
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: W facade siding at night, 8 m back"
+  },
+  {
+   "id": "jlook-facade-e_z23",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_z23",
+   "feet": [
+    22.5,
+    0.194,
+    23.0
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: E facade siding at night, 8 m back"
+  },
+  {
+   "id": "jlook-facade-e_z28",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_z28",
+   "feet": [
+    22.5,
+    0.194,
+    28.5
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: E facade siding at night, 8 m back"
+  },
+  {
+   "id": "jlook-corner-sw_obl",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_obl",
+   "feet": [
+    -21.0,
+    0.194,
+    11.0
+   ],
+   "yawDeg": 45.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: oblique corner, siding at night"
+  },
+  {
+   "id": "jlook-corner-se_obl",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_obl",
+   "feet": [
+    21.0,
+    0.194,
+    11.0
+   ],
+   "yawDeg": 135.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: oblique corner, siding at night"
+  },
+  {
+   "id": "jlook-corner-nw_obl",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_obl",
+   "feet": [
+    -22.0,
+    0.194,
+    41.0
+   ],
+   "yawDeg": -45.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: oblique corner, siding at night"
+  },
+  {
+   "id": "jlook-corner-ne_obl",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_obl",
+   "feet": [
+    20.0,
+    0.194,
+    41.0
+   ],
+   "yawDeg": -135.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: oblique corner, siding at night"
+  },
+  {
+   "id": "jlook-porch-front_wide",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_wide",
+   "feet": [
+    1.0,
+    0.194,
+    17.0
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 8.0,
+   "cut": true,
+   "outside": true,
+   "note": "Jacob 1: front porch + upper siding from 7 m (his look)"
+  },
+  {
+   "id": "jlook-red-door20758_in-near",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 2",
+   "kind": "sweep_in",
+   "feet": [
+    -8.3,
+    3.104,
+    26.47
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -25.0,
+   "cut": true,
+   "note": "Jacob 3: red room floor spill through door 20758, 1.5 m inside"
+  },
+  {
+   "id": "jlook-red-door20758_in-far",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 2",
+   "kind": "sweep_in",
+   "feet": [
+    -10.3,
+    3.104,
+    26.47
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "Jacob 3: red room floor spill through door 20758, 3.5 m inside"
+  },
+  {
+   "id": "jlook-red-door20758_out-near",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_out",
+   "feet": [
+    -5.0,
+    3.104,
+    26.47
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -25.0,
+   "cut": true,
+   "note": "Jacob 3: the spill edge seen from the far side of door 20758"
+  },
+  {
+   "id": "jlook-red-door20759_in-near",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 3",
+   "kind": "sweep_in",
+   "feet": [
+    -8.3,
+    3.104,
+    29.37
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -25.0,
+   "cut": true,
+   "note": "Jacob 3: red room floor spill through door 20759, 1.5 m inside"
+  },
+  {
+   "id": "jlook-red-door20759_out-near",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 1",
+   "kind": "sweep_out",
+   "feet": [
+    -5.0,
+    3.104,
+    29.37
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -25.0,
+   "cut": true,
+   "note": "Jacob 3: the spill edge seen from the far side of door 20759"
+  },
+  {
+   "id": "jlook-red-hall_along",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 2",
+   "kind": "sweep_along",
+   "feet": [
+    -7.4,
+    3.104,
+    27.0
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -22.0,
+   "cut": true,
+   "note": "Jacob 3: from the master bedroom door down the upper hall"
+  },
+  {
+   "id": "jlook-red-zface_across",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 3",
+   "kind": "sweep_across",
+   "feet": [
+    -9.0,
+    3.104,
+    28.5
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -30.0,
+   "cut": true,
+   "note": "Atlas #3: across the Bounds +z face z 25.938, from z 28.5 facing -z (CPU step at x -9.27: 99579b4e -40%, fix-3 5564577b none)"
+  },
+  {
+   "id": "jlook-red-zface_along",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 2",
+   "kind": "sweep_along",
+   "feet": [
+    -7.2,
+    3.104,
+    26.3
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -25.0,
+   "cut": true,
+   "note": "Atlas #3: along the z 25.94 line from x -7.2 facing -x"
+  },
+  {
+   "id": "jlook-hall-dome_view1",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_view1",
+   "feet": [
+    1.0,
+    3.104,
+    26.2
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 48.0,
+   "cut": true,
+   "note": "Jacob 4: upper hall ceiling by the stairs, dome fixture"
+  },
+  {
+   "id": "jlook-hall-dome_view2",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_view2",
+   "feet": [
+    5.3,
+    3.104,
+    26.2
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 48.0,
+   "cut": true,
+   "note": "Jacob 4: upper hall ceiling by the stairs, dome fixture"
+  },
+  {
+   "id": "jlook-hall-dome_view3",
+   "room": "upstairs hall",
+   "giVolume": "GI upstairs hall",
+   "kind": "sweep_view3",
+   "feet": [
+    2.8,
+    3.104,
+    26.0
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 48.0,
+   "cut": true,
+   "note": "Jacob 4: upper hall ceiling by the stairs, dome fixture"
+  },
+  {
+   "id": "jlook-entrance-rug_along-e",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 2",
+   "kind": "sweep_along",
+   "feet": [
+    -5.5,
+    0.194,
+    25.4
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -25.0,
+   "cut": true,
+   "note": "Jacob 6: runner rug + stairs, looking +x toward the living room"
+  },
+  {
+   "id": "jlook-entrance-rug_along-w",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 1",
+   "kind": "sweep_along",
+   "feet": [
+    3.2,
+    0.194,
+    25.4
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -25.0,
+   "cut": true,
+   "note": "Jacob 6: runner rug, looking -x"
+  },
+  {
+   "id": "jlook-entrance-rug_stairs",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 1",
+   "kind": "sweep_stairs",
+   "feet": [
+    -0.6,
+    0.194,
+    25.4
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -15.0,
+   "cut": true,
+   "note": "Jacob 6: runner rug + stairs side"
+  },
+  {
+   "id": "jlook-kitchen-sink_basin",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 7",
+   "kind": "sweep_basin",
+   "feet": [
+    -12.7,
+    0.194,
+    29.38
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -38.0,
+   "cut": true,
+   "note": "Jacob 4(b): kitchen sink basin, verify the probe recapture"
+  },
+  {
+   "id": "jlook-kitchen-sink_wide",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 7",
+   "kind": "sweep_wide",
+   "feet": [
+    -11.5,
+    0.194,
+    29.78
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -12.0,
+   "cut": true,
+   "note": "Jacob 4(b): kitchen sink and counter wide"
+  },
+  {
+   "id": "jlook-tableb-line_floor",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_floor",
+   "feet": [
+    -12.5,
+    3.104,
+    23.8
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": -20.0,
+   "cut": true,
+   "note": "Atlas: Lamp_table_B 35606/35608 +z edge z 26.07 along Wall_Interior_3x(4), x -14.4..-11.1, floor line + wall base. AFTER 6c4b9d89 (fam3-tableB-fade)"
+  },
+  {
+   "id": "jlook-tableb-line_ceil",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_ceil",
+   "feet": [
+    -12.5,
+    3.104,
+    23.8
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 25.0,
+   "cut": true,
+   "note": "Atlas: same pose, ceiling line at z 26.07 (ceiling y 5.781). AFTER 6c4b9d89 (fam3-tableB-fade)"
+  },
+  {
+   "id": "jlook-south-wall-z20-3_view",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_view",
+   "feet": [
+    -10.5,
+    0.194,
+    23.0
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": -5.0,
+   "cut": true,
+   "note": "Atlas: Lamp_stand 19 (35613) -z edge z 20.3 = south window wall x -14.38..-6.78, floor 0.194 + ceiling 2.871 junctions + windows. AFTER 525e3a75 (fam4-south)"
+  },
+  {
+   "id": "jlook-jamb-35614_west",
+   "room": "landing",
+   "giVolume": "GI landing",
+   "kind": "sweep_west",
+   "feet": [
+    7.4,
+    3.104,
+    28.4
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -40.0,
+   "cut": true,
+   "note": "row 111: threshold strip x 9.148..9.342 of the doorway beside 35614, from the lamp side (west). PASS / lit strip"
+  },
+  {
+   "id": "jlook-jamb-35614_east",
+   "room": "child's bedroom",
+   "giVolume": "GI child's bedroom 1",
+   "kind": "sweep_east",
+   "feet": [
+    11.1,
+    3.104,
+    28.4
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -40.0,
+   "cut": true,
+   "note": "row 111: same threshold strip from the far side (east)"
+  },
+  {
+   "id": "jlook-jamb-35601_threshold",
+   "room": "upstairs bathroom",
+   "giVolume": "GI upstairs bathroom 1",
+   "kind": "sweep_threshold",
+   "feet": [
+    -5.5,
+    3.104,
+    26.15
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": -52.0,
+   "cut": true,
+   "note": "row 111 (Atlas): 35601/36406 threshold strip x -6.857..-6.663 at z 25.99..~26.3 next to the jamb end z 25.99, opening z 25.99..26.94. Even light up to the jamb = PASS, jamb-shadow wedge = lit strip"
+  },
+  {
+   "id": "jlook-jamb-36400_threshold",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 3",
+   "kind": "sweep_threshold",
+   "feet": [
+    -8.0,
+    3.104,
+    29.05
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": -52.0,
+   "cut": true,
+   "note": "row 111 (Atlas): 36400 threshold strip x -6.857..-6.663 at z 28.90..~29.1 next to the jamb end z 28.90, opening z 28.90..29.85. Even light up to the jamb = PASS"
+  },
+  {
+   "id": "jlook-facade-bay-east_night",
+   "room": "jacob look",
+   "giVolume": "",
+   "kind": "sweep_night",
+   "feet": [
+    16.5,
+    0.194,
+    18.0
+   ],
+   "yawDeg": 118.0,
+   "pitchDeg": 3.0,
+   "cut": true,
+   "outside": true,
+   "note": "SM PM: siding x 13.6..14.6, z 21.1..24.0 east of the living-room bay, from outside at night: lit strip on the siding? (family E)"
+  },
+  {
+   "id": "jlook-bathdoor-wall_face",
+   "room": "downstairs bathroom",
+   "giVolume": "GI downstairs bathroom 1",
+   "kind": "sweep_face",
+   "feet": [
+    5.2,
+    0.194,
+    25.3
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "note": "Jacob #2: faces the hall wall beside the bathroom doorway (door 20762), blotch/stair-step shadow edge from hall spots 35594/35596 (Shadow Softness 2.5)"
+  },
+  {
+   "id": "jlook-chandelier-graze_face",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_face",
+   "feet": [
+    -9.25,
+    0.194,
+    24.2
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 12.0,
+   "cut": true,
+   "note": "kitchen chandelier 35586 vs south wall z 20.3: look for vertical cube-face seams at x -10.83 / -7.67 and a horizontal one at y 0.48"
+  },
+  {
+   "id": "jlook-chandelier-graze_oblique",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 1",
+   "kind": "sweep_oblique",
+   "feet": [
+    -7.4,
+    0.194,
+    22.8
+   ],
+   "yawDeg": -160.0,
+   "pitchDeg": 8.0,
+   "cut": true,
+   "note": "kitchen chandelier 35586: oblique along the south wall z 20.3, grazing incidence toward x -12"
+  },
+  {
+   "id": "jlook-thin-caster_chandelier",
+   "room": "living room",
+   "giVolume": "GI living room 1",
+   "kind": "sweep_chandelier",
+   "feet": [
+    10.95,
+    0.194,
+    24.6
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 30.0,
+   "cut": true,
+   "note": "thin caster: living-room chandelier 35592 arms/chain, close-up of its shadow on the ceiling (y 2.87) from 1.8 m"
+  },
+  {
+   "id": "bounds-35598_pz",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_pz",
+   "feet": [
+    -9.27,
+    3.104,
+    23.44
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 30.0,
+   "cut": true,
+   "note": "fix-3 master bedroom ceiling edge (light 35598), W6 extra for dev/fix3-master-ceil 5802c9f0"
+  },
+  {
+   "id": "bounds-35611_pz",
+   "room": "master bedroom",
+   "giVolume": "GI master bedroom 1",
+   "kind": "sweep_pz",
+   "feet": [
+    -9.27,
+    3.104,
+    23.44
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 30.0,
+   "cut": true,
+   "note": "fix-3 master bedroom ceiling edge (light 35611), W6 extra for dev/fix3-master-ceil 5802c9f0"
+  },
+  {
+   "id": "den-lamp-column20599_view",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_view",
+   "feet": [
+    0.3,
+    3.104,
+    29.4
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 5.0,
+   "cut": true,
+   "note": "fix-3 den lamp Lamp_stand 36409 / light 36410: bright patch on column 20599 at bulb height (CPU probe 0.386, house norm 0.35-0.54); flag if hot"
+  },
+  {
+   "id": "walkwp-front-door-before_pose",
+   "room": "Porch (outside)",
+   "giVolume": "",
+   "kind": "sweep_pose",
+   "feet": [
+    1.0,
+    0.165,
+    23.44
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "outside": true,
+   "note": "Kronos walk waypoint front_door_before (start of front_door_before->front_door_in: pop-full:2)"
+  },
+  {
+   "id": "walkwp-front-door-in_pose",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 6",
+   "kind": "sweep_pose",
+   "feet": [
+    1.0,
+    0.194,
+    24.04
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint front_door_in (end of front_door_before->front_door_in: pop-full:2)"
+  },
+  {
+   "id": "walkpop-front-door-before-to-front-door-in_mid",
+   "room": "Porch (outside)",
+   "giVolume": "",
+   "kind": "sweep_mid",
+   "feet": [
+    1.0,
+    0.179,
+    23.74
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "outside": true,
+   "note": "Kronos walk segment midpoint front_door_before->front_door_in: pop-full:2"
+  },
+  {
+   "id": "walkwp-hall-double-door-after_pose",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 3",
+   "kind": "sweep_pose",
+   "feet": [
+    2.46,
+    0.194,
+    27.55
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint hall_double_door_after (start of hall_double_door_after->corridor_east: pop-full:2)"
+  },
+  {
+   "id": "walkwp-corridor-east_pose",
+   "room": "living room",
+   "giVolume": "GI living room 6",
+   "kind": "sweep_pose",
+   "feet": [
+    4.75,
+    0.194,
+    27.55
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint corridor_east (end of hall_double_door_after->corridor_east: pop-full:2)"
+  },
+  {
+   "id": "walkpop-hall-double-door-after-to-corridor-east_mid",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 4",
+   "kind": "sweep_mid",
+   "feet": [
+    3.605,
+    0.194,
+    27.55
+   ],
+   "yawDeg": 45.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk segment midpoint hall_double_door_after->corridor_east: pop-full:2"
+  },
+  {
+   "id": "walkwp-hall-east-corner_pose",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 1",
+   "kind": "sweep_pose",
+   "feet": [
+    3.0,
+    0.194,
+    25.6
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint hall_east_corner (start of hall_east_corner->hall_center: pop-full:1)"
+  },
+  {
+   "id": "walkwp-hall-center_pose",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 2",
+   "kind": "sweep_pose",
+   "feet": [
+    -1.5,
+    0.194,
+    25.4
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint hall_center (end of hall_east_corner->hall_center: pop-full:1)"
+  },
+  {
+   "id": "walkpop-hall-east-corner-to-hall-center_mid",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 1",
+   "kind": "sweep_mid",
+   "feet": [
+    0.75,
+    0.194,
+    25.5
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk segment midpoint hall_east_corner->hall_center: pop-full:1"
+  },
+  {
+   "id": "walkwp-hall-west-corner_pose",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 2",
+   "kind": "sweep_pose",
+   "feet": [
+    -5.9,
+    0.194,
+    25.6
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint hall_west_corner (end of hall_center->hall_west_corner: pop-full:1; ramp R1 -74%)"
+  },
+  {
+   "id": "walkpop-hall-center-to-hall-west-corner_mid",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 2",
+   "kind": "sweep_mid",
+   "feet": [
+    -3.7,
+    0.194,
+    25.5
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk segment midpoint hall_center->hall_west_corner: pop-full:1; ramp R1 -74%"
+  },
+  {
+   "id": "walkwp-kitchen-main_pose",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 3",
+   "kind": "sweep_pose",
+   "feet": [
+    -11.0,
+    0.194,
+    27.25
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint kitchen_main (start of kitchen_main->kitchen_door_after: pop-full:2)"
+  },
+  {
+   "id": "walkwp-kitchen-door-after_pose",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 5",
+   "kind": "sweep_pose",
+   "feet": [
+    -4.82,
+    0.194,
+    27.55
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint kitchen_door_after (end of kitchen_main->kitchen_door_after: pop-full:2)"
+  },
+  {
+   "id": "walkpop-kitchen-main-to-kitchen-door-after_mid",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 2",
+   "kind": "sweep_mid",
+   "feet": [
+    -7.91,
+    0.194,
+    27.4
+   ],
+   "yawDeg": 135.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk segment midpoint kitchen_main->kitchen_door_after: pop-full:2"
+  },
+  {
+   "id": "walkwp-kitchen-door-in_pose",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 5",
+   "kind": "sweep_pose",
+   "feet": [
+    -4.82,
+    0.194,
+    26.95
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint kitchen_door_in (end of kitchen_door_after->kitchen_door_in: pop-full:2)"
+  },
+  {
+   "id": "walkpop-kitchen-door-after-to-kitchen-door-in_mid",
+   "room": "kitchen-dining",
+   "giVolume": "GI kitchen-dining 5",
+   "kind": "sweep_mid",
+   "feet": [
+    -4.82,
+    0.194,
+    27.25
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk segment midpoint kitchen_door_after->kitchen_door_in: pop-full:2"
+  },
+  {
+   "id": "walkwp-kitchen-door-before_pose",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 2",
+   "kind": "sweep_pose",
+   "feet": [
+    -4.82,
+    0.194,
+    26.35
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint kitchen_door_before (start of kitchen_door_before->hall_center: pop-full:3; ramp R2 +65%)"
+  },
+  {
+   "id": "walkpop-kitchen-door-before-to-hall-center_mid",
+   "room": "entrance hall",
+   "giVolume": "GI entrance hall 2",
+   "kind": "sweep_mid",
+   "feet": [
+    -3.16,
+    0.194,
+    25.875
+   ],
+   "yawDeg": 135.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk segment midpoint kitchen_door_before->hall_center: pop-full:3; ramp R2 +65%"
+  },
+  {
+   "id": "walkwp-landing-corner_pose",
+   "room": "landing",
+   "giVolume": "GI landing",
+   "kind": "sweep_pose",
+   "feet": [
+    7.6,
+    3.104,
+    31.0
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint landing_corner (start of landing_corner->child_door_before: pop-full:1)"
+  },
+  {
+   "id": "walkwp-child-door-before_pose",
+   "room": "landing",
+   "giVolume": "GI landing",
+   "kind": "sweep_pose",
+   "feet": [
+    8.65,
+    3.104,
+    28.4
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint child_door_before (end of landing_corner->child_door_before: pop-full:1)"
+  },
+  {
+   "id": "walkpop-landing-corner-to-child-door-before_mid",
+   "room": "landing",
+   "giVolume": "GI landing",
+   "kind": "sweep_mid",
+   "feet": [
+    8.125,
+    3.104,
+    29.7
+   ],
+   "yawDeg": 90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk segment midpoint landing_corner->child_door_before: pop-full:1"
+  },
+  {
+   "id": "walkwp-upstairs-hall-door-before_pose",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_pose",
+   "feet": [
+    4.4,
+    3.104,
+    28.52
+   ],
+   "yawDeg": -90.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint upstairs_hall_door_before (end of child_door_before->upstairs_hall_door_before: pop-full:2)"
+  },
+  {
+   "id": "walkpop-child-door-before-to-upstairs-hall-door-before_mid",
+   "room": "landing",
+   "giVolume": "GI landing",
+   "kind": "sweep_mid",
+   "feet": [
+    6.525,
+    3.104,
+    28.46
+   ],
+   "yawDeg": -45.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk segment midpoint child_door_before->upstairs_hall_door_before: pop-full:2"
+  },
+  {
+   "id": "walkwp-den-east_pose",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_pose",
+   "feet": [
+    -1.15,
+    3.104,
+    29.9
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint den_east (start of den_east->den_west: pop-full:2)"
+  },
+  {
+   "id": "walkwp-den-west_pose",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 1",
+   "kind": "sweep_pose",
+   "feet": [
+    -4.4,
+    3.104,
+    29.8
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint den_west (end of den_east->den_west: pop-full:2)"
+  },
+  {
+   "id": "walkpop-den-east-to-den-west_mid",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 2",
+   "kind": "sweep_mid",
+   "feet": [
+    -2.775,
+    3.104,
+    29.85
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk segment midpoint den_east->den_west: pop-full:2"
+  },
+  {
+   "id": "walkwp-master-den-door-before_pose",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 1",
+   "kind": "sweep_pose",
+   "feet": [
+    -6.16,
+    3.104,
+    29.38
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint master_den_door_before (end of den_west->master_den_door_before: pop-full:3)"
+  },
+  {
+   "id": "walkpop-den-west-to-master-den-door-before_mid",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 1",
+   "kind": "sweep_mid",
+   "feet": [
+    -5.28,
+    3.104,
+    29.59
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk segment midpoint den_west->master_den_door_before: pop-full:3"
+  },
+  {
+   "id": "walkwp-master-den-door-in_pose",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 1",
+   "kind": "sweep_pose",
+   "feet": [
+    -6.76,
+    3.104,
+    29.38
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint master_den_door_in (end of master_den_door_before->master_den_door_in: pop-full:2)"
+  },
+  {
+   "id": "walkpop-master-den-door-before-to-master-den-door-in_mid",
+   "room": "upstairs den",
+   "giVolume": "GI upstairs den 1",
+   "kind": "sweep_mid",
+   "feet": [
+    -6.46,
+    3.104,
+    29.38
+   ],
+   "yawDeg": -180.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk segment midpoint master_den_door_before->master_den_door_in: pop-full:2"
+  },
+  {
+   "id": "walkwp-child-door-in_pose",
+   "room": "landing",
+   "giVolume": "GI landing",
+   "kind": "sweep_pose",
+   "feet": [
+    9.25,
+    3.104,
+    28.4
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk waypoint child_door_in (end of child_door_before->child_door_in: pop-gi:1)"
+  },
+  {
+   "id": "walkpop-child-door-before-to-child-door-in_mid",
+   "room": "landing",
+   "giVolume": "GI landing",
+   "kind": "sweep_mid",
+   "feet": [
+    8.95,
+    3.104,
+    28.4
+   ],
+   "yawDeg": 0.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk segment midpoint child_door_before->child_door_in: pop-gi:1"
+  },
+  {
+   "id": "walkpop-upstairs-hall-door-before-to-den-east_mid",
+   "room": "stairwell",
+   "giVolume": "GI stairwell",
+   "kind": "sweep_mid",
+   "feet": [
+    1.625,
+    3.104,
+    29.21
+   ],
+   "yawDeg": -135.0,
+   "pitchDeg": 0.0,
+   "cut": true,
+   "note": "Kronos walk segment midpoint upstairs_hall_door_before->den_east: pop-gi:2"
+  }
+ ]
+}
