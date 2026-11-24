@@ -281,7 +281,8 @@ public:
     int Finish();
     // The frame loop hit an exception: Play reverted and a recovery snapshot written while the editor and world exist.
     void EmergencyRecoverySave() {
-        if (giBaker) giBaker->RestoreDoors(world); // a --bake-gi's posed doors are never written into the recovery file
+        // A --bake-gi mid-bake: the lights, sky, switches and doors as loaded (the posed doors never reach the file).
+        if (giBaker && giBaker->DoorsPosed()) giBaker->Abort(world, "exception");
         if (!headless) editor.EmergencyRecoverySave(world, assets);
     }
 
