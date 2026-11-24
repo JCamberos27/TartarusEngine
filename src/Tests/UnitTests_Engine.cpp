@@ -28,6 +28,7 @@
 #include "../Renderer/ShaderVariant.h"
 #include "../Renderer/CascadedShadowMap.h"
 #include "../Renderer/PointShadowMap.h"
+#include "../Renderer/SpotShadowMap.h"
 #include "../Renderer/Texture.h"
 #include "../Core/PngWrite.h"
 #include "../Core/SamplingProfiler.h"
@@ -526,15 +527,15 @@ static void Test_BoneAnimChannel_FinalizeMatchesSearch() {
 }
 
 // Point PCF (fix-3 S2): Softness 0 / negative / NaN keeps the old hard single compare (kernel 0); a positive Softness is
-// x3 cube texels, clamped to [0.5, 8]; the house's 1.3 gives 3.9 texels. Monotonic in Softness.
+// x3 cube texels, clamped to [0.5, 2.5] (the tent PCF's continuous reach); the house's 1.3 hits the cap. Monotonic.
 static void Test_PointShadowMap_KernelTexels() {
     CHECK(PointShadowMap::KernelTexels(0.0f) == 0.0f);
     CHECK(PointShadowMap::KernelTexels(-1.0f) == 0.0f);
     CHECK(PointShadowMap::KernelTexels(std::numeric_limits<float>::quiet_NaN()) == 0.0f);
     CHECK(PointShadowMap::KernelTexels(0.02f) == PointShadowMap::kKernelMinTexels);
-    CHECK(std::abs(PointShadowMap::KernelTexels(1.3f) - 3.9f) < 1e-5f);
-    CHECK(PointShadowMap::KernelTexels(1.0f) == 3.0f);
-    CHECK(PointShadowMap::KernelTexels(2.0f) == 6.0f);
+    CHECK(PointShadowMap::KernelTexels(1.3f) == PointShadowMap::kKernelMaxTexels);
+    CHECK(std::abs(PointShadowMap::KernelTexels(0.5f) - 1.5f) < 1e-6f);
+    CHECK(PointShadowMap::KernelTexels(2.0f) == PointShadowMap::kKernelMaxTexels);
     CHECK(PointShadowMap::KernelTexels(4.0f) == PointShadowMap::kKernelMaxTexels); // the Inspector's max Softness
     CHECK(PointShadowMap::KernelTexels(100.0f) == PointShadowMap::kKernelMaxTexels);
     float prev = 0.0f;
@@ -543,6 +544,18 @@ static void Test_PointShadowMap_KernelTexels() {
         CHECK(k >= prev);
         prev = k;
     }
+}
+
+// Spot PCF (fix-3): same contract as the points, x1 spot-map texels, clamped to [0.5, 2.5].
+static void Test_SpotShadowMap_KernelTexels() {
+    CHECK(SpotShadowMap::KernelTexels(0.0f) == 0.0f);
+    CHECK(SpotShadowMap::KernelTexels(-1.0f) == 0.0f);
+    CHECK(SpotShadowMap::KernelTexels(std::numeric_limits<float>::quiet_NaN()) == 0.0f);
+    CHECK(SpotShadowMap::KernelTexels(0.2f) == SpotShadowMap::kKernelMinTexels);
+    CHECK(std::abs(SpotShadowMap::KernelTexels(1.3f) - 1.3f) < 1e-6f); // kitchen spots
+    CHECK(SpotShadowMap::KernelTexels(2.5f) == 2.5f);                  // hall spots
+    CHECK(SpotShadowMap::KernelTexels(1.5f) == 1.5f);                  // the flashlight's slot
+    CHECK(SpotShadowMap::KernelTexels(100.0f) == SpotShadowMap::kKernelMaxTexels);
 }
 
 // Softness 0 is the hard sun edge (one 2x2 compare); every positive softness keeps the kernel it always had, so
@@ -1434,6 +1447,7 @@ void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"CascadedShadowMap::SliceTestMatchesAllPairs", Test_CascadedShadowMap_SliceTestMatchesAllPairs});
     tests.push_back({"CascadedShadowMap::HardKernelAndSplit", Test_CascadedShadowMap_HardKernelAndSplit});
     tests.push_back({"PointShadowMap::KernelTexels", Test_PointShadowMap_KernelTexels});
+    tests.push_back({"SpotShadowMap::KernelTexels", Test_SpotShadowMap_KernelTexels});
     tests.push_back({"PrefabInstance::HandWrittenComponentsDiffByJsonKey", Test_PrefabInstance_HandWrittenComponentsDiffByJsonKey});
     tests.push_back({"FirstPersonController::NewFieldsRoundTrip", Test_FirstPersonController_NewFieldsRoundTrip});
     tests.push_back({"FxHudSettings::RoundTrip", Test_FxHudSettings_RoundTrip});
