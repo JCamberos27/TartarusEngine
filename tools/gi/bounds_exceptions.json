@@ -1,0 +1,203 @@
+{
+ "_doc": "bounds_audit.py gate: every non-OK Bounds face must match one row (id, face, status). Commit a row WITH the scene change it excuses (same branch/commit), with the reason and who OK'd it.",
+ "exceptions": [
+  {
+   "id": 35586,
+   "face": "-z",
+   "status": "OVER",
+   "reason": "dining bay: deliberate (FOUND_ISSUES 07:48)"
+  },
+  {
+   "id": 35588,
+   "face": "+x",
+   "status": "OVER",
+   "reason": "kitchen doorway spill, shadowed (FOUND_ISSUES 07:48)"
+  },
+  {
+   "id": 35588,
+   "face": "-z",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 35591,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 35592,
+   "face": "+z",
+   "status": "OVER",
+   "reason": "living-room chandelier, shadowed, reaches the open-plan far wall (gates6..gates10)"
+  },
+  {
+   "id": 35592,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 35600,
+   "face": "-x",
+   "status": "SHORT",
+   "reason": "upstairs-bath zone (FOUND_ISSUES 07:48)"
+  },
+  {
+   "id": 35601,
+   "face": "+x",
+   "status": "SHORT",
+   "reason": "SHORT: L-shaped room / zoned light, face kept short on purpose (FOUND_ISSUES 07:48)"
+  },
+  {
+   "id": 35604,
+   "face": "+x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 35605,
+   "face": "+z",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 35607,
+   "face": "-x",
+   "status": "SHORT",
+   "reason": "SHORT: L-shaped room / zoned light, face kept short on purpose (FOUND_ISSUES 07:48)"
+  },
+  {
+   "id": 35609,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 35610,
+   "face": "+x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 35610,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 35610,
+   "face": "-z",
+   "status": "SHORT",
+   "reason": "35610 unshadowed; a full face would light upstairs (FOUND_ISSUES 07:48)"
+  },
+  {
+   "id": 35611,
+   "face": "+x",
+   "status": "OVER",
+   "reason": "fix-3 (dev/fix3-master-ceil 5802c9f0, SM 2026-11-24): 35611 Lamp_stand 17 now Cast Shadows ON; its +x face reaches the open part's east wall past the box-room door wall, which its shadow map blocks"
+  },
+  {
+   "id": 35614,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36367,
+   "face": "+x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36368,
+   "face": "+x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36370,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36371,
+   "face": "-z",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36373,
+   "face": "-z",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36390,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36391,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36392,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36393,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36394,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36395,
+   "face": "+x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36395,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36400,
+   "face": "-z",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36401,
+   "face": "-z",
+   "status": "OPEN",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)"
+  },
+  {
+   "id": 36405,
+   "face": "-x",
+   "status": "SHORT",
+   "reason": "upstairs-bath zone (FOUND_ISSUES 07:48)"
+  },
+  {
+   "id": 36406,
+   "face": "+x",
+   "status": "SHORT",
+   "reason": "SHORT: L-shaped room / zoned light, face kept short on purpose (FOUND_ISSUES 07:48)"
+  }
+ ]
+}
