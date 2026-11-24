@@ -20,10 +20,11 @@ public:
     // uPointShadowSoftness[] carries. Softness <= 0 (or NaN) returns 0 = the old single hard compare. Otherwise
     // kKernelPerSoftness x softness, clamped to [kKernelMinTexels, kKernelMaxTexels]: x3 puts a point light's edge at
     // the same Softness about as wide in the world as a ceiling spot's (cube texels are ~3.5x smaller than an
-    // 80-degree spot's 2048 map: 0.49 vs 1.7 cm at 2.5 m), e.g. Softness 1.3 -> ~3.8 cm vs 4.0 cm.
+    // 80-degree spot's 2048 map: 0.49 vs 1.7 cm at 2.5 m), e.g. Softness 1.3 -> ~3.8 cm vs 4.0 cm. Capped at 8 texels
+    // (Softness ~2.7, ~4 cm radius at 2.5 m): a wider disk lets light leak under contact shadows (Talos's review).
     static constexpr float kKernelPerSoftness = 3.0f;
     static constexpr float kKernelMinTexels = 0.5f;
-    static constexpr float kKernelMaxTexels = 16.0f;
+    static constexpr float kKernelMaxTexels = 8.0f;
     static float KernelTexels(float softness);
 
     PointShadowMap() = default;

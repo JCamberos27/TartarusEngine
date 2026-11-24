@@ -526,7 +526,7 @@ static void Test_BoneAnimChannel_FinalizeMatchesSearch() {
 }
 
 // Point PCF (fix-3 S2): Softness 0 / negative / NaN keeps the old hard single compare (kernel 0); a positive Softness is
-// x3 cube texels, clamped to [0.5, 16]; the house's 1.3 gives 3.9 texels. Monotonic in Softness.
+// x3 cube texels, clamped to [0.5, 8]; the house's 1.3 gives 3.9 texels. Monotonic in Softness.
 static void Test_PointShadowMap_KernelTexels() {
     CHECK(PointShadowMap::KernelTexels(0.0f) == 0.0f);
     CHECK(PointShadowMap::KernelTexels(-1.0f) == 0.0f);
@@ -534,7 +534,8 @@ static void Test_PointShadowMap_KernelTexels() {
     CHECK(PointShadowMap::KernelTexels(0.02f) == PointShadowMap::kKernelMinTexels);
     CHECK(std::abs(PointShadowMap::KernelTexels(1.3f) - 3.9f) < 1e-5f);
     CHECK(PointShadowMap::KernelTexels(1.0f) == 3.0f);
-    CHECK(PointShadowMap::KernelTexels(4.0f) == 12.0f);      // the Inspector's max Softness
+    CHECK(PointShadowMap::KernelTexels(2.0f) == 6.0f);
+    CHECK(PointShadowMap::KernelTexels(4.0f) == PointShadowMap::kKernelMaxTexels); // the Inspector's max Softness
     CHECK(PointShadowMap::KernelTexels(100.0f) == PointShadowMap::kKernelMaxTexels);
     float prev = 0.0f;
     for (float s = 0.02f; s <= 6.0f; s += 0.02f) {
