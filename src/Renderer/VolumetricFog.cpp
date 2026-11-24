@@ -258,11 +258,15 @@ void VolumetricFog::Render(const FrameState& fs) {
         inject.SetVec3Array("uSpotShadowPos[0]", spotShadowCount, in.spotShadowPos);
         inject.SetFloatArray("uSpotShadowFar[0]", spotShadowCount, in.spotShadowFar);
         inject.SetFloatArray("uSpotShadowHalfTan[0]", spotShadowCount, in.spotShadowHalfTan);
+        inject.SetFloatArray("uSpotShadowWeight[0]", spotShadowCount, ShadowWeightsOrFull(in.spotShadowWeight));
     }
     inject.SetFloat("uSpotShadowMapResolution", (float)in.spotShadow->Resolution());
     glBindTextureUnit(9, in.spotShadow->DepthArray() ? in.spotShadow->DepthArray() : DefaultTextures::DepthArray());
     inject.SetInt("uPointShadowCount", pointShadowCount);
-    if (pointShadowCount > 0) inject.SetFloatArray("uPointShadowFar[0]", pointShadowCount, in.pointShadowFar);
+    if (pointShadowCount > 0) {
+        inject.SetFloatArray("uPointShadowFar[0]", pointShadowCount, in.pointShadowFar);
+        inject.SetFloatArray("uPointShadowWeight[0]", pointShadowCount, ShadowWeightsOrFull(in.pointShadowWeight));
+    }
     inject.SetFloat("uPointShadowMapResolution", (float)in.pointShadow->Resolution());
     glBindTextureUnit(10, in.pointShadow->DepthCubeArray() ? in.pointShadow->DepthCubeArray() : DefaultTextures::DepthCubeArray());
 

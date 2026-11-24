@@ -27,6 +27,7 @@
     X(OpenAll, "TARTARUS_OPEN_ALL", Flag, "smoke shots: open every door/drawer on the first frame")                   \
     X(LightsOn, "TARTARUS_LIGHTS_ON", Flag, "smoke shots: 1 = every light circuit on, 0 = as the switches start")     \
     X(LightsOnly, "TARTARUS_LIGHTS_ONLY", Str, "smoke shots: only these ';'-separated light circuits on (leak checks)") \
+    X(TourMaxPoints, "TARTARUS_TOUR_MAX_POINTS", Int, "--gi-tour: the scene's Max point shadows for this run (perf sweeps)") \
     X(ShotCameras, "TARTARUS_SHOT_CAMERAS", List, "--smoke-shots: 'name:x,y,z,yaw,pitch;...' poses to capture")  \
     X(ShotStart, "TARTARUS_SHOT_START", Int, "--smoke-shots: frame of the first shot-camera capture (default 40)")    \
     X(ShotFov, "TARTARUS_SHOT_FOV", Float, "--smoke-shots: Scene-view FOV for shot cameras")                          \
@@ -70,6 +71,7 @@
     X(GiBakeEmissive, "TARTARUS_GI_EMISSIVE", Float, "--bake-gi: emission kept in the captures (default 0)")            \
     X(GiBakeBounces, "TARTARUS_GI_BOUNCES", Int, "--bake-gi: light bounces to bake (default 2)")                      \
     X(GiBakeTrace, "TARTARUS_GI_BAKE_TRACE", Flag, "--bake-gi: log the shadow-slot holders of every probe batch")     \
+    X(GiBakeLiveClocks, "TARTARUS_GI_BAKE_LIVE_CLOCKS", Flag, "--bake-gi: leave the clocks running (A/B vs the pinned bake clock)") \
     X(SkinAudit, "TARTARUS_SKIN_AUDIT", Flag, "log skinning audit")                                                   \
     X(TrisReport, "TARTARUS_TRIS_REPORT", Int, "print a triangle report on this frame")                               \
     X(HizStats, "TARTARUS_HIZ_STATS", Flag, "print Hi-Z culling stats")                                               \

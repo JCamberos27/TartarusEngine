@@ -24,6 +24,7 @@ class GIVolumes;
 class HdrTarget;
 class LightGather;
 class NpcTest;
+class ShadowFrame;
 class Window;
 class World;
 
@@ -47,9 +48,10 @@ struct SmokeContext {
     std::function<void()> togglePlay;           // the F1 / toolbar entry
     std::function<void(bool)> setMaximized;     // the Game view over the editor panels
     std::function<void()> warmRenderResources;  // what the editor does at startup, before its first frame
-    const LightGather* lightGather = nullptr;    // --gi-tour: the frame's shadow-slot holders
+    LightGather* lightGather = nullptr;          // --gi-tour: the frame's shadow-slot holders, and its cuts (RequestSnap)
     HdrTarget* sceneHdr = nullptr;              // --gi-tour: the Scene view's depth (the static-surface mask)
     GIVolumes* giVolumes = nullptr;             // --gi-tour-view nogi: switched off for the run
+    const ShadowFrame* shadowFrame = nullptr;   // --gi-tour: what the local shadow maps redrew (tour_perf.csv)
 };
 
 // --smoke-test (audit #187), and --perf-bench / --npc-test / --smoke-shots, which ride on it. Deliberately driven from
@@ -120,6 +122,20 @@ private:
     std::vector<unsigned char> m_TourRgba;
     std::vector<float> m_TourDepth;
     GiTour::DepthStats m_TourDepthStats;
+    // tour_perf.csv (GI Phase 1 perf): per drawn frame, what the local shadow maps redrew (known at once) and the
+    // frame's GPU pass times (read back a few frames late, by profiler frame serial).
+    struct TourPerfRow {
+        unsigned Serial = 0;
+        int TourFrame = 0;
+        std::string Mode, Segment;
+        float WallMs = -1.0f;
+        int SpotLive = 0, SpotStatic = 0, SpotDynamic = 0, SpotWhole = 0;
+        int PointLive = 0, PointStaticFaces = 0, PointDynamicFaces = 0, PointKeptFaces = 0;
+        int CasterDraws = 0, StaticCasterDraws = 0;
+    };
+    std::unique_ptr<std::ofstream> m_TourPerfCsv;
+    std::vector<TourPerfRow> m_TourPerfPending;
+    void TourPerfFlush(bool all);
 
     std::vector<std::string> m_ScenePaths;
     std::vector<Result> m_Results;
