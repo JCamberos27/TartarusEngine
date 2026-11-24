@@ -54,3 +54,10 @@ share only (roomSpecW), no global scale, no recapture, independent of the GI bak
 Per-probe `Specular Scale` (C++ + registry + uniform) NOT done: not needed unless the A/B says the constants cannot be one value.
 A/B: `run_fix_ab.ps1` (variants base / fix / c2 / c8 / f2 / f6 / nospec) over `tour_redroom_sink.json` (4 red-room poses + the kitchen sink basin).
 Poses are world positions (entity ids were renumbered on main; positions are not). The sink basin shot depends on kitchen GI only through `irradiance`.
+
+## 7. A/B result 2026-11-24 23:00 UTC (wt-gpu at main db92576f, 7 variants x 5 shots; stills in gi-p2\argus\fix_ab, not in git)
+- Sink (mean luma): basin 8.6 -> 10.1 (floor 0.6: 13.3), dishwasher front 34.7 -> 43.0 (0.6: 49.5), faucet 53.1 -> 54.2. Modest lift; floor 0.6 is better than 0.4.
+- Red room: base = fix = clamp 2 = clamp 8 (identical means, 0% pixels > 240): the clamp does nothing in 4 poses. nospec (x0.08) differs by ~1% red / ~20% G,B, no visible change.
+  => the spec-unscale / room cube is NOT the cause of Jacob's 'red-room metal too shiny' in these poses; hypothesis (a) NOT confirmed. Suspect (b): the red lamps'
+  DIRECT specular (Red Bulb, Lamp_stand, nightstand lamps) on gloss surfaces (nightstand top, desk edge). Not yet A/B'd (needs: lamps' specular off, same tour).
+- Next: ask Jacob which object; direct-specular A/B in a later GPU slot. PR #1217 stays draft: do not merge for the red room.
