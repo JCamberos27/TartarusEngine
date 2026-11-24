@@ -404848,6 +404848,51 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Living room;Lamp_table_A 15;Lamp_stand 14",
         "Fade": 0.10000000149011612,
+        "Fade Max": [
+          0.30000001192092896,
+          0.0,
+          0.0
+        ],
+        "Fade Min": [
+          0.30000001192092896,
+          0.0,
+          0.0
+        ],
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          0.8319354057312012,
+          2.815000057220459,
+          4.349999904632568
+        ],
+        "Spacing": 0.5
+      },
+      "id": 38103,
+      "name": "GI bridge living 1-4",
+      "order": 160009,
+      "parentId": 35585,
+      "position": [
+        -31.204030990600586,
+        2.0380001068115234,
+        10.183062553405762
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Living room;Lamp_table_A 15;Lamp_stand 14",
+        "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
         "Size": [
@@ -405311,6 +405356,51 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
+        "Circuits": "Kitchen;Lamp_wall_fluorescent 18;Lamp_stand 19",
+        "Fade": 0.10000000149011612,
+        "Fade Max": [
+          0.30000001192092896,
+          0.0,
+          0.0
+        ],
+        "Fade Min": [
+          0.30000001192092896,
+          0.0,
+          0.0
+        ],
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          0.7100018262863159,
+          2.815000057220459,
+          5.550000190734863
+        ],
+        "Spacing": 0.5
+      },
+      "id": 38104,
+      "name": "GI bridge kitchen-dining 3-7",
+      "order": 160010,
+      "parentId": 35585,
+      "position": [
+        -35.900001525878906,
+        2.0380001068115234,
+        -12.503000259399414
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
         "Circuits": "Kitchen;Lamp_stand 19;Hall",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
@@ -405650,6 +405740,51 @@
         -32.54349899291992,
         2.0380001068115234,
         0.7150000333786011
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "GI Volume": {
+        "Bake File": "scenes/Forest.gi",
+        "Circuits": "Hall",
+        "Fade": 0.10000000149011612,
+        "Fade Max": [
+          0.0,
+          0.0,
+          0.30000001192092896
+        ],
+        "Fade Min": [
+          0.0,
+          0.0,
+          0.30000001192092896
+        ],
+        "Intensity": 2.0,
+        "Outside": true,
+        "Size": [
+          2.4000000953674316,
+          2.815000057220459,
+          0.7400000095367432
+        ],
+        "Spacing": 0.5
+      },
+      "id": 38105,
+      "name": "GI bridge entrance hall 1-2",
+      "order": 160011,
+      "parentId": 35585,
+      "position": [
+        -32.481998443603516,
+        2.0380001068115234,
+        -1.9499998092651367
       ],
       "rotation": [
         0.0,
