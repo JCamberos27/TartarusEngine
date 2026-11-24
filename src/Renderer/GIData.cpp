@@ -145,6 +145,18 @@ glm::vec3 ProbeLocal(const glm::ivec3& ijk, const glm::ivec3& dims, const glm::v
     return q;
 }
 
+glm::vec3 FaceProbeNudge(const glm::ivec3& ijk, const glm::ivec3& dims, const glm::vec3& half, float nudge) {
+    glm::vec3 o(0.0f);
+    for (int a = 0; a < 3; ++a) {
+        if (dims[a] <= 1) continue;
+        const float cell = 2.0f * half[a] / (float)(dims[a] - 1);
+        const float d = std::min(nudge, 0.45f * cell);
+        if (ijk[a] == 0) o[a] = d;
+        else if (ijk[a] == dims[a] - 1) o[a] = -d;
+    }
+    return o;
+}
+
 glm::vec3 VolumeBake::Sample(int layer, const glm::vec3& q, const glm::vec3& n) const {
     if (layer < 0 || layer >= (int)Layers.size()) return glm::vec3(0.0f);
     const auto& P = Layers[layer].Probes;
@@ -338,17 +350,44 @@ void FillInvalid(std::vector<ProbeSH>& probes, const std::vector<bool>& valid, c
                     const int i = ProbeIndex(p, dims);
                     if (done[i]) continue;
                     ProbeSH sum;
-                    int cnt = 0;
-                    for (const auto& o : nb) {
-                        const glm::ivec3 q = p + o;
-                        if (glm::any(glm::lessThan(q, glm::ivec3(0))) || glm::any(glm::greaterThanEqual(q, dims))) continue;
+                    float wsum = 0.0f;
+                    const auto add = [&](const glm::ivec3& q, float w) {
+                        if (glm::any(glm::lessThan(q, glm::ivec3(0))) || glm::any(glm::greaterThanEqual(q, dims))) return;
                         const int j = ProbeIndex(q, dims);
-                        if (!done[j]) continue;
-                        for (int c = 0; c < 3; ++c) sum.c[c] += probes[j].c[c];
-                        ++cnt;
+                        if (!done[j]) return;
+                        for (int c = 0; c < 3; ++c) sum.c[c] += w * probes[j].c[c];
+                        wsum += w;
+                    };
+                    // The axes this probe lies on a box face of (inward = +1 / -1 along them); an axis with one probe has no face.
+                    glm::ivec3 inward(0);
+                    for (int a = 0; a < 3; ++a) {
+                        if (dims[a] <= 1) continue;
+                        if (p[a] == 0) inward[a] = 1;
+                        else if (p[a] == dims[a] - 1) inward[a] = -1;
                     }
-                    if (!cnt) continue;
-                    for (int c = 0; c < 3; ++c) sum.c[c] /= (float)cnt;
+                    if (inward != glm::ivec3(0)) {
+                        // 1. In-plane neighbours first (the 6-neighbours along the axes it is not on a face of).
+                        for (const auto& o : nb)
+                            if ((o.x != 0 && inward.x != 0) || (o.y != 0 && inward.y != 0) || (o.z != 0 && inward.z != 0)) continue;
+                            else add(p + o, 1.0f);
+                        // 2. None done (a whole slab row is invalid): the inward neighbour, blurred in-plane (4 / 2 / 1).
+                        if (wsum <= 0.0f) {
+                            const glm::ivec3 q = p + inward;
+                            for (int dz = -1; dz <= 1; ++dz)
+                                for (int dy = -1; dy <= 1; ++dy)
+                                    for (int dx = -1; dx <= 1; ++dx) {
+                                        const glm::ivec3 d(dx, dy, dz);
+                                        if ((d.x != 0 && inward.x != 0) || (d.y != 0 && inward.y != 0) || (d.z != 0 && inward.z != 0)) continue;
+                                        const int k = (dx != 0) + (dy != 0) + (dz != 0);
+                                        add(q + d, 4.0f / (float)(1 << k));
+                                    }
+                        }
+                    }
+                    // 3. Interior probes (and a face probe with nothing above): the average of every done 6-neighbour.
+                    if (wsum <= 0.0f)
+                        for (const auto& o : nb) add(p + o, 1.0f);
+                    if (wsum <= 0.0f) continue;
+                    for (int c = 0; c < 3; ++c) sum.c[c] /= wsum;
                     ring.push_back(i);
                     vals.push_back(sum);
                 }

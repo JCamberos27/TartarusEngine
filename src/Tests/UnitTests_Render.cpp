@@ -972,6 +972,57 @@ void GIVolumeLookup() {
         GI::FillInvalid(chain, {true, false, false, false}, glm::ivec3(4, 1, 1));
         CHECK(std::abs(chain[3].c[2].x - 4.0f) < 1e-6f); // spreads until every reachable probe is filled
     }
+
+    // Face probes (in the wall / ceiling slab) are captured nudged inward (Jacob #5: the ceiling ring around a fixture).
+    {
+        const glm::ivec3 d(5, 4, 6);
+        const glm::vec3 half(2.0f, 1.5f, 2.5f); // cell 1 m on every axis
+        const auto near3 = [](const glm::vec3& a, const glm::vec3& b) { return glm::length(a - b) < 1e-6f; };
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 1, 3), d, half, 0.15f), glm::vec3(0.0f)));            // interior: none
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 3, 3), d, half, 0.15f), glm::vec3(0.0f, -0.15f, 0.0f))); // ceiling row: down
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 0, 3), d, half, 0.15f), glm::vec3(0.0f, 0.15f, 0.0f)));  // floor row: up
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(0, 0, 0), d, half, 0.15f), glm::vec3(0.15f)));              // corner: 3 axes
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(4, 3, 5), d, half, 0.15f), glm::vec3(-0.15f)));
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(1, 0, 1), glm::ivec3(3, 1, 3), half, 0.15f), glm::vec3(0.0f))); // 1 probe on an axis: no face
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 3, 3), d, half, 0.0f), glm::vec3(0.0f)));                 // 0 = off
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 3, 3), d, half, 1.0f), glm::vec3(0.0f, -0.45f, 0.0f)));  // clamped to 0.45 cell
+    }
+    // FillInvalid on a face row: a whole invalid ceiling row is filled from the row below, blurred in-plane, so one strongly
+    // directional probe under it does not paint a hot spot; and a face probe with a valid in-plane neighbour takes those.
+    {
+        const glm::ivec3 big(5, 3, 5); // the top plane's inner 3x3 probes lie on ONE face (the ceiling) only
+        std::vector<GI::ProbeSH> pr(75);
+        std::vector<bool> valid(75, true);
+        for (int z = 0; z < 5; ++z)
+            for (int y = 0; y < 3; ++y)
+                for (int x = 0; x < 5; ++x) {
+                    const int i = GI::ProbeIndex(glm::ivec3(x, y, z), big);
+                    valid[i] = y < 2;
+                    pr[i].c[0].x = (y == 1 && x == 2 && z == 2) ? 9.0f : 1.0f; // one strongly directional probe under the ceiling
+                }
+        GI::FillInvalid(pr, valid, big);
+        float mean = 0.0f, mx = 0.0f;
+        for (int z = 1; z <= 3; ++z)
+            for (int x = 1; x <= 3; ++x) {
+                const float v = pr[GI::ProbeIndex(glm::ivec3(x, 2, z), big)].c[0].x;
+                mean += v / 9.0f;
+                mx = std::max(mx, v);
+            }
+        const float inplaneMean = (9.0f + 8.0f) / 9.0f; // the inner 3x3 of the row below
+        CHECK(std::abs(mean - inplaneMean) < 0.25f * inplaneMean);
+        CHECK(mx < 4.0f); // the old 6-neighbour average copied the 9 straight up
+        const glm::ivec3 d(3, 3, 3);
+        std::vector<GI::ProbeSH> q(27);
+        std::vector<bool> v2(27, true);
+        for (auto& p : q) p.c[0].x = 100.0f;                         // the inward row is hot
+        for (int z = 0; z < 3; ++z)
+            for (int x = 0; x < 3; ++x) q[GI::ProbeIndex(glm::ivec3(x, 2, z), d)].c[0].x = 5.0f; // the ceiling row is 5
+        const int top = GI::ProbeIndex(glm::ivec3(1, 2, 1), d);
+        v2[top] = false;
+        q[top].c[0].x = -7.0f;
+        GI::FillInvalid(q, v2, d);
+        CHECK(std::abs(q[top].c[0].x - 5.0f) < 1e-5f); // in-plane first, not the inward neighbour
+    }
     CHECK((GI::SplitCircuits(" Living ; Hall,,Living;") == std::vector<std::string>{"Living", "Hall"}));
 
     // Atlas packing: rows along x up to the width, then along z.

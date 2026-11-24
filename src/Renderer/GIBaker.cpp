@@ -137,6 +137,7 @@ bool GIBaker::Begin(World& world, const Options& opt) {
     m_Target = std::make_unique<HdrTarget>();
     m_Faces.assign((std::size_t)opt.FaceSize * opt.FaceSize * 4 * 6, 0.0f);
     m_StartTime = Now();
+    m_Nudged = 0;
     std::string names;
     for (const auto& v : m_Volumes)
         names += (names.empty() ? "" : ", ") + v.Name + " (" + std::to_string(v.Dims.x) + "x" + std::to_string(v.Dims.y) +
@@ -312,7 +313,9 @@ bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const R
         const VolumeJob& v = m_Volumes[jobs[k].Vol];
         const int pr = jobs[k].Probe;
         const glm::ivec3 ijk(pr % v.Dims.x, (pr / v.Dims.x) % v.Dims.y, pr / (v.Dims.x * v.Dims.y));
-        const glm::vec3 pos = v.Bounds.ToWorld(GI::ProbeLocal(ijk, v.Dims, v.Bounds.Half));
+        const glm::vec3 nudge = GI::FaceProbeNudge(ijk, v.Dims, v.Bounds.Half, m_Opt.FaceNudge);
+        if (!v.ValidKnown && nudge != glm::vec3(0.0f)) ++m_Nudged;
+        const glm::vec3 pos = v.Bounds.ToWorld(GI::ProbeLocal(ijk, v.Dims, v.Bounds.Half) + nudge);
         for (int f = 0; f < 6; ++f) {
             m_Target->BindForRender();
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -425,6 +428,7 @@ void GIBaker::EndPass() {
 }
 
 bool GIBaker::Finish(World& world, GIVolumes& gi) {
+    Log::Info("[GI bake] face probes nudged: " + std::to_string(m_Nudged) + Fmt(" (%.2f m inward)", m_Opt.FaceNudge));
     RestoreLighting(world);
     gi.SetOverride(nullptr);
     gi.SetSolo(nullptr);
