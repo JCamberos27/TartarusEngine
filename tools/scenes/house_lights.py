@@ -21,7 +21,7 @@ CLICK_OFF = 'assets/Audio/Foley/door/switch_off_1.wav;assets/Audio/Foley/door/sw
 # The toggle is a lit one (an old illuminated switch): a dim warm orange while its room is dark, out once the light is
 # on, so a switch can be found in a black room.
 ROCKER_MAT = 'assets/Props/Electrical/Materials/M_Light_Switch_White.mat'
-ROCKER_GLOW = dict(emissiveColor=[1.0, 0.33, 0.07], emissiveStrength=0.6)   # a pip you can find across a dark room
+ROCKER_GLOW = dict(emissiveColor=[1.0, 0.33, 0.07], emissiveStrength=0.18)   # a dim warm pip: 0.6 clipped the orange to cream
 
 # kind: the light; at: where on the fitting it sits ('below' its underside, 'shade' inside the shade near the top,
 # 'face' in front of a wall light); drop: metres below that point; I / R / K: intensity, range, colour temperature;
