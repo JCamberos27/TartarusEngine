@@ -19,7 +19,9 @@ ap.add_argument('--scene', default='project/scenes/Forest.json')
 ap.add_argument('--out', default=os.path.dirname(os.path.abspath(__file__)))
 ap.add_argument('--door-state', default='allOpen')
 ap.add_argument('--eye', type=float, default=1.6)
-ap.add_argument('--bounds', default=r'D:\Jacob\tblocks\descent\house-polish\atlas_fixtures\bounds_audit_final.json')
+ap.add_argument('--bounds', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bounds_audit.json'),
+                help='bounds audit JSON (rows id/name/face/value/status). Optional. Rows are checked against the scene by id AND name: an audit from before the #1216 renumbering is refused row by row')
+ap.add_argument('--descent-root', default=os.environ.get('DESCENT_ROOT', ''), help='the team folder (gi-p2 / gi-p1 sources of the walk-pop shots); empty = skip those shots')
 a = ap.parse_args()
 
 EYE = a.eye
@@ -91,6 +93,11 @@ def volume_holding(px, py, pz, vlist, margin=0.05):
         if m > bm: best, bm = v, m
     return (best, bm)
 
+def num(v):
+    return ('m' if v < 0 else 'p') + str(abs(int(round(v * 10))))
+def dkey(c):
+    """A door's key from its POSITION (x, z in 0.1 m), never its entity id: ids are renumbered by editor saves (#1216)."""
+    return 'door-x%s-z%s' % (num(c[0]), num(c[2]))
 def slug(s):
     return re.sub(r'[^a-z0-9]+', '-', s.lower()).strip('-')
 
@@ -220,7 +227,7 @@ for e in S.ents:
     nax = 0 if (hi[0] - lo[0]) < (hi[2] - lo[2]) else 2          # the thin axis = the door's normal
     c = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2]
     floor = GROUND_FLOOR if lo[1] < 1.5 else UPPER_FLOOR
-    doors.append({'id': e['id'], 'name': e.get('name', ''), 'ext': 'exterior' in e.get('name', ''), 'c': c, 'nax': nax, 'floor': floor, 'aabb': (lo, hi)})
+    doors.append({'id': e['id'], 'key': dkey(c), 'name': e.get('name', ''), 'ext': 'exterior' in e.get('name', ''), 'c': c, 'nax': nax, 'floor': floor, 'aabb': (lo, hi)})
 door_pts = [(d['c'][0], d['c'][2], d['floor']) for d in doors]
 for d in doors:
     n = (1, 0) if d['nax'] == 0 else (0, 1)
@@ -243,7 +250,7 @@ for d in doors:
             outside = m < 0.0
             yaw = yaw_of(-sgn * n[0], -sgn * n[1]); pitch = -math.degrees(math.atan2(EYE - 1.05, dd))
             for run in ('open', 'shut'):
-                add(run, 'door%d' % d['id'], '%s-%s' % (sname, dn), d['name'], None if outside else vol, (px, d['floor'], pz), yaw, pitch,
+                add(run, d['key'], '%s-%s' % (sname, dn), d['name'], None if outside else vol, (px, d['floor'], pz), yaw, pitch,
                     'door %d %s side %s %.1f m (%s)' % (d['id'], 'EXTERIOR' if d['ext'] else 'interior', sname, dd, 'outside' if outside else vol['name']), outside)
             sides.setdefault(sname, []).append({'dist': round(dd, 2), 'outside': outside})
     plan['doors'].append({'id': d['id'], 'name': d['name'], 'at': [round(d['c'][0], 2), round(d['c'][2], 2)], 'normal': 'xz'[d['nax'] // 2], 'sides': sides})
@@ -267,7 +274,7 @@ for d in [d for d in doors if d['ext']]:
     if out_sgn is None:
         plan['unresolved'].append({'door': d['id'], 'why': 'cannot tell the outside side'}); continue
     on = (out_sgn * n[0], out_sgn * n[1]); perp = (-on[1], on[0])
-    key = 'out-door%d' % d['id']
+    key = 'out-' + d['key']
     face = yaw_of(-on[0], -on[1])
     def place(col, dist, lat, yawoff, pitch, note):
         # try the pose, then pull in toward the door, until the spot is free (outside is not GI-covered)
@@ -361,8 +368,15 @@ for n_, (A, B, axis, gap, sname, floor, px, pz, clr) in enumerate(sorted(thr, ke
 # look toward the plane (and beyond) pitched down 20 deg, so a hard light edge shows on the floor and walls. Named after the light id.
 if os.path.exists(a.bounds):
     lpos = {e['id']: S.position(e) for e in S.ents if 'Light' in e and S.active(e)}
+    lname = {e['id']: e.get('name', '') for e in S.ents if 'Light' in e and S.active(e)}
+    _refused = 0
     for r in json.load(open(a.bounds, encoding='utf-8')):
-        if r['status'] == 'OK' or r['id'] not in lpos:
+        if r['status'] == 'OK':
+            continue
+        # entity ids were renumbered by #1216: an audit row only counts when the scene's light with that id has the row's NAME
+        # (a stale audit would otherwise place cameras at the wrong light). Names repeat, so the audit must be regenerated on this scene.
+        if r['id'] not in lpos or lname.get(r['id']) != r.get('name'):
+            _refused += 1
             continue
         lx, ly, lz = lpos[r['id']]
         ax = 0 if r['face'][1] == 'x' else 2
@@ -387,6 +401,9 @@ if os.path.exists(a.bounds):
             if done: break
         if not done:
             plan['unresolved'].append({'bounds_light': r['id'], 'face': r['face'], 'value': r['value'], 'why': 'no free in-volume spot 1-3.5 m back from the face'})
+    if _refused:
+        print('bounds audit: %d not-OK rows REFUSED (light id absent or its name differs in this scene: an audit from before the #1216 renumbering). '
+              'Regenerate it on this scene to get bounds shots.' % _refused)
 else:
     print('no bounds audit at', a.bounds, '-> no bounds shots')
 
@@ -432,10 +449,10 @@ jl(('open', 'shut'), 'jlook-porch-front', 'wide', 1.0, 17.0, GROUND_FLOOR, 90.0,
 
 # 2. red room (master bedroom, red bulbs 35598/35606/35608/35611) -> its doors, floor spill (image 3): from inside the red room through each
 # east door (20758 z 26.47, 20759 z 29.37; wall x -6.76), and back from the far side, floor-ward pitch -25
-for did, dz in ((20758, 26.47), (20759, 29.37)):
-    jl(('open',), 'jlook-red-door%d' % did, 'in-near', -8.3, dz, UPPER_FLOOR, 0.0, -25.0, 'Jacob 3: red room floor spill through door %d, 1.5 m inside' % did, False, ((0, 0.3), (0, -0.3), (-0.4, 0), (0.3, 0.6)))
-    jl(('open',), 'jlook-red-door%d' % did, 'in-far', -10.3, dz, UPPER_FLOOR, 0.0, -20.0, 'Jacob 3: red room floor spill through door %d, 3.5 m inside' % did, False, ((0, 0.4), (0, -0.4), (-0.4, 0)))
-    jl(('open',), 'jlook-red-door%d' % did, 'out-near', -5.0, dz, UPPER_FLOOR, 180.0, -25.0, 'Jacob 3: the spill edge seen from the far side of door %d' % did, False, ((0, 0.3), (0, -0.3), (0.4, 0)))
+for did, dz in (('z26', 26.47), ('z29', 29.37)):     # keys by position (door z), not by entity id (#1216 renumbered them)
+    jl(('open',), 'jlook-red-door-%s' % did, 'in-near', -8.3, dz, UPPER_FLOOR, 0.0, -25.0, 'Jacob 3: red room floor spill through the east door (z %s), 1.5 m inside' % did, False, ((0, 0.3), (0, -0.3), (-0.4, 0), (0.3, 0.6)))
+    jl(('open',), 'jlook-red-door-%s' % did, 'in-far', -10.3, dz, UPPER_FLOOR, 0.0, -20.0, 'Jacob 3: red room floor spill through the east door (z %s), 3.5 m inside' % did, False, ((0, 0.4), (0, -0.4), (-0.4, 0)))
+    jl(('open',), 'jlook-red-door-%s' % did, 'out-near', -5.0, dz, UPPER_FLOOR, 180.0, -25.0, 'Jacob 3: the spill edge seen from the far side of the east door (z %s)' % did, False, ((0, 0.3), (0, -0.3), (0.4, 0)))
 # the upper hall seen from the red room's door line down the hall (image 3 camera looks along the hall)
 jl(('open',), 'jlook-red-hall', 'along', -7.4, 27.0, UPPER_FLOOR, 0.0, -22.0, 'Jacob 3: from the master bedroom door down the upper hall', False, ((0, 0.5), (0, -0.5), (-0.5, 0)))
 
@@ -463,10 +480,10 @@ jl(('open',), 'jlook-tableB-line', 'ceil', -12.8, 23.8, UPPER_FLOOR, 90.0, 25.0,
 jl(('open',), 'jlook-south-wall-z20-3', 'view', -10.5, 23.0, GROUND_FLOOR, -90.0, -5.0, 'Atlas: Lamp_stand 19 (35613) -z edge z 20.3 = south window wall x -14.38..-6.78, floor 0.194 + ceiling 2.871 junctions + windows. AFTER 525e3a75 (fam4-south)', False, ((0, 0.3), (0.3, 0), (-0.3, 0), (0, -0.3)))
 # 6. FOUND_ISSUES row 111 (SM 2026-11-24 PM): doorway beside light 35614 Lamp_floor 20 (8.874, 30.39), doorway z 27.93..28.88 in wall x 9.148..9.342,
 #    upstairs. Is the 0.19 m threshold strip lit through the jamb? BEFORE af9eb895; AFTER dev/fix3-jambs 34ec488e (follow-up set). Door 20761 a/b shots already exist (baseline).
-jl(('open',), 'jlook-jamb-35614', 'west', 7.4, 28.4, UPPER_FLOOR, 0.0, -40.0, 'row 111: threshold strip x 9.148..9.342 of the doorway beside 35614, from the lamp side (west). PASS / lit strip', False, ((-0.3, 0), (-0.6, 0), (0, 0.3), (0, -0.3)))
-jl(('open',), 'jlook-jamb-35614', 'east', 11.1, 28.4, UPPER_FLOOR, 180.0, -40.0, 'row 111: same threshold strip from the far side (east)', False, ((0.3, 0), (0.6, 0), (0, 0.3), (0, -0.3)))
-jl(('open',), 'jlook-jamb-35601', 'threshold', -5.50, 26.15, UPPER_FLOOR, 180.0, -52.0, 'row 111 (Atlas): 35601/36406 threshold strip x -6.857..-6.663 at z 25.99..~26.3 next to the jamb end z 25.99, opening z 25.99..26.94. Even light up to the jamb = PASS, jamb-shadow wedge = lit strip', False, ((0, 0.2), (0.2, 0), (0, -0.2), (-0.2, 0)))
-jl(('open',), 'jlook-jamb-36400', 'threshold', -8.00, 29.05, UPPER_FLOOR, 0.0, -52.0, 'row 111 (Atlas): 36400 threshold strip x -6.857..-6.663 at z 28.90..~29.1 next to the jamb end z 28.90, opening z 28.90..29.85. Even light up to the jamb = PASS', False, ((0, 0.2), (-0.2, 0), (0, -0.2), (0.2, 0)))
+jl(('open',), 'jlook-jamb-x9', 'west', 7.4, 28.4, UPPER_FLOOR, 0.0, -40.0, 'row 111: threshold strip x 9.148..9.342 of the doorway beside 35614, from the lamp side (west). PASS / lit strip', False, ((-0.3, 0), (-0.6, 0), (0, 0.3), (0, -0.3)))
+jl(('open',), 'jlook-jamb-x9', 'east', 11.1, 28.4, UPPER_FLOOR, 180.0, -40.0, 'row 111: same threshold strip from the far side (east)', False, ((0.3, 0), (0.6, 0), (0, 0.3), (0, -0.3)))
+jl(('open',), 'jlook-jamb-z26', 'threshold', -5.50, 26.15, UPPER_FLOOR, 180.0, -52.0, 'row 111 (Atlas): 35601/36406 threshold strip x -6.857..-6.663 at z 25.99..~26.3 next to the jamb end z 25.99, opening z 25.99..26.94. Even light up to the jamb = PASS, jamb-shadow wedge = lit strip', False, ((0, 0.2), (0.2, 0), (0, -0.2), (-0.2, 0)))
+jl(('open',), 'jlook-jamb-z29', 'threshold', -8.00, 29.05, UPPER_FLOOR, 0.0, -52.0, 'row 111 (Atlas): 36400 threshold strip x -6.857..-6.663 at z 28.90..~29.1 next to the jamb end z 28.90, opening z 28.90..29.85. Even light up to the jamb = PASS', False, ((0, 0.2), (-0.2, 0), (0, -0.2), (0.2, 0)))
 # 7. SM PM add: night still of the main-facade siding east of the living-room bay, x 13.6..14.6, z 21.1..24.0 (outdoor pocket by the bay's east wall), from outside.
 #    EYES_ON: "lit strip on the siding? (family E)". BEFORE = this sweep; AFTER = follow-up set (Atlas family E trim + fills).
 jl(('open',), 'jlook-facade-bay-east', 'night', 16.5, 18.0, GROUND_FLOOR, 118.0, 3.0, 'SM PM: siding x 13.6..14.6, z 21.1..24.0 east of the living-room bay, from outside at night: lit strip on the siding? (family E)', True, ((0.5, 0), (-0.5, 0), (0, -0.5), (1.0, -0.5), (-1.0, -0.5), (0, -1.0), (1.0, 0), (-1.0, 0)))
@@ -482,26 +499,26 @@ jl(('open',), 'jlook-thin-caster', 'chandelier', 10.95, 24.6, GROUND_FLOOR, -90.
 print('jacob-look shots placed:', len(JL))
 
 # ---- fix-3 extras (SM 2026-11-24): Atlas dev/fix3-master-ceil 5802c9f0, master bedroom ceiling edge, no baseline exists --------
-for lid in (35598, 35611):
-    fx, fz = -9.27, 23.44
-    vol, _ = volume_holding(fx, UPPER_FLOOR + EYE, fz, vols_at_floor(UPPER_FLOOR))
-    add('open', 'bounds_%d' % lid, 'pz', G.room_of(vol['name']) if vol else 'master-bedroom', vol, (fx, UPPER_FLOOR, fz), 90.0, 30.0,
-        'fix-3 master bedroom ceiling edge (light %d), W6 extra for dev/fix3-master-ceil 5802c9f0' % lid)
-    plan.setdefault('bounds', []).append({'id': 'bounds-%d_pz' % lid, 'light': lid, 'face': '+z', 'status': 'fix3-extra', 'at': [fx, fz]})
+# (was one shot per master-bedroom red light, keyed by old entity ids 35598 / 35611 = the SAME pose twice; ids are renumbered, so ONE shot by name)
+fx, fz = -9.27, 23.44
+vol, _ = volume_holding(fx, UPPER_FLOOR + EYE, fz, vols_at_floor(UPPER_FLOOR))
+add('open', 'master-ceil-edge', 'pz', G.room_of(vol['name']) if vol else 'master-bedroom', vol, (fx, UPPER_FLOOR, fz), 90.0, 30.0,
+    'master bedroom ceiling edge across the red lights Bounds +z face (z 25.938), from (-9.27, 23.44) looking +z, pitch +30')
+plan.setdefault('bounds', []).append({'id': 'master-ceil-edge_pz', 'face': '+z', 'status': 'extra', 'at': [fx, fz]})
 
 # ---- fix-3 extra (SM 2026-11-24): den lamp 36409/36410 (dev/fix3-den-lamp b6ac15a8) on the den face of column 20599 (z 31.538) ----
 _fx, _fz = 0.30, 29.40
 _vol, _ = volume_holding(_fx, UPPER_FLOOR + EYE, _fz, vols_at_floor(UPPER_FLOOR))
-add('open', 'den-lamp-column20599', 'view', G.room_of(_vol['name']) if _vol else 'upstairs den', _vol, (_fx, UPPER_FLOOR, _fz), 90.0, 5.0,
+add('open', 'den-lamp-column', 'view', G.room_of(_vol['name']) if _vol else 'upstairs den', _vol, (_fx, UPPER_FLOOR, _fz), 90.0, 5.0,
     'fix-3 den lamp Lamp_stand 36409 / light 36410: bright patch on column 20599 at bulb height (CPU probe 0.386, house norm 0.35-0.54); flag if hot')
 
 # ---- Kronos walk-pop locations (SM 2026-11-24 PM): the COUNTED pops (full route 23, GI route 3) + the 2 fast ramps, by name -------------
 #      source gi-p2\kronos\doors\fix-3\seam_pops_tour_{full,gi}_route.md + routes_only.json (his walk waypoints). Frame index within a segment is
 #      not mapped to a position (his walk is interpolated), so each segment gets its two end poses + a midpoint pose. Open run only.
-_KR = r'D:\Jacob\tblocks\descent\gi-p2\kronos\doors\fix-3'
-_KW = r'D:\Jacob\tblocks\descent\gi-p1\argus\routes_only.json'
+_KR = os.path.join(a.descent_root, 'gi-p2', 'kronos', 'doors', 'fix-3')
+_KW = os.path.join(a.descent_root, 'gi-p1', 'argus', 'routes_only.json')
 def _kslug(x): return x.replace('_', '-')
-if os.path.exists(_KW) and os.path.isdir(_KR):
+if a.descent_root and os.path.exists(_KW) and os.path.isdir(_KR):
     _kw = {w['id']: w for w in json.load(open(_KW))['waypoints']}
     _segs = collections.OrderedDict()      # (a, b) -> {'tags': set}
     def _addseg(a_, b_, tag): _segs.setdefault((a_, b_), set()).add(tag)

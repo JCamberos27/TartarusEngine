@@ -18,38 +18,38 @@ match3 (7.7, 27.9, -130, -20), wall_e, wall_e_up, wall_w (control). Convention: 
 Camera positions are NOT engine-checked: if one sits inside a collider, nudge it and re-shoot. `sweep_tour_opt_bathdoor_retake.json`
 is obsolete (inside the bathroom).
 
+## Entity ids are renumbered (#1216): everything here is keyed by NAME / POSITION
+Waypoint ids never contain an entity id: doors are `door-x<m|p><x*10>-z<m|p><z*10>` (position of the door, e.g. `door-xm19-zp303`), thresholds
+`thrNN-<rooms>` (the NN follows scene order: look them up by their `at` position in `sweep_plan.json`), red-room doors `jlook-red-door-z26/z29`,
+jamb looks `jlook-jamb-x9 / -z26 / -z29`. Entity ids that remain inside waypoint NOTES are the pre-#1216 numbers and are history only.
+The bounds-audit shots (`--bounds bounds_audit.json`) are refused row by row unless the scene's light with that id has the row's name:
+regenerate the audit on the current scene (Atlas's `bounds_audit.py`) before expecting `bounds_*` shots.
+
 ## Run a tour (GPU, one engine job at a time)
-`run_sweep.ps1 -Out <dir> -Tour <tour.json> [-TimeoutMin 30] [-SceneSwap]` launches the Release engine hidden and muted:
-`TartarusEngine.exe --project <wt>\project --gi-tour <tour.json> --gi-tour-view full --out <dir>\png --perf-res 1920x1080`
-(`--gi-tour-view full` writes both `NN_<id>_full.png` and `NN_<id>_gi.png`). It refuses to run unless the runner worktree is clean
-(`-SceneSwap` allows only `project/scenes/Forest.json` dirty), the lock folder `locks\perf` names W6, no foreign engine is running
-and D: has 100 GB free. Idle cost about 2.2 s per shot. Output: PNGs, `sweep_summary.txt`, stdout/stderr.
-Example: `run_sweep.ps1 -Out house-polish\sweep_fix3\options\bathdoor_hall -Tour sweep_tour_opt_bathdoor_hall.json`.
+`run_sweep.ps1 -Out <dir> -Tour <tour.json> [-Runner <worktree>] [-TimeoutMin 30] [-SceneSwap] [-NoLock] [-LockOwner W6]` launches the Release engine
+hidden and muted: `TartarusEngine.exe --project <runner>\project --gi-tour <tour.json> --gi-tour-view full --out <dir>\png --perf-res 1920x1080`
+(`full` writes both `NN_<id>_full.png` and `NN_<id>_gi.png`). It refuses to run unless the runner is clean (`-SceneSwap` allows only
+`project/scenes/Forest.json` dirty), `<root>\locks\perf\owner.txt` names the owner (skip with `-NoLock` on a machine without the team folder), no foreign
+engine is running and the drive has 100 GB free. About 2.2 s per shot idle. Output: PNGs, `sweep_summary.txt`, stdout/stderr.
 
-## Generate the full sweep tours (CPU)
-`make_sweep_tour_v2.py` (run from a worktree root at the sha to sweep: `python -I <path>\make_sweep_tour_v2.py`; options `--scene`,
-`--out`, `--door-state`, `--eye`, `--bounds`) writes `sweep_tour_open.json` (doors all open: 35 room spots x (4 walls, ceiling, floor),
-thresholds, doors both sides near/far, outside, stairs; about 439 shots) and `sweep_tour_shut.json` (doors as authored, about 97 shots)
-plus `sweep_plan.json` and a dry check of the cameras (`SWEEP_DRYCHECK.md`, 0 camera problems expected). It reads the bounds audit
-`bounds_audit_final.json` (not in git). The big tours are not committed: regenerate them.
+## Generate tours (CPU)
+Run from a worktree root at the sha to sweep (it needs `tools/gi/gi_audit.py` and `project/scenes/Forest.json`):
+`python -I tools/descent/briareos/make_sweep_tour_v2.py --out <gen dir> [--bounds <audit.json>] [--descent-root <team folder>]` writes `sweep_tour_open.json`
+(doors all open: room spots x (4 walls, ceiling, floor), thresholds, doors both sides near/far, outside, stairs, the look poses; ~370 shots),
+`sweep_tour_shut.json` (doors as authored, ~97 shots), `sweep_plan.json` and a dry check (`SWEEP_DRYCHECK.md`). Not committed: regenerate.
+`make_look_tour.py --gen <gen dir> --out <dir>/sweep_tour_look4.json [--extra more.json]` picks the compact LOOK tour (master ceiling line, south wall fade, hall
+line, the three known seams by position, plus the `--extra` tours, e.g. `sweep_tour_opt_bathdoor_hall.json`) and writes `<out>_groups.json`.
 
-## Contact sheets and the look sheet (CPU, Python with Pillow + numpy)
-- `make_sweep_sheets.py --run baseline=<png dir> [--run after=<png dir>] --out <dir> [--thumb 480]`: one sheet per camera group, rows
-  per run (full, then gi), thumbnails labelled with the PNG name, pairs runs by waypoint id; also writes `index.html`.
-- `make_look_sheet.py` (`python -I`): Jacob's look sheet `look_sheet\look_sheet.html` + panels: a KNOWN section (seams thr24 / thr07 /
-  thr02, door 20756 strip, master bedroom ceiling diagonal) and OPTIONS before/after (35613 south, hall line, kitchen half wall).
-  Inputs are the `sweep_fix3` PNG folders; edit `B`, `FIX`, `BASE` at the top.
-- `hard_edge_scan.py`: candidate list of hard lighting edges in the shots (`HARD_EDGES.md`; mostly geometry, a candidate list only).
-- `EYES_ON_TEMPLATE.md`, `EYES_ON_SWEEP_677c753d.md`: how the shots are read and what was found at 677c753d.
-- `JACOB_WALK_STEPS.md` / `WALK_POPS.md`: steps and pops for Jacob's own walk (29 uncounted steps + 2 ramps).
-- `BOUNDS_COVERAGE.md`: which GI bounds the tour covers.
-
-## Option stills (before/after, scene patch applied then restored)
-`run_options.ps1` / `run_options_rest.ps1` run `sweep_tour_opt_*.json` on the runner: AS-BUILT, then each option's `Forest.json`
-patch from `optpatches/` (tableb 6c4b9d89, south 525e3a75, hallline d26b5d3c) via `git apply`, one engine run, then
-`git checkout -- project/scenes/Forest.json`. `make_option_tours.py` builds the `sweep_tour_opt_*.json` files. The tableB option is dropped.
+## Sheets (CPU, Python with Pillow + numpy)
+- `make_look_sheet4.py --tour <look tour> --before <png dir> --after <png dir> --out <dir> [--gi] [--note GROUP=text]`: per shot BEFORE | AFTER | difference x6
+  (same pose both times), grouped as in the look tour; `look_sheet.html` + `panels\`.
+- `make_sweep_sheets.py --run baseline=<png dir> [--run after=<png dir>] --out <dir> [--thumb 480]`: contact sheets per camera group for the full sweeps, pairs by waypoint id.
+- `hard_edge_scan.py`: candidate list of hard lighting edges in the shots (mostly geometry; a candidate list only).
+- `EYES_ON_TEMPLATE.md`, `EYES_ON_SWEEP_677c753d.md` (history, pre-#1216 ids): how the shots are read. `JACOB_WALK_STEPS.md` / `WALK_POPS.md`: steps and pops for Jacob's walk.
+  `BOUNDS_COVERAGE.md`: which GI bounds the tour covered.
+- Removed (pre-#1216 scene patches and the fix-3 look sheet): `run_options*.ps1`, `optpatches\`, `make_look_sheet.py`, `make_option_tours.py`: the options they previewed are now the fix4 scripts.
 
 ## Gotchas
-- Python strings with `\f \b \a` eat Windows paths: use raw strings.
+- Python strings with `  ` eat Windows paths: use raw strings (and the Edit tool, not a python heredoc, for edits that contain them).
 - Never run the engine in a compile-only build dir; the GPU runner is the only place for engine, tour and bake runs.
 - Every perf number from the girlfriend's PC is "DESKTOP-GQKO56V, RAM 2133 (XMP off)".

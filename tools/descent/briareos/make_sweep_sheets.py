@@ -17,8 +17,7 @@ ap.add_argument('--only', action='append', default=[], help='only camera groups 
 a = ap.parse_args()
 # 2026-11-24 (SM): fix-3 tours were regenerated (tree blocker): these camera groups have a different pose than the 99579b4e baseline.
 # Pairing is by id (the NNN_ prefix is stripped), never by index.
-NOBASE = {'den-lamp-column20599': 'new in fix-3 (no baseline)',
-          'bounds-35598': 'new in fix-3 (no baseline)', 'bounds-35611': 'new in fix-3 (no baseline)',
+NOBASE = {'den-lamp-column': 'new (no baseline)', 'master-ceil-edge': 'new (no baseline)',
           'living-room-spot4': 'old pose was inside the Christmas tree',
           'living-room': 'pose moved (tree blocker)', 'living-room-spot2': 'pose moved (tree blocker)', 'living-room-spot5': 'pose moved (tree blocker)'}
 for n in a.nobase:
