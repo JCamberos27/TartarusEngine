@@ -175,7 +175,7 @@ uniform float uSpotShadowHalfTan[16]; // tan(half-FOV) of each spot's map — th
                                      // 90° cube face gives; a narrow spot was over-offsetting (#134)
 uniform float uSpotShadowBias[16];       // per-light x depth bias   (#140 phase 2, default 1.0)
 uniform float uSpotShadowNormalBias[16]; // per-light x normal offset
-uniform float uSpotShadowSoftness[16];   // per-light x PCF tap spread
+uniform float uSpotShadowSoftness[16];   // PCF radius in spot-map texels (SpotShadowMap::KernelTexels), 0 = hard
 uniform float uSpotShadowWeight[16];     // 0..1: the slot's shadow fading in or out (LightGather, GI Phase 1)
 layout(binding = 9) uniform sampler2DArrayShadow uSpotShadowMap;
 uniform float uSpotShadowMapResolution; // known CPU-side (SpotShadowMap::Configure) (#190)
@@ -596,10 +596,13 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
     return vis;
 }
 
+float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float radiusW, float biasW, float far);
+
 // Visibility from a spot light's shadow map. 1 = lit, 0 = shadowed. The map stores LINEAR
 // distance-to-light / far, so the compare reference is distance(fragment, light) / far and a
-// constant bias is uniform in world space — the shadow reaches the whole light Range. 4-tap PCF.
-float SpotShadow(int slot, vec3 worldPos, vec3 N) {
+// constant bias is uniform in world space — the shadow reaches the whole light Range. Softness 0 is one hard compare;
+// otherwise the point lights' receiver-plane PCF (ShadowPlanePCF, kind 1), blended in by the geometric N.L.
+float SpotShadow(int slot, vec3 worldPos, vec3 N, vec3 geoN) {
     if (slot < 0 || slot >= uSpotShadowCount || uNoReceiveShadows == 1) return 1.0;
     // The depth pass stores the light-facing surface (back-face cull), so a caster's own lit side
     // CAN self-shadow — the bias below has to cover one shadow-texel of slope error, but no more,
@@ -624,14 +627,15 @@ float SpotShadow(int slot, vec3 worldPos, vec3 N) {
     // Depth bias = one shadow texel of world size (a bit more at grazing angles, where the stored
     // surface slopes fastest across a texel). Range-independent, unlike the old `d/far - 0.00035`
     // whose gap grew to centimetres on a long-range light (#134).
-    float ref = (d - texelW * (1.0 + 2.0 * (1.0 - nl)) * uSpotShadowBias[slot]) / far;
-    vec2 texel = (1.0 / vec2(uSpotShadowMapResolution)) * max(uSpotShadowSoftness[slot], 0.0);
-    float vis = 0.0;
-    vis += texture(uSpotShadowMap, vec4(p.xy + vec2(-0.5, -0.5) * texel, float(slot), ref));
-    vis += texture(uSpotShadowMap, vec4(p.xy + vec2( 0.5, -0.5) * texel, float(slot), ref));
-    vis += texture(uSpotShadowMap, vec4(p.xy + vec2(-0.5,  0.5) * texel, float(slot), ref));
-    vis += texture(uSpotShadowMap, vec4(p.xy + vec2( 0.5,  0.5) * texel, float(slot), ref));
-    return mix(1.0, vis * 0.25, uSpotShadowWeight[slot]);
+    float biasW = texelW * (1.0 + 2.0 * (1.0 - nl)) * uSpotShadowBias[slot];
+    float kernel = uSpotShadowSoftness[slot];
+    float nlG = dot(geoN, toL / max(d0, 1e-4));
+    float soft = kernel > 0.0 ? smoothstep(0.03, 0.10, nlG) : 0.0;
+    float vis = 1.0;
+    if (soft < 1.0) vis = texture(uSpotShadowMap, vec4(p.xy, float(slot), (d - biasW) / far));
+    if (soft > 0.0)
+        vis = mix(vis, ShadowPlanePCF(1, slot, biasedPos - uSpotShadowPos[slot], d, geoN, kernel * texelW, biasW, far), soft);
+    return mix(1.0, vis, uSpotShadowWeight[slot]);
 }
 
 // Point PCF (fix-3 S2): a fixed Poisson disk of radius `radiusW` (world units at the receiver) in the plane
@@ -639,7 +643,19 @@ float SpotShadow(int slot, vec3 worldPos, vec3 N) {
 // light to the RECEIVER'S PLANE along that tap's own direction (receiver-plane depth), not against d: a tilted wall
 // is then not shadowed by itself across the kernel, so no kernel-sized bias (and no peter-panning) is needed. Same
 // 4-probe early-out as SampleCascade: fully lit or fully shadowed pixels cost 4 taps, only the penumbra 16.
-float PointShadowPCF(int slot, vec3 dir, float d, vec3 N, float radiusW, float biasW, float far) {
+// One tap of the shared PCF: `u` is the light->tap world vector, `ref` the compare distance / far. Spot taps outside
+// the cone or behind the light count as lit, as SpotShadow's own early-outs do.
+float ShadowTap(int kind, int slot, vec3 u, float ref) {
+    if (kind == 0) return texture(uPointShadowMap, vec4(u, float(slot)), ref);
+    vec4 lp = uSpotShadowVP[slot] * vec4(uSpotShadowPos[slot] + u, 1.0);
+    if (lp.w <= 0.0) return 1.0;
+    vec2 q = (lp.xy / lp.w) * 0.5 + 0.5;
+    if (any(lessThan(q, vec2(0.0))) || any(greaterThan(q, vec2(1.0)))) return 1.0;
+    return texture(uSpotShadowMap, vec4(q, float(slot), ref));
+}
+
+// kind 0 = a point light's cube, 1 = a spot's map (fix-3: the spots' 4-tap filter left ~6 cm stair-stepped edges).
+float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float radiusW, float biasW, float far) {
     vec3 w = dir / d;
     vec3 t = normalize(cross(abs(w.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), w));
     vec3 b = cross(w, t);
@@ -655,7 +671,7 @@ float PointShadowPCF(int slot, vec3 dir, float d, vec3 N, float radiusW, float b
         float un = dot(u, N);
         // Receiver-plane distance along u: d * (pn / un) * |u| / d; clamp so a near-parallel tap can't run away.
         float tPlane = (un < -1e-4) ? clamp(pn / un, 0.5, 2.0) * length(u) : d;
-        vis += texture(uPointShadowMap, vec4(u, float(slot)), (tPlane - biasW) / far);
+        vis += ShadowTap(kind, slot, u, (tPlane - biasW) / far);
         if (i == 3) {
             if (vis <= 0.0) return 0.0; // all 4 probes shadowed
             if (vis >= 4.0) return 1.0; // all 4 probes lit
@@ -689,7 +705,7 @@ float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N, vec3 geoN) {
     float vis = 1.0;
     if (soft < 1.0) vis = texture(uPointShadowMap, vec4(dir, float(slot)), (d - biasW) / far);
     if (soft > 0.0)
-        vis = mix(vis, PointShadowPCF(slot, dir, d, geoN, kernel * 2.0 * d / uPointShadowMapResolution, biasW, far), soft);
+        vis = mix(vis, ShadowPlanePCF(0, slot, dir, d, geoN, kernel * 2.0 * d / uPointShadowMapResolution, biasW, far), soft);
     return mix(1.0, vis, uPointShadowWeight[slot]);
 }
 
@@ -737,7 +753,7 @@ bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance) {
         // the far edge of the cone/range falloff is already at atten==0 here, so this skips a
         // full shadow-array texture fetch that would just get multiplied away.
         if (atten <= 0.0) return false;
-        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N); // #119
+        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N, geoN); // #119
     } else {
         if (atten <= 0.0) return false;
         atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N, geoN); // #119

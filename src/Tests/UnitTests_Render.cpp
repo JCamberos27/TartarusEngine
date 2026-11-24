@@ -932,7 +932,10 @@ void ShaderConstantsMatch() {
     CHECK(has(shading, "uniform float uPointShadowSoftness[" + n(PointShadowMap::kMaxPoints) + "];"));
     CHECK(has(shading, "float soft = kernel > 0.0 ? smoothstep(0.03, 0.10, nlG) : 0.0;"));
     CHECK(has(shading, "bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance)"));
-    CHECK(has(shading, "float PointShadowPCF(int slot, vec3 dir, float d, vec3 N, float radiusW, float biasW, float far)"));
+    CHECK(has(shading, "float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float radiusW, float biasW, float far) {"));
+    // fix-3 spot PCF: SpotShadow takes the geometric normal and the shared PCF (kind 1).
+    CHECK(has(shading, "float SpotShadow(int slot, vec3 worldPos, vec3 N, vec3 geoN) {"));
+    CHECK(has(shading, "ShadowPlanePCF(1, slot, biasedPos - uSpotShadowPos[slot], d, geoN, kernel * texelW, biasW, far)"));
     CHECK(has(shading, "        vec2 o = kPoisson16[k] * radiusW;")); // a fixed disk: no per-pixel rotation grain
 }
 

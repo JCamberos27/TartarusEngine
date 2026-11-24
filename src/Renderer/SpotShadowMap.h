@@ -18,6 +18,15 @@ public:
     // (World::MaxSpotShadows) picks how many layers are actually allocated and rendered.
     static constexpr int kMaxSpots = ShadowLimits::kMaxSpots;
 
+    // Spot PCF (fix-3): the filter radius in spot-map texels for a light's Shadow Softness (the shader's
+    // uSpotShadowSoftness[]). Softness <= 0 (or NaN) returns 0 = one hard compare. Otherwise 1 x softness texels,
+    // clamped to [0.5, 4] (the point lights' cap: wider fixed disks ghost thin casters): a spot texel is ~3.5x a point cube texel (80-degree spot: 1.7 cm at 2.5 m), so x1 puts a
+    // ceiling spot's penumbra close to a point light's at the same Softness (kitchen 1.3 -> ~4.4 cm, hall 2.5 -> 8.5 cm).
+    static constexpr float kKernelPerSoftness = 1.0f;
+    static constexpr float kKernelMinTexels = 0.5f;
+    static constexpr float kKernelMaxTexels = 4.0f;
+    static float KernelTexels(float softness);
+
     SpotShadowMap() = default;
     SpotShadowMap(const SpotShadowMap&) = delete;
     SpotShadowMap& operator=(const SpotShadowMap&) = delete;
