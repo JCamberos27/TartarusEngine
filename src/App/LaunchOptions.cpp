@@ -111,9 +111,10 @@ const FlagDef kFlags[] = {
     {"--gi-only", Arity::Required, "name", false, kNoMode, Bit(LaunchMode::BakeGI),
      [](LaunchOptions& o, const std::string& v) { o.bakeGiOnly = v; },
      "bake only the GI Volumes whose name contains this"},
-    {"--bake-gi-doors", Arity::Required, "start|open|shut", false, kNoMode, Bit(LaunchMode::BakeGI),
+    {"--bake-gi-doors", Arity::Required, "start|open|shut|hidden", false, kNoMode, Bit(LaunchMode::BakeGI),
      [](LaunchOptions& o, const std::string& v) { o.bakeGiDoors = v; },
-     "the doors in the GI captures: as Play starts them (default), all open, or all shut as authored"},
+     "the doors in the GI captures: as Play starts them (default), all open, all shut as authored, or the interior "
+     "door leaves hidden (the rest shut)"},
     {"--weapon-lab", Arity::None, "", false, kNoMode, kGuiModes,
      [](LaunchOptions& o, const std::string&) { o.weaponLabMode = true; },
      "the WeaponLab scene with the Weapon Lab panel"},
@@ -291,8 +292,9 @@ bool ParseLaunchOptions(int argc, char** argv, LaunchOptions& out, std::string& 
     // run-weapon-lab.cmd starts the exe without arguments; only the windowed modes take it, as they do --weapon-lab.
     if (Env::Flag(Env::Var::WeaponLab) && (kGuiModes & Bit(o.mode))) o.weaponLabMode = true;
 
-    if (o.bakeGiDoors != "start" && o.bakeGiDoors != "open" && o.bakeGiDoors != "shut") {
-        error = "'--bake-gi-doors' takes start, open or shut";
+    if (o.bakeGiDoors != "start" && o.bakeGiDoors != "open" && o.bakeGiDoors != "shut" &&
+        o.bakeGiDoors != "hidden") {
+        error = "'--bake-gi-doors' takes start, open, shut or hidden";
         return false;
     }
     if (o.giTourView != "full" && o.giTourView != "gi" && o.giTourView != "nogi") {
