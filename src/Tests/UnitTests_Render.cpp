@@ -442,6 +442,17 @@ void InstanceImportId() {
 // The froxel jitter's blue noise: every one of the 1024 ranks exactly once, and an even scatter -
 // the first eighth of the ranks never has two points as neighbours (a white-noise pick of 128 out
 // of 1024 cells almost surely would).
+void VolumetricInscatterCap() {
+    CHECK(VolumetricFog::CapInscatter(0.3f, 2.0f) == 0.3f && VolumetricFog::CapInscatter(1.0f, 2.0f) == 1.0f); // below the knee: untouched
+    CHECK(VolumetricFog::CapInscatter(50.0f, 0.0f) == 50.0f);                                                   // 0 = off
+    float prev = 1.0f;
+    for (float l = 1.0f; l < 1000.0f; l *= 1.3f) {
+        const float c = VolumetricFog::CapInscatter(l, 2.0f);
+        CHECK(c >= prev - 1e-6f && c <= 2.0f && c <= l + 1e-6f); // monotone, bounded by the cap, never brighter than the input
+        prev = c;
+    }
+    CHECK(std::fabs(VolumetricFog::CapInscatter(1.0001f, 2.0f) - VolumetricFog::CapInscatter(0.9999f, 2.0f)) < 1e-3f); // continuous at the knee
+}
 void VolumetricBlueNoise() {
     unsigned short ranks[32 * 32];
     VolumetricFog::BuildBlueNoise(ranks);
@@ -2375,6 +2386,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Scene wind: settings round-trip, old-scene defaults, one bearing convention", SceneWindSettings});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});
+    tests.push_back({"Volumetric fog: the in-scatter soft cap is identity below the knee, monotone and bounded", VolumetricInscatterCap});
     tests.push_back({"Volumetric fog: settings and Volumetric Intensity round-trip; old scenes default off / 1", VolumetricSettingsRoundTrip});
     tests.push_back({"TAA mode + rain wetness round-trip; old scenes keep MSAA/FXAA and stay dry; jitter un-jitters", TaaAndWetnessRoundTrip});
     tests.push_back({"Fur: shell count follows the hair's size on screen", FurShellLod});

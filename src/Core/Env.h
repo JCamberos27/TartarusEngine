@@ -28,6 +28,7 @@
     X(LightsOn, "TARTARUS_LIGHTS_ON", Flag, "smoke shots: 1 = every light circuit on, 0 = as the switches start")     \
     X(LightsOnly, "TARTARUS_LIGHTS_ONLY", Str, "smoke shots: only these ';'-separated light circuits on (leak checks)") \
     X(TourMaxPoints, "TARTARUS_TOUR_MAX_POINTS", Int, "--gi-tour: the scene's Max point shadows for this run (perf sweeps)") \
+    X(VolInscatterCap, "TARTARUS_VOL_INSCATTER_CAP", Float, "volumetric fog: soft cap on the integrated in-scatter luminance (A/B; 0 = off)") \
     X(ShotCameras, "TARTARUS_SHOT_CAMERAS", List, "--smoke-shots: 'name:x,y,z,yaw,pitch;...' poses to capture")  \
     X(ShotStart, "TARTARUS_SHOT_START", Int, "--smoke-shots: frame of the first shot-camera capture (default 40)")    \
     X(ShotFov, "TARTARUS_SHOT_FOV", Float, "--smoke-shots: Scene-view FOV for shot cameras")                          \

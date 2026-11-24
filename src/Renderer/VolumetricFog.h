@@ -40,6 +40,14 @@ public:
     // The integrated volume's texture unit, read by ModelShading.glsl (kept out of the material
     // units: ShaderAsset stops at 26).
     static constexpr int kVolumeUnit = 27;
+    // Soft cap on the integrated in-scatter's luminance (linear, before exposure). A long ray that looks near a light with
+    // a strongly forward phase (the moon at Volumetric Intensity 4, anisotropy 0.8) piles up in-scatter and clips to white;
+    // above half of this the luminance rolls off toward it (hue kept), so the light keeps its glow without a white wedge.
+    // 0 = off. TARTARUS_VOL_INSCATTER_CAP overrides it for A/B runs.
+    static constexpr float kInscatterCap = 2.0f;
+    // The cap's curve (the CPU twin of VolumetricIntegrate.comp.glsl's SoftCapLuminance): identity up to cap / 2, then
+    // k + (cap - k) * (1 - exp(-(l - k) / (cap - k))), which stays below `cap`. cap <= 0 returns `lum` unchanged.
+    static float CapInscatter(float lum, float cap);
 
     VolumetricFog();
     ~VolumetricFog();
