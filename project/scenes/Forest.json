@@ -412318,7 +412318,7 @@
   ],
   "libraryPrefabs": [],
   "librarySounds": [],
-  "maxPointShadows": 12,
+  "maxPointShadows": 4,
   "maxSpotShadows": 8,
   "models": [
     {
