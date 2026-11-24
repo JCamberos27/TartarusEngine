@@ -36,6 +36,8 @@
 #define GL_FRAGMENT_SHADER 0x8B30
 #define GL_COMPILE_STATUS 0x8B81
 #define GL_LINK_STATUS 0x8B82
+#define GL_ACTIVE_UNIFORMS 0x8B86
+#define GL_ACTIVE_UNIFORM_MAX_LENGTH 0x8B87
 #define GL_INFO_LOG_LENGTH 0x8B84
 #define GL_LEQUAL 0x0203
 #define GL_LESS 0x0201
@@ -372,6 +374,9 @@ typedef void (__stdcall* PFNGLGETPROGRAMINFOLOGPROC)(GLuint, GLsizei, GLsizei*, 
 typedef void (__stdcall* PFNGLUSEPROGRAMPROC)(GLuint);
 typedef void (__stdcall* PFNGLDELETEPROGRAMPROC)(GLuint);
 typedef GLint (__stdcall* PFNGLGETUNIFORMLOCATIONPROC)(GLuint, const GLchar*);
+typedef GLboolean (__stdcall* PFNGLISPROGRAMPROC)(GLuint);
+typedef void (__stdcall* PFNGLGETACTIVEUNIFORMPROC)(GLuint, GLuint, GLsizei, GLsizei*, GLint*, GLenum*, GLchar*);
+typedef void (__stdcall* PFNGLGETUNIFORMIVPROC)(GLuint, GLint, GLint*);
 typedef void (__stdcall* PFNGLUNIFORMMATRIX4FVPROC)(GLint, GLsizei, GLboolean, const GLfloat*);
 typedef void (__stdcall* PFNGLUNIFORM2FPROC)(GLint, GLfloat, GLfloat);
 typedef void (__stdcall* PFNGLUNIFORM1IPROC)(GLint, GLint);
@@ -482,6 +487,9 @@ extern TARTARUS_CORE_API PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
 extern TARTARUS_CORE_API PFNGLUSEPROGRAMPROC glUseProgram;
 extern TARTARUS_CORE_API PFNGLDELETEPROGRAMPROC glDeleteProgram;
 extern TARTARUS_CORE_API PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;
+extern TARTARUS_CORE_API PFNGLISPROGRAMPROC glIsProgram;
+extern TARTARUS_CORE_API PFNGLGETACTIVEUNIFORMPROC glGetActiveUniform;
+extern TARTARUS_CORE_API PFNGLGETUNIFORMIVPROC glGetUniformiv;
 extern TARTARUS_CORE_API PFNGLUNIFORMMATRIX4FVPROC glUniformMatrix4fv;
 extern TARTARUS_CORE_API PFNGLUNIFORM2FPROC glUniform2f;
 extern TARTARUS_CORE_API PFNGLUNIFORM1IPROC glUniform1i;
