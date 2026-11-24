@@ -32,6 +32,9 @@ public:
         std::string Only;           // bake only volumes whose name contains this ("" = all)
         int FaceSize = 32;          // cube face texels
         int Bounces = 2;
+        // Probes on a box face (the boxes stop inside the wall / ceiling slab) are captured this many metres inside it, so they
+        // see open air, not back faces (GI::FaceProbeNudge; Jacob #5 ceiling ring). 0 = captured on the face as before.
+        float FaceNudge = 0.15f;
         float InvalidBackfaces = 0.2f; // a probe seeing more than this share of back faces (by solid angle) is invalid
         float Emissive = 0.0f;      // emission kept in the captures (the light itself already lights the room)
         int ProbesPerFrame = 24;    // the frame's own views and shadows cost the same however many probes it does
@@ -105,6 +108,7 @@ private:
     // Per bounce, the volumes' bakes as they fill (the last bounce is what's written).
     std::vector<std::shared_ptr<GI::BakeFile>> m_Bakes;
     int m_Pass = -1, m_Vol = 0, m_Probe = 0, m_Settle = 0;
+    int m_Nudged = 0;                    // first-pass face probes captured nudged inward (logged at the end of pass 1)
     long long m_Done = 0, m_Total = 0;
     std::unique_ptr<HdrTarget> m_Target;
     std::vector<float> m_Faces;
