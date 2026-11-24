@@ -280,7 +280,10 @@ public:
     bool Frame();
     int Finish();
     // The frame loop hit an exception: Play reverted and a recovery snapshot written while the editor and world exist.
-    void EmergencyRecoverySave() { if (!headless) editor.EmergencyRecoverySave(world, assets); }
+    void EmergencyRecoverySave() {
+        if (giBaker) giBaker->RestoreDoors(world); // a --bake-gi's posed doors are never written into the recovery file
+        if (!headless) editor.EmergencyRecoverySave(world, assets);
+    }
 
 private:
     // Runs a statement at its place in the member order.
@@ -288,6 +291,7 @@ private:
         template <typename F> explicit Step(F&& f) { f(); }
     };
     void ShutdownEditor() {
+        if (giBaker) giBaker->RestoreDoors(world); // a bake closed before Finish leaves no posed door behind
         editor.Shutdown();
         editorModule.Shutdown();
         AppAudioMuter::Shutdown();
@@ -1762,7 +1766,9 @@ bool AppSession::Frame() {
     { PROFILE_SCOPE("Asset Pump"); assets.PumpAsync(AssetLibrary::PumpBudgetMs(playing, OutfitSystem::AnyPending(), lastFrameWorkMs)); }
     { PROFILE_SCOPE("Outfit Pending");
       // #15 - an edit made without an undo step stays its own step, not part of the baseline the landing makes.
-      if (!playerMode && OutfitSystem::LandingDue(world)) editor.JournalBeforeOutfitLanding(world);
+      // Not while --bake-gi has the doors posed: they would be journaled as an "Unrecorded Change" undo step.
+      if (!playerMode && !(giBaker && giBaker->DoorsPosed()) && OutfitSystem::LandingDue(world))
+          editor.JournalBeforeOutfitLanding(world);
       OutfitSystem::UpdatePending(world, assets); }
     { PROFILE_SCOPE("Outfit Hiding"); OutfitSystem::UpdateHiding(world); } // outfit skin under clothing (only when an outfit's pieces changed)
     }

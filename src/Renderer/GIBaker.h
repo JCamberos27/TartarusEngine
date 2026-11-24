@@ -63,6 +63,12 @@ public:
               const std::function<void(const glm::vec3&)>& moveCamera);
     bool Failed() const { return !m_Error.empty(); }
     const std::string& Error() const { return m_Error; }
+    // True from Begin until the doors are put back (Finish, an error): the scene in memory then holds posed doors that
+    // must never reach an undo step, a save or a recovery file.
+    bool DoorsPosed() const { return m_DoorsPosed; }
+    // The openables as loaded again (a no-op once done). RestoreLighting calls it; the app also calls it before an
+    // emergency recovery save and at shutdown, for a bake that ends without Finish.
+    void RestoreDoors(World& world);
     // Progress 0..1 and a line for the log.
     float Progress() const;
 

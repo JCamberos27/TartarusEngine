@@ -198,13 +198,16 @@ void GIBaker::RestoreLighting(World& world) {
     LightSwitch::Stop(world); // the switches and circuits as authored again (Play starts them from Start On)
     if (m_LightingSaved) world.Render.SkyAmbientIntensity = m_SkyAmbient;
     m_LightingSaved = false;
-    if (m_DoorsPosed) { // the openables as loaded: the posed doors never reach an undo step or a save
-        Openable::Restore(world, m_DoorsSaved);
-        m_DoorsSaved.clear();
-        m_DoorsPosed = false;
-        world.RebuildWorldTransformCache();
-    }
+    RestoreDoors(world); // the openables as loaded: the posed doors never reach an undo step or a save
     world.SyncActiveInHierarchy();
+}
+
+void GIBaker::RestoreDoors(World& world) {
+    if (!m_DoorsPosed) return;
+    Openable::Restore(world, m_DoorsSaved);
+    m_DoorsSaved.clear();
+    m_DoorsPosed = false;
+    world.RebuildWorldTransformCache();
 }
 
 bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const RenderFrameContext&)>& draw,
