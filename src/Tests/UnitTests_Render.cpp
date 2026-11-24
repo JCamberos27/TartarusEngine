@@ -933,6 +933,7 @@ void ShaderConstantsMatch() {
     CHECK(has(shading, "float soft = kernel > 0.0 ? smoothstep(0.03, 0.10, nlG) : 0.0;"));
     CHECK(has(shading, "bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance)"));
     CHECK(has(shading, "float PointShadowPCF(int slot, vec3 dir, float d, vec3 N, float radiusW, float biasW, float far)"));
+    CHECK(has(shading, "        vec2 o = kPoisson16[k] * radiusW;")); // a fixed disk: no per-pixel rotation grain
 }
 
 void GIVolumeLookup() {

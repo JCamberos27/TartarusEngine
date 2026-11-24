@@ -634,7 +634,7 @@ float SpotShadow(int slot, vec3 worldPos, vec3 N) {
     return mix(1.0, vis * 0.25, uSpotShadowWeight[slot]);
 }
 
-// Point PCF (fix-3 S2): a rotated Poisson disk of radius `radiusW` (world units at the receiver) in the plane
+// Point PCF (fix-3 S2): a fixed Poisson disk of radius `radiusW` (world units at the receiver) in the plane
 // perpendicular to the light->receiver direction `dir` (length d). Each tap compares against the distance from the
 // light to the RECEIVER'S PLANE along that tap's own direction (receiver-plane depth), not against d: a tilted wall
 // is then not shadowed by itself across the kernel, so no kernel-sized bias (and no peter-panning) is needed. Same
@@ -643,14 +643,14 @@ float PointShadowPCF(int slot, vec3 dir, float d, vec3 N, float radiusW, float b
     vec3 w = dir / d;
     vec3 t = normalize(cross(abs(w.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), w));
     vec3 b = cross(w, t);
-    float rot = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
-    float s = sin(rot), co = cos(rot);
-    mat2 R = mat2(co, s, -s, co);
+    // A FIXED disk, not the sun's per-pixel random rotation: with MSAA and no TAA nothing averages the rotation's
+    // per-pixel noise, so the penumbra showed as grain (fix-3 PCF check, den 35599). 16 fixed taps over a few cube
+    // texels, each a 2x2 hardware compare, give a smooth gradient instead.
     float pn = dot(dir, N); // light->receiver . N (the geometric normal): < 0 here (callers blend in at N.L >= 0.03)
     float vis = 0.0;
     for (int i = 0; i < 16; ++i) {
         int k = (i < 4) ? i * 4 : ((i - 4) / 3) * 4 + 1 + (i - 4) % 3; // probes 0,4,8,12 first, then the rest
-        vec2 o = (R * kPoisson16[k]) * radiusW;
+        vec2 o = kPoisson16[k] * radiusW;
         vec3 u = dir + t * o.x + b * o.y;
         float un = dot(u, N);
         // Receiver-plane distance along u: d * (pn / un) * |u| / d; clamp so a near-parallel tap can't run away.
