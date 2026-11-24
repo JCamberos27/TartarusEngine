@@ -409753,6 +409753,11 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Living room",
         "Fade": 0.10000000149011612,
+        "Fade Min": [
+          0.5,
+          0.0,
+          0.0
+        ],
         "Intensity": 2.0,
         "Outside": true,
         "Size": [
@@ -409998,6 +410003,11 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Kitchen;Lamp_stand 19",
         "Fade": 0.10000000149011612,
+        "Fade Min": [
+          0.27000001072883606,
+          0.0,
+          0.0
+        ],
         "Intensity": 2.0,
         "Outside": true,
         "Size": [
@@ -410243,6 +410253,11 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Hall",
         "Fade": 0.10000000149011612,
+        "Fade Max": [
+          0.0,
+          0.0,
+          0.5
+        ],
         "Intensity": 2.0,
         "Outside": true,
         "Size": [
@@ -410488,6 +410503,11 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Hall;Living room",
         "Fade": 0.10000000149011612,
+        "Fade Min": [
+          0.1550000011920929,
+          0.0,
+          0.0
+        ],
         "Intensity": 2.0,
         "Outside": true,
         "Size": [
@@ -410523,6 +410543,11 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Hall;Living room",
         "Fade": 0.10000000149011612,
+        "Fade Min": [
+          0.1550000011920929,
+          0.0,
+          0.0
+        ],
         "Intensity": 2.0,
         "Outside": true,
         "Size": [
@@ -410558,6 +410583,11 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Hall;Kitchen",
         "Fade": 0.10000000149011612,
+        "Fade Max": [
+          0.32499998807907104,
+          0.0,
+          0.0
+        ],
         "Intensity": 2.0,
         "Outside": true,
         "Size": [
@@ -410943,6 +410973,11 @@
         "Bake File": "scenes/Forest.gi",
         "Circuits": "Upstairs bathroom",
         "Fade": 0.10000000149011612,
+        "Fade Max": [
+          0.0,
+          0.0,
+          0.5
+        ],
         "Intensity": 2.0,
         "Outside": true,
         "Size": [
