@@ -197,11 +197,9 @@ void RegisterSceneComponents() {
             { "Bounds Fade", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, BoundsFade), 0.01f,
               "Metres inside each face over which the light fades to nothing.", 0.0f, 2.0f },
             { "Bounds Fade -", T::Vec3, TARTARUS_REFLECT_FIELD(LightComponent, BoundsFadeNeg), 0.01f,
-              "Per-face fade (metres) for the box's -X / -Y / -Z faces.
-< 0 = use Bounds Fade. Widen it where a face ends in open air." },
+              "Per-face fade (metres) for the box's -X / -Y / -Z faces.\n< 0 = use Bounds Fade. Widen it where a face ends in open air." },
             { "Bounds Fade +", T::Vec3, TARTARUS_REFLECT_FIELD(LightComponent, BoundsFadePos), 0.01f,
-              "Per-face fade (metres) for the box's +X / +Y / +Z faces.
-< 0 = use Bounds Fade. Widen it where a face ends in open air." },
+              "Per-face fade (metres) for the box's +X / +Y / +Z faces.\n< 0 = use Bounds Fade. Widen it where a face ends in open air." },
             // #203 - drawn as a layer checklist by DrawReflectedComponentExtra("Light").
             { "Culling Mask", T::Int, TARTARUS_REFLECT_FIELD(LightComponent, CullingMask), 0.0f,
               "Which layers this light illuminates." },
