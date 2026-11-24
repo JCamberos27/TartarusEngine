@@ -188,7 +188,8 @@ void GIVolumes::Gather(const World& world) {
     }
 }
 
-void GIVolumes::SetMask(Shader& program, std::uint64_t mask) {
+void GIVolumes::SetMask(Shader& program, std::uint64_t mask, bool flatL1) {
+    program.SetInt("uGIFlatL1", flatL1 ? 1 : 0);
     program.SetInt("uGIMaskLo", (int)(std::uint32_t)mask);
     program.SetInt("uGIMaskHi", (int)(std::uint32_t)(mask >> 32));
 }

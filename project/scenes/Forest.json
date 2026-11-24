@@ -371075,6 +371075,70 @@
       "static": true
     },
     {
+      "Reflection Probe": {
+        "Capture Scene": true,
+        "Importance": 3.0,
+        "Size": [
+          4.8,
+          3.0,
+          3.2
+        ]
+      },
+      "id": 38101,
+      "name": "Probe Downstairs Bathroom",
+      "order": 37006,
+      "parentId": 22438,
+      "position": [
+        6.9,
+        1.6,
+        25.55
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "Reflection Probe": {
+        "Capture Scene": true,
+        "Importance": 3.0,
+        "Size": [
+          6.4,
+          2.8,
+          3.8
+        ]
+      },
+      "id": 38102,
+      "name": "Probe Upstairs Bathroom",
+      "order": 37007,
+      "parentId": 22438,
+      "position": [
+        -2.9,
+        4.6,
+        25.7
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
       "id": 35087,
       "name": "Abandoned House",
       "order": 105955,
