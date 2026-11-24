@@ -408260,7 +408260,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Living room;Lamp_table_A 15",
+        "Circuits": "Living room",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -408330,7 +408330,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Living room;Downstairs bathroom",
+        "Circuits": "Living room",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -408365,7 +408365,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Living room;Lamp_table_A 15;Downstairs bathroom",
+        "Circuits": "Living room",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -408470,41 +408470,6 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Living room;Lamp_table_A 15;Downstairs bathroom",
-        "Fade": 0.10000000149011612,
-        "Intensity": 2.0,
-        "Outside": true,
-        "Size": [
-          1.124998927116394,
-          2.815000057220459,
-          1.5100001096725464
-        ],
-        "Spacing": 0.5
-      },
-      "id": 36299,
-      "name": "GI living room 9",
-      "order": 109179,
-      "parentId": 35585,
-      "position": [
-        -34.45750045776367,
-        2.0380001068115234,
-        4.235000133514404
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "GI Volume": {
-        "Bake File": "scenes/Forest.gi",
         "Circuits": "Living room;Lamp_table_A 15",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
@@ -408540,7 +408505,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Kitchen;Storeroom",
+        "Circuits": "Storeroom",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -409415,7 +409380,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Master bedroom;Lamp_table_B 11;Lamp_table_B 13",
+        "Circuits": "Master bedroom;Lamp_table_B 11",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -409485,7 +409450,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Stairs;Upper hall",
+        "Circuits": "Upper hall",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
@@ -409870,7 +409835,7 @@
     {
       "GI Volume": {
         "Bake File": "scenes/Forest.gi",
-        "Circuits": "Stairs;Lamp_table_A 16",
+        "Circuits": "Stairs;Lamp_table_A 16;Living room",
         "Fade": 0.10000000149011612,
         "Intensity": 2.0,
         "Outside": true,
