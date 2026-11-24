@@ -387524,6 +387524,124 @@
         "Angular Size": 0.5299999713897705,
         "Bounds": true,
         "Bounds Center": [
+          -30.165,
+          4.9475,
+          -10.9125
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          5.73,
+          2.815,
+          6.215
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.03500000014901161,
+          0.019999999552965164
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 0.15,
+        "Range": 7.570000171661377,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Lamp_stand 17",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 38113,
+      "name": "Fill Lamp_stand 17 room",
+      "order": 160019,
+      "parentId": 35585,
+      "position": [
+        -32.61000061035156,
+        4.763999938964844,
+        -12.754400253295898
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -35.82,
+          4.9475,
+          -9.945
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Size": [
+          5.68,
+          2.815,
+          4.28
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.03500000014901161,
+          0.019999999552965164
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 0.15,
+        "Range": 7.570000171661377,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 30.0,
+        "Type": "Point",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Lamp_stand 17",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 38114,
+      "name": "Fill Lamp_stand 17 corridor",
+      "order": 160020,
+      "parentId": 35585,
+      "position": [
+        -32.61000061035156,
+        4.763999938964844,
+        -12.754400253295898
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
           -32.97999954223633,
           2.0380001068115234,
           -11.579999923706055
