@@ -990,27 +990,28 @@ void GIVolumeLookup() {
     // FillInvalid on a face row: a whole invalid ceiling row is filled from the row below, blurred in-plane, so one strongly
     // directional probe under it does not paint a hot spot; and a face probe with a valid in-plane neighbour takes those.
     {
-        const glm::ivec3 d(3, 3, 3);
-        std::vector<GI::ProbeSH> pr(27);
-        std::vector<bool> valid(27, true);
-        for (int z = 0; z < 3; ++z)
+        const glm::ivec3 big(5, 3, 5); // the top plane's inner 3x3 probes lie on ONE face (the ceiling) only
+        std::vector<GI::ProbeSH> pr(75);
+        std::vector<bool> valid(75, true);
+        for (int z = 0; z < 5; ++z)
             for (int y = 0; y < 3; ++y)
-                for (int x = 0; x < 3; ++x) {
-                    const int i = GI::ProbeIndex(glm::ivec3(x, y, z), d);
+                for (int x = 0; x < 5; ++x) {
+                    const int i = GI::ProbeIndex(glm::ivec3(x, y, z), big);
                     valid[i] = y < 2;
-                    pr[i].c[0].x = (y == 1 && x == 1 && z == 1) ? 9.0f : 1.0f;
+                    pr[i].c[0].x = (y == 1 && x == 2 && z == 2) ? 9.0f : 1.0f; // one strongly directional probe under the ceiling
                 }
-        GI::FillInvalid(pr, valid, d);
+        GI::FillInvalid(pr, valid, big);
         float mean = 0.0f, mx = 0.0f;
-        for (int z = 0; z < 3; ++z)
-            for (int x = 0; x < 3; ++x) {
-                const float v = pr[GI::ProbeIndex(glm::ivec3(x, 2, z), d)].c[0].x;
+        for (int z = 1; z <= 3; ++z)
+            for (int x = 1; x <= 3; ++x) {
+                const float v = pr[GI::ProbeIndex(glm::ivec3(x, 2, z), big)].c[0].x;
                 mean += v / 9.0f;
                 mx = std::max(mx, v);
             }
-        const float inplaneMean = (9.0f + 8.0f) / 9.0f; // the row below
+        const float inplaneMean = (9.0f + 8.0f) / 9.0f; // the inner 3x3 of the row below
         CHECK(std::abs(mean - inplaneMean) < 0.25f * inplaneMean);
         CHECK(mx < 4.0f); // the old 6-neighbour average copied the 9 straight up
+        const glm::ivec3 d(3, 3, 3);
         std::vector<GI::ProbeSH> q(27);
         std::vector<bool> v2(27, true);
         for (auto& p : q) p.c[0].x = 100.0f;                         // the inward row is hot
