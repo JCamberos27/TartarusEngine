@@ -63,6 +63,11 @@ glm::ivec3 GridDims(const glm::vec3& half, float spacing);
 // Probe (i, j, k)'s position in box-local space.
 glm::vec3 ProbeLocal(const glm::ivec3& ijk, const glm::ivec3& dims, const glm::vec3& half);
 inline int ProbeIndex(const glm::ivec3& ijk, const glm::ivec3& dims) { return ijk.x + dims.x * (ijk.y + dims.y * ijk.z); }
+// The probes on a box face sit in the wall, floor or ceiling slab (the boxes stop a few cm inside them), so a capture there
+// sees mostly back faces. FaceProbeNudge() is the box-local offset the baker captures a FACE probe at instead: inward along
+// each axis it lies on a face of (an axis with one probe has no face), by `nudge` metres but at most 0.45 of that axis' cell,
+// so the capture is in open air just inside the surface (Jacob #5: the ceiling ring around a fixture). Interior probes: zero.
+glm::vec3 FaceProbeNudge(const glm::ivec3& ijk, const glm::ivec3& dims, const glm::vec3& half, float nudge);
 
 // One baked layer of one volume.
 struct Layer {
