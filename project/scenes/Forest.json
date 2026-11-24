@@ -371299,6 +371299,38 @@
       "static": true
     },
     {
+      "Reflection Probe": {
+        "Capture Scene": true,
+        "Importance": 0.5,
+        "Size": [
+          6.4,
+          2.8,
+          5.9
+        ]
+      },
+      "id": 36200,
+      "name": "Probe Master Bedroom",
+      "order": 268794,
+      "parentId": 22363,
+      "position": [
+        -9.95,
+        4.6,
+        23.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
       "id": 35014,
       "name": "Abandoned House",
       "order": 105955,
