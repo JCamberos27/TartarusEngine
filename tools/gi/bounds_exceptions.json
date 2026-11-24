@@ -198,6 +198,84 @@
    "face": "+x",
    "status": "SHORT",
    "reason": "SHORT: L-shaped room / zoned light, face kept short on purpose (FOUND_ISSUES 07:48)"
+  },
+  {
+   "id": 35601,
+   "face": "+x",
+   "status": "OVER",
+   "reason": "SHORT: L-shaped room / zoned light, face kept short on purpose (FOUND_ISSUES 07:48) [label flips with sampling: fix-3 dev/fix3-jambs ed128ba4 reveal snap -z 24.18 -> 24.04 moved the lateral sample lattice, mode wall x -0.552 (SHORT) -> x -1.522 (OVER), same face -1.18; same accepted exception]"
+  },
+  {
+   "id": 36406,
+   "face": "+x",
+   "status": "OVER",
+   "reason": "SHORT: L-shaped room / zoned light, face kept short on purpose (FOUND_ISSUES 07:48) [label flips with sampling: fix-3 dev/fix3-jambs ed128ba4 reveal snap -z 24.18 -> 24.04 moved the lateral sample lattice, mode wall x -0.552 (SHORT) -> x -1.522 (OVER), same face -1.18; same accepted exception]"
+  },
+  {
+   "id": 36392,
+   "face": "+x",
+   "status": "SHORT",
+   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)"
+  },
+  {
+   "id": 36394,
+   "face": "+x",
+   "status": "SHORT",
+   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)"
+  },
+  {
+   "id": 35609,
+   "face": "+x",
+   "status": "SHORT",
+   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)"
+  },
+  {
+   "id": 38103,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)"
+  },
+  {
+   "id": 38103,
+   "face": "-z",
+   "status": "OPEN",
+   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)"
+  },
+  {
+   "id": 38103,
+   "face": "+z",
+   "status": "OVER",
+   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)"
+  },
+  {
+   "id": 38104,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)"
+  },
+  {
+   "id": 38104,
+   "face": "-z",
+   "status": "OPEN",
+   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)"
+  },
+  {
+   "id": 38104,
+   "face": "+z",
+   "status": "OVER",
+   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)"
+  },
+  {
+   "id": 38105,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)"
+  },
+  {
+   "id": 38105,
+   "face": "-z",
+   "status": "OPEN",
+   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)"
   }
  ]
 }
