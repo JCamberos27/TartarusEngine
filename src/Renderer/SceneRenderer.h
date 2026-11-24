@@ -159,6 +159,7 @@ struct SceneRenderInputs {
     const float* pointShadowFar        = nullptr;
     const float* pointShadowBias       = nullptr;
     const float* pointShadowNormalBias = nullptr;
+    const float* pointShadowSoftness   = nullptr; // per slot Shadow Softness (null = all 0: the hard compare)
     const float* pointShadowWeight     = nullptr; // 0..1 per slot (null = all full)
 };
 

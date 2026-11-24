@@ -475,7 +475,7 @@ void main() {
         if (!clustered && int(uLights[li].PositionType.w) == 0) continue; // the sun is shaded above
         if (!LightAffects(li)) continue; // #203
         vec3 L, radiance;
-        if (!PointSpotLight(li, N, L, radiance)) continue;
+        if (!PointSpotLight(li, N, geoN, L, radiance)) continue;
 #ifdef _ANISO
         Lo += ShadeLightAniso(N, V, L, radiance, albedo, F0, metallic, roughness, anisoT, anisoB);
 #else

@@ -917,6 +917,11 @@ void ShaderConstantsMatch() {
         CHECK(has(*text, "uniform float uPointShadowWeight[" + n(PointShadowMap::kMaxPoints) + "];"));
         CHECK(has(*text, "uniform float uSpotShadowWeight[" + n(SpotShadowMap::kMaxSpots) + "];"));
     }
+    // S2 point PCF: the per-slot kernel array SceneRenderer uploads, and the hard path for Softness 0 kept.
+    CHECK(has(shading, "uniform float uPointShadowSoftness[" + n(PointShadowMap::kMaxPoints) + "];"));
+    CHECK(has(shading, "float soft = kernel > 0.0 ? smoothstep(0.03, 0.10, nlG) : 0.0;"));
+    CHECK(has(shading, "bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance)"));
+    CHECK(has(shading, "float PointShadowPCF(int slot, vec3 dir, float d, vec3 N, float radiusW, float biasW, float far)"));
 }
 
 void GIVolumeLookup() {
