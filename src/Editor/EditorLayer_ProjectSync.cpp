@@ -31,6 +31,7 @@
 #include "Model.h"
 #include "MotionRebake.h"
 #include "OutfitSystem.h"
+#include "Openable.h" // BakePosed
 #include "PhysicsWorld.h"
 #include "Core/Paths.h"
 #include "ProjectSettings.h"
@@ -257,7 +258,8 @@ int EditorLayer::RefreshPrefabInstances(World& world, AssetLibrary& assets) {
     // The baseline is the World as it now saves: diffed against the new content, an override that
     // now equals the file is gone (Apply to Prefab's own value). Left as the old snapshot, the next
     // Undo journaled that difference as an unrecorded change and took back only that.
-    m_CurrentUndoScene = SceneSerializer::SaveToString(world, assets);
+    // While --bake-gi has the doors posed, no baseline at all: EnsureUndoScene takes the real one once they're back.
+    m_CurrentUndoScene = Openable::BakePosed() ? std::string() : SceneSerializer::SaveToString(world, assets);
     m_ChangesOutsideUndo = 0;
     Log::Info("Updated " + std::to_string(instances) + " prefab instance" + (instances == 1 ? "" : "s") + " from " + names +
               " (their overrides kept).");

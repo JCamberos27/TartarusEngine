@@ -349,7 +349,9 @@ uniform float     uIOR;                 // index of refraction
 #endif
 
 // PR15 — Screen-space ambient occlusion. uSSAOEnabled == 0 (the GL default) = no occlusion.
-uniform sampler2D uSSAOMap;   // blurred R8 occlusion (unit 15); only read when uSSAOEnabled == 1
+// Fixed on unit 15 like the other frame maps: left at the GL default (unit 0) with SSAO off, it shared unit 0 with the
+// impostors' sampler2DArray atlas (ImpostorSurface.glsl), and every ImpostorLit draw failed GL_INVALID_OPERATION.
+layout(binding = 15) uniform sampler2D uSSAOMap;   // blurred R8 occlusion; only read when uSSAOEnabled == 1
 uniform int       uSSAOEnabled;
 uniform float     uSSAOIntensity; // #160 — exponent on the occlusion; <= 0 (unset) means 1
 

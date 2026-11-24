@@ -53,6 +53,7 @@ GI::ProbeSH GIBaker::ProjectFaces(const float* rgba, int n, float* backfaceShare
 }
 
 bool GIBaker::Begin(World& world, const Options& opt) {
+    RestoreDoors(world); // a Begin while posed would save the posed doors as "as loaded"
     m_Opt = opt;
     m_Volumes.clear();
     m_Passes.clear();
@@ -129,6 +130,8 @@ bool GIBaker::Begin(World& world, const Options& opt) {
             m_ClipMin = glm::min(m_ClipMin, v.Bounds.ToWorld(q));
             m_ClipMax = glm::max(m_ClipMax, v.Bounds.ToWorld(q));
         }
+    PoseDoors(world, opt.DoorPose);
+
     m_ClipMin -= glm::vec3(opt.ClipMargin);
     m_ClipMax += glm::vec3(opt.ClipMargin);
     m_Target = std::make_unique<HdrTarget>();
@@ -180,14 +183,57 @@ void GIBaker::RestoreLighting(World& world) {
     LightSwitch::Stop(world); // the switches and circuits as authored again (Play starts them from Start On)
     if (m_LightingSaved) world.Render.SkyAmbientIntensity = m_SkyAmbient;
     m_LightingSaved = false;
+    RestoreDoors(world); // the openables as loaded: the posed doors never reach an undo step or a save
     world.SyncActiveInHierarchy();
+}
+
+void GIBaker::PoseDoors(World& world, Options::Doors pose) {
+    RestoreDoors(world); // posed twice: the second save must still be the scene as loaded
+    // Saved first (every openable, active or not), so every exit puts the scene back as loaded.
+    m_DoorsSaved = Openable::Save(world);
+    m_DoorsPosed = true;
+    Openable::SetBakePosed(true); // the editor: no undo step, recovery file or crash save of this pose
+    std::string line;
+    if (pose == Options::Doors::Shut) {
+        line = "all shut as authored (--bake-gi-doors shut)";
+    } else if (pose == Options::Doors::Open) {
+        Openable::SetAll(world, 1.0f);
+        int n = 0; // what SetAll posed: the openables with a loaded model
+        for (auto e : world.Registry.view<OpenableComponent, RenderableComponent>())
+            n += world.Registry.get<RenderableComponent>(e).ModelRef ? 1 : 0;
+        line = "all " + std::to_string(n) + " openables open (--bake-gi-doors open)";
+    } else {
+        const Openable::Posed posed = Openable::PoseStart(world);
+        std::string names;
+        for (const auto& n : posed.Open) names += (names.empty() ? "" : ", ") + n;
+        line = std::to_string(posed.Open.size()) + " posed at their Play start" +
+               (names.empty() ? std::string() : " (" + names + ")") + ", " + std::to_string(posed.Shut) + " shut";
+    }
+    Log::Info("[GI bake] doors: " + line);
+    if (m_Opt.TraceShadowSet) Log::Info("[GI trace] doors: " + line);
+    world.RebuildWorldTransformCache();
+}
+
+void GIBaker::RestoreDoors(World& world) {
+    if (!m_DoorsPosed) return;
+    Openable::Restore(world, m_DoorsSaved);
+    m_DoorsSaved.clear();
+    m_DoorsPosed = false;
+    Openable::SetBakePosed(false);
+    world.RebuildWorldTransformCache();
+}
+
+void GIBaker::Abort(World& world, const std::string& why) {
+    if (m_Error.empty()) m_Error = why.empty() ? std::string("aborted") : why;
+    RestoreLighting(world); // lights, sky ambient, switches and the doors as loaded
+    m_Finished = true;
 }
 
 bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const RenderFrameContext&)>& draw,
                    const std::function<void(const glm::vec3&)>& moveCamera) {
     if (m_Finished) return true;
     if (!m_Error.empty()) { // as Finish puts things back, without writing a half bake
-        RestoreLighting(world);
+        Abort(world, m_Error);
         gi.SetOverride(nullptr);
         gi.SetSolo(nullptr);
         gi.SetEnabled(true);

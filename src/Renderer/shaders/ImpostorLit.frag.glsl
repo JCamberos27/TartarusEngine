@@ -4,7 +4,7 @@
 // reflections with SSAO, then the fog. Drawn GL_EQUAL over the pre-pass's depth (ImpostorSurface.glsl's offset).
 layout(location = 0) out vec4 FragColor;
 layout(location = 1) out vec2 oVelocity;
-vec3 vWorldPos; // ModelShading.glsl reads it: the surface ImpostorResolve finds
+vec3 vWorldPos = vec3(0.0); // ModelShading.glsl reads it: the surface ImpostorResolve finds (initialised: Mesa warns otherwise)
 #include "ModelShading.glsl"
 #define IMPOSTOR_HAS_VIEW
 #include "ImpostorSurface.glsl"

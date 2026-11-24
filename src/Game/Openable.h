@@ -2,6 +2,7 @@
 
 #include <glm/glm.hpp>
 #include <string>
+#include <vector>
 #include <entt/entt.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -51,5 +52,30 @@ bool Open(World& world, entt::entity e);
 // Every openable straight to open (t = 1) or shut (0), outside Play too: --smoke-shots with TARTARUS_OPEN_ALL=1 shows
 // them all open, to check each hinge.
 void SetAll(World& world, float t);
+
+// Every openable's transform and state as they are now, to put back exactly with Restore (--bake-gi poses the doors for
+// its captures, then leaves the scene in memory as it was loaded).
+struct Saved {
+    entt::entity Entity = entt::null;
+    glm::vec3 Position{0.0f};
+    glm::quat Rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    bool Started = false;
+    float Progress = 0.0f, Target = 0.0f;
+};
+std::vector<Saved> Save(World& world);
+void Restore(World& world, const std::vector<Saved>& saved);
+
+// Every openable posed as Play starts it, outside Play: Start Open (and Start Ajar) ones open that far, the rest shut.
+// Like Play, inactive openables and those whose model isn't loaded are skipped (left as they are).
+struct Posed {
+    std::vector<std::string> Open; // the names of the ones left open (or ajar), in entity order
+    int Shut = 0;                  // the ones posed shut
+};
+Posed PoseStart(World& world);
+
+// --bake-gi has the scene's openables posed for its captures (GIBaker sets it from PoseDoors until RestoreDoors). The
+// editor checks it: no undo step, no recovery snapshot and no crash save is ever made of a posed scene.
+void SetBakePosed(bool posed);
+bool BakePosed();
 
 } // namespace Openable
