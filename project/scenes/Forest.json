@@ -1105799,11 +1105799,17 @@
       ]
     },
     {
+      "Light Circuit": {
+        "Circuit": "Master bedroom",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
       "id": 20998,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_ceiling_circle (4)",
@@ -1105826,8 +1105832,7 @@
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "id": 20999,
@@ -1107183,11 +1107188,17 @@
       ]
     },
     {
+      "Light Circuit": {
+        "Circuit": "Master bedroom",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
       "id": 21034,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_ceiling_circle (2)",
@@ -1107210,8 +1107221,7 @@
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "id": 21035,
@@ -1110507,11 +1110517,17 @@
       "static": true
     },
     {
+      "Light Circuit": {
+        "Circuit": "Master bedroom",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
       "id": 21121,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_ceiling_circle (3)",
@@ -1110534,8 +1110550,7 @@
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "id": 21122,
@@ -1111861,11 +1111876,17 @@
       "static": true
     },
     {
+      "Light Circuit": {
+        "Circuit": "Closet",
+        "Glow": 0.22,
+        "Glow When Off": false
+      },
+      "castShadows": 0,
       "id": 21158,
       "materials": [
         {
-          "guid": "af7ac0342f5de963",
-          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House_Off.mat"
+          "guid": "c9b20836e574a6c8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
         }
       ],
       "name": "Lamp_bedroom (4)",
@@ -1111888,8 +1111909,7 @@
         1.0,
         1.0,
         1.0
-      ],
-      "static": true
+      ]
     },
     {
       "collider": {
