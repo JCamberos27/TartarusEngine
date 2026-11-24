@@ -12,7 +12,8 @@ Map (parent House Lights): world x = local z + 1, world z = -local x - 7; +z = F
 Idempotent: a second run changes nothing. Fails loudly if the light is missing/ambiguous or its box is not what
 jambs.py leaves (x -13.02..-6.663, z 20.16|20.30..31.66).
 
-Usage:  python -I master_ceiling.py <repo dir | path/to/Forest.json> [--write]     (dry run without --write)
+Usage:  python -I master_ceiling.py <repo dir | path/to/Forest.json> [--copy-intensity X] [--write]   (dry run without --write)
+        --copy-intensity X (0 < X <= 0.5): milder variant, sets only the copy's Intensity; works on an already-applied scene.
 """
 # ---------------------------------------------------------------- shared helpers (kept inline: scripts run with python -I)
 import sys, json, copy, json.encoder as _je
@@ -101,6 +102,11 @@ def main():
     a = sys.argv[1:]
     if not a or a[0].startswith("-"): die(__doc__)
     path = scene_path(a[0]); write = "--write" in a
+    # milder variant (SM 16:29 MST): --copy-intensity X sets ONLY the unshadowed copy's Intensity (default = the lamp's
+    # 0.5, the PM-approved design). Below 0.5 the crossfade no longer sums to 1: the master part beyond z 26.08 gets
+    # X/0.5 of the lamp's direct light. Runtime for direct light; the baked bounce only follows after a re-bake.
+    ci = float(a[a.index("--copy-intensity") + 1]) if "--copy-intensity" in a else None
+    if ci is not None and not (0.0 < ci <= 0.5): die(f"--copy-intensity {ci}: expected 0 < X <= 0.5")
     scene = load(path); allent, byid = index(scene)
     o = find_one(allent, byid, NAME, PARENT, POS, "master light")
     Lo = o.get("Light") or die("master light has no Light")
@@ -139,12 +145,16 @@ def main():
             if cur is None or not all(close(x, y) for x, y in zip(cur, v)): die(f"{COPY_NAME!r}: {k} = {cur}, expected {v}")
         if Lc.get("Cast Shadows") is not False: die(f"{COPY_NAME!r} must not cast shadows")
         print(f"  already  copy {COPY_ID} {COPY_NAME!r}")
+        if ci is not None and not close(Lc.get("Intensity"), ci):
+            print(f"  SET      copy {COPY_ID} Intensity {Lc.get('Intensity')} -> {ci}")
+            Lc["Intensity"] = ci; changed += 1
     else:
         check_new_id(byid, allent, COPY_ID, COPY_ORDER, "master copy")
         cp = copy.deepcopy(o)
         cp["id"], cp["order"], cp["name"] = COPY_ID, COPY_ORDER, COPY_NAME
         cp["Light"]["Cast Shadows"] = False
         cp["Light"].update(want)
+        if ci is not None: cp["Light"]["Intensity"] = ci
         for k in CATS:
             if o in scene[k]: scene[k].insert(scene[k].index(o) + 1, cp); break
         changed += 1
