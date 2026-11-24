@@ -276,6 +276,78 @@
    "face": "-z",
    "status": "OPEN",
    "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)"
+  },
+  {
+   "id": 36370,
+   "face": "+x",
+   "status": "OPEN",
+   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)"
+  },
+  {
+   "id": 38109,
+   "face": "-x",
+   "status": "OPEN",
+   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)"
+  },
+  {
+   "id": 38109,
+   "face": "+x",
+   "status": "OPEN",
+   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)"
+  },
+  {
+   "id": 38109,
+   "face": "-z",
+   "status": "SHORT",
+   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)"
+  },
+  {
+   "id": 38109,
+   "face": "+z",
+   "status": "SHORT",
+   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)"
+  },
+  {
+   "id": 38110,
+   "face": "-x",
+   "status": "SHORT",
+   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)"
+  },
+  {
+   "id": 38110,
+   "face": "+x",
+   "status": "OVER",
+   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)"
+  },
+  {
+   "id": 38110,
+   "face": "-z",
+   "status": "OPEN",
+   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)"
+  },
+  {
+   "id": 38110,
+   "face": "+z",
+   "status": "OPEN",
+   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)"
+  },
+  {
+   "id": 38111,
+   "face": "-x",
+   "status": "SHORT",
+   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)"
+  },
+  {
+   "id": 38111,
+   "face": "+x",
+   "status": "OPEN",
+   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)"
+  },
+  {
+   "id": 38111,
+   "face": "-z",
+   "status": "OPEN",
+   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)"
   }
  ]
 }

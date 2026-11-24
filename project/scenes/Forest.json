@@ -386297,13 +386297,18 @@
         "Bounds Center": [
           -36.3055,
           2.0380001068115234,
-          8.791500091552734
+          5.466
         ],
         "Bounds Fade": 0.05000000074505806,
+        "Bounds Fade +": [
+          -1,
+          -1,
+          0.19
+        ],
         "Bounds Size": [
           4.905,
           2.815000057220459,
-          9.493000030517578
+          2.842
         ],
         "Cast Shadows": false,
         "Color": [
@@ -386331,6 +386336,208 @@
       "id": 36370,
       "name": "Ceiling Living room",
       "order": 145810,
+      "parentId": 35585,
+      "position": [
+        -36.300045013427734,
+        3.3450000286102295,
+        5.8000078201293945
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -36.38,
+          2.0380001068115234,
+          8.2485
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Fade +": [
+          0.05,
+          -1,
+          -1
+        ],
+        "Bounds Fade -": [
+          0.05,
+          -1,
+          0.19
+        ],
+        "Bounds Size": [
+          3.434,
+          2.815000057220459,
+          3.103
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.699999988079071,
+        "Range": 4.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 88.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 38109,
+      "name": "Ceiling Living room (opening)",
+      "order": 160015,
+      "parentId": 35585,
+      "position": [
+        -36.300045013427734,
+        3.3450000286102295,
+        5.8000078201293945
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -34.283,
+          2.0380001068115234,
+          8.55
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Fade -": [
+          0.05,
+          -1,
+          0.2
+        ],
+        "Bounds Size": [
+          0.86,
+          2.815000057220459,
+          2.5
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.699999988079071,
+        "Range": 4.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 88.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 38110,
+      "name": "Ceiling Living room (strip N)",
+      "order": 160016,
+      "parentId": 35585,
+      "position": [
+        -36.300045013427734,
+        3.3450000286102295,
+        5.8000078201293945
+      ],
+      "rotation": [
+        -0.7071070075035095,
+        0.0,
+        0.0,
+        0.7071070075035095
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Bounds": true,
+        "Bounds Center": [
+          -38.4025,
+          2.0380001068115234,
+          8.55
+        ],
+        "Bounds Fade": 0.05000000074505806,
+        "Bounds Fade +": [
+          0.05,
+          -1,
+          -1
+        ],
+        "Bounds Fade -": [
+          -1,
+          -1,
+          0.2
+        ],
+        "Bounds Size": [
+          0.711,
+          2.815000057220459,
+          2.5
+        ],
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.8600000143051147,
+          0.699999988079071
+        ],
+        "ColorTempK": 2900.0,
+        "Culling Mask": -1,
+        "Intensity": 0.699999988079071,
+        "Range": 4.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Softness": 1.2999999523162842,
+        "Spot Angle": 88.0,
+        "Type": "Spot",
+        "Volumetric Intensity": 0.0
+      },
+      "Light Circuit": {
+        "Circuit": "Living room",
+        "Glow": 0.0,
+        "Glow When Off": false
+      },
+      "id": 38111,
+      "name": "Ceiling Living room (strip S)",
+      "order": 160017,
       "parentId": 35585,
       "position": [
         -36.300045013427734,
