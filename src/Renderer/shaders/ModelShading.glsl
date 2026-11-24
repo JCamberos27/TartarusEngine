@@ -176,6 +176,7 @@ uniform float uSpotShadowHalfTan[16]; // tan(half-FOV) of each spot's map — th
 uniform float uSpotShadowBias[16];       // per-light x depth bias   (#140 phase 2, default 1.0)
 uniform float uSpotShadowNormalBias[16]; // per-light x normal offset
 uniform float uSpotShadowSoftness[16];   // per-light x PCF tap spread
+uniform float uSpotShadowWeight[16];     // 0..1: the slot's shadow fading in or out (LightGather, GI Phase 1)
 layout(binding = 9) uniform sampler2DArrayShadow uSpotShadowMap;
 uniform float uSpotShadowMapResolution; // known CPU-side (SpotShadowMap::Configure) (#190)
 
@@ -183,9 +184,10 @@ uniform float uSpotShadowMapResolution; // known CPU-side (SpotShadowMap::Config
 // light's Params.y. Also stores linear distance / uPointShadowFar[slot] (the light's Range).
 // Unit 10.
 uniform int   uPointShadowCount; // arrays below are sized to PointShadowMap::kMaxPoints (#110)
-uniform float uPointShadowFar[8];
-uniform float uPointShadowBias[8];       // per-light x depth bias   (#140 phase 2, default 1.0)
-uniform float uPointShadowNormalBias[8]; // per-light x normal offset
+uniform float uPointShadowFar[12];
+uniform float uPointShadowBias[12];       // per-light x depth bias   (#140 phase 2, default 1.0)
+uniform float uPointShadowNormalBias[12]; // per-light x normal offset
+uniform float uPointShadowWeight[12];     // 0..1: the slot's shadow fading in or out (GI Phase 1)
 layout(binding = 10) uniform samplerCubeArrayShadow uPointShadowMap;
 uniform float uPointShadowMapResolution; // known CPU-side (PointShadowMap::Configure) (#190)
 
@@ -626,7 +628,7 @@ float SpotShadow(int slot, vec3 worldPos, vec3 N) {
     vis += texture(uSpotShadowMap, vec4(p.xy + vec2( 0.5, -0.5) * texel, float(slot), ref));
     vis += texture(uSpotShadowMap, vec4(p.xy + vec2(-0.5,  0.5) * texel, float(slot), ref));
     vis += texture(uSpotShadowMap, vec4(p.xy + vec2( 0.5,  0.5) * texel, float(slot), ref));
-    return vis * 0.25;
+    return mix(1.0, vis * 0.25, uSpotShadowWeight[slot]);
 }
 
 // Visibility from a point light's depth cube. 1 = lit, 0 = shadowed. Cube stores linear
@@ -645,7 +647,7 @@ float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N) {
     if (d >= far) return 1.0;                // past the shadow range
     // Texel-proportional, Range-independent depth bias — see SpotShadow (#134).
     float ref = (d - texelW * (1.0 + 2.0 * (1.0 - nl)) * uPointShadowBias[slot]) / far;
-    return texture(uPointShadowMap, vec4(dir, float(slot)), ref);
+    return mix(1.0, texture(uPointShadowMap, vec4(dir, float(slot)), ref), uPointShadowWeight[slot]);
 }
 
 // Cook-Torrance contribution for one light direction L delivering `radiance` to the fragment.
