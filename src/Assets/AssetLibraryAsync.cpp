@@ -564,8 +564,7 @@ void AssetLibrary::BeginPlayScope() {
     const float skinFreeBefore = MeshArena::SkinnedFreePages();
     MeshArena::WarmSkinned(1.0f);
     if (PumpTrace())
-        std::printf("[PumpTrace] play start: skinned free %.2f -> %.2f pages
-", skinFreeBefore, MeshArena::SkinnedFreePages());
+        std::printf("[PumpTrace] play start: skinned free %.2f -> %.2f pages\n", skinFreeBefore, MeshArena::SkinnedFreePages());
     for (const auto& [k, v] : m_ModelCache) m.Models.insert(k);
     for (const auto& [k, v] : m_TextureCache) m.Textures.insert(k);
     for (const auto& [k, v] : m_MaterialCache) m.Materials.insert(k);
