@@ -182,41 +182,12 @@ void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const g
     p.frame = Time::FrameCount();
     p.renderMask = shadowMap.PlanRender(p.frame); // the far cascades every FarRefresh() frames, staggered
     Frustum (&casterCells)[CascadedShadowMap::kMaxCascades] = p.cells;
-    for (int c = 0; c < shadowMap.Count(); ++c) casterCells[c] = Frustum::FromViewProj(shadowMap.LightViewProj(c));
-    // The static cells: kept from an earlier frame while its padded cascades still hold this frame's (SunGatherHolds),
-    // else gathered against this frame's cascades padded by kSunGatherPadTexels. Then the Always cells, every frame.
-    VisibilityQuery casts; // #163 - Cast Shadows: Off skips
-    casts.ShadowCasters = true;
-    casts.CellCullCount = shadowMap.Count();
-    SunGatherBase& g = m_SunGather;
-    const bool reused = SunGatherHolds(world, fl, shadowMap);
-    if (reused) {
-        m_Casting.resize(g.staticCount);
-        ++g_SunGatherTotals.Reused;
-    } else {
-        g.valid = true;
-        g.world = &world;
-        g.count = shadowMap.Count();
-        g.pad = 2.0f * kSunGatherPadTexels / (float)std::max(shadowMap.Resolution(), 1);
-        const glm::mat4 grow = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f / (1.0f + g.pad))); // clip [-1-pad, 1+pad] -> [-1, 1]
-        for (int c = 0; c < g.count; ++c) {
-            g.vp[c] = shadowMap.LightViewProj(c);
-            g.padded[c] = Frustum::FromViewProj(grow * g.vp[c]);
-        }
-        g.sunDir = fl.SunDir;
-        g.edits = GatherCandidateEdits();
-        g.epoch = RenderSettingsEpoch();
-        g.frame = Time::FrameCount();
-        casts.CellCull = g.padded; // castsInto below draws nothing outside every cascade's frustum
-        casts.Part = VisibilityQuery::Cells::Static;
-        GatherVisible(world, casts, m_Casting);
-        g.staticCount = m_Casting.size();
-        ++g_SunGatherTotals.Gathered;
+    glm::mat4 vp[CascadedShadowMap::kMaxCascades];
+    for (int c = 0; c < shadowMap.Count(); ++c) {
+        vp[c] = shadowMap.LightViewProj(c);
+        casterCells[c] = Frustum::FromViewProj(vp[c]);
     }
-    casts.CellCull = casterCells;
-    casts.Part = VisibilityQuery::Cells::Always;
-    GatherVisible(world, casts, m_SunAlways);
-    m_Casting.insert(m_Casting.end(), m_SunAlways.begin(), m_SunAlways.end());
+    const bool reused = GatherSunCasting(world, vp, shadowMap.Count(), shadowMap.Resolution(), fl.SunDir, casterCells, p.frame);
     m_SceneWorld = &world;
     if (reused && CacheVerify()) VerifySunGather(p);
     // The caster list, and G4-d's held far cascades a moved or re-posed caster forces (FillSunCasters).
@@ -259,22 +230,59 @@ bool ShadowFrame::CascadesInside(const glm::mat4* base, const glm::mat4* now, in
 
 ShadowFrame::SunGatherTotals ShadowFrame::SunGatherTotalsSoFar() { return g_SunGatherTotals; }
 
+// The static cells: kept from an earlier frame while its padded cascades still hold this frame's (SunGatherHolds),
+// else gathered against this frame's cascades padded by kSunGatherPadTexels. Then the Always cells, every frame.
+bool ShadowFrame::GatherSunCasting(World& world, const glm::mat4* vp, int count, int resolution, const glm::vec3& sunDir,
+                                   const Frustum* cells, std::uint64_t frame) {
+    VisibilityQuery casts; // #163 - Cast Shadows: Off skips
+    casts.ShadowCasters = true;
+    casts.CellCullCount = count;
+    SunGatherBase& g = m_SunGather;
+    const bool reused = SunGatherHolds(world, vp, count, sunDir, frame);
+    if (reused) {
+        m_Casting.resize(g.staticCount);
+        ++g_SunGatherTotals.Reused;
+    } else {
+        g.valid = true;
+        g.world = &world;
+        g.count = count;
+        g.pad = 2.0f * kSunGatherPadTexels / (float)std::max(resolution, 1);
+        const glm::mat4 grow = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f / (1.0f + g.pad))); // clip [-1-pad, 1+pad] -> [-1, 1]
+        for (int c = 0; c < count; ++c) {
+            g.vp[c] = vp[c];
+            g.padded[c] = Frustum::FromViewProj(grow * vp[c]);
+        }
+        g.sunDir = sunDir;
+        g.edits = GatherCandidateEdits();
+        g.epoch = RenderSettingsEpoch();
+        g.frame = frame;
+        casts.CellCull = g.padded; // DrawSunCasters' castsInto draws nothing outside every cascade's frustum
+        casts.Part = VisibilityQuery::Cells::Static;
+        GatherVisible(world, casts, m_Casting);
+        g.staticCount = m_Casting.size();
+        ++g_SunGatherTotals.Gathered;
+    }
+    casts.CellCull = cells;
+    casts.Part = VisibilityQuery::Cells::Always;
+    GatherVisible(world, casts, m_SunAlways);
+    m_Casting.insert(m_Casting.end(), m_SunAlways.begin(), m_SunAlways.end());
+    return reused;
+}
+
 // Whether the kept static part still holds everything a fresh gather would (see kSunGatherPadTexels). The moves and
 // LOD flips are drained on every call, so a new base only ever sees what came after it.
-bool ShadowFrame::SunGatherHolds(World& world, const FrameLights& fl, const CascadedShadowMap& map) {
+bool ShadowFrame::SunGatherHolds(World& world, const glm::mat4* now, int n, const glm::vec3& sunDir, std::uint64_t frame) {
     PROFILE_SCOPE("Sun: Gather Reuse Check");
+    SyncGatherCandidates(world); // this frame's moves and edits in before they're read
     bool movesAll = false, lodAll = false;
     TakeStaticCandidateMoves(m_SunMoves, movesAll);
     world.TakeLodToggles(m_SunLodToggles, lodAll, 1);
     static const bool off = Env::Flag(Env::Var::NoSunGatherReuse);
     const SunGatherBase& g = m_SunGather;
-    const int n = map.Count();
     if (off || !g.valid || g.world != &world || g.count != n || movesAll || lodAll || g.edits != GatherCandidateEdits() ||
-        g.epoch != RenderSettingsEpoch() || g.sunDir != fl.SunDir || Time::FrameCount() - g.frame >= kSunGatherFullEvery)
+        g.epoch != RenderSettingsEpoch() || g.sunDir != sunDir || frame - g.frame >= kSunGatherFullEvery)
         return false;
     // A texel of the pad kept back: float slack for the plane tests (sub-millimetre against a texel's centimetres).
-    glm::mat4 now[CascadedShadowMap::kMaxCascades];
-    for (int c = 0; c < n; ++c) now[c] = map.LightViewProj(c);
     if (!CascadesInside(g.vp, now, n, g.pad * (kSunGatherPadTexels - 1.0f) / kSunGatherPadTexels)) return false;
     auto inside = [&](const AABB& b) {
         for (int c = 0; c < n; ++c)
@@ -297,7 +305,8 @@ bool ShadowFrame::SunGatherHolds(World& world, const FrameLights& fl, const Casc
 // Verify mode: this frame's fresh gather against the kept list. Every caster it holds that can draw (DrawSunCasters'
 // test: its bounds in some cascade's frustum and reaching that cascade's slice) must be in the list with the same fields,
 // and every extra the list holds must fail that test for each cascade. A caster the fresh gather holds only because its
-// ground cell's box touches a cascade - its own bounds miss them all - is counted, not an error: it draws nothing.
+// ground cell's box touches a cascade - its own bounds miss them all - is counted, not an error: it draws nothing. So is
+// one held with the fields it had before a small move outside the padded cascades: it draws from neither place.
 void ShadowFrame::VerifySunGather(SunPass& p) {
     VisibilityQuery casts;
     casts.ShadowCasters = true;
@@ -325,9 +334,13 @@ void ShadowFrame::VerifySunGather(SunPass& p) {
         if (!k) {
             if (draws(f)) ++missing;
             else ++g_SunGatherTotals.VerifyAbsentNoDraw;
-        } else if (k->Entity != f.Entity || k->Renderable != f.Renderable || k->Xform != f.Xform || k->Bounded != f.Bounded ||
-                   k->WorldMin != f.WorldMin || k->WorldMax != f.WorldMax) {
-            ++missing; // stale: held differently
+        } else if (k->Entity != f.Entity || k->Renderable != f.Renderable) {
+            ++missing; // another caster in its slot
+        } else if (k->Xform != f.Xform || k->Bounded != f.Bounded || k->WorldMin != f.WorldMin || k->WorldMax != f.WorldMax) {
+            // Held as it was: an error if it draws from either place. One that moved a little outside the padded
+            // cascades (SunGatherHolds lets that pass) keeps its old fields, and draws nothing from either.
+            if (draws(f) || draws(*k)) ++missing;
+            else ++g_SunGatherTotals.VerifyAbsentNoDraw;
         }
         if (i >= 0) m_SunVerifyIndex[f.Slot] = -2; // in both
     }

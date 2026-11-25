@@ -84,6 +84,8 @@ std::uint64_t GatherCandidateFullBuilds();
 // candidate's flags, layer, model or component changed, one came or left, a static cell turned Always, or the list was
 // rebuilt - anything that can change what the static cells give besides a move.
 std::uint64_t GatherCandidateEdits();
+// Brings the candidate list up to date with `world` now (what GatherVisible does first), so the two above are current.
+void SyncGatherCandidates(World& world);
 // ...and the static-cell candidates moved since the last call: each one's box before and after, joined. `all`: anything
 // may have moved (the first call, one without bounds, or past the cap). Nothing is kept until the first call.
 void TakeStaticCandidateMoves(std::vector<AABB>& out, bool& all);

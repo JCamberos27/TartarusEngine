@@ -35,6 +35,7 @@
 #include "../Renderer/PointShadowMap.h"
 #include "../Renderer/SpotShadowMap.h"
 #include "../Renderer/ShadowFrame.h"
+#include "../Game/ComponentsCharacter.h"
 #include "../Renderer/DecalTypes.h"
 #include "../Renderer/ClusterGrid.h"
 #include "../Renderer/TemporalAA.h"
@@ -858,6 +859,156 @@ void SunCasterListDelta() {
                 deltaFrames, fullFrames, untakenFrames, forcedFrames, movedOnceChecked);
     CHECK(deltaFrames > 150 && fullFrames > 20 && untakenFrames > 10 && forcedFrames > 50);
     g_FakeSunPose.clear();
+    ForgetGatherCandidates();
+}
+
+// The sun's kept caster gather (ShadowFrame::GatherSunCasting) against a fresh gather, every frame: over random frames of
+// a camera walking and turning (four texel-snapped cascades following it), now and then a jump, a sun turn or a cascade
+// count change, with props moving, LOD groups switching levels as the camera passes, Cast Shadows writes, adds and removals and player-body pieces
+// (the Always cells) moving every frame, the kept list holds every caster a fresh gather holds whose own box touches a
+// cascade, field for field, and none it doesn't that does. It must actually keep the list on most quiet frames.
+void SunGatherReuse() {
+    auto prop = Model::CreatePrimitive("terrain", "w1_sun_reuse_prop.fbx"); // CPU-only stand-ins: no GL in unit tests
+    CHECK(prop != nullptr);
+    if (!prop) return;
+    World w;
+    std::vector<entt::entity> props, body;
+    for (int i = 0; i < 900; ++i) // 30 x 30 props, 9 m apart: ~9 ground cells a side
+        props.push_back(w.CreateModelEntity(prop, glm::vec3((float)(i % 30) * 9.0f - 130.0f, 0.0f, (float)(i / 30) * 9.0f - 130.0f),
+                                            glm::vec3(0), glm::vec3(1), "P"));
+    for (int i = 0; i < 3; ++i) {
+        body.push_back(w.CreateModelEntity(prop, glm::vec3(0.0f), glm::vec3(0), glm::vec3(0.3f), "B"));
+        w.Registry.emplace<PlayerBodyTag>(body.back());
+    }
+    for (int i = 0; i < 120; ++i) { // LOD groups among them: the walk flips their levels (ApplyLod), as trees do
+        const glm::vec3 at((float)(i % 12) * 20.0f - 115.0f, 0.0f, (float)(i / 12) * 20.0f - 115.0f);
+        const entt::entity group = w.CreateEmptyEntity(at, glm::vec3(0), glm::vec3(1), "G");
+        w.Registry.emplace<LODGroupComponent>(group).Size = 12.0f;
+        for (int l = 0; l < 2; ++l) CHECK(w.SetParent(w.CreateModelEntity(prop, at, glm::vec3(0), glm::vec3(1.0f - 0.2f * l), "L"), group));
+    }
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    const glm::mat4 camProj = glm::perspective(glm::radians(70.0f), 16.0f / 9.0f, 0.1f, 1000.0f);
+    constexpr int kRes = 1024;
+    std::mt19937 rng(9137);
+    std::uniform_int_distribution<int> roll(0, 999), pickProp(0, 899);
+    std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
+    glm::vec3 cam(0.0f, 1.7f, 0.0f), sun = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
+    float yaw = 0.0f;
+    int cascades = 4;
+    const float radius[4] = {6.0f, 15.0f, 40.0f, 90.0f};
+    auto fit = [&](glm::mat4* vp, Frustum* cells) {
+        const glm::vec3 fwd(std::cos(yaw), 0.0f, std::sin(yaw));
+        const glm::vec3 up = std::abs(sun.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
+        for (int c = 0; c < cascades; ++c) {
+            const float r = radius[c], pull = r + 50.0f;
+            const glm::vec3 centre = cam + fwd * r * 0.8f;
+            glm::mat4 proj = glm::ortho(-r, r, -r, r, 0.0f, pull + r);
+            const glm::mat4 view = glm::lookAt(centre - sun * pull, centre, up);
+            glm::vec4 o = proj * view * glm::vec4(0, 0, 0, 1);
+            o *= (float)kRes * 0.5f;
+            const glm::vec2 off = (glm::round(glm::vec2(o)) - glm::vec2(o)) * (2.0f / (float)kRes); // texel-snapped, as the map
+            proj[3][0] += off.x;
+            proj[3][1] += off.y;
+            vp[c] = proj * view;
+            cells[c] = Frustum::FromViewProj(vp[c]);
+        }
+    };
+    ShadowFrame sf;
+    std::vector<VisibleRenderable> fresh;
+    std::vector<std::int32_t> at;
+    int kept = 0, gathered = 0, bad = 0, cellOnly = 0;
+    auto alive = [&](entt::entity e) { return w.Registry.valid(e); };
+    for (std::uint64_t frame = 1000; frame < 1800; ++frame) {
+        // The view: walking (0.05-0.35 m a frame) and turning, now and then a jump.
+        yaw += 0.02f * unit(rng);
+        cam += glm::vec3(std::cos(yaw), 0.0f, std::sin(yaw)) * (0.2f + 0.15f * unit(rng));
+        if (roll(rng) < 4) cam = glm::vec3(60.0f * unit(rng), 1.7f, 60.0f * unit(rng));
+        if (std::abs(cam.x) > 120.0f || std::abs(cam.z) > 120.0f) yaw += 3.14159f;
+        if (roll(rng) < 3) sun = glm::normalize(sun + glm::vec3(0.02f * unit(rng), 0.0f, 0.02f * unit(rng))); // the sun turns
+        if (roll(rng) < 2) cascades = cascades == 4 ? 3 : 4;
+        // Edits.
+        if (roll(rng) < 60) { // a prop moves a little or far
+            const entt::entity e = props[(size_t)pickProp(rng)];
+            if (alive(e))
+                w.Registry.get<TransformComponent>(e).Position += glm::vec3(unit(rng), 0.0f, unit(rng)) * (roll(rng) < 500 ? 0.5f : 40.0f);
+        }
+        if (roll(rng) < 10) { // Cast Shadows written (reported)
+            const entt::entity e = props[(size_t)pickProp(rng)];
+            if (alive(e)) {
+                auto& r = w.Registry.get<RenderableComponent>(e);
+                r.CastShadows = r.CastShadows == RenderableComponent::ShadowCasting::Off ? RenderableComponent::ShadowCasting::On
+                                                                                         : RenderableComponent::ShadowCasting::Off;
+                NoteRenderSettingsChanged();
+            }
+        }
+        if (frame % 89 == 7) { // one leaves
+            const entt::entity e = props[(size_t)pickProp(rng)];
+            if (alive(e)) w.Registry.destroy(e);
+        }
+        if (frame % 113 == 50) // one arrives
+            props.push_back(w.CreateModelEntity(prop, glm::vec3(100.0f * unit(rng), 0.0f, 100.0f * unit(rng)), glm::vec3(0), glm::vec3(1), "N"));
+        for (const entt::entity e : body)
+            w.Registry.get<TransformComponent>(e).Position = cam + glm::vec3(0.1f * unit(rng), -1.0f, 0.1f * unit(rng));
+        w.RebuildWorldTransformCache();
+        w.ApplyLod(cam, camProj); // this view's levels (the sun casts what the view shows)
+
+        glm::mat4 vp[4];
+        Frustum cells[4];
+        fit(vp, cells);
+        const bool reused = sf.GatherSunCasting(w, vp, cascades, kRes, sun, cells, frame);
+        (reused ? kept : gathered)++;
+        VisibilityQuery q;
+        q.ShadowCasters = true;
+        q.CellCull = cells;
+        q.CellCullCount = cascades;
+        GatherVisible(w, q, fresh);
+        const std::vector<VisibleRenderable>& list = sf.CastingForTest();
+        at.assign(at.size(), -1);
+        for (std::size_t i = 0; i < list.size(); ++i) {
+            if (list[i].Slot >= at.size()) at.resize((std::size_t)list[i].Slot + 1, -1);
+            at[list[i].Slot] = (std::int32_t)i;
+        }
+        auto touches = [&](const VisibleRenderable& v) {
+            if (!v.Bounded) return true;
+            for (int c = 0; c < cascades; ++c)
+                if (cells[c].Intersects(AABB{v.WorldMin, v.WorldMax})) return true;
+            return false;
+        };
+        int frameBad = 0;
+        for (const VisibleRenderable& f : fresh) {
+            const std::int32_t i = f.Slot < at.size() ? at[f.Slot] : -1;
+            if (i < 0) {
+                if (touches(f)) ++frameBad;
+                else ++cellOnly;
+                continue;
+            }
+            const VisibleRenderable& k = list[(std::size_t)i];
+            // Held differently: an error if either box reaches a cascade. One that moved a little outside the padded
+            // cascades keeps its old fields, and draws nothing from either place.
+            if ((k.Entity != f.Entity || k.Renderable != f.Renderable || k.Xform != f.Xform || k.Bounded != f.Bounded ||
+                 k.WorldMin != f.WorldMin || k.WorldMax != f.WorldMax) &&
+                (k.Entity != f.Entity || k.Renderable != f.Renderable || touches(f) || touches(k)))
+                ++frameBad;
+            at[f.Slot] = -2;
+        }
+        for (const VisibleRenderable& k : list)
+            if (at[k.Slot] != -2 && touches(k)) ++frameBad; // an extra that draws
+        if (frameBad) {
+            std::printf("[SunGatherReuse] frame %llu (%s): %d caster(s) missing, stale or extra that draw\n",
+                        (unsigned long long)frame, reused ? "kept" : "gathered", frameBad);
+            ++bad;
+        }
+    }
+    std::printf("[SunGatherReuse] %d kept, %d gathered, %d bad frames, %d cell-only\n", kept, gathered, bad, cellOnly);
+    CHECK(bad == 0);
+    CHECK(kept > 250 && gathered > 50);
+    // The containment test itself: a cascade inside its padded self, nudged by half the pad (in) and by twice it (out).
+    glm::mat4 base[1] = {glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.0f, 50.0f)}, now[1];
+    now[0] = glm::translate(glm::mat4(1.0f), glm::vec3(0.05f, 0.0f, 0.0f)) * base[0];
+    CHECK(ShadowFrame::CascadesInside(base, base, 1, 0.0f));
+    CHECK(ShadowFrame::CascadesInside(base, now, 1, 0.1f));
+    CHECK(!ShadowFrame::CascadesInside(base, now, 1, 0.025f));
     ForgetGatherCandidates();
 }
 
@@ -3678,6 +3829,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GpuScene: slot state needs 9 fragment SSBO blocks; below that a global _NO_SLOT_STATE define", GpuSceneSlotStateBlockBudget});
     tests.push_back({"GpuScene: the change log lists every changed slot with where it was and is (300 random frames)", GpuSceneChangeLog});
     tests.push_back({"Sun caster list: the change-log delta path = the full loop, field for field, every frame (400 random frames)", SunCasterListDelta});
+    tests.push_back({"Sun gather reuse: the kept list holds every caster a fresh gather draws, field for field (800 random frames)", SunGatherReuse});
     tests.push_back({"Local shadows (G4-c): a frame's changes wake the quiet lights they reach, and only those", LocalShadowQuietWake});
     tests.push_back({"Local shadows (G4-c): a LOD level change wakes the lights around the renderers it swapped", LocalShadowLodToggles});
     tests.push_back({"GpuScene: upload runs (merge, cap, whole list) and layer packing", GpuSceneRuns});

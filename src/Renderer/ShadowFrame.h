@@ -141,11 +141,17 @@ public:
     // Whether every corner of `now`'s n cascades lies inside `base`'s, each grown by `margin` in clip space.
     static bool CascadesInside(const glm::mat4* base, const glm::mat4* now, int n, float margin);
     // Verify: reused frames checked; casters that can draw missing from (or held stale in) the kept list; extras in it
-    // that would draw; and casters only a fresh gather holds that draw nothing (their ground cell touches a cascade).
+    // that would draw; and differences that draw nothing (a caster only a fresh gather holds because its ground cell
+    // touches a cascade, or one held with its fields from before a small move outside the padded cascades).
     struct SunGatherTotals {
         std::uint64_t Reused = 0, Gathered = 0, VerifyChecked = 0, VerifyMissing = 0, VerifyExtraDraws = 0, VerifyAbsentNoDraw = 0;
     };
     static SunGatherTotals SunGatherTotalsSoFar();
+    // GatherSunCasters' gather step (no GL): m_Casting = the kept or newly padded static part, then this frame's Always
+    // part, for `count` cascades `vp` (their frusta `cells`) of a `resolution` map. `frame` is the clock. Returns
+    // whether the static part was kept. Public for the tests (CastingForTest reads the result).
+    bool GatherSunCasting(World& world, const glm::mat4* vp, int count, int resolution, const glm::vec3& sunDir,
+                          const Frustum* cells, std::uint64_t frame);
 
     // What the last RenderLocal redrew (GI Phase 1 perf: slot re-renders vs per-caster cost; --gi-tour writes it per
     // frame). A "static redraw" rebuilds a cache from scratch - what a slot changing hands costs; a "dynamic" pass only
@@ -255,7 +261,7 @@ private:
     std::vector<std::int32_t> m_SunVerifyIndex;              // verify: slot -> index in m_Casting, -1 none
     std::vector<AABB> m_SunMoves;                            // scratch: static candidates moved since the last frame
     std::vector<entt::entity> m_SunLodToggles;               // scratch: LOD levels flipped since the last frame
-    bool SunGatherHolds(World& world, const FrameLights& fl, const CascadedShadowMap& map);
+    bool SunGatherHolds(World& world, const glm::mat4* now, int n, const glm::vec3& sunDir, std::uint64_t frame);
     void VerifySunGather(SunPass& p);
     std::vector<DepthCaster> m_Draws;
     // The layered sun pass's grouping + commands, kept while its casters hold: one per set of cascades drawn (the

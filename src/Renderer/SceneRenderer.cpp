@@ -690,6 +690,7 @@ bool ReadSceneSlot(std::uint32_t slot, SceneSlot& out) {
 }
 std::uint64_t GatherCandidateFullBuilds() { return CandidateStore().FullBuilds; }
 std::uint64_t GatherCandidateEdits() { return CandidateStore().Edits; }
+void SyncGatherCandidates(World& world) { Candidates(world); }
 void TakeStaticCandidateMoves(std::vector<AABB>& out, bool& all) {
     CandidateCache& cache = CandidateStore();
     out.swap(cache.StaticMoves);
