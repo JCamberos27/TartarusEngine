@@ -46,7 +46,6 @@ struct ReverbBusComponent;
 
 struct GLFWwindow;
 struct RootMotionOptions;
-namespace SceneSerializer { struct LibraryState; }
 class World;
 class ScriptIDE;
 class Camera;
@@ -1670,10 +1669,9 @@ private:
     // Last committed authored state. Navigation must never serialize the scene; controls
     // that report a change after updating their value still need this pre-edit state.
     std::string m_CurrentUndoScene;
-    // P-55c: the scene as Play started (SaveToString's text and its AssetLibrary half). Stop loads that scene back,
-    // so it is the baseline again when the library still matches: no full save of the scene the frame after Stop.
+    // P-55c: SaveToString's text of the scene as Play started. Stop loads that scene back, so with the live
+    // AssetLibrary half swapped in it is the baseline again: no full save of the scene the frame after Stop.
     std::string m_PrePlayBaseline;
-    std::shared_ptr<const SceneSerializer::LibraryState> m_PrePlayLibrary;
     unsigned m_OutfitLandedSeen = 0; // OutfitSystem::LandedGeneration() as of the last baseline (#15)
     unsigned m_ExternalSyncs = 0;    // SyncProjectChanges passes that applied outside-the-editor changes
     int m_UiStylesHook = 0;          // AssetChangeHooks id: editor_ui_styles.json edited outside the editor reloads

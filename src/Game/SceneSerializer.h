@@ -72,15 +72,8 @@ namespace SceneSerializer {
     };
     // Play entry (P-55): SaveToString(world) into `entityOnly` and, when `assets` and `withLibrary` are given,
     // SaveToString(world, *assets) into `withLibrary`, from ONE walk of the World (byte-identical to calling both).
-    // The AssetLibrary half of a snapshot, kept parsed (defined in SceneSerializer.cpp).
-    struct LibraryState;
-    // `library`, when given with `withLibrary`, gets that AssetLibrary half: Stop checks it against the live library
-    // before it takes `withLibrary` back as the undo baseline (P-55c).
     void SaveToStrings(const World& world, std::string& entityOnly, const AssetLibrary* assets = nullptr,
-                       std::string* withLibrary = nullptr, SnapshotTimes* times = nullptr,
-                       std::shared_ptr<const LibraryState>* library = nullptr);
-    // The live AssetLibrary would write `library` again (the parsed half, compared without writing text).
-    bool LibraryStateMatches(const AssetLibrary& assets, const LibraryState& library);
+                       std::string* withLibrary = nullptr, SnapshotTimes* times = nullptr);
     // #15 - two of those snapshots hold the same scene (entities and scene settings), whatever
     // their AssetLibrary state, which the Asset Browser re-lists on its own between undo steps.
     bool SameSceneContent(const std::string& a, const std::string& b);
@@ -90,6 +83,10 @@ namespace SceneSerializer {
     // `scene`'s scene with `library`'s AssetLibrary state (both SaveToString snapshots). Empty
     // when either won't parse.
     std::string WithLibraryState(const std::string& scene, const std::string& library);
+    // P-55c: what SaveToString(world, assets) returns for the scene `snapshot` (a SaveToString text of it) holds, with
+    // the live AssetLibrary half: the snapshot's own scene text, its library members swapped for the live library's,
+    // without parsing the snapshot. Empty when the text isn't one object it can split.
+    std::string WithLiveLibrary(const std::string& snapshot, const AssetLibrary& assets);
     bool LoadFromString(World& world, AssetLibrary& assets, const std::string& data);
 
     // #148 — writes an entity-only snapshot (the play-mode one from SaveToString(world)) plus the

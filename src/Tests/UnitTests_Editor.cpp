@@ -1342,16 +1342,22 @@ static void TestPlaySnapshotsOneWalk() {
         nextFrame();
         CHECK(EditorHistoryTestAccess::Current(editor)==edited);
         CHECK(EditorHistoryTestAccess::Count(editor)==1); // Play and Stop added nothing after it
-        // P-55c: the library changed during Play (a sound registered): Stop doesn't take the pre-Play save, whose
-        // library half is stale; the next frame saves the scene again.
+        // P-55c: the library changed during Play (a sound registered): Stop's baseline is the pre-Play scene with
+        // the live library half, the same bytes as a fresh save.
         EditorHistoryTestAccess::EnterPlay(editor,world);
         assets.RegisterSound("assets/Audio/p55c_during_play.wav");
         EditorHistoryTestAccess::ExitPlay(editor,world,assets);
         const std::string afterStop=SceneSerializer::SaveToString(world,assets);
         CHECK(afterStop!=edited);
-        CHECK(EditorHistoryTestAccess::Current(editor).empty());
+        CHECK(EditorHistoryTestAccess::Current(editor)==afterStop);
         nextFrame();
         CHECK(EditorHistoryTestAccess::Current(editor)==afterStop);
+        CHECK(EditorHistoryTestAccess::Count(editor)==1);
+        // WithLiveLibrary on its own: an older save of the scene + the library now == a save now; not an object -> empty.
+        assets.RegisterSound("assets/Audio/p55c_later.wav");
+        CHECK(SceneSerializer::WithLiveLibrary(afterStop,assets)==SceneSerializer::SaveToString(world,assets));
+        CHECK(SceneSerializer::WithLiveLibrary(SceneSerializer::SaveToString(world),assets)==SceneSerializer::SaveToString(world,assets));
+        CHECK(SceneSerializer::WithLiveLibrary("[1]",assets).empty());
         EditorHistoryTestAccess::Clear(editor);
     }
     ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);
