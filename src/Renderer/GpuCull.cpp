@@ -5,9 +5,21 @@
 #include "SceneRenderer.h"
 #include "SceneViewPass.h"
 #include "GpuScene.h"
+#include "GLStateCache.h"
+#include "InstanceBatch.h"
+#include "Shader.h"
+#include "gl.h"
+#include "World.h"
+#include "Components.h"
+#include "Core/Log.h"
 
 #include <cmath>
+#include <algorithm>
+#include <cstdio>
 #include <cstring>
+#include <exception>
+#include <memory>
+#include <string>
 
 namespace GpuCull {
 
@@ -113,7 +125,7 @@ layout(std430, binding = 28) writeonly buffer RemapBlock { uint uRemap[]; };
 layout(std430, binding = 29) buffer CommandBlock { uint uCommands[]; };           // 5 uints per command
 uniform vec4 uPlanes[6];
 uniform vec4 uWithinMin, uWithinMax, uSizeEye;
-uniform uint uRejectFlags, uLayerMask, uBits;
+uniform uint uRejectFlags, uLayerMask, uBits, uGroupOffset;
 uniform float uMinScreenHeight;
 shared uint sScan[64];
 
@@ -146,7 +158,7 @@ bool Visible(uint slot) {
 // One workgroup per group: test its slots 64 at a time and append the survivors in slot order (a prefix sum per
 // chunk), then give the group's commands the count.
 void main() {
-    uvec4 g = uGroups[gl_WorkGroupID.x];
+    uvec4 g = uGroups[uGroupOffset + gl_WorkGroupID.x];
     uint lid = gl_LocalInvocationID.x;
     uint written = 0u;
     for (uint c = 0u; c < g.y; c += 64u) {
@@ -169,6 +181,242 @@ void main() {
     for (uint i = lid; i < g.w; i += 64u) uCommands[(g.z + i) * 5u + 1u] = written;
 }
 )";
+}
+
+void BuildDrawTable(std::uint32_t slotCount, DrawTable& out) {
+    out.Groups.clear();
+    out.Slots.clear();
+    out.GroupOf.assign(slotCount, DrawTable::kNoGroup);
+    static std::vector<std::uint32_t> batched;
+    static std::vector<const RenderableComponent*> owner;
+    batched.clear();
+    owner.clear();
+    SceneSlot s;
+    for (std::uint32_t i = 0; i < slotCount; ++i) {
+        if (!ReadSceneSlot(i, s) || !s.Alive || !s.Renderable || (s.Flags & kCandPosed)) continue;
+        if (!s.Renderable->ModelRef) continue;
+        batched.push_back(i);
+        owner.push_back(s.Renderable);
+    }
+    static InstanceGroups groups;
+    GroupInstances(
+        batched.size(),
+        [&](std::size_t k) {
+            const RenderableComponent& r = *owner[k];
+            return HashSlots(r.Materials, (std::uint64_t)(std::uintptr_t)r.ModelRef.get() * 0x9E3779B97F4A7C15ull);
+        },
+        [&](std::uint32_t a, std::uint32_t b) {
+            return owner[a]->ModelRef.get() == owner[b]->ModelRef.get() && SameSlots(owner[a]->Materials, owner[b]->Materials);
+        },
+        groups);
+    out.Slots.resize(batched.size());
+    out.Groups.reserve(groups.Groups.size());
+    for (std::size_t g = 0; g < groups.Groups.size(); ++g) {
+        const InstanceGroups::Group& run = groups.Groups[g];
+        // G2-a: one command per group, whose instanceCount is the survivor count (G2-b gives each mesh its own).
+        out.Groups.push_back({run.First, run.Count, (std::uint32_t)g, 1});
+        for (std::uint32_t k = 0; k < run.Count; ++k) {
+            const std::uint32_t slot = batched[groups.Order[run.First + k]];
+            out.Slots[run.First + k] = slot;
+            out.GroupOf[slot] = (std::uint32_t)g;
+        }
+    }
+}
+
+namespace {
+VerifyTotals g_Totals;
+
+struct Resources {
+    std::unique_ptr<Shader> Program;
+    bool Failed = false;
+    unsigned Groups = 0, Slots = 0, Lod = 0, Remap = 0, Commands = 0;
+};
+Resources& Res() {
+    static Resources* r = new Resources(); // never destroyed: the GL context is gone by the time statics are
+    return *r;
+}
+bool EnsureProgram() {
+    Resources& r = Res();
+    if (r.Program || r.Failed) return !r.Failed;
+    try {
+        r.Program = std::make_unique<Shader>(std::string(ComputeSource()), "GpuCull");
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "[GpuCull] compute program failed, GPU culling off: %s\n", e.what());
+    }
+    if (!r.Program || !r.Program->Program()) {
+        r.Program.reset();
+        r.Failed = true;
+        return false;
+    }
+    glCreateBuffers(1, &r.Groups);
+    glCreateBuffers(1, &r.Slots);
+    glCreateBuffers(1, &r.Lod);
+    glCreateBuffers(1, &r.Remap);
+    glCreateBuffers(1, &r.Commands);
+    return true;
+}
+
+// The storage bindings the dispatch takes, put back after it (the passes after keep theirs).
+constexpr unsigned kBindings[] = {22, 23, 24, 25, 28, 29};
+constexpr int kBindingCount = (int)(sizeof(kBindings) / sizeof(kBindings[0]));
+struct SavedBinding {
+    GLint Buffer = 0;
+    GLint64 Start = 0, Size = 0;
+};
+void SaveBindings(SavedBinding (&out)[kBindingCount]) {
+    for (int i = 0; i < kBindingCount; ++i) {
+        glGetIntegeri_v(GL_SHADER_STORAGE_BUFFER_BINDING, kBindings[i], &out[i].Buffer);
+        glGetInteger64i_v(GL_SHADER_STORAGE_BUFFER_START, kBindings[i], &out[i].Start);
+        glGetInteger64i_v(GL_SHADER_STORAGE_BUFFER_SIZE, kBindings[i], &out[i].Size);
+    }
+}
+void RestoreBindings(const SavedBinding (&in)[kBindingCount]) {
+    for (int i = 0; i < kBindingCount; ++i) {
+        if (in[i].Buffer && in[i].Size > 0)
+            glBindBufferRange(GL_SHADER_STORAGE_BUFFER, kBindings[i], (GLuint)in[i].Buffer, (GLintptr)in[i].Start,
+                              (GLsizeiptr)in[i].Size);
+        else
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kBindings[i], (GLuint)in[i].Buffer);
+    }
+}
+} // namespace
+
+const VerifyTotals& Totals() { return g_Totals; }
+
+void VerifyView(World& world, const VisibilityQuery& q) {
+    GpuScene& scene = GpuScene::Get();
+    scene.Sync(world);
+    if (!GpuScene::Enabled() || !scene.BoundsBuffer() || scene.Count() == 0 || !EnsureProgram()) {
+        ++g_Totals.Skipped;
+        return;
+    }
+    static DrawTable table;
+    BuildDrawTable(scene.Count(), table); // verify only: rebuilt every call (G2-b keys it on the candidate stamp)
+    if (table.Groups.empty()) { // nothing batched: nothing to differ
+        ++g_Totals.Views;
+        return;
+    }
+    const std::uint32_t slotCount = scene.Count();
+
+    // The view's LOD bitset (1 bit per scene slot, from LOD Select's tags) and each batched entity's slot.
+    static std::vector<std::uint32_t> lod;
+    lod.assign((slotCount + 31) / 32, 0u);
+    static std::vector<std::uint32_t> slotOf; // entity index -> scene slot
+    std::fill(slotOf.begin(), slotOf.end(), DrawTable::kNoGroup);
+    const bool anyLod = !world.Registry.storage<LodCulledTag>().empty();
+    {
+        SceneSlot s;
+        for (std::uint32_t slot : table.Slots) {
+            if (!ReadSceneSlot(slot, s)) continue;
+            if (anyLod && world.IsLodCulled(s.Entity)) lod[slot >> 5] |= 1u << (slot & 31u);
+            const std::size_t e = (std::size_t)entt::to_entity(s.Entity);
+            if (e >= slotOf.size()) slotOf.resize(e + 1, DrawTable::kNoGroup);
+            slotOf[e] = slot;
+        }
+    }
+
+    Resources& r = Res();
+    SavedBinding saved[kBindingCount];
+    SaveBindings(saved);
+    glNamedBufferData(r.Groups, (GLsizeiptr)(table.Groups.size() * sizeof(Group)), table.Groups.data(), GL_STREAM_DRAW);
+    glNamedBufferData(r.Slots, (GLsizeiptr)(table.Slots.size() * sizeof(std::uint32_t)), table.Slots.data(), GL_STREAM_DRAW);
+    glNamedBufferData(r.Lod, (GLsizeiptr)(lod.size() * sizeof(std::uint32_t)), lod.data(), GL_STREAM_DRAW);
+    glNamedBufferData(r.Remap, (GLsizeiptr)(table.Slots.size() * sizeof(std::uint32_t)), nullptr, GL_STREAM_READ);
+    static std::vector<IndirectCommand> commands;
+    commands.assign(table.Groups.size(), IndirectCommand{0, 0, 0, 0, 0});
+    glNamedBufferData(r.Commands, (GLsizeiptr)(commands.size() * sizeof(IndirectCommand)), commands.data(), GL_STREAM_READ);
+    glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 22, scene.BoundsBuffer(), 0,
+                      (GLsizeiptr)slotCount * 2 * (GLsizeiptr)sizeof(glm::vec4));
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 23, r.Groups);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 24, r.Slots);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 25, r.Lod);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 28, r.Remap);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 29, r.Commands);
+
+    const ViewQuery vq = MakeQuery(q);
+    Shader& prog = *r.Program;
+    prog.Bind();
+    glUniform4fv(prog.Loc("uPlanes"), 6, &vq.Planes[0].x);
+    prog.SetVec4("uWithinMin", vq.WithinMin);
+    prog.SetVec4("uWithinMax", vq.WithinMax);
+    prog.SetVec4("uSizeEye", vq.SizeEye);
+    glUniform1ui(prog.Loc("uRejectFlags"), vq.RejectFlags);
+    glUniform1ui(prog.Loc("uLayerMask"), vq.LayerMask);
+    glUniform1ui(prog.Loc("uBits"), vq.Bits);
+    prog.SetFloat("uMinScreenHeight", vq.MinScreenHeight);
+    const int offsetLoc = prog.Loc("uGroupOffset");
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT); // the GPU scene's uploads land first
+    constexpr std::uint32_t kMaxGroupsPerDispatch = 65535; // GL's guaranteed minimum for one dimension
+    const std::uint32_t groupCount = (std::uint32_t)table.Groups.size();
+    for (std::uint32_t first = 0; first < groupCount; first += kMaxGroupsPerDispatch) {
+        glUniform1ui(offsetLoc, first);
+        prog.DispatchCompute(std::min(kMaxGroupsPerDispatch, groupCount - first), 1, 1);
+    }
+    glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+    static std::vector<std::uint32_t> remap;
+    remap.resize(table.Slots.size());
+    glGetNamedBufferSubData(r.Remap, 0, (GLsizeiptr)(remap.size() * sizeof(std::uint32_t)), remap.data());
+    glGetNamedBufferSubData(r.Commands, 0, (GLsizeiptr)(commands.size() * sizeof(IndirectCommand)), commands.data());
+    RestoreBindings(saved);
+    GLStateCache::Invalidate();
+
+    // The CPU's answer for the same query: each group's slots in GatherVisible's order.
+    static std::vector<VisibleRenderable> visible;
+    GatherVisible(world, q, visible);
+    static std::vector<std::vector<std::uint32_t>> expected;
+    if (expected.size() < table.Groups.size()) expected.resize(table.Groups.size());
+    for (std::size_t g = 0; g < table.Groups.size(); ++g) expected[g].clear();
+    for (const VisibleRenderable& v : visible) {
+        const std::size_t e = (std::size_t)entt::to_entity(v.Entity);
+        if (e >= slotOf.size() || slotOf[e] == DrawTable::kNoGroup) continue; // not batched (posed, ...)
+        expected[table.GroupOf[slotOf[e]]].push_back(slotOf[e]);
+    }
+    static std::vector<std::uint8_t> mark;
+    mark.assign(slotCount, 0);
+    std::uint64_t missing = 0, orderBad = 0, cpuKept = 0, gpuKept = 0;
+    for (std::size_t g = 0; g < table.Groups.size(); ++g) {
+        const Group& grp = table.Groups[g];
+        const std::uint32_t n = std::min(commands[g].InstanceCount, grp.Count);
+        const std::uint32_t* got = remap.data() + grp.Base;
+        for (std::uint32_t k = 0; k < n; ++k)
+            if (got[k] < slotCount) mark[got[k]] = 1;
+        // GatherVisible's survivors must all be there, in its order (the GPU's extras may sit between them).
+        std::uint32_t at = 0;
+        bool ordered = true;
+        for (std::uint32_t slot : expected[g]) {
+            if (!mark[slot]) {
+                ++missing;
+                continue;
+            }
+            while (at < n && got[at] != slot) ++at;
+            if (at == n) ordered = false;
+            else ++at;
+        }
+        orderBad += !ordered;
+        cpuKept += expected[g].size();
+        gpuKept += n;
+        for (std::uint32_t k = 0; k < n; ++k)
+            if (got[k] < slotCount) mark[got[k]] = 0;
+    }
+    const std::uint64_t extra = gpuKept - (cpuKept - missing); // what the GPU kept beyond the expected ones it kept
+    ++g_Totals.Views;
+    g_Totals.Expected += cpuKept;
+    g_Totals.Missing += missing;
+    g_Totals.Extra += extra;
+    g_Totals.OrderBad += orderBad;
+    if (missing || orderBad)
+        Log::Error("[GpuCull] verify: " + std::to_string(missing) + " missing, " + std::to_string(orderBad) +
+                   " groups out of order (" + std::to_string(cpuKept) + " expected in " +
+                   std::to_string(table.Groups.size()) + " groups)");
+    static std::uint64_t reported = 0;
+    if (g_Totals.Views == 1 || g_Totals.Views - reported >= 120) {
+        reported = g_Totals.Views;
+        std::printf("[GpuCull] verify: %llu views, %llu expected, %llu missing, %llu extra, %llu out of order, %llu skipped\n",
+                    (unsigned long long)g_Totals.Views, (unsigned long long)g_Totals.Expected,
+                    (unsigned long long)g_Totals.Missing, (unsigned long long)g_Totals.Extra,
+                    (unsigned long long)g_Totals.OrderBad, (unsigned long long)g_Totals.Skipped);
+        std::fflush(stdout);
+    }
 }
 
 } // namespace GpuCull

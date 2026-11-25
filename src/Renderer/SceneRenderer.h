@@ -85,6 +85,8 @@ struct SceneSlot {
     // reads live (the kSlot* bits below).
     std::uint16_t Flags = 0;
     int Layer = 0;
+    entt::entity Entity = entt::null;                 // who holds the slot (null: nobody now)
+    const RenderableComponent* Renderable = nullptr;  // its renderable (null: it left)
 };
 enum SceneSlotFlag : std::uint16_t {
     kSlotFlagCastOff = 1 << 8,      // Cast Shadows: Off

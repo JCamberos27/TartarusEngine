@@ -565,6 +565,8 @@ bool ReadSceneSlot(std::uint32_t slot, SceneSlot& out) {
     out.Alive = c.Renderable && c.Renderable->ModelRef && !(c.Flags & kCandInactive);
     out.Flags = c.Flags;
     out.Layer = c.Layer;
+    out.Entity = c.Renderable ? c.Entity : entt::null;
+    out.Renderable = c.Renderable;
     if (c.Renderable) { // read live, as GatherVisible's consider() does
         const RenderableComponent& r = *c.Renderable;
         if (r.CastShadows == RenderableComponent::ShadowCasting::Off) out.Flags |= kSlotFlagCastOff;

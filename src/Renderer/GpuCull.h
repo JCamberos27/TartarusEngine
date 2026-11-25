@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 struct VisibilityQuery;
+class World;
 
 // GPU-driven culling (G-2): the per-view visibility test of GatherVisible, run on the GPU over the persistent GPU scene
 // (GpuScene: one slot per candidate), packing each multi-draw group's visible slots IN SLOT ORDER into its remap run
@@ -69,5 +70,32 @@ bool VerifyEnabled();
 
 // The GLSL of stage A + the ordered compaction (exposed for the shader-compile unit test).
 const char* ComputeSource();
+
+// The draw table: the GPU scene's batchable slots (alive, not posed, with a model) grouped by model + material set
+// (InstanceBatch's key), groups in the order of their first slot and slots in slot order within a group.
+struct DrawTable {
+    static constexpr std::uint32_t kNoGroup = ~0u;
+    std::vector<Group> Groups;
+    std::vector<std::uint32_t> Slots;   // the groups' runs, back to back (Group::Base indexes this)
+    std::vector<std::uint32_t> GroupOf; // scene slot -> group (kNoGroup: not batched)
+};
+// Built from the candidate list as it is now (ReadSceneSlot); the GPU scene must be synced this frame.
+void BuildDrawTable(std::uint32_t slotCount, DrawTable& out);
+
+// Verify mode totals since start (TARTARUS_GPU_CULL_VERIFY=1).
+struct VerifyTotals {
+    std::uint64_t Views = 0;    // queries compared
+    std::uint64_t Expected = 0; // batched slots GatherVisible kept
+    std::uint64_t Missing = 0;  // ...that the GPU dropped: a bug
+    std::uint64_t Extra = 0;    // batched slots the GPU kept and GatherVisible didn't (allowed)
+    std::uint64_t OrderBad = 0; // groups whose survivors came out in another order than GatherVisible's
+    std::uint64_t Skipped = 0;  // views not compared (no GPU scene buffers, or the program failed)
+};
+const VerifyTotals& Totals();
+
+// Runs stage A + the compaction on the GPU for `q` over the draw table, reads the result back (waits on the GPU) and
+// compares it group by group with GatherVisible(q). Puts back the storage bindings it took. G2-a: nothing draws from
+// it yet.
+void VerifyView(World& world, const VisibilityQuery& q);
 
 } // namespace GpuCull

@@ -1,6 +1,7 @@
 // SceneRenderer::RenderScene, stage by stage (SceneViewPass.h): one ViewPass per call holds the view's state, and
 // Run() calls the stages in drawing order.
 #include "SceneViewPass.h"
+#include "GpuCull.h"
 #include "AssetCost.h"
 #include "OpaqueBatchKey.h"
 #include "RenderFrameContext.h"
@@ -289,6 +290,14 @@ void SceneRenderer::ViewPass::BuildDrawLists() {
     inView.CellCull = viewCells;
     inView.CellCullCount = m_ViewModelPass ? 2 : 1;
     GatherVisible(world, inView, m_S.Visible);
+    if (GpuCull::Enabled()) { // G2-a verify mode: the GPU's stage A against the same query, then with the camera frustum
+        GpuCull::VerifyView(world, inView);
+        VisibilityQuery framed = inView;
+        framed.Cull = &m_CamFrustum;
+        framed.CellCull = nullptr;
+        framed.CellCullCount = 0;
+        GpuCull::VerifyView(world, framed);
+    }
     {
         PROFILE_SCOPE("Scene: Classify Visible"); // per visible: cull, registry reads, draw items (P-42)
         for (const VisibleRenderable& vis : m_S.Visible) {
