@@ -159,12 +159,17 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
             s_SharedKept.erase(oldest);
         }
     };
-    if (auto live = s_Loaded[key].lock()) { // held by a body (until Invalidate)
-        if (auto kept = s_SharedKept.find(key); kept != s_SharedKept.end() && kept->second.Db == live) kept->second.LastUse = ++s_SharedKeptClock;
-        return live;
+    const auto kept = s_SharedKept.find(key);
+    if (auto live = s_Loaded[key].lock()) {
+        // Held by a body (beyond `live` here and the kept copy): that load until Invalidate, as before.
+        const bool isKept = kept != s_SharedKept.end() && kept->second.Db == live;
+        if (live.use_count() > (isKept ? 2 : 1)) {
+            if (isKept) kept->second.LastUse = ++s_SharedKeptClock;
+            return live;
+        }
     }
     // Nothing holds it: the kept load, unless its files were rewritten since it was read.
-    if (auto kept = s_SharedKept.find(key); kept != s_SharedKept.end()) {
+    if (kept != s_SharedKept.end()) {
         if (kept->second.Stamps == stamps) {
             kept->second.LastUse = ++s_SharedKeptClock;
             s_Loaded[key] = kept->second.Db;
