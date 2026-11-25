@@ -167,6 +167,7 @@ void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const g
     casts.CellCull = casterCells; // castsInto below draws nothing outside every cascade's frustum
     casts.CellCullCount = shadowMap.Count();
     GatherVisible(world, casts, m_Casting);
+    m_SceneWorld = &world;
     for (const VisibleRenderable& v : m_Casting) {
         const auto& r = *v.Renderable;
         SunCaster& sc = m_SunCasters.emplace_back();
@@ -175,6 +176,7 @@ void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const g
         const auto* hide = world.Registry.try_get<OutfitHideTag>(v.Entity);
         sc.visible = hide ? hide->Visible.get() : nullptr;
         sc.xform = v.Xform;
+        sc.slot = v.Slot;
         // #163 - Cast Shadows: Two Sided draws without back-face culling.
         sc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
         // As posed (Model::PosedBounds), the bounds the main pass culls with.
@@ -246,7 +248,7 @@ void ShadowFrame::DrawSunCasters(SunPass& p) {
                 if (!(mask & (1u << c))) { ++c; continue; }
                 int end = c;
                 while (end + 1 < cascadeCount && (mask & (1u << (end + 1)))) ++end;
-                m_Draws.push_back({sc.model, sc.materials, sc.visible, &sc.xform, sc.twoSided, c, end - c + 1});
+                m_Draws.push_back({sc.model, sc.materials, sc.visible, &sc.xform, sc.twoSided, c, end - c + 1, sc.slot});
                 c = end + 1;
             }
         }
@@ -265,7 +267,7 @@ void ShadowFrame::DrawSunCasters(SunPass& p) {
         }
         stage.reset();
         stage.emplace("Sun: Draw Casters");
-        DrawDepthCasters(shadowShader, m_Draws, firstLoc);
+        DrawDepthCasters(shadowShader, m_Draws, firstLoc, m_SceneWorld);
         if (sliceScissor) {
             shadowShader.SetInt(cascadeViewportLoc, 0);
             CascadedShadowMap::EndLayeredScissor();
@@ -282,8 +284,9 @@ void ShadowFrame::DrawSunCasters(SunPass& p) {
             const Frustum& cascadeFrustum = casterCells[c];
             m_Draws.clear();
             for (const SunCaster& sc : m_SunCasters)
-                if (castsInto(sc, c, cascadeFrustum)) m_Draws.push_back({sc.model, sc.materials, sc.visible, &sc.xform, sc.twoSided});
-            DrawDepthCasters(shadowShader, m_Draws);
+                if (castsInto(sc, c, cascadeFrustum))
+                    m_Draws.push_back({sc.model, sc.materials, sc.visible, &sc.xform, sc.twoSided, 0, 1, sc.slot});
+            DrawDepthCasters(shadowShader, m_Draws, -1, m_SceneWorld);
         }
     }
 }
@@ -411,6 +414,7 @@ void ShadowFrame::GatherLocalCasters(const ShadowFrameInputs& in) {
     casts.CellCull = reach.data();
     casts.CellCullCount = (int)reach.size();
     GatherVisible(world, casts, m_Casting);
+    m_SceneWorld = &world;
     const std::uint64_t now = in.frame;
     for (const VisibleRenderable& v : m_Casting) {
         // A cell holds far more than a lamp reaches: the caster itself must touch some light's reach.
@@ -429,6 +433,7 @@ void ShadowFrame::GatherLocalCasters(const ShadowFrameInputs& in) {
         const auto* hide = world.Registry.try_get<OutfitHideTag>(entity);
         lc.visible = hide ? hide->Visible.get() : nullptr;
         lc.xform = v.Xform;
+        lc.slot = v.Slot;
         lc.id = static_cast<std::uint32_t>(entity);
         lc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
         lc.player = world.Registry.any_of<HiddenFromOwnerTag, PlayerBodyTag>(entity);
@@ -506,11 +511,11 @@ void ShadowFrame::DrawLocalCasters(Shader& shader, bool animatedOnes, const Frus
         const LocalCaster* c = m_Visible[vi];
         if ((m_VisibleDynamic[vi] != 0) != animatedOnes) continue;
         if (clip && c->bounded && !clip->Intersects(c->bounds)) continue;
-        m_Draws.push_back({c->model, c->materials, c->visible, &c->xform, c->twoSided});
+        m_Draws.push_back({c->model, c->materials, c->visible, &c->xform, c->twoSided, 0, 1, c->slot});
     }
     m_Stats.CasterDraws += (int)m_Draws.size();
     if (m_CountingStatic) m_Stats.StaticCasterDraws += (int)m_Draws.size();
-    DrawDepthCasters(shader, m_Draws);
+    DrawDepthCasters(shader, m_Draws, -1, m_SceneWorld);
 }
 
 void ShadowFrame::EndLocalPass() {
