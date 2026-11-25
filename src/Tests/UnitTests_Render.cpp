@@ -347,7 +347,7 @@ void GpuSceneMirror() {
     };
     {
         auto& r = w.Registry.get<RenderableComponent>(live[0]);
-        castNext(r);
+        r.CastShadows = RenderableComponent::ShadowCasting::Off;
         scene.Sync(w, false); // transforms untouched: no rebuild, no patch
         CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
         CHECK(matches(-2));

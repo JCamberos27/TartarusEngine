@@ -561,6 +561,7 @@ CandidateCache::LiveKey LiveKeyOf(const Candidate& c) {
 // Re-reads every slot's LiveKey and marks the ones that changed. With `full` it only refills them (every slot goes out
 // anyway). Across the cores: a forest's 150k candidates are one pointer read each, plus the shared material's queue.
 void ScanLiveKeys(CandidateCache& cache, bool full) {
+    PROFILE_SCOPE("GPU Scene Live Scan");
     // Only a full build moves slots; a patch appends (its new slots compare unequal and are marked, as they already are).
     const size_t n = cache.List.size();
     cache.Live.resize(n);
