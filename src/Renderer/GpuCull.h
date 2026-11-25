@@ -12,7 +12,8 @@ class World;
 // and setting its commands' instance counts, so the batched draws come out exactly as the CPU path would order them.
 //
 // Exactness (never a missing object): stage A is the same test as GatherVisible's, on the same data. Where the GPU's
-// float order can differ (frustum planes) it may only draw MORE; the size cull is the CPU formula op for op.
+// float rounding can differ (frustum planes, the size cull's sqrt) it errs by a hair on the kept side, so it may only
+// draw MORE (ComputeSource's slack constants).
 // TARTARUS_GPU_CULL_VERIFY=1 reads the result back every frame (debug only: it waits for the GPU) and compares it with
 // GatherVisible: a slot the CPU keeps and the GPU drops is "missing" (a bug), one the GPU keeps extra is counted.
 //
