@@ -1,6 +1,7 @@
 // Model drawing: material binds (fixed and data-driven), per-mesh render state, the draw and depth-only passes.
 
 #include "Model.h"
+#include <chrono>
 #include "DecalSystem.h"
 #include "SkinHideBuffer.h"
 #include "MaterialAsset.h"
@@ -297,7 +298,23 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
 }
 } // namespace
 
+// G5-0: the CPU time a draw call on a skinned model takes (Model::SkinFrameStats::PosedDrawMs), only while
+// --perf-bench counts (Model::SkinStatsEnabled): no clock reads otherwise.
+namespace {
+struct PosedDrawTimer {
+    explicit PosedDrawTimer(bool skinned) : On(skinned && Model::SkinStatsEnabled()) {
+        if (On) Start = std::chrono::steady_clock::now();
+    }
+    ~PosedDrawTimer() {
+        if (On) Model::NotePosedDraw(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Start).count());
+    }
+    bool On;
+    std::chrono::steady_clock::time_point Start;
+};
+} // namespace
+
 void Model::Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots) {
+    PosedDrawTimer posedTimer(m_D->BoneCounter > 0);
     SetWindFrame(shader);
     const bool preSkinned = UploadBoneMatrices(shader);
     const MaterialLocs& locs = CachedMaterialLocs(shader);
@@ -405,6 +422,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
                          const ProgramSelector& selectProgram, float opacity,
                          const std::function<void(Shader&)>& onProgramBound, MeshPass pass, bool forceDoubleSided,
                          const VisibleIndexBuffer* visible, int instances) {
+    PosedDrawTimer posedTimer(m_D->BoneCounter > 0);
     const glm::mat4 nrm = glm::mat4(NormalMatrix(xform));
 
     Shader*             lastProg = nullptr;
@@ -468,6 +486,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
 
 void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots, int instances,
                           const VisibleIndexBuffer* visible) {
+    PosedDrawTimer posedTimer(m_D->BoneCounter > 0);
     SetWindFrame(shader);
     const bool preSkinned = UploadBoneMatrices(shader);
     const MaterialLocs& locs = CachedMaterialLocs(shader);
@@ -579,6 +598,7 @@ std::uint64_t Model::MeshStateKey(int i, const std::vector<std::shared_ptr<Mater
 bool Model::DrawMeshIndirect(Shader& fallback, int i, const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                              const ProgramSelector& selectProgram, const std::function<void(Shader&)>& onProgramBound,
                              bool forceDoubleSided, const void* indirect, int drawCount, DrawPassState* passState) {
+    PosedDrawTimer posedTimer(m_D->BoneCounter > 0);
     const bool hasSlot = i < (int)slots.size() && slots[i];
     if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) return false;
     const ModelMesh& mesh = *m_D->Meshes[i];

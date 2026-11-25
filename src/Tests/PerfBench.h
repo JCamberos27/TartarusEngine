@@ -100,6 +100,13 @@ private:
     std::vector<Worst> m_Worst;
     Worst m_Pending;
     std::vector<FrameLoads::Event> m_Loads; // the frame's loads, from TakeFrameMs
+    // G5-0: the skinning counters (Model::SkinFrameStats) of the frame TakeFrameMs closed, and their phase sums.
+    struct SkinSums {
+        double Frames = 0, Listed = 0, Dispatched = 0, Idle = 0, Fallback = 0, Verts = 0, Offscreen = 0, OffscreenVerts = 0,
+               PosedDraws = 0, PosedMs = 0, PosedMsMax = 0;
+    };
+    SkinSums m_SkinFrame, m_Skin;
+    void ReportSkin(const char* mode);
     MachineLoad::Snapshot m_LoadStart;      // at the phase's first measured frame
     std::vector<std::pair<std::string, std::vector<double>>> m_Halves; // AddHalf's samples, per key, in first-seen order
     std::vector<std::string> m_UnmappedCpu;
