@@ -124,7 +124,7 @@ void PerfBench::AddCpuHalves() {
 void PerfBench::PrintMachine() const {
     const std::string label = Env::Str(Env::Var::PerfMachine);
     if (!label.empty()) { std::printf("[PerfBench]   MACHINE %s\n", label.c_str()); return; }
-    const char* gpu = reinterpret_cast<const char*>(glGetString(0x1F01 /* GL_RENDERER: not in the loader's header */));
+    const char* gpu = reinterpret_cast<const char*>(glGetString(0x1F01 /* GL_RENDERER */));
     std::printf("[PerfBench]   MACHINE (unlabelled: set TARTARUS_PERF_MACHINE) GPU %s, %d logical cores\n",
                 gpu ? gpu : "?", MachineLoad::Cores());
 }
