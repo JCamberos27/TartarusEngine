@@ -130,6 +130,7 @@
 #include "Log.h"
 #include "TextureCache.h"
 #include "ModelCache.h"
+#include "ProgramBinaryCache.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -881,6 +882,7 @@ private:
         }
         // The cooked model cache: entries unused for a month, crash leftovers, the size cap (Library/Models).
         ModelCache::Prune();
+        ProgramBinaryCache::Prune(); // the linked-program cache (Library/ShaderCache): same rules
         const ModelCache::Stats models = ModelCache::GetStats();
         if (models.Hits + models.Cooked > 0)
             Log::Info("Model cache: " + std::to_string(models.Hits) + " models read (" + std::to_string((int)models.HitMs) +
@@ -2788,6 +2790,8 @@ bool AppSession::Frame() {
 
 // After the last frame: the test runs report, the editor saves its state, everything shuts down. The exit code.
 int AppSession::Finish() {
+    // How many programs this run read from Library/ShaderCache vs compiled (perf-bench / test logs read it).
+    if (const std::string programs = ProgramBinaryCache::Summary(); !programs.empty()) Log::Info(programs);
     if (opt.editorTestsMode) {
         // Like the smoke test: nothing from this run is saved back (the scene is in memory only).
         const int code = EditorUiTests::ExitCode();
