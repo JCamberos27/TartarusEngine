@@ -39,6 +39,9 @@ bool TestBit(const std::vector<std::uint32_t>& bits, std::uint32_t i) {
     return (i >> 5) < bits.size() && ((bits[i >> 5] >> (i & 31u)) & 1u) != 0;
 }
 constexpr std::uint32_t kNone = ~0u;
+// The ground cell a member's group is split by (metres, on x and z): a group's box is then at most about this wide, so
+// a view sends only the groups around it, whatever model they draw.
+constexpr float kGpuTableCell = 32.0f;
 } // namespace
 
 bool SceneRenderer::ViewPass::GpuDrawsWanted() const {
@@ -145,6 +148,9 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
         std::uint32_t Slot, Entity;
         int LayerBit;
         bool ReceiveShadows;
+        bool Bounded;
+        std::uint64_t Cell; // kGpuTableCell square of its centre (~0: no bounds)
+        glm::vec3 WorldMin, WorldMax;
     };
     auto& reg = m_World.Registry;
     static std::vector<Member> items;
@@ -177,8 +183,12 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
         const glm::vec3 centre = s.Bounded ? glm::vec3(model * glm::vec4((s.LocalMin + s.LocalMax) * 0.5f, 1.0f))
                                            : glm::vec3(model[3]);
         const std::uint64_t giMask = gi ? (s.Bounded ? gi->MaskFor(s.WorldMin, s.WorldMax) : gi->AllMask()) : 0;
+        const std::uint64_t cell =
+            s.Bounded ? ((std::uint64_t)(std::uint32_t)(std::int32_t)std::floor(centre.x / kGpuTableCell) << 32) |
+                            (std::uint64_t)(std::uint32_t)(std::int32_t)std::floor(centre.z / kGpuTableCell)
+                      : ~0ull;
         items.push_back({m, &slots, giMask, centre, slot, (std::uint32_t)entt::to_integral(e),
-                         (int)(1u << std::clamp(s.Layer, 0, 31)), r.ReceiveShadows});
+                         (int)(1u << std::clamp(s.Layer, 0, 31)), r.ReceiveShadows, s.Bounded, cell, s.WorldMin, s.WorldMax});
     }
     // A group's lead as the classify step would make its draw item (what the batches bind and the per-draw hook reads).
     const auto makeLead = [&](const Member& mb) {
@@ -214,25 +224,29 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
             const Member& it = items[i];
             std::uint64_t seed = (std::uint64_t)(std::uintptr_t)it.Ref->ImportId() * 0x9E3779B97F4A7C15ull;
             seed ^= (std::uint64_t)Model::MeshPass::All | ((std::uint64_t)it.ReceiveShadows << 5) | ((std::uint64_t)(std::uint32_t)it.LayerBit << 8) |
-                    ((std::uint64_t)probeKey[i] << 32) ^ ((std::uint64_t)it.GIMask * 0xC2B2AE3D27D4EB4Full);
+                    ((std::uint64_t)probeKey[i] << 32) ^ ((std::uint64_t)it.GIMask * 0xC2B2AE3D27D4EB4Full) ^
+                    (it.Cell * 0xD6E8FEB86659FD93ull);
             return HashSlots(*it.Slots, seed);
         },
         [&](std::uint32_t a, std::uint32_t b) {
             const Member& x = items[a];
             const Member& y = items[b];
             return x.Ref->ImportId() == y.Ref->ImportId() && x.ReceiveShadows == y.ReceiveShadows && x.LayerBit == y.LayerBit &&
-                   probeKey[a] == probeKey[b] && x.GIMask == y.GIMask && SameSlots(*x.Slots, *y.Slots);
+                   probeKey[a] == probeKey[b] && x.GIMask == y.GIMask && x.Cell == y.Cell && SameSlots(*x.Slots, *y.Slots);
         },
         groups);
 
     // Runs (in slot order within a group), the opaque and depth items of each group's lead.
     static std::vector<std::uint32_t> runs;
-    static std::vector<GpuCull::Group> stageGroups;
+    std::vector<GpuCull::Group>& stageGroups = t.StageGroups;
     static std::vector<float> sway;
     static std::vector<IndirectItem> opaqueItems, depthItems;
     runs.clear();
     stageGroups.clear();
     sway.clear();
+    t.GroupMin.clear();
+    t.GroupMax.clear();
+    t.GroupAlways.clear();
     opaqueItems.clear();
     depthItems.clear();
     t.Leads.reserve(groups.Groups.size());
@@ -245,6 +259,16 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
             const std::uint32_t slot = items[i].Slot;
             runs.push_back(slot);
             SetBit(t.Owned, slot);
+            const Member& mb = items[i];
+            if (k == 0) {
+                t.GroupMin.push_back(mb.WorldMin);
+                t.GroupMax.push_back(mb.WorldMax);
+                t.GroupAlways.push_back(mb.Bounded ? 0 : 1);
+            } else {
+                t.GroupMin.back() = glm::min(t.GroupMin.back(), mb.WorldMin);
+                t.GroupMax.back() = glm::max(t.GroupMax.back(), mb.WorldMax);
+                if (!mb.Bounded) t.GroupAlways.back() = 1;
+            }
             t.MemberEntity[slot] = items[i].Entity;
             maxEntity = std::max(maxEntity, (std::uint32_t)entt::to_entity(entt::entity{items[i].Entity}));
         }
@@ -348,14 +372,28 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
         if (i < t.OpaqueCommands) slotsBuf[stageGroups[g].CmdFirst + fill[g]++] = i;
         else slotsBuf[stageGroups[g].CmdFirst + opaqueCount[g] + depthFill[g]++] = i;
     }
-    static std::vector<glm::uvec4> hizGroups;
-    hizGroups.clear();
+    t.HizGroups.clear();
     for (std::uint32_t g = 0; g < (std::uint32_t)stageGroups.size(); ++g) {
         std::uint32_t swayBits;
         std::memcpy(&swayBits, &sway[g], 4);
-        hizGroups.push_back({stageGroups[g].Base, swayBits, stageGroups[g].CmdFirst, opaqueCount[g]});
+        t.HizGroups.push_back({stageGroups[g].Base, swayBits, stageGroups[g].CmdFirst, opaqueCount[g]});
     }
-    GpuCull::UploadTable(t.Gl, stageGroups, hizGroups, slotsBuf, t.Members);
+    // Each batch's groups (a batch is drawn when one of them can be seen).
+    const auto batchGroups = [&](const std::vector<IndirectBatch>& batches, std::vector<std::uint32_t>& out,
+                                 std::vector<std::uint32_t>& at) {
+        out.clear();
+        at.assign(1, 0);
+        for (const IndirectBatch& b : batches) {
+            for (std::uint32_t c = b.First; c < b.First + b.Count; ++c) {
+                const std::uint32_t g = groupOfBase[t.Commands[c].BaseInstance];
+                if (out.size() == at.back() || out.back() != g) out.push_back(g); // a group's commands sit together
+            }
+            at.push_back((std::uint32_t)out.size());
+        }
+    };
+    batchGroups(t.OpaqueBatches, t.OpaqueBatchGroups, t.OpaqueBatchAt);
+    batchGroups(t.DepthBatches, t.DepthBatchGroups, t.DepthBatchAt);
+    GpuCull::UploadTable(t.Gl, slotsBuf, t.Members);
 }
 
 void SceneRenderer::ViewPass::CullGpuView(const VisibilityQuery& framed) {
@@ -372,12 +410,33 @@ void SceneRenderer::ViewPass::CullGpuView(const VisibilityQuery& framed) {
         const std::uint32_t slot = t.SlotOfEntity[index];
         if (slot != kNone && t.MemberEntity[slot] == integral) SetBit(t.Reject, slot);
     }
-    // This view's counts go into its own copy of the commands (views draw in turn from one table).
+    // The groups this view can see (their joined boxes against its frustum), and the batches holding one.
+    const std::size_t groups = t.StageGroups.size();
+    t.GroupSeen.assign(groups, 0);
+    t.ViewStage.clear();
+    t.ViewHiz.clear();
+    for (std::size_t g = 0; g < groups; ++g) {
+        if (!t.GroupAlways[g] && framed.Cull && !framed.Cull->Intersects(AABB{t.GroupMin[g], t.GroupMax[g]})) continue;
+        t.GroupSeen[g] = 1;
+        t.ViewStage.push_back(t.StageGroups[g]);
+        t.ViewHiz.push_back(t.HizGroups[g]);
+    }
+    const auto batchesOn = [&](const std::vector<std::uint32_t>& list, const std::vector<std::uint32_t>& at,
+                               std::vector<std::uint8_t>& on) {
+        on.assign(at.size() - 1, 0);
+        for (std::size_t b = 0; b + 1 < at.size(); ++b)
+            for (std::uint32_t k = at[b]; k < at[b + 1] && !on[b]; ++k) on[b] = t.GroupSeen[list[k]];
+    };
+    batchesOn(t.OpaqueBatchGroups, t.OpaqueBatchAt, t.OpaqueBatchOn);
+    batchesOn(t.DepthBatchGroups, t.DepthBatchAt, t.DepthBatchOn);
+    if (t.ViewStage.empty()) return; // nothing of the table in view
+    // This view's counts go into its own copy of the commands (views draw in turn from one table); the groups it
+    // doesn't send keep 0.
     IndirectBuffer::Upload(t.Commands);
     m_GpuCmdBuffer = IndirectBuffer::Handle();
     m_GpuCmdBase = IndirectBuffer::Base();
     IndirectBuffer::BindStorage(29);
-    m_GpuCulled = GpuCull::CullView(t.Gl, GpuCull::MakeQuery(framed), t.Reject);
+    m_GpuCulled = GpuCull::CullView(t.Gl, t.ViewStage, GpuCull::MakeQuery(framed), t.Reject);
     m_GpuRemap = t.Gl.StageA;
     m_ModelShader.Bind();
 }
@@ -395,7 +454,9 @@ void SceneRenderer::ViewPass::DrawGpuDepth(Shader& depth) {
     GLint passFace = GL_BACK;
     glGetIntegerv(GL_CULL_FACE_MODE, &passFace);
     int cullNow = 0;
-    for (const IndirectBatch& b : t.DepthBatches) {
+    for (std::size_t bi = 0; bi < t.DepthBatches.size(); ++bi) {
+        if (!t.DepthBatchOn[bi]) continue;
+        const IndirectBatch& b = t.DepthBatches[bi];
         const SceneGpuTable::DepthTag& tag = t.DepthTags[b.Tag];
         const DrawItem& lead = t.Leads[tag.Group];
         const int cull = (int)((b.Key >> 45) & 3);
@@ -429,8 +490,8 @@ void SceneRenderer::ViewPass::CullGpuHiz() {
     c.Viewport = glm::vec4(m_Fs.vp[0], m_Fs.vp[1], m_Fs.vp[2], m_Fs.vp[3]);
     c.ViewProj = m_Ctx.Proj * m_Ctx.View;
     c.Eye = m_Ctx.ViewPos;
-    c.Groups = t.Gl.HizGroups;
-    c.GroupCount = t.Gl.GroupCount;
+    c.Groups = t.ViewHiz.data();
+    c.GroupCount = (std::uint32_t)t.ViewHiz.size();
     c.Bounds = GpuScene::Get().BoundsBuffer();
     c.BoundsBytes = (std::size_t)GpuScene::Get().Count() * 2 * sizeof(glm::vec4);
     c.CmdList = t.Gl.Slots;
@@ -460,8 +521,9 @@ void SceneRenderer::ViewPass::DrawGpuOpaque(Model::DrawPassState& passState, uns
     const auto floatBits = [](float f) { std::uint32_t u; std::memcpy(&u, &f, 4); return u; };
     // Grouped by program, render state and material, as the CPU path's pre-passed batches draw.
     static std::vector<std::uint32_t> order;
-    order.resize(t.OpaqueBatches.size());
-    for (std::uint32_t i = 0; i < (std::uint32_t)order.size(); ++i) order[i] = i;
+    order.clear();
+    for (std::uint32_t i = 0; i < (std::uint32_t)t.OpaqueBatches.size(); ++i)
+        if (t.OpaqueBatchOn[i]) order.push_back(i);
     std::sort(order.begin(), order.end(), [&](std::uint32_t a, std::uint32_t b) {
         const SceneOpaqueTag& x = t.OpaqueTags[t.OpaqueBatches[a].Tag];
         const SceneOpaqueTag& y = t.OpaqueTags[t.OpaqueBatches[b].Tag];

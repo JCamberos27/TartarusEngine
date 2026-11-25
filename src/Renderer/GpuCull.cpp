@@ -310,29 +310,22 @@ bool DrawsEnabled() {
     return !off && GpuScene::Enabled() && MultiDrawEnabled() && EnsureProgram();
 }
 
-void UploadTable(DrawBuffers& b, const std::vector<Group>& groups, const std::vector<glm::uvec4>& hizGroups,
-                 const std::vector<std::uint32_t>& slots, std::uint32_t runSlots) {
-    if (!b.Groups) {
-        glCreateBuffers(1, &b.Groups);
-        glCreateBuffers(1, &b.HizGroups);
-        glCreateBuffers(1, &b.Slots);
-    }
-    const auto put = [](unsigned buf, const void* data, std::size_t bytes) {
-        static const std::uint32_t none[4] = {};
-        glNamedBufferData(buf, (GLsizeiptr)std::max<std::size_t>(bytes, 16), bytes ? data : none, GL_STATIC_DRAW);
-    };
-    put(b.Groups, groups.data(), groups.size() * sizeof(Group));
-    put(b.HizGroups, hizGroups.data(), hizGroups.size() * sizeof(glm::uvec4));
-    put(b.Slots, slots.data(), slots.size() * sizeof(std::uint32_t));
+void UploadTable(DrawBuffers& b, const std::vector<std::uint32_t>& slots, std::uint32_t runSlots) {
+    if (!b.Slots) glCreateBuffers(1, &b.Slots);
+    static const std::uint32_t none[4] = {};
+    const std::size_t bytes = slots.size() * sizeof(std::uint32_t);
+    glNamedBufferData(b.Slots, (GLsizeiptr)std::max<std::size_t>(bytes, 16), bytes ? (const void*)slots.data() : none,
+                      GL_STATIC_DRAW);
     EnsureStore(b.StageA, g_StageACap, std::max<std::size_t>(runSlots, 1) * sizeof(std::uint32_t));
     EnsureStore(b.Final, g_FinalCap, std::max<std::size_t>(runSlots, 1) * sizeof(std::uint32_t));
-    b.GroupCount = (std::uint32_t)groups.size();
     b.RunSlots = runSlots;
 }
 
-bool CullView(const DrawBuffers& b, const ViewQuery& q, const std::vector<std::uint32_t>& reject) {
+bool CullView(const DrawBuffers& b, const std::vector<Group>& groups, const ViewQuery& q,
+              const std::vector<std::uint32_t>& reject) {
     GpuScene& scene = GpuScene::Get();
-    if (!b.GroupCount || !scene.Ready() || !scene.BoundsBuffer() || scene.Count() == 0 || !EnsureProgram()) return false;
+    if (groups.empty() || !b.Slots || !scene.Ready() || !scene.BoundsBuffer() || scene.Count() == 0 || !EnsureProgram())
+        return false;
     PROFILE_GPU_SCOPE("GPU Cull");
     const std::uint32_t none = 0;
     const std::size_t rejectBytes = std::max<std::size_t>(reject.size(), 1) * sizeof(std::uint32_t);
@@ -343,14 +336,18 @@ bool CullView(const DrawBuffers& b, const ViewQuery& q, const std::vector<std::u
     }
     glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 22, scene.BoundsBuffer(), 0,
                       (GLsizeiptr)scene.Count() * 2 * (GLsizeiptr)sizeof(glm::vec4));
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 23, b.Groups);
+    if (!InstanceBuffer::UploadRange(23, groups.data(), groups.size() * sizeof(Group))) {
+        Resources& r = Res();
+        glNamedBufferData(r.Groups, (GLsizeiptr)(groups.size() * sizeof(Group)), groups.data(), GL_STREAM_DRAW);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 23, r.Groups);
+    }
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 24, b.Slots);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 28, b.StageA);
     Shader& prog = *Res().Program;
     prog.Bind();
     SetQueryUniforms(prog, q);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT); // the GPU scene's uploads land first
-    Dispatch(prog, b.GroupCount);
+    Dispatch(prog, (std::uint32_t)groups.size());
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
     GLStateCache::Invalidate();
     return true;

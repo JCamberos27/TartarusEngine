@@ -56,7 +56,7 @@ public:
         glm::vec4 Viewport{0.0f};
         glm::mat4 ViewProj{1.0f};
         glm::vec3 Eye{0.0f};
-        unsigned Groups = 0;
+        const glm::uvec4* Groups = nullptr; // this view's groups (uploaded here)
         std::uint32_t GroupCount = 0;
         unsigned Bounds = 0;
         std::size_t BoundsBytes = 0;

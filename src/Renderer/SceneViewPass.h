@@ -123,12 +123,24 @@ struct SceneGpuTable {
     std::vector<IndirectBatch> DepthBatches;   // First indexes Commands (after the opaque ones)
     std::vector<IndirectCommand> Commands;     // the opaque batches' commands, then the depth batches'
     std::uint32_t OpaqueCommands = 0;
+    // Groups are split by ground cell (kGpuTableCell), so each has a box the view tests before anything is sent: only
+    // groups that can be seen are culled on the GPU, and only batches holding one are drawn.
+    std::vector<GpuCull::Group> StageGroups;   // per group: run base, count, command list at, every command
+    std::vector<glm::uvec4> HizGroups;         // per group: run base, foliage sway bits, command list at, opaque commands
+    std::vector<glm::vec3> GroupMin, GroupMax; // the members' world bounds, joined
+    std::vector<std::uint8_t> GroupAlways;     // a member without bounds: always sent
+    std::vector<std::uint32_t> OpaqueBatchGroups, DepthBatchGroups; // each batch's groups, back to back
+    std::vector<std::uint32_t> OpaqueBatchAt, DepthBatchAt;         // where batch i's start (size + 1)
     std::uint32_t Members = 0;
     GpuCull::DrawBuffers Gl;
     // Per frame / view scratch.
     std::vector<std::uint32_t> Cleared;  // Owned bits cleared for this frame (fading, blood): set again next frame
     std::vector<std::uint32_t> Reject;   // the view's stage-A reject bits
     std::vector<std::uint32_t> MovedNow; // TakeMovedSceneSlots
+    std::vector<std::uint8_t> GroupSeen;  // the view's
+    std::vector<GpuCull::Group> ViewStage;
+    std::vector<glm::uvec4> ViewHiz;
+    std::vector<std::uint8_t> OpaqueBatchOn, DepthBatchOn;
 };
 
 // The scene pass's per-frame lists, reused across views and frames rather than reallocated each call. Owned by the

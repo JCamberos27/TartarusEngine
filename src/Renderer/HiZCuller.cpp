@@ -273,7 +273,11 @@ bool HiZCuller::CullChained(const Chained& c) {
     Resources& r = Res();
     const Resources::Pyramid& pyr = c.PyramidBuilt ? EnsurePyramid(c.W, c.H) : BuildPyramidFor(c.DepthTex, c.W, c.H);
     glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 22, c.Bounds, 0, (GLsizeiptr)c.BoundsBytes);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 23, c.Groups);
+    const std::size_t groupBytes = (std::size_t)c.GroupCount * sizeof(glm::uvec4);
+    if (!InstanceBuffer::UploadRange(23, c.Groups, groupBytes)) {
+        glNamedBufferData(r.Groups, (GLsizeiptr)groupBytes, c.Groups, GL_STREAM_DRAW);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 23, r.Groups);
+    }
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 24, c.CmdList);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 25, c.InSlots);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 28, c.OutRemap);
@@ -281,13 +285,8 @@ bool HiZCuller::CullChained(const Chained& c) {
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
     SetCullUniforms(*r.Cull, c.ViewProj, c.Viewport, c.W, c.H, pyr.Levels, c.Eye, 2);
     glBindTextureUnit(40, pyr.Tex);
-    constexpr std::uint32_t kMaxGroupsPerDispatch = 65535;
-    for (std::uint32_t first = 0; first < c.GroupCount; first += kMaxGroupsPerDispatch) {
-        // A group offset would need a uniform the classic mode lacks: past 65535 groups, rebind 23 at an offset.
-        if (first) glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 23, c.Groups, (GLintptr)first * 16,
-                                     (GLsizeiptr)(std::min(kMaxGroupsPerDispatch, c.GroupCount - first)) * 16);
-        r.Cull->DispatchCompute(std::min(kMaxGroupsPerDispatch, c.GroupCount - first), 1, 1);
-    }
+    // One work group per group (GL guarantees 65535 in one dimension: more than any view's groups).
+    r.Cull->DispatchCompute(std::min<std::uint32_t>(c.GroupCount, 65535u), 1, 1);
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
     GLStateCache::Invalidate();
     return true;
