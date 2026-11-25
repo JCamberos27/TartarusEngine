@@ -446,7 +446,6 @@ static std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const 
     // Queue / surface fields — both formats (#105: v1 used to drop them, so a transparent or
     // cutout v1 material reverted to opaque on reload). Opaque by default.
     ma->RenderQueue = (Queue)std::clamp(top.Int("renderQueue", (int)Queue::Opaque), 0, 2);
-    NoteRenderSettingsChanged();
     ma->QueueIndex  = top.Int("queueIndex", 2000);
     ma->Opacity     = std::clamp(top.Num("opacity", 1.0f), 0.0f, 1.0f);
     // #101 — the AlphaTest queue now actually clips (it rendered exactly like Opaque).
@@ -498,7 +497,6 @@ static std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const 
         if (ma->Shader && ma->Shader->RenderState().Queue >= 0 && !j.contains("renderQueue")) {
             const ShaderRenderState& st = ma->Shader->RenderState();
             ma->RenderQueue = (Queue)st.Queue;
-            NoteRenderSettingsChanged();
             if (!j.contains("queueIndex")) ma->QueueIndex = st.QueueIndex;
             m.AlphaClip = ma->RenderQueue == Queue::AlphaTest;
         }

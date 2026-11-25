@@ -652,7 +652,7 @@ bool SetColourway(World& world, AssetLibrary& assets, entt::entity piece, const 
     bool any = false;
     for (size_t i = 0; i < sources.size(); ++i)
         if (!sources[i].empty() && Same(sources[i], source)) { rc->Materials[i] = mat; any = true; }
-        NoteRenderSettingsChanged();
+    if (any) NoteRenderSettingsChanged();
     // What caches the outfit's look (the first-person body's twins) notices by the look version: the pieces are the same
     // (no Version bump, which would rebuild the body).
     if (any)
