@@ -4,6 +4,7 @@
 #include "gl.h"
 #include "Core/Env.h"
 #include "Core/Log.h"
+#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <memory>
@@ -246,12 +247,45 @@ bool SkinEnabled() {
     return on && Enabled();
 }
 
+namespace {
+std::size_t g_VaosTaken = 0, g_PlayVaosAtBegin = 0, g_LastPlayVaosTaken = 0;
+bool g_InPlay = false;
+} // namespace
+
 unsigned TakeVao() {
+    ++g_VaosTaken;
     if (g_SpareVaos.empty()) RefillVaos();
     const GLuint v = g_SpareVaos.back();
     g_SpareVaos.pop_back();
     return v;
 }
+
+std::size_t SkinnedPlayVaoReserve(std::size_t lastPlayTaken) {
+    return std::max<std::size_t>(kFirstPlayVaos, lastPlayTaken + kPlayVaoMargin);
+}
+
+void SkinnedPlayBegin() {
+    g_InPlay = true;
+    g_PlayVaosAtBegin = g_VaosTaken;
+    if (!SkinEnabled()) return;
+    const std::size_t want = SkinnedPlayVaoReserve(g_LastPlayVaosTaken);
+    if (g_SpareVaos.size() >= want) return;
+    // One batch: the wait is the driver thread draining, not the count.
+    std::vector<GLuint> ids(want - g_SpareVaos.size());
+    glCreateVertexArrays((GLsizei)ids.size(), ids.data());
+    for (GLuint v : ids) ConfigureModelVao(v, 0, 0);
+    g_SpareVaos.insert(g_SpareVaos.end(), ids.begin(), ids.end());
+}
+
+void SkinnedPlayEnd() {
+    if (!g_InPlay) return;
+    g_InPlay = false;
+    g_LastPlayVaosTaken = g_VaosTaken - g_PlayVaosAtBegin;
+}
+
+std::size_t SpareVaos() { return g_SpareVaos.size(); }
+std::size_t VaosTaken() { return g_VaosTaken; }
+std::size_t LastPlayVaosTaken() { return g_LastPlayVaosTaken; }
 
 void WarmSkinned() {
     if (!SkinEnabled()) return;
