@@ -15,6 +15,8 @@
 #include <iterator>
 #include <string>
 
+#include <json.hpp>
+
 bool ScratchInstanceNameValid(const std::string& name) {
     return name.size() <= 32 &&
            std::all_of(name.begin(), name.end(), [](unsigned char ch) { return std::isalnum(ch) || ch == '-' || ch == '_'; });
@@ -51,6 +53,29 @@ bool UseScratchFolder(const char* what, const std::string& base) {
     return false;
 }
 
+// A harness run draws Shaded whatever view mode the user left the editor in: an Unlit or Wireframe pref turned every
+// smoke, perf-bench and editor-shot capture (the Game view too, which shares the pref) into a picture without lighting
+// or shadows. Only the scratch copy changes; the user's own prefs keep their mode. One line says what the run uses.
+void ForceShadedPrefs(const char* what, const std::filesystem::path& prefs) {
+    int had = 0; // no prefs, or no mode in them: the editor's default, Shaded
+    nlohmann::json j;
+    if (std::ifstream in(prefs); in) j = nlohmann::json::parse(in, nullptr, /*allow_exceptions=*/false);
+    if (j.is_object() && j.contains("shadingMode") && j["shadingMode"].is_number_integer()) had = j["shadingMode"].get<int>();
+    if (had != 0) {
+        j["shadingMode"] = 0; // EditorLayer::ShadingMode::Shaded
+        std::ofstream out(prefs, std::ios::trunc);
+        out << j.dump(2);
+        out.close();
+        if (!out) {
+            std::cerr << what << ": view mode " << had << " (could not write Shaded into this run's prefs copy)" << std::endl;
+            return;
+        }
+    }
+    std::cerr << what << ": view mode Shaded"
+              << (had != 0 ? " (the user's prefs have mode " + std::to_string(had) + "; this run's copy set to Shaded)" : std::string())
+              << std::endl;
+}
+
 // Copies the prefs and layout the user sees into the scratch folder this run may freely rewrite (window placement,
 // layout, last scene). UserPaths::Root() pins on first use, so the real folder comes from BaseDir() instead.
 bool CopyUserPrefsToScratch(const char* what, const std::string& base, bool dropLayout) {
@@ -68,6 +93,7 @@ bool CopyUserPrefsToScratch(const char* what, const std::string& base, bool drop
     for (const char* f : {"imgui.ini", "editor_prefs.json", "shortcuts.json"})
         fs::copy_file(real / f, scratch / f, fs::copy_options::overwrite_existing, ec);
     if (dropLayout) fs::remove(scratch / "imgui.ini", ec);
+    ForceShadedPrefs(what, scratch / "editor_prefs.json");
     return true;
 }
 
