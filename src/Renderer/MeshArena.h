@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <vector>
@@ -74,5 +75,18 @@ void WarmSkinned();
 // returns a name, and a vertex array's first use builds it, so with the driver's threaded optimization each waited
 // for the driver thread to drain everything queued before it: 2-6 ms mid-Play. WarmSkinned refills the batch.
 unsigned TakeVao();
+
+// P-56: making vertex arrays waits on the driver thread (5-7 ms a batch, whatever its size), and a Play takes ~330-370
+// of them (the wardrobe's skinned pieces), so WarmSkinned's refill ran mid-Play once or twice. Play entry (a frame that
+// already stalls ~0.6 s) makes them up front instead: SkinnedPlayBegin tops the spare ones up to SkinnedPlayVaoReserve
+// of what the last Play took (the first Play: kFirstPlayVaos), and SkinnedPlayEnd (Stop) records what this one took.
+inline constexpr std::size_t kFirstPlayVaos = 448; // the Forest's and Hallway's first Play took 358-365 (2026-11-25)
+inline constexpr std::size_t kPlayVaoMargin = 64;  // WarmSkinned refills below a quarter batch: the reserve keeps that much over
+std::size_t SkinnedPlayVaoReserve(std::size_t lastPlayTaken); // max(kFirstPlayVaos, last + kPlayVaoMargin); 0 = no Play yet
+void SkinnedPlayBegin();
+void SkinnedPlayEnd();
+std::size_t SpareVaos();         // spare (made, unused) skinned vertex arrays
+std::size_t VaosTaken();         // TakeVao calls since start
+std::size_t LastPlayVaosTaken(); // what the last finished Play took (0 before one)
 
 } // namespace MeshArena

@@ -1056,6 +1056,16 @@ void MeshArenaFreeList() {
     CHECK(f.Take(100) == 0 && f.Take(1) == ~0u);
 }
 
+// P-56: Play entry's skinned VAO reserve: the first Play gets kFirstPlayVaos; a later one what the last took plus the
+// margin WarmSkinned refills under, never less than the first Play's.
+void MeshArenaPlayVaoReserve() {
+    CHECK(MeshArena::SkinnedPlayVaoReserve(0) == MeshArena::kFirstPlayVaos);
+    CHECK(MeshArena::SkinnedPlayVaoReserve(100) == MeshArena::kFirstPlayVaos);
+    CHECK(MeshArena::SkinnedPlayVaoReserve(365) == MeshArena::kFirstPlayVaos); // the measured first Play fits
+    CHECK(MeshArena::kFirstPlayVaos >= 365 + MeshArena::kPlayVaoMargin);
+    CHECK(MeshArena::SkinnedPlayVaoReserve(1000) == 1000 + MeshArena::kPlayVaoMargin);
+}
+
 // GpuCull (G-2): stage A's CPU reference gives GatherVisible's answer for every slot - the same flag tests, Frustum::
 // Intersects, the Within box and TooSmallOnScreen - over random boxes, flags, layers and queries (camera, owner view,
 // editor view with a layer mask, shadow casters with a Within box). Slots are packed by GpuScene::Pack, so the GPU
@@ -3526,6 +3536,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Async uploads: a model's later upload that holds ring space is stepped too", ModelUploadStepsFreeTheRing});
     tests.push_back({"GPU-driven draws: indirect batches by key, in first-appearance order", IndirectBuilder});
     tests.push_back({"GPU-driven draws: mesh arena free list is first-fit and coalesces", MeshArenaFreeList});
+    tests.push_back({"Mesh arena: Play entry's skinned VAO reserve (P-56)", MeshArenaPlayVaoReserve});
     tests.push_back({"GPU occlusion culling: box padding", HiZPieces});
     tests.push_back({"GPU culling: stage A matches the CPU gather", GpuCullStageAMatchesCpu});
     tests.push_back({"GPU culling: sun caster cascades match the CPU", GpuCullCasterCascadesMatchCpu});
