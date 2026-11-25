@@ -36,6 +36,14 @@
 #define GL_FRAGMENT_SHADER 0x8B30
 #define GL_COMPILE_STATUS 0x8B81
 #define GL_LINK_STATUS 0x8B82
+// Program binaries (GL 4.1 core / ARB_get_program_binary): ProgramBinaryCache.
+#define GL_PROGRAM_BINARY_RETRIEVABLE_HINT 0x8257
+#define GL_PROGRAM_BINARY_LENGTH 0x8741
+#define GL_NUM_PROGRAM_BINARY_FORMATS 0x87FE
+#ifndef GL_VENDOR
+#define GL_VENDOR 0x1F00
+#define GL_RENDERER 0x1F01
+#endif
 #define GL_ACTIVE_UNIFORMS 0x8B86
 #define GL_ACTIVE_UNIFORM_MAX_LENGTH 0x8B87
 #define GL_INFO_LOG_LENGTH 0x8B84
@@ -370,6 +378,9 @@ typedef GLuint (__stdcall* PFNGLCREATEPROGRAMPROC)(void);
 typedef void (__stdcall* PFNGLATTACHSHADERPROC)(GLuint, GLuint);
 typedef void (__stdcall* PFNGLLINKPROGRAMPROC)(GLuint);
 typedef void (__stdcall* PFNGLGETPROGRAMIVPROC)(GLuint, GLenum, GLint*);
+typedef void (__stdcall* PFNGLGETPROGRAMBINARYPROC)(GLuint, GLsizei, GLsizei*, GLenum*, void*);
+typedef void (__stdcall* PFNGLPROGRAMBINARYPROC)(GLuint, GLenum, const void*, GLsizei);
+typedef void (__stdcall* PFNGLPROGRAMPARAMETERIPROC)(GLuint, GLenum, GLint);
 typedef void (__stdcall* PFNGLGETPROGRAMINFOLOGPROC)(GLuint, GLsizei, GLsizei*, GLchar*);
 typedef void (__stdcall* PFNGLUSEPROGRAMPROC)(GLuint);
 typedef void (__stdcall* PFNGLDELETEPROGRAMPROC)(GLuint);
@@ -484,6 +495,10 @@ extern TARTARUS_CORE_API PFNGLATTACHSHADERPROC glAttachShader;
 extern TARTARUS_CORE_API PFNGLLINKPROGRAMPROC glLinkProgram;
 extern TARTARUS_CORE_API PFNGLGETPROGRAMIVPROC glGetProgramiv;
 extern TARTARUS_CORE_API PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
+// Optional (GLLoader_Init doesn't fail without them): null means no program binary cache.
+extern TARTARUS_CORE_API PFNGLGETPROGRAMBINARYPROC glGetProgramBinary;
+extern TARTARUS_CORE_API PFNGLPROGRAMBINARYPROC glProgramBinary;
+extern TARTARUS_CORE_API PFNGLPROGRAMPARAMETERIPROC glProgramParameteri;
 extern TARTARUS_CORE_API PFNGLUSEPROGRAMPROC glUseProgram;
 extern TARTARUS_CORE_API PFNGLDELETEPROGRAMPROC glDeleteProgram;
 extern TARTARUS_CORE_API PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;

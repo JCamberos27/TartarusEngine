@@ -16,6 +16,7 @@
 #include "../Renderer/AssetCost.h"
 #include "../Renderer/SceneViewPass.h"
 #include "../Renderer/SkyAtmosphere.h"
+#include "../Renderer/ProgramBinaryCache.h"
 #include "../Renderer/Material.h"
 #include "../Renderer/RenderFrameContext.h"
 #include "../Core/TimeService.h"
@@ -2473,7 +2474,66 @@ void TestMaterialRobustness() {
 
 } // namespace
 
+// A-2: the linked-program cache's key and entry file. A changed source, a stage boundary moved, another driver, a
+// corrupt or truncated file are all misses; a clean entry reads back byte-exact; Prune keeps a fresh entry.
+void ProgramBinaryCacheKeyAndEntry() {
+    namespace PBC = ProgramBinaryCache;
+    const PBC::Key a = PBC::MakeKeyFor({"#version 460\nvoid main(){}", "#version 460\nout vec4 c; void main(){c=vec4(1);}"});
+    CHECK(a.Valid);
+    CHECK(a.Source == PBC::MakeKeyFor({"#version 460\nvoid main(){}", "#version 460\nout vec4 c; void main(){c=vec4(1);}"}).Source);
+    // One character changed (a variant #define) -> a different key.
+    CHECK(a.Source != PBC::MakeKeyFor({"#version 460\nvoid main(){}", "#version 460\nout vec4 c; void main(){c=vec4(0);}"}).Source);
+    // The same text split differently between stages -> a different key.
+    CHECK(PBC::MakeKeyFor({"ab", "c"}).Source != PBC::MakeKeyFor({"a", "bc"}).Source);
+    // A compute program with the vertex stage's text is not the vertex+fragment program.
+    CHECK(PBC::MakeKeyFor({"x"}).Source != PBC::MakeKeyFor({"x", ""}).Source);
+    CHECK(a.SourceBytes == 26 + 48);
+
+    const std::string driver = "NVIDIA Corporation | GeForce Test | 4.6.0 NVIDIA 999.99";
+    std::string blob(4096, '\0');
+    for (size_t i = 0; i < blob.size(); ++i) blob[i] = (char)(i * 31 + 7);
+    std::uint32_t format = 0;
+    std::string out;
+
+    const std::string entry = PBC::EncodeEntry(a, driver, 0x8E21u, blob);
+    CHECK(PBC::DecodeEntry(entry, a, driver, format, out) && format == 0x8E21u && out == blob);
+    CHECK(!PBC::DecodeEntry(entry, a, driver + " (updated)", format, out)); // another driver
+    PBC::Key other = a;
+    other.Source ^= 1;
+    CHECK(!PBC::DecodeEntry(entry, other, driver, format, out)); // another program's entry
+    other = a;
+    other.SourceBytes += 1;
+    CHECK(!PBC::DecodeEntry(entry, other, driver, format, out)); // a hash collision with a different length
+    std::string corrupt = entry;
+    corrupt[corrupt.size() - 100] ^= 0x40;
+    CHECK(!PBC::DecodeEntry(corrupt, a, driver, format, out)); // a flipped bit in the binary
+    CHECK(!PBC::DecodeEntry(std::string_view(entry).substr(0, entry.size() - 1), a, driver, format, out)); // truncated
+    CHECK(!PBC::DecodeEntry(entry + "x", a, driver, format, out));                                        // trailing bytes
+    CHECK(!PBC::DecodeEntry({}, a, driver, format, out));
+    CHECK(!PBC::DecodeEntry(PBC::EncodeEntry(a, driver, 1, {}), a, driver, format, out)); // an empty binary
+
+    // Through the folder: write, read back, a miss for another driver, Prune keeps it, Clear removes it.
+    const std::filesystem::path dir = UnitTestSupport::TempDir("program_cache");
+    PBC::SetDirectoryForTests((dir / "ShaderCache").string());
+    struct Restore { ~Restore() { ProgramBinaryCache::SetDirectoryForTests(""); } } restore;
+    PBC::Clear();
+    CHECK(PBC::DiskUsage().Entries == 0);
+    CHECK(!PBC::ReadEntryForTests(a, driver, format, out)); // nothing stored yet
+    CHECK(PBC::WriteEntryForTests(a, driver, 0x8E21u, blob));
+    CHECK(PBC::DiskUsage().Entries == 1);
+    out.clear();
+    CHECK(PBC::ReadEntryForTests(a, driver, format, out) && out == blob);
+    CHECK(!PBC::ReadEntryForTests(a, "AMD | Radeon | 4.6", format, out));
+    CHECK(PBC::WriteEntryForTests(a, driver, 0x8E21u, blob + "more")); // a re-store replaces the entry in place
+    CHECK(PBC::DiskUsage().Entries == 1);
+    CHECK(PBC::ReadEntryForTests(a, driver, format, out) && out == blob + "more");
+    PBC::Prune();
+    CHECK(PBC::DiskUsage().Entries == 1);
+    CHECK(PBC::Clear() == 1 && PBC::DiskUsage().Entries == 0);
+}
+
 void RegisterRenderTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"Program binary cache: key, entry checks, folder round trip", ProgramBinaryCacheKeyAndEntry});
     tests.push_back({"GI: L1 SH projection of known environments", GISphericalHarmonics});
     tests.push_back({"GI: volume lookup, bake file, weights follow circuits", GIVolumeLookup});
     tests.push_back({"Shader constants match their C++ sources", ShaderConstantsMatch});
