@@ -8,7 +8,6 @@
 
 #include "Camera.h"
 #include "Components.h"
-#include "Core/Env.h"
 #include "GameModuleAPI.h"
 #include "IK.h"
 #include "Log.h"
@@ -211,14 +210,12 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         }
         m.ApplyLocalPose(pose);
     };
-    // TARTARUS_FP_PIECE_DEDUPE: solved once, on the driver, and its legs' bones copied to the other pieces - every piece
-    // carries the driver's pose (they agree to ~0.08 degrees going in), so each re-solving it got the same legs again.
-    // Off: every piece solves its own, as before.
-    static const bool dedupe = Env::Flag(Env::Var::FpPieceDedupe);
+    // Solved once, on the driver, and its legs' bones copied to the other pieces: every piece carries the driver's pose
+    // (they agree to ~0.08 degrees going in), so each re-solving it got the same legs again - and now they match it exactly.
+    // Without a driver piece every piece solves its own.
     size_t driver = m_Models.size();
-    if (dedupe)
-        for (size_t k = 0; k < m_Models.size() && k < m_Pieces.size(); ++k)
-            if (m_Pieces[k] == m_Driver && m_Models[k]) driver = k;
+    for (size_t k = 0; k < m_Models.size() && k < m_Pieces.size(); ++k)
+        if (m_Pieces[k] == m_Driver && m_Models[k]) driver = k;
     bool solved[2];
     if (driver == m_Models.size()) {
         for (const auto& mp : m_Models) solveLegs(*mp, solved);

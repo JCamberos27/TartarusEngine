@@ -8,7 +8,6 @@
 
 #include "Camera.h"
 #include "Components.h"
-#include "Core/Env.h"
 #include "GameModuleAPI.h"
 #include "IK.h"
 #include "Log.h"
@@ -107,12 +106,11 @@ void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const s
         m.ApplyLocalPose(pose);
         return true;
     };
-    // TARTARUS_FP_PIECE_DEDUPE (the body's own pieces): turned once, on the driver, and the chain's bones (and the
-    // pelvis, when it takes a share) copied to every piece that skins under the chain - the same pieces that turned
-    // before. Off, or another list (the twins): every piece turns its own, as before.
-    static const bool dedupe = Env::Flag(Env::Var::FpPieceDedupe);
+    // The body's own pieces: turned once, on the driver, and the chain's bones (and the pelvis, when it takes a share)
+    // copied to every piece that skins under the chain - the same pieces that turned before. Another list (the twins),
+    // or no driver piece: every piece turns its own.
     size_t driver = list.size();
-    if (dedupe && !models)
+    if (!models)
         for (size_t k = 0; k < list.size() && k < m_Pieces.size(); ++k)
             if (m_Pieces[k] == m_Driver && list[k]) driver = k;
     if (driver == list.size() || !turnPiece(driver)) {
