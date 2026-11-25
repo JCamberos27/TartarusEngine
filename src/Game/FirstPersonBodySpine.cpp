@@ -130,6 +130,15 @@ void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const s
         for (size_t c = 0; c < chain.size(); ++c)
             if (const int i = m.NodeIndex(Bone(chain[c])); i >= 0) bones.push_back(i);
         if (bones.empty() || !SkinsUnder(m, bones, chain.front())) continue; // as turnPiece skips it
+        // The pelvis's local is only the driver's turn when it hangs under the same nodes (some pieces' skeletons have a
+        // root node more or less above it): otherwise the piece turns in its own frame, as before.
+        if (pelvisToo) {
+            const int i = src.NodeIndex(Bone(FPBody::kBonePelvis)), o = m.NodeIndex(Bone(FPBody::kBonePelvis));
+            if (i >= 0 && o >= 0 && !SameAncestry(src, i, m, o)) {
+                turnPiece(k);
+                continue;
+            }
+        }
         bool changed = false;
         auto copyBone = [&](const std::string& name) {
             if (const int i = src.NodeIndex(Bone(name)), o = m.NodeIndex(Bone(name)); i >= 0 && o >= 0) {
@@ -141,6 +150,12 @@ void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const s
         if (pelvisToo) copyBone(FPBody::kBonePelvis);
         if (changed) m.ApplyLocalPose(pose);
     }
+}
+// Node `a` of `ma` and node `b` of `mb` under the same chain of parents, by name, up to the root.
+bool FirstPersonBody::SameAncestry(const Model& ma, int a, const Model& mb, int b) {
+    for (a = ma.NodeParent(a), b = mb.NodeParent(b); a >= 0 && b >= 0; a = ma.NodeParent(a), b = mb.NodeParent(b))
+        if (ma.NodeName(a) != mb.NodeName(b)) return false;
+    return a < 0 && b < 0;
 }
 bool FirstPersonBody::SkinsUnder(const Model& m, const std::vector<int>& roots, const std::string& key) {
     const auto id = std::make_pair(&m, key);
