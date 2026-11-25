@@ -4,6 +4,8 @@
 #include "GpuCull.h"
 #include "AssetCost.h"
 #include "OpaqueBatchKey.h"
+#include "BatchCensus.h"
+#include <unordered_map>
 #include "RenderFrameContext.h"
 
 #include "World.h"
@@ -760,6 +762,43 @@ bool SceneRenderer::ViewPass::Batchable(const DrawItem& it) const {
     return true;
 }
 
+
+namespace {
+// DIAG (G-MB census): a material's parameters without its textures, and its texture set alone.
+std::uint64_t CensusMix(std::uint64_t key, std::uint64_t v) { return key ^ (v + 0x9E3779B97F4A7C15ull + (key << 6) + (key >> 2)); }
+void CensusMaterialParts(const Material& mat, std::uint64_t& params, std::uint64_t& textures) {
+    static std::unordered_map<const Material*, std::pair<std::uint32_t, std::pair<std::uint64_t, std::uint64_t>>> cache;
+    auto& e = cache[&mat];
+    if (e.first == Material::HashFrame()) { params = e.second.first; textures = e.second.second; return; }
+    const Texture* const texs[] = {mat.AlbedoMap.get(), mat.NormalMap.get(), mat.MetallicRoughnessMap.get(), mat.MetallicMap.get(),
+                                   mat.RoughnessMap.get(), mat.AOMap.get(), mat.EmissiveMap.get(), mat.ClearCoatMap.get(),
+                                   mat.ThicknessMap.get(), mat.HeightMap.get(), mat.DetailAlbedoMap.get(), mat.DetailNormalMap.get(),
+                                   mat.GrungeMap.get()};
+    textures = 0x1234567ull;
+    for (const Texture* t : texs) textures = CensusMix(textures, (std::uint64_t)(std::uintptr_t)t);
+    std::vector<std::pair<std::string, const Texture*>> extraTex;
+    for (const auto& [name, prop] : mat.ExtraProps)
+        if (prop.Tex) extraTex.emplace_back(name, prop.Tex.get());
+    std::sort(extraTex.begin(), extraTex.end());
+    for (const auto& [name, t] : extraTex) textures = CensusMix(CensusMix(textures, std::hash<std::string>{}(name)), (std::uint64_t)(std::uintptr_t)t);
+    Material copy = mat;
+    copy.AlbedoMap = copy.NormalMap = copy.MetallicRoughnessMap = copy.MetallicMap = copy.RoughnessMap = copy.AOMap = nullptr;
+    copy.EmissiveMap = copy.ClearCoatMap = copy.ThicknessMap = copy.HeightMap = nullptr;
+    copy.DetailAlbedoMap = copy.DetailNormalMap = copy.GrungeMap = nullptr;
+    for (auto& [name, prop] : copy.ExtraProps) prop.Tex = nullptr;
+    params = copy.ComputeHash();
+    for (const auto& [name, prop] : copy.ExtraProps) {
+        params = CensusMix(params, std::hash<std::string>{}(name));
+        params = CensusMix(params, std::hash<float>{}(prop.F));
+        for (int c = 0; c < 4; ++c) params = CensusMix(params, std::hash<float>{}(prop.V[c]));
+        params = CensusMix(params, (std::uint64_t)prop.B);
+        params = CensusMix(params, (std::uint64_t)prop.I);
+    }
+    e.first = Material::HashFrame();
+    e.second = {params, textures};
+}
+} // namespace
+
 void SceneRenderer::ViewPass::BuildBatches() {
     const RenderFrameContext& ctx = m_Ctx;
     const FrameState& fs = m_Fs;
@@ -841,6 +880,9 @@ void SceneRenderer::ViewPass::BuildBatches() {
     static const bool slotStateLead = Env::Flag(Env::Var::SlotStateLead);
     std::vector<std::uint32_t>& slotStaging = m_S.SlotStaging;
     slotStaging.clear();
+    const bool census = BatchCensus::Enabled();
+    static std::vector<BatchCensus::Item> censusItems;
+    censusItems.clear();
     std::vector<glm::mat4>& staging = InstanceBuffer::Staging();
     staging.clear();
     for (std::size_t g = 0; multiDraw && g < groups.Groups.size(); ++g) {
@@ -895,6 +937,14 @@ void SceneRenderer::ViewPass::BuildBatches() {
         objectState.GIMask = m_SlotState ? 0ull : lead.GIMask;
         objectState.GIFlatL1 = lead.GIFlatL1;
         const std::uint64_t objectKey = OpaqueBatchKey::Object(objectState);
+        std::uint64_t censusFlags = 0;
+        if (census) {
+            OpaqueBatchKey::ObjectState flagsOnly = objectState;
+            flagsOnly.ProbeKey = 0;
+            flagsOnly.GIMask = 0;
+            flagsOnly.GIFlatL1 = false;
+            censusFlags = OpaqueBatchKey::Object(flagsOnly);
+        }
         for (int m = 0; m < lead.Ref->MeshCount(); ++m) {
             const MaterialAsset* ma = m < (int)lead.Slots->size() ? (*lead.Slots)[m].get() : nullptr;
             if (ma && ma->RenderQueue == MaterialAsset::Queue::Transparent) continue;
@@ -917,12 +967,27 @@ void SceneRenderer::ViewPass::BuildBatches() {
             mix(state);
             mix(r.Page);
             mix(alphaTest ? 1ull : 0ull);
+            if (census) {
+                BatchCensus::Item ci{};
+                ci.P[BatchCensus::Probe] = objectState.ProbeKey;
+                ci.P[BatchCensus::GI] = CensusMix(objectState.GIMask, objectState.GIFlatL1 ? 1ull : 0ull);
+                ci.P[BatchCensus::ObjFlags] = censusFlags;
+                ci.P[BatchCensus::Program] = (std::uint64_t)(std::uintptr_t)prog;
+                std::uint64_t params = 0, textures = 0;
+                CensusMaterialParts(mat, params, textures);
+                ci.P[BatchCensus::Material] = CensusMix(params, shaderId);
+                ci.P[BatchCensus::Textures] = textures;
+                ci.P[BatchCensus::State] = CensusMix(state, alphaTest ? 1ull : 0ull);
+                ci.P[BatchCensus::Page] = r.Page;
+                censusItems.push_back(ci);
+            }
             m_S.OpaqueTags.push_back({(std::uint32_t)g, (std::uint16_t)m, Prepassed(lead), prog, state, matKey, objectKey});
             m_S.OpaqueItems.push_back({key, (std::uint32_t)m_S.OpaqueTags.size() - 1,
                                        {r.IndexCount, grp.Count, r.FirstIndex, (std::int32_t)r.BaseVertex, base}});
         }
     }
     if (!m_S.OpaqueItems.empty()) BuildIndirectBatches(m_S.OpaqueItems, m_S.OpaqueCommands, m_S.OpaqueBatches);
+    if (census) BatchCensus::Record(censusItems, m_S.OpaqueItems.empty() ? 0 : m_S.OpaqueBatches.size());
     for (std::size_t g = 0; g < groups.Groups.size(); ++g) {
         const auto& grp = groups.Groups[g];
         if (m_S.GroupIndirect[g] || grp.Count < 2) continue;
