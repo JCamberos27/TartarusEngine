@@ -163,6 +163,7 @@ private:
     // Across scenes, as the function-local statics they came from were.
     std::string m_SetupError;     // a harness setup failure (a bad camera path), charged to the first scene
     bool m_Cinematic = false;     // TARTARUS_CINEMATIC: this run records the camera path (Tests/Cinematic.h)
+    std::uint64_t m_SunVerifyBefore[4] = {}; // smoke_min: GpuCull::SunTotals() when the G4-a check asked (passes, expected, missing, extra)
     bool m_ViewPlanted = false;   // smoke_min planted a bad view pref for the guard to undo
     std::string m_ViewNotLit;     // this scene drew a frame not Shaded and lit (HarnessView): what it was; fails the scene
     int m_ShotHold = 0;           // frames the current capture has waited for decal textures to stream in
