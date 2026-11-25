@@ -4,6 +4,8 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 class AssetLibrary;
 
@@ -85,6 +87,9 @@ struct MaterialAsset {
     // non-null (they remain null otherwise). Returns nullptr on I/O or parse error.
     static std::shared_ptr<MaterialAsset> Load(const std::string& path,
                                                AssetLibrary* lib = nullptr);
+    // The built-in maps this material names (absolute paths) and how each is used, as Load(path, lib) would ask
+    // the library for them. For loading them ahead of time (AssetLibrary::PrefetchMaterialTextures).
+    std::vector<std::pair<std::string, int /*AssetLibrary::TextureUse*/>> TextureRefs() const;
 
     // Creates a new MaterialAsset at `path` with default (white, 0.5 roughness) settings and
     // writes the .mat file. Returns nullptr on I/O failure. Does NOT register with AssetLibrary.

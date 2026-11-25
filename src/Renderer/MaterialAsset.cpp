@@ -321,6 +321,18 @@ std::string AbsoluteAssetPath(const std::string& p) {
     return ProjectPaths::Resolve(p);
 }
 
+} // namespace
+
+std::vector<std::pair<std::string, int>> MaterialAsset::TextureRefs() const {
+    std::vector<std::pair<std::string, int>> out;
+    for (const Builtin& b : kBuiltins)
+        if (b.Kind == BuiltinKind::Tex && !((*this).*b.Path).empty())
+            out.emplace_back(AbsoluteAssetPath((*this).*b.Path), (int)b.Use);
+    return out;
+}
+
+namespace {
+
 bool IsTextureAsset(const std::string& absPath) {
     const std::string type = AssetDatabase::AssetType(absPath);
     return type == "texture" || type == "hdri";
