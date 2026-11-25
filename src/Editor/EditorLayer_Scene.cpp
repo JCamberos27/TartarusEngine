@@ -153,6 +153,7 @@ void EditorLayer::JournalFilesBefore(const World& world, const std::vector<Edito
 }
 
 void EditorLayer::BeginGlobalUndoFrame(const World& world) {
+    m_BaselineFromStop = false; // P-55c: an editor frame runs from here; edits may follow
     // #15 - an outfit change landed since last frame (a scene just opened rebuilding a stale body,
     // or the async half of an outfit edit already on the undo stack): part of the baseline, not
     // an unrecorded change for the next Undo to journal. Not while an edit is open: its commit
@@ -297,6 +298,8 @@ void EditorLayer::JournalBeforeOutfitLanding(const World& world) {
     // An open edit takes the landing into its own step when it commits (FinishGlobalUndo).
     if (m_InPlayMode || m_GlobalUndoActive || m_GlobalUndoApplying || m_CurrentUndoScene.empty() || !m_AssetsPtr ||
         Openable::BakePosed()) return;
+    // P-55c: Stop's baseline, nothing run since: the World is the snapshot Stop loaded, there is no change to keep.
+    if (m_BaselineFromStop && m_ChangesOutsideUndo == 0) return;
     PROFILE_SCOPE("Undo Pre-Landing Check");
     std::string current = SceneSerializer::SaveToString(world, *m_AssetsPtr);
     if (SceneSerializer::SameSceneContentApartFromOutfits(current, m_CurrentUndoScene)) return;
@@ -392,6 +395,7 @@ void EditorLayer::RememberLastScene(const std::string& path) {
 }
 
 void EditorLayer::ClearUndoHistory() {
+    m_BaselineFromStop = false; // P-55c
     m_GlobalUndoActive=false;m_FileJournal.Clear();m_GlobalUndoScene.clear();m_GlobalUndoSelection.clear();
     m_GlobalUndoHasScene=false;m_CurrentUndoScene.clear();
     m_UndoStack.clear();
@@ -966,6 +970,7 @@ void EditorLayer::RestoreSelectionByOrder(World& world, const std::vector<int>& 
 void EditorLayer::PushUndo(const World& world, const std::string& label, bool selectionOnly,
                            const std::vector<int>* selectedOrdersOverride) {
     PROFILE_SCOPE("PushUndo");
+    m_BaselineFromStop = false; // P-55c
     if(m_GlobalUndoActive && !m_GlobalUndoApplying && selectionOnly) return;
     if (!selectionOnly && !m_GlobalUndoApplying) {
         const EditorSound::Event sound = EditorSound::UndoLabelEvent(label);
@@ -1345,6 +1350,7 @@ void EditorLayer::JumpToRedoEntry(World& world, AssetLibrary& assets, size_t red
 }
 
 void EditorLayer::OnEnterPlayMode(const World& world) {
+    m_BaselineFromStop = false; // P-55c
     FinishGlobalUndo(world,true);
     // P-55: one walk of the scene gives both the Play snapshot (entities only) and the with-library snapshot the #15
     // check below compares with the undo baseline. They used to be two full saves.
@@ -1360,6 +1366,8 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
     const auto journalT0 = std::chrono::steady_clock::now();
     if (journal) JournalUnrecordedChange(world, withLibrary); // #15 - Stop drops the baseline; keep that change a step
     const double journalMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - journalT0).count();
+    // P-55c: SaveToString(world, assets) of the scene Stop loads back, kept for Stop to take as the baseline again.
+    m_PrePlayBaseline = journal ? std::move(withLibrary) : std::string();
     const double snapshotMs = std::chrono::duration<double, std::milli>(journalT0 - playT0).count();
     auto FormatMs = [](double ms) {
         char text[32];
@@ -1465,6 +1473,8 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     CancelEyedropper(); // #93
     m_InPlayMode = false;
     m_CurrentUndoScene.clear();
+    std::string prePlayBaseline = std::move(m_PrePlayBaseline);
+    m_PrePlayBaseline.clear();
 
     // Always tear the PhysX world down, even on the snapshot-empty early-out below — Create()
     // may have run regardless (#185). Destroy() is idempotent when nothing is active.
@@ -1492,6 +1502,14 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
         // The world still holds Play's state. Keep the pre-Play scene where it can be recovered and
         // say so: a Save now would write Play's state over the scene file.
         KeepUnrestoredSnapshot(m_PlayModeSnapshot, "Stop");
+    } else if (!prePlayBaseline.empty()) {
+        // P-55c: the world is the pre-Play scene again: its save from Play entry, with the library as it is now (Stop
+        // dropped what Play loaded; loads still pending at Play entry may be gone too), is the baseline. Else the next
+        // frame's EnsureUndoScene saves the whole scene again (~0.5 s in the Forest). Empty if the text won't split: then it does.
+        PROFILE_SCOPE("Undo Baseline From Play Entry");
+        m_CurrentUndoScene = SceneSerializer::WithLiveLibrary(prePlayBaseline, assets);
+        if (!m_CurrentUndoScene.empty()) m_ChangesOutsideUndo = 0;
+        m_BaselineFromStop = !m_CurrentUndoScene.empty();
     }
     m_PlayModeSnapshot.clear();
 
