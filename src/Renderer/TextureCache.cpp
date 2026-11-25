@@ -9,6 +9,10 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
+#include <mutex>
+#include <numeric>
+#include <unordered_set>
 #include <vector>
 
 #if defined(_WIN32)
@@ -23,10 +27,14 @@ namespace TextureCache {
 namespace {
 
 // #159: entries are raw pixels (a 4K RGBA texture is 64 MB), so the directory needs a ceiling.
-// Prune() evicts least-recently-used entries past this. Generous on purpose: evicting something
-// the next launch needs just costs one PNG decode, but a cap below a project's working set would
-// make every launch re-decode.
-constexpr uint64_t kMaxCacheBytes = 4ull * 1024 * 1024 * 1024;
+// Prune() evicts least-recently-used entries past it. A cap below a project's working set makes
+// every open re-decode (and re-encode BCn) the textures evicted last time: the Forest's 4.47 GB
+// against the old fixed 4 GB cap made its 2nd and 3rd warm opens 45 and 71 s instead of ~10 s.
+// So the cap is at least this, grows with what this session uses, and never evicts that.
+constexpr uint64_t kGiB = 1024ull * 1024 * 1024;
+constexpr uint64_t kMinCapBytes = 8 * kGiB;
+// However large the working set, pruning keeps the disk at least this free (pinned entries excepted).
+constexpr uint64_t kKeepFreeDiskBytes = 20 * kGiB;
 // An in-flight ".tmp" older than this was abandoned by a crash, not being written right now.
 constexpr auto kAbandonedTempAge = std::chrono::hours(1);
 
@@ -57,6 +65,23 @@ constexpr auto kUnusedVariantAge = std::chrono::hours(24 * 14);
 std::string CacheDir() {
     static const std::string dir = ProjectPaths::Resolve("Library/Textures");
     return dir;
+}
+
+// Entries this process loaded or stored (file names): its working set, which Prune never evicts.
+// Store runs on the texture loader threads too, so it's locked.
+std::mutex s_SessionMutex;
+std::unordered_set<std::string> s_SessionEntries;
+
+void MarkUsedThisSession(const std::string& entryPath) {
+    const std::string name = std::filesystem::path(entryPath).filename().string();
+    std::lock_guard<std::mutex> lock(s_SessionMutex);
+    s_SessionEntries.insert(name);
+}
+
+bool UsedThisSession(const std::filesystem::path& entryPath) {
+    const std::string name = entryPath.filename().string();
+    std::lock_guard<std::mutex> lock(s_SessionMutex);
+    return s_SessionEntries.count(name) != 0;
 }
 
 } // namespace
@@ -178,6 +203,7 @@ bool Load(const std::string& sourcePath, const TextureImportSettings& settings, 
     // Mark the entry as recently used; Prune()'s size cap evicts the oldest-stamped entries first.
     std::error_code touchEc;
     std::filesystem::last_write_time(entryPath, std::filesystem::file_time_type::clock::now(), touchEc);
+    MarkUsedThisSession(entryPath);
 
     out.SourceWidth = sw;
     out.SourceHeight = sh;
@@ -239,18 +265,45 @@ void Store(const std::string& sourcePath, const TextureImportSettings& settings,
     }
     std::filesystem::rename(tempPath, finalPath, ec);
     if (ec) std::filesystem::remove(tempPath, ec);
+    else MarkUsedThisSession(finalPath);
+}
+
+uint64_t CapBytes(uint64_t pinnedBytes) {
+    return std::max(kMinCapBytes, pinnedBytes + pinnedBytes / 4);
+}
+
+std::vector<size_t> ChooseEvictions(const std::vector<EntryInfo>& entries, uint64_t freeDiskBytes) {
+    uint64_t total = 0, pinned = 0;
+    for (const EntryInfo& e : entries) {
+        total += e.Bytes;
+        if (e.Pinned) pinned += e.Bytes;
+    }
+    uint64_t cap = CapBytes(pinned);
+    if (freeDiskBytes != std::numeric_limits<uint64_t>::max()) {
+        // Deleting entries frees their bytes: the directory may hold at most (total + free) - the reserve.
+        const uint64_t room = total + freeDiskBytes;
+        cap = std::min(cap, room > kKeepFreeDiskBytes ? room - kKeepFreeDiskBytes : 0);
+    }
+    std::vector<size_t> victims;
+    if (total <= cap) return victims;
+    std::vector<size_t> order(entries.size());
+    std::iota(order.begin(), order.end(), size_t{0});
+    std::stable_sort(order.begin(), order.end(),
+                     [&entries](size_t a, size_t b) { return entries[a].LastUsed < entries[b].LastUsed; });
+    for (size_t i : order) {
+        if (total <= cap) break;
+        if (entries[i].Pinned) continue; // this session's working set stays, whatever the cap
+        victims.push_back(i);
+        total -= entries[i].Bytes;
+    }
+    return victims;
 }
 
 void Prune(const std::function<std::optional<uint64_t>(const std::string& sourcePath)>& currentSettingsHash) {
     std::error_code ec;
     if (!std::filesystem::is_directory(CacheDir(), ec)) return; // no cache directory yet: nothing to prune
 
-    struct Survivor {
-        std::filesystem::file_time_type LastUsed;
-        uint64_t Bytes;
-        std::filesystem::path Path;
-    };
-    std::vector<Survivor> survivors; // valid entries, candidates for the size cap below
+    std::vector<EntryInfo> survivors; // valid entries, candidates for the size cap below
     const auto now = std::filesystem::file_time_type::clock::now();
 
     for (const auto& entry : std::filesystem::directory_iterator(CacheDir(), ec)) {
@@ -317,22 +370,20 @@ void Prune(const std::function<std::optional<uint64_t>(const std::string& source
             std::error_code statEc;
             auto lastUsed = entry.last_write_time(statEc);
             auto bytes = entry.file_size(statEc);
-            if (!statEc) survivors.push_back({lastUsed, (uint64_t)bytes, path});
+            if (!statEc)
+                survivors.push_back({path.string(), (uint64_t)bytes, (int64_t)lastUsed.time_since_epoch().count(),
+                                     UsedThisSession(path)});
         }
     }
 
-    // Size cap (#159): evict least-recently-used entries until the directory fits. Load() and
-    // Store() both refresh an entry's timestamp, and this runs after the scene's textures have
-    // loaded, so everything the current session uses is the newest and goes last.
-    uint64_t total = 0;
-    for (const Survivor& s : survivors) total += s.Bytes;
-    if (total <= kMaxCacheBytes) return;
-    std::sort(survivors.begin(), survivors.end(),
-              [](const Survivor& a, const Survivor& b) { return a.LastUsed < b.LastUsed; });
-    for (const Survivor& s : survivors) {
-        if (total <= kMaxCacheBytes) break;
+    // Size cap (#159, P-53): evict least-recently-used entries until the directory fits, never one this
+    // session loaded or stored. Load() and Store() both refresh an entry's timestamp.
+    std::error_code spaceEc;
+    const auto space = std::filesystem::space(CacheDir(), spaceEc);
+    const uint64_t freeBytes = spaceEc ? std::numeric_limits<uint64_t>::max() : (uint64_t)space.available;
+    for (size_t i : ChooseEvictions(survivors, freeBytes)) {
         std::error_code rmEc;
-        if (std::filesystem::remove(s.Path, rmEc)) total -= s.Bytes;
+        std::filesystem::remove(survivors[i].Path, rmEc);
     }
 }
 

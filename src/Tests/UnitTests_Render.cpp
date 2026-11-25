@@ -1,4 +1,5 @@
 #include "UnitTestSupport.h"
+#include <limits>
 #include <random>
 #include "../Renderer/SceneRenderer.h"
 #include "../Renderer/Model.h"
@@ -2317,6 +2318,31 @@ void TestPhysicalSky() {
 
 // --- TextureCache: one texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's)
 // keeps both entries - they used to share one and evict each other every session, re-decoding (and re-compressing) both.
+// P-53: the size cap never evicts this session's working set, grows with it, and keeps 20 GB of disk free.
+void TestTextureCachePinEvict() {
+    constexpr uint64_t GiB = 1024ull * 1024 * 1024;
+    constexpr uint64_t unknownFree = std::numeric_limits<uint64_t>::max();
+    CHECK(TextureCache::CapBytes(0) == 8 * GiB);
+    CHECK(TextureCache::CapBytes(4 * GiB) == 8 * GiB);
+    CHECK(TextureCache::CapBytes(8 * GiB) == 10 * GiB);
+    using E = TextureCache::EntryInfo;
+    // The Forest case: a 4.47 GB working set fits the 8 GB floor, nothing goes.
+    std::vector<E> forest;
+    for (int i = 0; i < 45; ++i) forest.push_back({"f" + std::to_string(i), GiB / 10, i, false});
+    CHECK(TextureCache::ChooseEvictions(forest, unknownFree).empty());
+    // 12 GB on disk, 9 GB of it pinned (cap 11.25 GB): only unpinned, oldest first, until it fits.
+    std::vector<E> e = {{"old", 1 * GiB, 1, false}, {"pinOld", 9 * GiB, 0, true}, {"mid", 1 * GiB, 2, false},
+                        {"new", 1 * GiB, 3, false}};
+    std::vector<size_t> v = TextureCache::ChooseEvictions(e, unknownFree);
+    CHECK(v.size() == 1 && v[0] == 0);
+    // Disk nearly full: cap clamps to (total + free) - 20 GB, but pinned entries still stay.
+    v = TextureCache::ChooseEvictions(e, 10 * GiB); // room 22 GB -> cap 2 GB
+    CHECK(v.size() == 3);
+    for (size_t i : v) CHECK(!e[i].Pinned);
+    // Under the cap with plenty of disk: nothing.
+    CHECK(TextureCache::ChooseEvictions({{"a", GiB, 0, false}}, 500 * GiB).empty());
+}
+
 void TestTextureCacheVariants() {
     const std::string src = (std::filesystem::temp_directory_path() / "tt_cache_variant_test.png").string();
     {
@@ -2457,6 +2483,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"MaterialRobustness", TestMaterialRobustness});
     tests.push_back({"MaterialTextureDefaults", TestMaterialTextureDefaults});
     tests.push_back({"TextureCacheVariants", TestTextureCacheVariants});
+    tests.push_back({"TextureCachePinEvict", TestTextureCachePinEvict});
     tests.push_back({"TextureCacheHash", TestTextureCacheHash});
     tests.push_back({"CameraFrustumValidation", TestCameraFrustumValidation});
     tests.push_back({"CameraRoll", TestCameraRoll});
