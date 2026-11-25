@@ -19,6 +19,7 @@
 #include "Frustum.h"
 #include "GLStateCache.h"
 #include "GLStateScope.h"
+#include "GpuCull.h"
 #include "GrassRenderer.h"
 #include "ImpostorRenderer.h"
 #include "SkinHideBuffer.h"
@@ -258,6 +259,19 @@ void ShadowFrame::DrawSunCasters(SunPass& p) {
         if (static const int reportAt = Env::Int(Env::Var::TrisReport, -1);
             reportAt >= 0 && Time::FrameCount() == (std::uint64_t)reportAt)
             ReportSunTris(m_Draws, cascadeCount);
+        // G4-a verify (TARTARUS_GPU_CULL_VERIFY, or the smoke check's one-shot): the GPU's per-cascade caster sets
+        // against these draws' runs. Waits on the GPU; nothing draws from it yet.
+        if (GpuCull::SunVerifyDue()) {
+            static std::vector<GpuCull::SunPair> pairs;
+            pairs.clear();
+            for (const DepthCaster& d : m_Draws)
+                for (int c = d.LayerFirst; c < d.LayerFirst + d.Layers; ++c) pairs.push_back({d.Slot, (std::uint32_t)c});
+            GpuCull::VerifySunCasters(*m_SceneWorld,
+                                      GpuCull::MakeSunCasterBlock(shadowMap, casterCells, renderMask, sunKernelTexels,
+                                                                  fl.SunShadowNormalBias),
+                                      pairs);
+            shadowShader.Bind(); // the verify ran its own program
+        }
         // Each cascade rasterises only the texels its slice of the view can read (CascadedShadowMap::
         // BeginLayeredScissor): the rest of a layer is never sampled, and the forest's terrain and canopy filled all
         // of it - most of the pass's fill cost.

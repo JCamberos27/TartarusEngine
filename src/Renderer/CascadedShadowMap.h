@@ -121,6 +121,17 @@ public:
     // Cascade c's receiver slice corners in its light clip space (x, y), from Update().
     const std::array<glm::vec2, 8>& SliceCorners(int c) const { return m_SliceCorners[c]; }
 
+    // CasterReachesSlice's inputs for one cascade, flat: what GpuCull's caster mode uploads (std140-compatible: only
+    // vec4 / mat4 members). ReachesSlice runs CasterReachesSlice's test on it op for op, so the two always agree.
+    struct CasterSlice {
+        glm::mat4 ViewProj{1.0f};
+        glm::vec4 Rect{0.0f};   // light clip x/y: lo in xy, hi in zw. Cascade 0: ReadRect (margin in); else the slice's box
+        glm::vec4 Params{0.0f}; // x = margin (cascade > 0), y = axis count, z = 1: cascade 0's rule (Rect is the test)
+        glm::vec4 Axes[8]{};    // the slice hull's edge normals (xy) and the slice's extent along each (z min, w max)
+    };
+    CasterSlice CasterSliceOf(int c, float kernelTexels, float normalBias) const;
+    static bool ReachesSlice(const CasterSlice& s, const glm::vec3& boundsMin, const glm::vec3& boundsMax);
+
 private:
     float MarginNdc(int c, float kernelTexels, float normalBias) const; // ReadRect / CasterReachesSlice's reach
     DepthArrayTarget m_Target; // the cascade array (its own per-layer FBOs below, so no FBOs of its own)

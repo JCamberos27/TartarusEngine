@@ -46,6 +46,7 @@
 #include "../Game/TimeOfDay.h"
 #include "AssetLibrary.h"
 #include "AsyncTicketCount.h"
+#include "StepPending.h"
 #include "../Game/World.h"
 #include "../Game/Components.h"
 #include "../Physics/Frustum.h"
@@ -949,6 +950,73 @@ void GpuCullStageAMatchesCpu() {
     CHECK(kept > total / 20 && kept < total); // the cases are mixed: some kept, some not
 }
 
+// GpuCull caster mode (G4-a): the per-cascade test's CPU twin gives ShadowFrame's castsInto answer for every slot and
+// cascade - the cascade's frustum (Frustum::Intersects) then CascadedShadowMap::CasterReachesSlice, gated by the
+// render mask - over a fitted 4-cascade map, a held cascade, unbounded slots and boxes along the cascades' reach. The
+// slice data goes through CasterSliceOf (what the compute reads), so the upload is what is tested; the compute is
+// held to this twin (plus its slack) by the verify mode and the smoke_min check.
+void GpuCullCasterCascadesMatchCpu() {
+    CascadedShadowMap csm;
+    const glm::vec3 eye(3.0f, 1.7f, -2.0f);
+    const glm::mat4 view = glm::lookAt(eye, glm::vec3(10.0f, 1.0f, 20.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::mat4 proj = glm::perspective(glm::radians(70.0f), 16.0f / 9.0f, 0.05f, 500.0f);
+    const glm::vec3 casterMin(-150.0f, -5.0f, -150.0f), casterMax(150.0f, 40.0f, 150.0f);
+    csm.Update(view, proj, glm::normalize(glm::vec3(-0.4f, -0.8f, 0.3f)), 150.0f, &casterMin, &casterMax);
+    CHECK(csm.Count() == 4);
+    Frustum cells[CascadedShadowMap::kMaxCascades];
+    for (int c = 0; c < csm.Count(); ++c) cells[c] = Frustum::FromViewProj(csm.LightViewProj(c));
+    std::mt19937 rng(4401);
+    std::uniform_real_distribution<float> along(-0.2f, 1.0f), side(-1.0f, 1.0f), size(0.02f, 8.0f), unit(0.0f, 1.0f);
+    const glm::vec3 fwd = glm::normalize(glm::vec3(7.0f, -0.7f, 22.0f)), right = glm::normalize(glm::cross(fwd, glm::vec3(0, 1, 0)));
+    int mismatches = 0, twinMismatches = 0, pairs = 0, total = 0;
+    unsigned seen = 0;
+    for (const unsigned renderMask : {0xFu, 0xBu, 0x7u}) { // all, cascade 2 held, cascade 3 held
+        for (const float kernel : {0.0f, 2.5f}) {
+            const float bias = kernel > 0.0f ? 1.0f : 0.0f;
+            const GpuCull::SunCasterBlock block = GpuCull::MakeSunCasterBlock(csm, cells, renderMask, kernel, bias);
+            for (int c = 0; c < csm.Count(); ++c) CHECK(((block.Info.x >> c) & 1u) == ((renderMask >> c) & 1u));
+            for (int i = 0; i < 4000; ++i) {
+                // Boxes spread along the view out past the shadow distance, near the slices and well off to the sides.
+                const float d = along(rng) * 200.0f;
+                const glm::vec3 c = eye + fwd * d + right * side(rng) * (10.0f + 0.8f * std::abs(d)) +
+                                    glm::vec3(0.0f, side(rng) * 15.0f, 0.0f);
+                const glm::vec3 h(size(rng), size(rng), size(rng));
+                SceneSlot s;
+                s.WorldMin = c - h * 0.5f;
+                s.WorldMax = c + h * 0.5f;
+                s.Bounded = unit(rng) < 0.97f;
+                s.Alive = true;
+                glm::mat4 xf[2];
+                glm::vec4 bounds[2];
+                GpuScene::Pack(s, xf, bounds);
+                // castsInto, restated on the slot.
+                unsigned cpu = 0;
+                for (int k = 0; k < csm.Count(); ++k) {
+                    if (!((renderMask >> k) & 1u)) continue;
+                    if (!s.Bounded || (cells[k].Intersects(AABB{s.WorldMin, s.WorldMax}) &&
+                                       csm.CasterReachesSlice(k, s.WorldMin, s.WorldMax, kernel, bias)))
+                        cpu |= 1u << k;
+                    // The flat slice alone, bit for bit what CasterReachesSlice answers.
+                    twinMismatches += CascadedShadowMap::ReachesSlice(block.Cascades[k].Slice, s.WorldMin, s.WorldMax) !=
+                                      csm.CasterReachesSlice(k, s.WorldMin, s.WorldMax, kernel, bias);
+                }
+                const unsigned gpu = GpuCull::CasterCascades(bounds, block);
+                mismatches += cpu != gpu;
+                for (unsigned m = gpu; m; m &= m - 1) ++pairs;
+                seen |= gpu;
+                ++total;
+            }
+        }
+    }
+    CHECK(mismatches == 0);
+    CHECK(twinMismatches == 0);
+    CHECK(seen == 0xFu);                          // every cascade gets casters
+    CHECK(pairs > total / 4 && pairs < total * 3); // and the cases are mixed: in some cascades, not all
+    // The remap word: a slot and its cascade share one uint.
+    CHECK(GpuCull::kSlotMask == 0x3FFFFFFFu);
+    CHECK(((7u | (3u << GpuCull::kCascadeShift)) & GpuCull::kSlotMask) == 7u);
+}
+
 // HiZCuller: the occlusion boxes are padded past the object, and swaying foliage pads them further.
 void HiZPieces() {
     glm::vec3 lo(0.0f), hi(1.0f);
@@ -1000,6 +1068,37 @@ void AssetPumpWaitingTickets() {
     CHECK(CountWaitingTickets(tickets) == 1);
     loading->Ready = true;
     CHECK(CountWaitingTickets(tickets) == 0);
+}
+
+// A model's pending uploads share the staging ring. The first one waits for ring space that a later one holds (its copy
+// is done and only a step retires it): stepping just the first never frees it. Every pending item gets a step.
+void ModelUploadStepsFreeTheRing() {
+    struct Up { bool Pending = true, Holds = false, CopyDone = false; };
+    int freeSlots = 0; // the ring has room for one reservation, and the second upload holds it
+    std::vector<Up> ups(2);
+    ups[1].Holds = true;
+    ups[1].CopyDone = true;
+    const auto isPending = [](const Up& u) { return u.Pending; };
+    const auto step = [&](Up& u) {
+        if (u.Holds && u.CopyDone) { u.Pending = false; u.Holds = false; ++freeSlots; return true; } // upload + retire
+        if (!u.Holds) {
+            if (freeSlots == 0) return false;                  // the ring is full for now
+            --freeSlots; u.Holds = true; u.CopyDone = true;    // reserved; the worker's copy lands
+        }
+        return false;                                          // copy not in yet: waiting
+    };
+    CHECK(StepPending(ups, isPending, step) == PendingStep::Progress); // the later upload retires its span...
+    int steps = 1;
+    while (StepPending(ups, isPending, step) != PendingStep::None && steps < 10) ++steps;
+    CHECK(!ups[0].Pending && !ups[1].Pending);                         // ...so the first gets its space and finishes
+    CHECK(steps <= 4);
+    // Everything waiting is reported as waiting, nothing pending as none.
+    std::vector<Up> stuck(2);
+    int none = 0;
+    CHECK(StepPending(stuck, isPending, [&](Up&) { return none != 0; }) == PendingStep::Waiting);
+    std::vector<Up> done(2);
+    done[0].Pending = done[1].Pending = false;
+    CHECK(StepPending(done, isPending, step) == PendingStep::None);
 }
 
 // Material slots batch when they draw alike: the same asset, or separate copies with the same values; a different
@@ -3119,10 +3218,12 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Async uploads: staging ring placement wraps and never overlaps", UploadStagingRing});
     tests.push_back({"Async uploads: the pump budget follows the frame headroom in Play", AssetPumpBudget});
     tests.push_back({"Async uploads: a ticket the budget deferred still counts as in flight", AssetPumpWaitingTickets});
+    tests.push_back({"Async uploads: a model's later upload that holds ring space is stepped too", ModelUploadStepsFreeTheRing});
     tests.push_back({"GPU-driven draws: indirect batches by key, in first-appearance order", IndirectBuilder});
     tests.push_back({"GPU-driven draws: mesh arena free list is first-fit and coalesces", MeshArenaFreeList});
     tests.push_back({"GPU occlusion culling: box padding", HiZPieces});
     tests.push_back({"GPU culling: stage A matches the CPU gather", GpuCullStageAMatchesCpu});
+    tests.push_back({"GPU culling: sun caster cascades match the CPU", GpuCullCasterCascadesMatchCpu});
     tests.push_back({"Scene wind: settings round-trip, old-scene defaults, one bearing convention", SceneWindSettings});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});
