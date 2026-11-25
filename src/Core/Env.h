@@ -23,6 +23,8 @@
     X(PerfCsv, "TARTARUS_PERF_CSV", Str, "--perf-bench: append each phase's hitch report to this CSV file")           \
     X(PerfMachine, "TARTARUS_PERF_MACHINE", Str, "--perf-bench: the machine label printed with every phase")          \
     X(AssetCost, "TARTARUS_ASSET_COST", Str, "--perf-bench: append each phase's per-asset cost table to this CSV")    \
+    X(TexturePruneAfterOpenMb, "TARTARUS_TEXTURE_PRUNE_AFTER_OPEN_MB", Int,                                           \
+      "smoke: prune Library/Textures to N MB once a scene opens; evicts every other entry (later scenes re-decode)")  \
     X(PerfTurn, "TARTARUS_PERF_TURN", Float, "--perf-bench: the player view turns this many degrees a second in Play") \
     X(MemReport, "TARTARUS_MEM_REPORT", Str, "smoke harness: write per-scene model memory snapshots to this folder")  \
     X(OpenAll, "TARTARUS_OPEN_ALL", Flag, "smoke shots: open every door/drawer on the first frame")                   \
@@ -92,7 +94,6 @@
     X(NoMeshArena, "TARTARUS_NO_MESH_ARENA", Flag, "disable the static mesh arena")                                   \
     X(NoModelCache, "TARTARUS_NO_MODEL_CACHE", Flag, "import models from their files (skip Library/Models)")          \
     X(NoProgramCache, "TARTARUS_NO_PROGRAM_CACHE", Flag, "compile every shader program (skip Library/ShaderCache)")    \
-    X(TexturePruneAfterOpenMb, "TARTARUS_TEXTURE_PRUNE_AFTER_OPEN_MB", Int, "smoke harness: prune Library/Textures to this many MB after each scene opens (its own textures stay)") \
     X(NoSkinArena, "TARTARUS_NO_SKIN_ARENA", Flag, "disable the skinned mesh arena")                                  \
     X(NoPreskin, "TARTARUS_NO_PRESKIN", Flag, "disable compute pre-skinning")                                         \
     X(NoAsyncUpload, "TARTARUS_NO_ASYNC_UPLOAD", Flag, "disable async texture/mesh uploads")                          \

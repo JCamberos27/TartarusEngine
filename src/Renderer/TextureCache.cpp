@@ -272,7 +272,8 @@ uint64_t CapBytes(uint64_t pinnedBytes, uint64_t minCapBytes) {
     return std::max(minCapBytes ? minCapBytes : kMinCapBytes, pinnedBytes + pinnedBytes / 4);
 }
 
-std::vector<size_t> ChooseEvictions(const std::vector<EntryInfo>& entries, uint64_t freeDiskBytes, uint64_t minCapBytes) {
+std::vector<size_t> ChooseEvictions(const std::vector<EntryInfo>& entries, uint64_t freeDiskBytes, uint64_t minCapBytes,
+                                    uint64_t* capOut) {
     uint64_t total = 0, pinned = 0;
     for (const EntryInfo& e : entries) {
         total += e.Bytes;
@@ -284,6 +285,7 @@ std::vector<size_t> ChooseEvictions(const std::vector<EntryInfo>& entries, uint6
         const uint64_t room = total + freeDiskBytes;
         cap = std::min(cap, room > kKeepFreeDiskBytes ? room - kKeepFreeDiskBytes : 0);
     }
+    if (capOut) *capOut = cap;
     std::vector<size_t> victims;
     if (total <= cap) return victims;
     std::vector<size_t> order(entries.size());
@@ -388,15 +390,27 @@ PruneStats Prune(const std::function<std::optional<uint64_t>(const std::string& 
         stats.Bytes += e.Bytes;
         if (e.Pinned) { ++stats.Pinned; stats.PinnedBytes += e.Bytes; }
     }
-    stats.CapBytes = CapBytes(stats.PinnedBytes, minCapBytes);
-    for (size_t i : ChooseEvictions(survivors, freeBytes, minCapBytes)) {
+    for (size_t i : ChooseEvictions(survivors, freeBytes, minCapBytes, &stats.CapBytes)) {
         std::error_code rmEc;
         if (!std::filesystem::remove(survivors[i].Path, rmEc)) continue;
         ++stats.Evicted;
         stats.EvictedBytes += survivors[i].Bytes;
-        if (survivors[i].Pinned) ++stats.EvictedPinned; // must stay 0: ChooseEvictions never picks a pinned entry
     }
     return stats;
+}
+
+int SessionEntriesMissing() {
+    std::vector<std::string> names;
+    {
+        std::lock_guard<std::mutex> lock(s_SessionMutex);
+        names.assign(s_SessionEntries.begin(), s_SessionEntries.end());
+    }
+    int missing = 0;
+    for (const std::string& name : names) {
+        std::error_code ec;
+        if (!std::filesystem::exists(std::filesystem::path(CacheDir()) / name, ec)) ++missing;
+    }
+    return missing;
 }
 
 Usage DiskUsage() {

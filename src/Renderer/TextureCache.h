@@ -71,11 +71,16 @@ std::string EntryPath(const std::string& sourcePath, const TextureImportSettings
 // an interrupted Store are removed once they're over an hour old.
 // `minCapBytes` (0 = the 8 GB default) lowers the cap's floor: tests and the smoke harness's pin check.
 struct PruneStats {
-    int Entries = 0, Pinned = 0, Evicted = 0, EvictedPinned = 0; // after the stale sweep
-    uint64_t Bytes = 0, PinnedBytes = 0, EvictedBytes = 0, CapBytes = 0;
+    int Entries = 0, Pinned = 0, Evicted = 0; // after the stale sweep
+    uint64_t Bytes = 0, PinnedBytes = 0, EvictedBytes = 0;
+    uint64_t CapBytes = 0; // the cap actually applied (after the free-disk clamp)
 };
 PruneStats Prune(const std::function<std::optional<uint64_t>(const std::string& sourcePath)>& currentSettingsHash = nullptr,
                  uint64_t minCapBytes = 0);
+
+// How many entries this process loaded or stored (the pinned set) are no longer on disk: 0 after any Prune, or
+// the pinning failed. The smoke harness's pin check.
+int SessionEntriesMissing();
 
 // P-53 - the size cap Prune enforces: at least 8 GB, and 1.25x the bytes this session loaded or stored
 // (its working set) when that's larger. Those entries are pinned: never evicted, whatever the cap.
@@ -90,7 +95,9 @@ struct EntryInfo {
 };
 // Which entries (indices) the size cap evicts: least recently used first, never a pinned one, until the
 // rest fits CapBytes(pinned bytes) and leaves at least 20 GB of `freeDiskBytes` (UINT64_MAX = unknown).
-std::vector<size_t> ChooseEvictions(const std::vector<EntryInfo>& entries, uint64_t freeDiskBytes, uint64_t minCapBytes = 0);
+// `capOut`: the cap it applied, after that clamp.
+std::vector<size_t> ChooseEvictions(const std::vector<EntryInfo>& entries, uint64_t freeDiskBytes, uint64_t minCapBytes = 0,
+                                    uint64_t* capOut = nullptr);
 
 // Total bytes and entry count currently on disk (#159) - a directory walk, so callers showing
 // it in the UI should cache the result rather than calling it every frame.

@@ -9,7 +9,6 @@
 #include "ClusterGrid.h"
 #include "Components.h"
 #include "Core/Env.h"
-#include "Renderer/TextureCache.h"
 #include "Core/FrameLoads.h"
 #include "Core/Paths.h"
 #include "Core/Profiler.h"
@@ -40,6 +39,7 @@
 #include "Window.h"
 #include "World.h"
 #include "Renderer/MemReport.h"
+#include "Renderer/TextureCache.h"
 
 #include <atomic>
 #include <chrono>
@@ -300,14 +300,23 @@ void SmokeHarness::LoadScene() {
                 (modelsAfter.CookMs - modelsBefore.CookMs) / 1000.0);
     std::fflush(stdout);
     // P-53 pin check: prune with the scene open, as an editor session's later prune would, under a deliberately
-    // small cap. The scene's own textures (loaded or stored by this process) must all survive.
+    // small cap. The scene's own textures (loaded or stored by this process) must all survive. Material textures
+    // decode on the async loader, and an entry is pinned only once its load or store ran, so wait for it to drain.
     if (const int pruneMb = Env::Int(Env::Var::TexturePruneAfterOpenMb, 0); pruneMb > 0 && m_SceneLoadOk) {
+        const double waitStart = glfwGetTime();
+        while (m_Ctx.assets.AsyncInFlight() > 0 && glfwGetTime() - waitStart < 300.0) {
+            m_Ctx.assets.PumpAsync(50.0);
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        const int inFlight = m_Ctx.assets.AsyncInFlight();
         const TextureCache::PruneStats ps = TextureCache::Prune(nullptr, (uint64_t)pruneMb * 1024 * 1024);
+        const int missing = TextureCache::SessionEntriesMissing(); // the scene's entries no longer on disk
         constexpr double MB = 1024.0 * 1024.0;
-        std::printf("[SmokeTest] Texture cache pin check: %d entries %.0f MB, %d pinned %.0f MB, cap %.0f MB; evicted %d "
-                    "(%.0f MB), %d of them pinned%s\n",
-                    ps.Entries, ps.Bytes / MB, ps.Pinned, ps.PinnedBytes / MB, ps.CapBytes / MB, ps.Evicted,
-                    ps.EvictedBytes / MB, ps.EvictedPinned, ps.EvictedPinned == 0 ? "" : "  FAIL");
+        std::printf("[SmokeTest] Texture cache pin check: async in flight %d (waited %.1f s); %d entries %.0f MB, %d pinned "
+                    "%.0f MB, cap %.0f MB; evicted %d (%.0f MB); this scene's entries missing after: %d%s\n",
+                    inFlight, glfwGetTime() - waitStart, ps.Entries, ps.Bytes / MB, ps.Pinned, ps.PinnedBytes / MB,
+                    ps.CapBytes / MB, ps.Evicted, ps.EvictedBytes / MB, missing,
+                    (missing == 0 && inFlight == 0) ? "" : "  FAIL");
         std::fflush(stdout);
     }
     if (m_SceneLoadOk) {
