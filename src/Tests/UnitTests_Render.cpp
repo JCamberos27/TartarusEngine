@@ -3,6 +3,7 @@
 #include <random>
 #include <cstring>
 #include "../Renderer/SceneRenderer.h"
+#include "../Renderer/RenderSettingsEpoch.h"
 #include "../Renderer/Model.h"
 #include "../Renderer/InstanceBatch.h"
 #include "../Renderer/OpaqueBatchKey.h"
@@ -358,6 +359,30 @@ void GpuSceneMirror() {
     w.RebuildWorldTransformCache();
     scene.Sync(w, false);
     CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 0);
+    // Fields written in place with nothing told (G2-DIRTY): Cast Shadows and the first material's queue. A frame that
+    // changes only one of them, with nothing moved, must still bring that slot up to date.
+    auto glass = std::make_shared<MaterialAsset>();
+    glass->RenderQueue = MaterialAsset::Queue::Transparent;
+    auto castNext = [](RenderableComponent& r) {
+        r.CastShadows = (RenderableComponent::ShadowCasting)(((int)r.CastShadows + 1) % 4);
+    };
+    {
+        auto& r = w.Registry.get<RenderableComponent>(live[0]);
+        r.CastShadows = RenderableComponent::ShadowCasting::Off;
+        scene.Sync(w, false); // transforms untouched: no rebuild, no patch
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+        CHECK(matches(-2));
+        if (r.Materials.empty()) r.Materials.resize(1);
+        r.Materials[0] = glass;
+        scene.Sync(w, false);
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+        CHECK(matches(-3));
+        glass->RenderQueue = MaterialAsset::Queue::Opaque; // the asset edited (Inspector): its users change too
+        scene.Sync(w, false);
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+        CHECK(matches(-4));
+        glass->RenderQueue = MaterialAsset::Queue::Transparent;
+    }
     int incremental = 0, frames = 0;
     std::uint64_t written = 0, total = 0;
     for (int frame = 0; frame < 300; ++frame) {
@@ -367,7 +392,7 @@ void GpuSceneMirror() {
             live.erase(std::remove_if(live.begin(), live.end(), [&](entt::entity e) { return !w.Registry.valid(e); }), live.end());
             if (live.empty()) break;
             const entt::entity e = live[pick(live.size())];
-            switch (pick(11)) {
+            switch (pick(13)) {
             case 0: case 1: spawn(); break;
             case 2: w.DestroyEntityAndChildren(e); break;
             case 3: w.Registry.destroy(e); break;
@@ -377,6 +402,13 @@ void GpuSceneMirror() {
             case 7: if (w.Registry.all_of<HiddenInSceneTag>(e)) w.Registry.remove<HiddenInSceneTag>(e); else w.Registry.emplace<HiddenInSceneTag>(e); break;
             case 8: w.Registry.emplace_or_replace<LayerComponent>(e).Layer = (int)pick(7) - 2; break; // negatives too
             case 9: { auto& r = w.Registry.get<RenderableComponent>(e); r.ModelRef = r.ModelRef ? nullptr : modelA; break; }
+            case 10: castNext(w.Registry.get<RenderableComponent>(e)); break;
+            case 11: {
+                auto& r = w.Registry.get<RenderableComponent>(e);
+                if (r.Materials.empty()) r.Materials.resize(1);
+                r.Materials[0] = r.Materials[0] ? nullptr : glass;
+                break;
+            }
             default: w.Registry.get<TransformComponent>(e).Position = at(); break;
             }
         }
@@ -399,6 +431,71 @@ void GpuSceneMirror() {
                 (unsigned long long)written, (unsigned long long)total);
     CHECK(incremental * 2 > frames);
     CHECK(written * 10 < total); // a few changes a frame: a few slots, not the list
+}
+
+// G2-DIRTY at scale: past one sweep slice, an in-place write that reports itself (NoteRenderSettingsChanged) reaches
+// the next sync; one that doesn't is still caught by the sweep within a lap (slots / 1024 syncs), and a quiet frame
+// sends nothing.
+void GpuSceneLiveEpoch() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    constexpr int kCount = 5000; // 5 sweep slices of 1024
+    std::vector<entt::entity> all;
+    for (int i = 0; i < kCount; ++i)
+        all.push_back(w.CreateModelEntity(model, glm::vec3((float)(i % 100), 0.0f, (float)(i / 100)), glm::vec3(0), glm::vec3(1), "R"));
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    scene.Sync(w, false);
+    CHECK(scene.LastSync().Full);
+    for (int i = 0; i < 6; ++i) { // a full lap of the sweep with nothing changed
+        scene.Sync(w, false);
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 0);
+    }
+    auto syncsUntilSeen = [&](int limit) {
+        for (int n = 1; n <= limit; ++n) {
+            scene.Sync(w, false);
+            if (scene.LastSync().Slots > 0) {
+                CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+                return n;
+            }
+        }
+        return limit + 1;
+    };
+    // Reported: the next sync.
+    w.Registry.get<RenderableComponent>(all[2500]).CastShadows = RenderableComponent::ShadowCasting::Off;
+    NoteRenderSettingsChanged();
+    CHECK(syncsUntilSeen(1) == 1);
+    // The first material swapped to a Transparent one on a still entity (the Inspector's slot writes report it).
+    auto glass = std::make_shared<MaterialAsset>();
+    glass->RenderQueue = MaterialAsset::Queue::Transparent;
+    {
+        auto& r = w.Registry.get<RenderableComponent>(all[1200]);
+        if (r.Materials.empty()) r.Materials.resize(1);
+        r.Materials[0] = glass;
+        NoteRenderSettingsChanged();
+        CHECK(syncsUntilSeen(1) == 1);
+    }
+    // The asset's own queue edited (Inspector Render Mode): no renderable write, its users change.
+    glass->RenderQueue = MaterialAsset::Queue::Opaque;
+    NoteRenderSettingsChanged();
+    CHECK(syncsUntilSeen(1) == 1);
+    // Not reported: within one lap, wherever the sweep stands.
+    for (int k : {10, 2600, 4999}) {
+        w.Registry.get<RenderableComponent>(all[k]).CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
+        CHECK(syncsUntilSeen(5) <= 5);
+    }
 }
 
 // Every Sync keys SyncOnce: SyncOnce(A), a Sync for another world (a bake, a preview), then SyncOnce(A) must sync A
@@ -2792,6 +2889,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Light bounds: per-face fade (Bounds Fade - / +), uniform = the old single fade", LightBoundsFaceFade});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
     tests.push_back({"GpuScene: the mirror matches the candidate list slot by slot, frame after frame", GpuSceneMirror});
+    tests.push_back({"GpuScene: in-place render settings reach the slots (reported: next sync; unreported: within a sweep lap)", GpuSceneLiveEpoch});
     tests.push_back({"GpuScene: SyncOnce's key follows every Sync (another world in between syncs again)", GpuSceneSyncOnceKey});
     tests.push_back({"GpuScene: upload runs (merge, cap, whole list) and layer packing", GpuSceneRuns});
     tests.push_back({"GatherPatch", GatherPatch});

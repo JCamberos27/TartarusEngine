@@ -78,6 +78,7 @@
 #include <cmath>
 #include <cctype>
 #include "ReflectionProbeCapture.h"
+#include "RenderSettingsEpoch.h"
 #include <functional>
 #include <variant>
 #include <cfloat>
@@ -386,6 +387,7 @@ SurfaceEdit DrawRenderModeRows(const std::vector<MaterialAsset*>& assets) {
         ev.Defer([assets, mode]() {
             for (MaterialAsset* a : assets) {
                 a->RenderQueue = (MaterialAsset::Queue)mode;
+                NoteRenderSettingsChanged();
                 a->Mat.AlphaClip = a->RenderQueue == MaterialAsset::Queue::AlphaTest; // #101 pairing
             }
         });
@@ -3549,6 +3551,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                     std::string path((const char*)payload->Data);
                     PushUndo(world, "Change Mesh");
                     renderable->ModelRef = assets.InstantiateModel(path);
+                    NoteRenderSettingsChanged();
                 }
                 ImGui::EndDragDropTarget();
             }
@@ -3566,6 +3569,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 auto pick = [&](const char* kind) {
                     PushUndo(world, "Change Mesh");
                     renderable->ModelRef = assets.CreatePrimitive(kind);
+                    NoteRenderSettingsChanged();
                 };
                 if (ImGui::Selectable(ICON_FA_CUBE "  Cube")) pick("cube");
                 if (ImGui::Selectable(ICON_FA_CIRCLE "  Sphere")) pick("sphere");
@@ -3593,6 +3597,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 if (ImGui::Combo("##CastShadows", &cast, kCastModes, IM_ARRAYSIZE(kCastModes))) {
                     PushUndo(world, "Edit Cast Shadows");
                     renderable->CastShadows = (RenderableComponent::ShadowCasting)cast;
+                    NoteRenderSettingsChanged();
                 }
             }
             PropertyLabel("Receive Shadows", "Whether shadows from other objects (and itself) darken this surface.");
@@ -5858,6 +5863,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             auto ma = assets.LoadMaterial(matPath);
             if (i >= (int)rc->Materials.size()) rc->Materials.resize(i + 1);
             rc->Materials[i] = ma;
+            NoteRenderSettingsChanged();
         };
 
         for (int i = 0; i < meshCount; ++i) {
@@ -5926,6 +5932,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                     PushUndo(world, "Edit Material");
                     if (i >= (int)rc->Materials.size()) rc->Materials.resize(i + 1);
                     rc->Materials[i] = MakeEmbeddedFromImported(rc, i);
+                    NoteRenderSettingsChanged();
                 }
             }
 
@@ -5962,6 +5969,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                                  ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
                     PushUndo(world, "Clear Material Slot");
                     if (i < (int)rc->Materials.size()) rc->Materials[i] = nullptr;
+                    NoteRenderSettingsChanged();
                 }
             }
 
@@ -6051,6 +6059,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 for (RenderableComponent* rc : rcs) {
                     if (rc->Materials.empty()) rc->Materials.push_back(ma);
                     else rc->Materials[0] = ma;
+                    NoteRenderSettingsChanged();
                 }
                 slotAssigned = true; // the PBR editor below isn't drawn this frame
             }
@@ -6066,6 +6075,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 for (RenderableComponent* rc : rcs) {
                     if (rc->Materials.empty()) rc->Materials.push_back(ma);
                     else rc->Materials[0] = ma;
+                    NoteRenderSettingsChanged();
                 }
                 slotAssigned = true;
             }
@@ -6079,6 +6089,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 PushUndo(world, "Clear Material Slot");
                 for (RenderableComponent* rc : rcs)
                     if (!rc->Materials.empty()) rc->Materials[0] = nullptr;
+                NoteRenderSettingsChanged();
                 nCustom = 0;
             }
         }
@@ -6100,8 +6111,10 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                     auto ma = MakeEmbeddedFromImported(rc, 0);
                     if (rc->Materials.empty()) rc->Materials.push_back(ma);
                     else rc->Materials[0] = ma;
+                    NoteRenderSettingsChanged();
                 } else if (!enable) {
                     if (!rc->Materials.empty()) rc->Materials[0] = nullptr;
+                    NoteRenderSettingsChanged();
                 }
             }
             nCustom = enable ? total : 0;

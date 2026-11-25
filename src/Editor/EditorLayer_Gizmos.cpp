@@ -74,6 +74,7 @@
 #include <functional>
 #include <cfloat>
 #include <random>
+#include "RenderSettingsEpoch.h"
 
 using namespace EditorInternal;
 
@@ -1173,6 +1174,7 @@ void EditorLayer::RestoreMaterialDropPreview(World& world) {
     if (!rc || p.Slot < 0 || p.Slot >= (int)rc->Materials.size()) return;
     rc->Materials[p.Slot] = p.Original;
     if (rc->Materials.size() > p.OriginalSlotCount) rc->Materials.resize(p.OriginalSlotCount);
+    NoteRenderSettingsChanged();
 }
 
 void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Camera& editorCamera) {
@@ -1298,6 +1300,7 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
                           rc->Materials.size(), path, true};
                     if ((int)rc->Materials.size() <= slot) rc->Materials.resize(slot + 1);
                     rc->Materials[slot] = mat;
+                    NoteRenderSettingsChanged();
                 }
             }
         }

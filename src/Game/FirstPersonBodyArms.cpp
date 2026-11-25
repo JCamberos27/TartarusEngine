@@ -29,6 +29,7 @@
 #include <tuple>
 #include <cstdio>
 #include <sstream>
+#include "RenderSettingsEpoch.h"
 
 // FirstPersonBody: the arms - the pieces' (first person) and the world twins' onto a gun's hold (ArmsLateUpdate), the
 // arm shapes copied off the rig, the twist bones, and the hands held off the eye.
@@ -277,9 +278,13 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         auto saved = std::find_if(m_ArmsEasedOut.begin(), m_ArmsEasedOut.end(), [e](const auto& s) { return s.first == e; });
         if (armsHidden) {
             if (saved == m_ArmsEasedOut.end()) m_ArmsEasedOut.emplace_back(e, (int)rc.CastShadows);
-            rc.CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
+            if (rc.CastShadows != RenderableComponent::ShadowCasting::ShadowsOnly) { // every frame while hidden
+                rc.CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
+                NoteRenderSettingsChanged();
+            }
         } else if (saved != m_ArmsEasedOut.end()) {
             rc.CastShadows = (RenderableComponent::ShadowCasting)saved->second;
+            NoteRenderSettingsChanged();
             m_ArmsEasedOut.erase(saved);
         }
     }
