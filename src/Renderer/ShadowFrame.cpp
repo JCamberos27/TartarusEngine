@@ -176,6 +176,9 @@ void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const g
     shadowMap.Update(fitView, fitProj, fl.SunDir, world.Render.ShadowDistance, &casterMin, &casterMax);
     p.frame = Time::FrameCount();
     p.renderMask = shadowMap.PlanRender(p.frame); // the far cascades on alternate frames
+    // G4-d measure: what drawing the far cascades costs, the most a far static cache could save. Diagnostic only: the
+    // far layers keep whatever they last held.
+    if (static const bool skipFar = Env::Flag(Env::Var::SunSkipFar); skipFar && shadowMap.Count() == 4) p.renderMask &= 0b0011u;
     Frustum (&casterCells)[CascadedShadowMap::kMaxCascades] = p.cells;
     for (int c = 0; c < shadowMap.Count(); ++c) casterCells[c] = Frustum::FromViewProj(shadowMap.LightViewProj(c));
     VisibilityQuery casts; // #163 - Cast Shadows: Off skips
