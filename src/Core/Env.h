@@ -97,6 +97,8 @@
     X(NoGpuScene, "TARTARUS_NO_GPU_SCENE", Flag, "disable the persistent GPU scene buffers")                          \
     X(NoMeshArena, "TARTARUS_NO_MESH_ARENA", Flag, "disable the static mesh arena")                                   \
     X(NoModelCache, "TARTARUS_NO_MODEL_CACHE", Flag, "import models from their files (skip Library/Models)")          \
+    X(NoTexturePrefetch, "TARTARUS_NO_TEXTURE_PREFETCH", Flag, "scene open: decode material textures one by one")    \
+    X(TextureDigest, "TARTARUS_TEXTURE_DIGEST", Flag, "log a pixel hash for every texture file decoded")             \
     X(NoProgramCache, "TARTARUS_NO_PROGRAM_CACHE", Flag, "compile every shader program (skip Library/ShaderCache)")    \
     X(NoSkinArena, "TARTARUS_NO_SKIN_ARENA", Flag, "disable the skinned mesh arena")                                  \
     X(NoPreskin, "TARTARUS_NO_PRESKIN", Flag, "disable compute pre-skinning")                                         \
