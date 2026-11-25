@@ -99,7 +99,8 @@ std::map<std::string, std::weak_ptr<const SharedMotionDatabase>> s_SharedLoaded;
 std::atomic<std::uint64_t> s_SharedGeneration{0};
 
 // The last loads stay alive after their bodies stop, so a later Play in the same session reuses them (the database is
-// ~2 s to load and measure). Each remembers its files' write times: a rewritten database or rig file loads afresh.
+// ~2 s to load and measure). They are kept across scene switches until shutdown (ReleaseKept): every scene's body uses
+// the same database. Each remembers its files' write times: a rewritten database, rig file or rig .meta loads afresh.
 struct KeptLoad {
     std::shared_ptr<const SharedMotionDatabase> Db;
     std::vector<std::filesystem::file_time_type> Stamps;
@@ -110,9 +111,9 @@ std::uint64_t s_SharedKeptClock = 0;
 
 std::vector<std::filesystem::file_time_type> FileStamps(const std::string& base, const std::string& rigPath) {
     std::vector<std::filesystem::file_time_type> out;
-    for (const std::string& f : {base + ".mmanim", base + ".mmdb", rigPath}) {
+    for (const std::string& f : SharedMotionDatabase::WatchedFiles(base, rigPath)) {
         std::error_code ec;
-        out.push_back(f.empty() ? std::filesystem::file_time_type{} : std::filesystem::last_write_time(std::filesystem::u8path(f), ec));
+        out.push_back(std::filesystem::last_write_time(std::filesystem::u8path(f), ec));
         if (ec) out.back() = std::filesystem::file_time_type{};
     }
     return out;
@@ -331,6 +332,15 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
     s_Loaded[key] = shared;
     keep(shared);
     return shared;
+}
+
+std::vector<std::string> SharedMotionDatabase::WatchedFiles(const std::string& base, const std::string& rigPath) {
+    std::vector<std::string> out{base + ".mmanim", base + ".mmdb"};
+    if (!rigPath.empty()) {
+        out.push_back(rigPath);
+        out.push_back(rigPath + ".meta"); // its import settings (scale, axes) change the measured frames, not the model file
+    }
+    return out;
 }
 
 void SharedMotionDatabase::ReleaseKept() {

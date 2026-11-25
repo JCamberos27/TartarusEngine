@@ -1036,6 +1036,10 @@ void TestSharedDatabaseInvalidate() {
     fresh.reset();
     SharedMotionDatabase::Invalidate(base);
     CHECK(rewrittenWeak.expired());
+    // A kept load also watches the rig's model file and its .meta (import settings change the measured frames).
+    CHECK(SharedMotionDatabase::WatchedFiles("a/Manny", "") == std::vector<std::string>({"a/Manny.mmanim", "a/Manny.mmdb"}));
+    CHECK(SharedMotionDatabase::WatchedFiles("a/Manny", "b/Rig.fbx") ==
+          std::vector<std::string>({"a/Manny.mmanim", "a/Manny.mmdb", "b/Rig.fbx", "b/Rig.fbx.meta"}));
     std::filesystem::remove_all(dir, ec);
 
     // What the editor's watcher hands the rebake.
