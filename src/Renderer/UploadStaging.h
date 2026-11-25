@@ -24,6 +24,7 @@ namespace UploadStaging {
 enum class Step { Done, Progress, Waiting };
 
 bool Enabled();
+void DebugDump(); // DIAG (temporary)
 
 // One staged copy: Ready() once the worker has written the bytes.
 struct Region {

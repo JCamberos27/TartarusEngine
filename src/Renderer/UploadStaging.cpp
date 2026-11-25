@@ -126,6 +126,22 @@ void Recycle(bool all) {
     if (r.Spans.empty()) r.Head = 0;
 }
 
+void DebugDump() { // DIAG (temporary)
+    Ring& r = R();
+    std::printf("[RingDiag] frame=%llu head=%zu spans=%zu\n", (unsigned long long)r.Frame, r.Head, r.Spans.size());
+    {
+        Worker& w = W();
+        std::lock_guard<std::mutex> lock(w.M);
+        std::printf("[RingDiag] copy worker queue=%zu\n", w.Q.size());
+    }
+    int n = 0;
+    for (const Live& s : r.Spans) {
+        if (n++ < 12)
+            std::printf("[RingDiag]  span %zu..%zu (%zu MiB) retired=%d retiredFrame=%llu\n", s.Offset, s.End, (s.End - s.Offset) >> 20, (int)s.Retired,
+                        (unsigned long long)s.Frame);
+    }
+}
+
 void EndFrame() {
     ++R().Frame;
     Recycle(false);

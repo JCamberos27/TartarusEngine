@@ -228,6 +228,14 @@ AssetLibrary::AsyncLoader& AssetLibrary::Async() {
 
 bool AssetLibrary::IsReady(const AsyncHandle& ticket) { return !ticket || ticket->Ready; }
 
+void AssetLibrary::DebugDumpAsync() const { // DIAG (temporary)
+    if (!m_Async) return;
+    for (const auto& j : m_Async->Active)
+        std::printf("[AsyncDiag] kind=%d done=%d texPending=%d texOk=%d forget=%d queueWaitingTickets path=%s\n", (int)j->K, (int)j->Done.load(),
+                    (int)(j->TexPending != nullptr), (int)j->TexResult.Ok, (int)j->Forget, j->Path.c_str());
+    std::printf("[AsyncDiag] tickets waiting=%d\n", CountWaitingTickets(m_Async->Tickets));
+}
+
 int AssetLibrary::AsyncInFlight() const {
     if (!m_Async) return 0;
     // Plus tickets the pump's budget left for the next pump (CLI tools and the impostor bake drain until this is 0).

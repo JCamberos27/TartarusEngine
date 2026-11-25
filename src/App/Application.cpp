@@ -1762,6 +1762,14 @@ bool AppSession::Frame() {
             s_gate = OutfitWaitGate();
             std::printf("[NpcTest] an outfit change's loads were still in flight after %.0f s (%d in flight): no more holding for it\n",
                         OutfitWaitGate::kCapSeconds, assets.AsyncInFlight());
+            UploadStaging::DebugDump();
+            assets.DebugDumpAsync();
+            for (entt::entity r : world.Registry.view<const CharacterOutfitComponent>()) { // DIAG (temporary)
+                int d = 0, t = 0;
+                const bool pend = OutfitSystem::IsPending(world, r, &d, &t);
+                std::printf("[OutfitDiag] root %u pending=%d done=%d total=%d coverageReading=%d landingDue=%d\n", (unsigned)r, pend, d, t,
+                            (int)OutfitSystem::CoverageReading(), (int)OutfitSystem::LandingDue(world));
+            }
             if (npcTest) npcTest->Fail("the outfit change's loads finished within the hold cap (the picture would show a half-loaded outfit)");
             break;
         }

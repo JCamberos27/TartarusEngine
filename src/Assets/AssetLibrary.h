@@ -305,6 +305,7 @@ public:
     // least a quarter millisecond so the loads keep moving.
     static double PumpBudgetMs(bool playing, bool urgent, double lastFrameWorkMs);
     int AsyncInFlight() const;
+    void DebugDumpAsync() const; // DIAG (temporary)
 
     // --- Play scope ----------------------------------------------------------------------------
     // Play loads assets the edit-mode scene never asked for (PlayerLook warms the whole wardrobe,
