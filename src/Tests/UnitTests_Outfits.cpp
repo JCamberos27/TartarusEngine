@@ -98,14 +98,16 @@ void TestWardrobe() {
       "root": "assets/Chars",
       "skinMaterials": ["M_Body", "M_Head"],
       "excludeFolders": ["StaticMesh"],
+      "hatSlot": "Hat", "hairSlot": "Hair",
+      "namePrefixes": ["SKM_F_", "SM_F_", "SKM_", "SM_"], "femaleFolders": ["Female"], "femalePrefixes": ["SKM_F_"],
       "slots": [
-        {"id": "Hair", "folders": ["Hair"], "headAttached": true},
-        {"id": "Hat", "folders": ["Hats", "WithHair"], "headAttached": true},
-        {"id": "Top", "folders": ["Tops"]},
-        {"id": "Outerwear", "folders": ["Outerwear"]},
-        {"id": "Pants", "folders": ["Pants"]},
-        {"id": "Shoes", "folders": ["Shoes"]},
-        {"id": "Wrist L", "folders": ["Accessories"], "nameSuffix": "_L"}
+        {"id": "Hair", "folders": ["Hair"], "headAttached": true, "layer": 9, "hides": false},
+        {"id": "Hat", "folders": ["Hats", "WithHair"], "headAttached": true, "layer": 10},
+        {"id": "Top", "folders": ["Tops"], "layer": 4},
+        {"id": "Outerwear", "folders": ["Outerwear"], "layer": 6},
+        {"id": "Pants", "folders": ["Pants"], "layer": 3},
+        {"id": "Shoes", "folders": ["Shoes"], "layer": 2},
+        {"id": "Wrist L", "folders": ["Accessories"], "nameSuffix": "_L", "layer": 8, "hides": false}
       ],
       "bodies": {
         "Male": {"parts": [{"part": "Torso", "model": "Body/Torso.fbx"}, {"part": "Legs", "model": "Body/Legs.fbx"},
@@ -140,10 +142,23 @@ void TestWardrobe() {
         CHECK(!parsed && err.find("wrong type") != std::string::npos);
     }
     CHECK(Wardrobe::Parse(text, w, &err));
-    CHECK(Wardrobe::PrettyName("SM_F_Balaclava_Crime") == "Balaclava Crime");
+    CHECK(Wardrobe::PrettyName("SM_F_Balaclava_Crime", w.NamePrefixes) == "Balaclava Crime");
 
-    CHECK(Wardrobe::PrettyName("SKM_F_Hoodie_Zipper_Hood") == "Hoodie Zipper Hood");
-    CHECK(Wardrobe::PrettyName("SKM_Tshirt_Tucked") == "T-Shirt Tucked");
+    CHECK(Wardrobe::PrettyName("SKM_F_Hoodie_Zipper_Hood", w.NamePrefixes) == "Hoodie Zipper Hood");
+    CHECK(Wardrobe::PrettyName("SKM_Tshirt_Tucked", w.NamePrefixes) == "T-Shirt Tucked");
+    CHECK(Wardrobe::PrettyName("SKM_Tshirt_Tucked") == "SKM T-Shirt Tucked"); // no pack prefixes: nothing dropped
+    {   // The pack's names live in the .wardrobe, not in code: without them a "Hair" slot is an ordinary middle layer
+        // that hides, nothing is a fitted haircut's hat, and no folder or prefix makes an item female.
+        Wardrobe::Wardrobe bare;
+        CHECK(Wardrobe::Parse(R"({"slots": [{"id": "Hair", "folders": ["Hair"]}, {"id": "Hat", "folders": ["Hats"]}],
+                                  "bodies": {"Male": {"parts": [{"part": "Torso", "model": "T.fbx"}]}}})", bare, &err));
+        CHECK(bare.HatSlot.empty() && bare.HairSlot.empty() && bare.NamePrefixes.empty());
+        CHECK(bare.Slot("Hair")->Layer == Wardrobe::kDefaultLayer && bare.Slot("Hair")->Hides);
+        const auto l = Wardrobe::LayerOf(bare, "Glasses", "a/SKM_Glasses.fbx", false); // not a slot of this wardrobe
+        CHECK(l.Layer == Wardrobe::kDefaultLayer && l.Hides);
+        Wardrobe::Item f;
+        CHECK(Wardrobe::Classify(bare, "Female/Hair/SKM_F_Bob.fbx", {}, f) && f.Sex == Wardrobe::Gender::Male && f.Name == "SKM F Bob");
+    }
     CHECK(Wardrobe::SkinBase(w, "assets/M/M_Body_Afro.mat") == "M_Body" && Wardrobe::SkinBase(w, "assets/M/M_Cap.mat").empty());
 
     std::vector<Wardrobe::Item> cat;
@@ -241,8 +256,9 @@ void TestWardrobe() {
 
     // Layers: each hides what pokes through it from the layers under it - and nothing else.
     Wardrobe::Wardrobe lw;
-    CHECK(Wardrobe::Parse(R"({"slots": [{"id": "Top"}, {"id": "Outerwear"}, {"id": "Pants"}, {"id": "Shoes"},
-                                        {"id": "Hair", "headAttached": true}, {"id": "Bag", "layer": 1, "hides": false}],
+    CHECK(Wardrobe::Parse(R"({"slots": [{"id": "Top", "layer": 4}, {"id": "Outerwear", "layer": 6}, {"id": "Pants", "layer": 3},
+                                        {"id": "Shoes", "layer": 2}, {"id": "Hair", "headAttached": true, "layer": 9, "hides": false},
+                                        {"id": "Bag", "layer": 1, "hides": false}],
                               "bodies": {"Male": {"parts": [{"part": "Torso", "model": "T.fbx"}]}},
                               "layers": [{"slot": "Top", "nameHasAny": ["Tucked"], "layer": 2},
                                          {"slot": "Shoes", "nameHasAny": ["Boots"], "layer": 5},
