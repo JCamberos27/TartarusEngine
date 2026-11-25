@@ -1355,11 +1355,14 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
     {
         PROFILE_SCOPE("Play Snapshot");
         SceneSerializer::SaveToStrings(world, m_PlayModeSnapshot, journal ? m_AssetsPtr : nullptr,
-                                       journal ? &withLibrary : nullptr, &snapTimes);
+                                       journal ? &withLibrary : nullptr, &snapTimes, journal ? &m_PrePlayLibrary : nullptr);
     }
     const auto journalT0 = std::chrono::steady_clock::now();
     if (journal) JournalUnrecordedChange(world, withLibrary); // #15 - Stop drops the baseline; keep that change a step
     const double journalMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - journalT0).count();
+    // P-55c: SaveToString(world, assets) of the scene Stop loads back, kept for Stop to take as the baseline again.
+    m_PrePlayBaseline = journal ? std::move(withLibrary) : std::string();
+    if (!journal) m_PrePlayLibrary.reset();
     const double snapshotMs = std::chrono::duration<double, std::milli>(journalT0 - playT0).count();
     auto FormatMs = [](double ms) {
         char text[32];
@@ -1465,6 +1468,10 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     CancelEyedropper(); // #93
     m_InPlayMode = false;
     m_CurrentUndoScene.clear();
+    std::string prePlayBaseline = std::move(m_PrePlayBaseline);
+    m_PrePlayBaseline.clear();
+    const std::shared_ptr<const SceneSerializer::LibraryState> prePlayLibrary = std::move(m_PrePlayLibrary);
+    m_PrePlayLibrary.reset();
 
     // Always tear the PhysX world down, even on the snapshot-empty early-out below — Create()
     // may have run regardless (#185). Destroy() is idempotent when nothing is active.
@@ -1492,6 +1499,11 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
         // The world still holds Play's state. Keep the pre-Play scene where it can be recovered and
         // say so: a Save now would write Play's state over the scene file.
         KeepUnrestoredSnapshot(m_PlayModeSnapshot, "Stop");
+    } else if (!prePlayBaseline.empty() && prePlayLibrary && SceneSerializer::LibraryStateMatches(assets, *prePlayLibrary)) {
+        // P-55c: the world is the pre-Play scene again, and the library is as it was then: that save is the baseline
+        // (else the next frame's EnsureUndoScene saves the whole scene again, ~0.5 s in the Forest).
+        m_CurrentUndoScene = std::move(prePlayBaseline);
+        m_ChangesOutsideUndo = 0;
     }
     m_PlayModeSnapshot.clear();
 

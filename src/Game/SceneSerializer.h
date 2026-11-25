@@ -72,8 +72,15 @@ namespace SceneSerializer {
     };
     // Play entry (P-55): SaveToString(world) into `entityOnly` and, when `assets` and `withLibrary` are given,
     // SaveToString(world, *assets) into `withLibrary`, from ONE walk of the World (byte-identical to calling both).
+    // The AssetLibrary half of a snapshot, kept parsed (defined in SceneSerializer.cpp).
+    struct LibraryState;
+    // `library`, when given with `withLibrary`, gets that AssetLibrary half: Stop checks it against the live library
+    // before it takes `withLibrary` back as the undo baseline (P-55c).
     void SaveToStrings(const World& world, std::string& entityOnly, const AssetLibrary* assets = nullptr,
-                       std::string* withLibrary = nullptr, SnapshotTimes* times = nullptr);
+                       std::string* withLibrary = nullptr, SnapshotTimes* times = nullptr,
+                       std::shared_ptr<const LibraryState>* library = nullptr);
+    // The live AssetLibrary would write `library` again (the parsed half, compared without writing text).
+    bool LibraryStateMatches(const AssetLibrary& assets, const LibraryState& library);
     // #15 - two of those snapshots hold the same scene (entities and scene settings), whatever
     // their AssetLibrary state, which the Asset Browser re-lists on its own between undo steps.
     bool SameSceneContent(const std::string& a, const std::string& b);

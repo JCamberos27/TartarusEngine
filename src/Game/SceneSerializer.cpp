@@ -448,8 +448,17 @@ double MsSince(std::chrono::steady_clock::time_point t0) {
 }
 } // namespace
 
+struct SceneSerializer::LibraryState {
+    json Keys; // LibraryStateJson's object: the marker and the library keys
+};
+
+bool SceneSerializer::LibraryStateMatches(const AssetLibrary& assets, const LibraryState& library) {
+    return LibraryStateJson(assets) == library.Keys;
+}
+
 void SceneSerializer::SaveToStrings(const World& world, std::string& entityOnly, const AssetLibrary* assets,
-                                    std::string* withLibrary, SnapshotTimes* times) {
+                                    std::string* withLibrary, SnapshotTimes* times,
+                                    std::shared_ptr<const LibraryState>* library) {
     SnapshotTimes local;
     SnapshotTimes& t = times ? *times : local;
     auto t0 = std::chrono::steady_clock::now();
@@ -468,6 +477,12 @@ void SceneSerializer::SaveToStrings(const World& world, std::string& entityOnly,
     for (auto it = lib.begin(); it != lib.end(); ++it) root[it.key()] = std::move(*it);
     *withLibrary = root.dump();
     t.LibraryDumpMs = MsSince(t0);
+    if (!library) return;
+    // The library keys move back out of `root` (thrown away next): no copy of the library half.
+    auto state = std::make_shared<LibraryState>();
+    state->Keys = json::object();
+    for (auto it = lib.begin(); it != lib.end(); ++it) state->Keys[it.key()] = std::move(root[it.key()]);
+    *library = std::move(state);
 }
 
 bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const std::string& data) {

@@ -1326,6 +1326,7 @@ static void TestPlaySnapshotsOneWalk() {
         world.Render.ExposureEV=3.0f; // Play's own change, reverted by Stop
         EditorHistoryTestAccess::ExitPlay(editor,world,assets);
         CHECK(SceneSerializer::SaveToString(world,assets)==before);
+        CHECK(EditorHistoryTestAccess::Current(editor)==before); // P-55c: Stop takes the pre-Play save back, byte for byte
         nextFrame();
         CHECK(EditorHistoryTestAccess::Current(editor)==before);
         CHECK(EditorHistoryTestAccess::Count(editor)==0);
@@ -1337,9 +1338,20 @@ static void TestPlaySnapshotsOneWalk() {
         CHECK(EditorHistoryTestAccess::TopLabel(editor)=="Unrecorded Change");
         EditorHistoryTestAccess::ExitPlay(editor,world,assets);
         CHECK(SceneSerializer::SaveToString(world,assets)==edited);
+        CHECK(EditorHistoryTestAccess::Current(editor)==edited); // P-55c: the baseline Play journaled to, not the older one
         nextFrame();
         CHECK(EditorHistoryTestAccess::Current(editor)==edited);
         CHECK(EditorHistoryTestAccess::Count(editor)==1); // Play and Stop added nothing after it
+        // P-55c: the library changed during Play (a sound registered): Stop doesn't take the pre-Play save, whose
+        // library half is stale; the next frame saves the scene again.
+        EditorHistoryTestAccess::EnterPlay(editor,world);
+        assets.RegisterSound("assets/Audio/p55c_during_play.wav");
+        EditorHistoryTestAccess::ExitPlay(editor,world,assets);
+        const std::string afterStop=SceneSerializer::SaveToString(world,assets);
+        CHECK(afterStop!=edited);
+        CHECK(EditorHistoryTestAccess::Current(editor).empty());
+        nextFrame();
+        CHECK(EditorHistoryTestAccess::Current(editor)==afterStop);
         EditorHistoryTestAccess::Clear(editor);
     }
     ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);
