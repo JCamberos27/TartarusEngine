@@ -1305,6 +1305,8 @@ bool AppSession::Frame() {
     const float dt = Time::UnscaledDeltaTime();
     // --npc-test runs on a fixed step, so its timings don't depend on the machine.
     // (--npc-test ragdoll stops time for a few frames to shoot one moment from four sides.)
+    // (Set late in the frame, read here on the next one: the first loading frame still advances 1/60 s and the first frame
+    // after the hold stays frozen. Deterministic either way.)
     static bool outfitHold = false; // set below while an outfit change's loads are in flight (harness runs): time stands still
     const float gameDt = opt.npcTestMode ? (playing && !(npcTest && npcTest->Frozen()) && !outfitHold ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
     if (!playing && sprayCans.Spraying() > 0) sprayCans.Stop(); // Play ended mid-spray: the hiss stops
@@ -1755,11 +1757,11 @@ bool AppSession::Frame() {
     // OutfitWaitGate::kCapSeconds it logs, fails --npc-test, and stops holding until an outfit change lands again.
     // Timed perf-bench runs (no pictures) don't hold.
     outfitHold = false;
-    if ((opt.npcTestMode || (opt.perfBenchMode && !opt.smokeShotsDir.empty())) && playing) {
-        static OutfitWaitGate s_gate;
+    if (opt.npcTestMode || (opt.perfBenchMode && !opt.smokeShotsDir.empty())) {
+        static OutfitWaitGate s_gate; // a Stop mid-hold ends it (loading is false outside Play), so the next Play's clock starts fresh
         static std::chrono::steady_clock::time_point s_t0 = std::chrono::steady_clock::now();
         static unsigned s_gaveUpAt = ~0u; // the landed generation the last cap hit happened at
-        const bool loading = OutfitSystem::AnyPending() && !OutfitSystem::LandingDue(world) &&
+        const bool loading = playing && OutfitSystem::AnyPending() && !OutfitSystem::LandingDue(world) &&
                              (assets.AsyncInFlight() > 0 || OutfitSystem::CoverageReading()) &&
                              OutfitSystem::LandedGeneration() != s_gaveUpAt;
         const double nowSec = std::chrono::duration<double>(std::chrono::steady_clock::now() - s_t0).count();
@@ -1769,8 +1771,9 @@ bool AppSession::Frame() {
         case OutfitWaitGate::State::CapHit:
             s_gaveUpAt = OutfitSystem::LandedGeneration();
             s_gate = OutfitWaitGate();
-            std::printf("[NpcTest] an outfit change's loads were still in flight after %.0f s (%d in flight): no more holding for it\n",
-                        OutfitWaitGate::kCapSeconds, assets.AsyncInFlight());
+            std::printf("[NpcTest] an outfit change's loads were still in flight after %.0f s (%d in flight): no more holding for it%s\n",
+                        OutfitWaitGate::kCapSeconds, assets.AsyncInFlight(),
+                        npcTest ? "" : " (the _playmax picture may show a half-loaded outfit)");
             if (npcTest) npcTest->Fail("the outfit change's loads finished within the hold cap (the picture would show a half-loaded outfit)");
             break;
         }
