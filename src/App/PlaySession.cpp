@@ -1,4 +1,5 @@
 #include "App/PlaySession.h"
+#include "App/PlayAssetsWarmup.h"
 #include "EditorSound.h"
 #include "Editor/GameModuleBuild.h"
 
@@ -170,8 +171,9 @@ void PlaySession::Start() {
         m_BloodFx.Config.ImpactPuffs = b.ImpactPuffs;
         m_BloodFx.Config.Gore = b.Gore;
     }
-    BloodRenderer::Get().Load(); // once; a missing import just leaves the blood off
-    KnifeFxLibrary::Get().Load(); // likewise the Knife packs
+    // The blood and Knife effects, once (a missing import just leaves them off): from the files the warm-up read on its
+    // worker (P-56), waiting for it if it is still going, else straight from disk.
+    PlayAssetsWarmup::Get().FinishForPlay();
     if (entt::entity ctrl = m_State.ControllerEntity; ctrl != entt::null) {
         m_State.UsesPlayer=true;
         m_GravityGun.Reset();

@@ -46,6 +46,7 @@
 #include "TimeOfDay.h"
 #include "Material.h"
 #include "ShaderLibrary.h"
+#include "App/PlayAssetsWarmup.h"
 #include "GpuScene.h"
 #include "TintOverlayRenderer.h"
 #include "HdrTarget.h"
@@ -398,7 +399,7 @@ private:
     // declared before every local below, so it is destroyed after all of them (NPC ragdolls, the player and the world
     // may still release PhysX / audio objects in their own destructors).
     struct CoreShutdownGuard {
-        ~CoreShutdownGuard() { AudioEngine::Shutdown(); PhysicsWorld::Shutdown(); }
+        ~CoreShutdownGuard() { PlayAssetsWarmup::Get().Shutdown(); AudioEngine::Shutdown(); PhysicsWorld::Shutdown(); }
     } coreShutdownGuard;
 
     Step step16{[&] {
@@ -1666,6 +1667,8 @@ bool AppSession::Frame() {
     }
     EditorSound::Update(); // the notification sounds for what was logged this frame
     AudioEngine::Update();
+    // P-56: the first Play's sound decodes and effect-file reads, on a worker once a playable scene is open.
+    PlayAssetsWarmup::Get().Tick(world, assets.AsyncInFlight(), playing);
     }
 
     // Whether gameplay actually advances this frame: playing and not paused, or a
