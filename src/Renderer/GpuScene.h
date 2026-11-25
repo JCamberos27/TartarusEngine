@@ -30,6 +30,10 @@ public:
 
     // Brings the mirror and (with `upload`) the GPU buffers up to the world's renderables. Unit tests pass false: no GL.
     void Sync(World& world, bool upload = true);
+    // Sync, unless nothing the candidate list is built from changed since the last one for this world (its transform
+    // cache stamp and renderable count: the list's own fast path). For passes that draw from the scene many times a
+    // frame (every shadow map). Returns Ready().
+    bool SyncOnce(World& world);
     void Release(); // GL buffers freed (the mirror kept); the next Sync re-creates and fills them
 
     std::uint32_t Count() const { return m_Count; }
@@ -72,4 +76,7 @@ private:
     std::vector<glm::vec4> m_BoundsCpu;
     std::vector<std::uint32_t> m_Sorted;
     SyncStats m_Last;
+    const World* m_OnceWorld = nullptr; // SyncOnce's last key
+    std::uint64_t m_OnceStamp = 0;
+    std::size_t m_OnceRenderables = 0;
 };

@@ -10,6 +10,7 @@ class Model;
 class Shader;
 struct MaterialAsset;
 class VisibleIndexBuffer;
+class World;
 
 // GPU instancing of repeated static models (Project Settings > Quality > GPU instancing). A pass groups the copies of
 // one model that draw the same way, puts their transforms in the per-frame instance buffer, and draws each group once
@@ -92,6 +93,7 @@ bool SameSlots(const std::vector<std::shared_ptr<MaterialAsset>>& a, const std::
 std::uint64_t HashSlots(const std::vector<std::shared_ptr<MaterialAsset>>& slots, std::uint64_t seed);
 
 namespace InstanceBuffer {
+constexpr unsigned kXformBinding = 27; // ModelVertex.glsl / ShadowDepth.vert.glsl InstanceBlock
 // The per-frame instance transforms, two mat4s per instance (the transform, then its normal matrix), bound at 27.
 // Each Upload copies the staging into a fresh span of a persistently mapped ring and binds that range (the draws
 // before it keep reading theirs).
@@ -155,9 +157,13 @@ struct DepthCaster {
     bool TwoSided = false;  // drawn without back-face culling (Cast Shadows: Two Sided)
     int LayerFirst = 0;     // the sun's single-pass cascades: its first cascade and how many in a row
     int Layers = 1;
+    std::uint32_t Slot = ~0u; // VisibleRenderable::Slot: its transform in the GPU scene (GpuScene.h), ~0u = none
 };
 // Draws the casters through a depth program (ShadowDepth.vert.glsl) whose uLightViewProj (or cascade matrices) the
 // caller set. Copies of an unskinned, whole model with the same materials, sidedness and cascades draw as one
 // instanced draw when GPU instancing is on; the rest one by one with uModel. `firstLoc`: the program's uCascadeFirst
 // when drawing the sun's layered cascades, else -1. Returns the draw calls issued (one per model, not per mesh).
-int DrawDepthCasters(Shader& shader, const std::vector<DepthCaster>& casters, int firstLoc = -1);
+// `sceneWorld`: the world the casters were gathered from. With it, the multi-draw copies read their transforms from
+// the persistent GPU scene by slot (synced first, GpuScene::SyncOnce) instead of being copied into the instance ring;
+// copies without a slot draw the old way.
+int DrawDepthCasters(Shader& shader, const std::vector<DepthCaster>& casters, int firstLoc = -1, World* sceneWorld = nullptr);

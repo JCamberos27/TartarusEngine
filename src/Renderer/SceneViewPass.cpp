@@ -619,8 +619,8 @@ void SceneRenderer::ViewPass::DepthPrepass() {
     std::vector<DepthCaster>& prepass = m_S.Prepass;
     prepass.clear();
     for (const DrawItem& it : m_S.DrawList)
-        if (Prepassed(it)) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
-    DrawDepthCasters(depth, prepass);
+        if (Prepassed(it)) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform, false, 0, 1, it.Slot});
+    DrawDepthCasters(depth, prepass, -1, &m_World);
     if (m_ImpostorsOn) {
         ImpostorRenderer::Get().DrawDepth(ctx.View, ctx.Proj, ctx.ViewPos);
         m_Stats.DrawCalls += ImpostorRenderer::Get().DrawCalls();
@@ -644,8 +644,9 @@ void SceneRenderer::ViewPass::DepthPrepass() {
         glViewport(0, 0, w, h);
         prepass.clear();
         for (const DrawItem& it : m_S.DrawList)
-            if (!Prepassed(it) && !it.NoSsao && it.LodFade == 0.0f) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
-        DrawDepthCasters(depth, prepass);
+            if (!Prepassed(it) && !it.NoSsao && it.LodFade == 0.0f)
+                prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform, false, 0, 1, it.Slot});
+        DrawDepthCasters(depth, prepass, -1, &m_World);
         depth.SetInt("uSplitViewProj", 0);
         viewDepthCopied = true;
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // the occlusion passes write colour
@@ -932,7 +933,7 @@ void SceneRenderer::ViewPass::BuildBatches() {
 // view's span of the instance ring (the one-by-one instanced groups).
 void SceneRenderer::ViewPass::BindInstanceXforms(bool scene) {
     if (scene == m_XformsOnScene) return;
-    if (scene) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 27, GpuScene::Get().XformBuffer());
+    if (scene) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, InstanceBuffer::kXformBinding, GpuScene::Get().XformBuffer());
     else InstanceBuffer::Rebind();
     m_XformsOnScene = scene;
 }

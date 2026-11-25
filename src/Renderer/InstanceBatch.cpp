@@ -1,5 +1,6 @@
 #include "InstanceBatch.h"
 #include "GpuMemTrack.h"
+#include "GpuScene.h"
 #include "gl.h"
 #include "Model.h"
 #include "Shader.h"
@@ -45,7 +46,7 @@ std::uint64_t HashSlots(const std::vector<std::shared_ptr<MaterialAsset>>& slots
 
 namespace InstanceBuffer {
 namespace {
-constexpr GLuint kBinding = 27; // ModelVertex.glsl / ShadowDepth.vert.glsl InstanceBlock
+constexpr GLuint kBinding = kXformBinding;
 GLuint g_Buffer = 0; // the fallback: an upload the ring can't take (or no ring)
 std::vector<glm::mat4> g_Staging;
 GLuint g_LastBuffer = 0; // what the last Upload bound at kBinding (Rebind)
@@ -234,8 +235,11 @@ namespace {
 // The depth passes' multi-draw path: every caster of an arena model (unskinned, drawn whole) goes out through the
 // instance buffer, a group of copies at a time, and each of its sub-meshes becomes one indirect command in the batch
 // of sub-meshes that bind alike (page, cascades, culling, cutout / sway). `rest` gets the casters it can't take.
+// `sceneSlots`: the copies stage their GPU scene slot (GpuScene.h) instead of their transform - binding 27 holds the
+// scene's transforms and 28 the slots while the batches draw (ShadowDepth.vert.glsl uInstanced 2); a group with a copy
+// that has no slot goes to `rest`.
 int DrawDepthIndirect(Shader& shader, const std::vector<DepthCaster>& casters, const InstanceGroups& groups, int firstLoc,
-                      std::vector<std::uint32_t>& rest) {
+                      std::vector<std::uint32_t>& rest, bool sceneSlots) {
     struct Tag { std::uint32_t Group; std::uint16_t Mesh; };
     static std::vector<Tag> tags;
     static std::vector<IndirectItem> items;
@@ -243,18 +247,26 @@ int DrawDepthIndirect(Shader& shader, const std::vector<DepthCaster>& casters, c
     static std::vector<IndirectBatch> batches;
     tags.clear();
     items.clear();
+    static std::vector<std::uint32_t> slots;
+    slots.clear();
+    const std::uint32_t sceneCount = sceneSlots ? GpuScene::Get().Count() : 0;
     std::vector<glm::mat4>& staging = InstanceBuffer::Staging();
     staging.clear();
     for (std::uint32_t g = 0; g < (std::uint32_t)groups.Groups.size(); ++g) {
         const auto& grp = groups.Groups[g];
         const DepthCaster& lead = casters[groups.Order[grp.First]];
-        if (lead.Visible || !lead.Ref->InArena()) {
+        bool slotless = false;
+        for (std::uint32_t k = 0; sceneSlots && k < grp.Count && !slotless; ++k)
+            slotless = casters[groups.Order[grp.First + k]].Slot >= sceneCount;
+        if (lead.Visible || !lead.Ref->InArena() || slotless) {
             for (std::uint32_t k = 0; k < grp.Count; ++k) rest.push_back(groups.Order[grp.First + k]);
             continue;
         }
-        const std::uint32_t base = (std::uint32_t)(staging.size() / 2);
+        const std::uint32_t base = (std::uint32_t)(sceneSlots ? slots.size() : staging.size() / 2);
         for (std::uint32_t k = 0; k < grp.Count; ++k) {
-            InstanceBuffer::Append(staging, *casters[groups.Order[grp.First + k]].Xform);
+            const DepthCaster& c = casters[groups.Order[grp.First + k]];
+            if (sceneSlots) slots.push_back(c.Slot);
+            else InstanceBuffer::Append(staging, *c.Xform);
         }
         for (int m = 0; m < lead.Ref->MeshCount(); ++m) {
             int cull = 0;
@@ -273,14 +285,19 @@ int DrawDepthIndirect(Shader& shader, const std::vector<DepthCaster>& casters, c
         }
     }
     if (items.empty()) return 0;
-    InstanceBuffer::Upload();
+    if (sceneSlots) {
+        GpuScene::Get().BindSlotList(28, slots);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, InstanceBuffer::kXformBinding, GpuScene::Get().XformBuffer());
+    } else {
+        InstanceBuffer::Upload();
+    }
     BuildIndirectBatches(items, commands, batches);
     IndirectBuffer::Upload(commands);
 
     const bool passCull = glIsEnabled(GL_CULL_FACE) == GL_TRUE;
     GLint passFace = GL_BACK;
     glGetIntegerv(GL_CULL_FACE_MODE, &passFace);
-    shader.SetInt(shader.Loc("uInstanced"), 1);
+    shader.SetInt(shader.Loc("uInstanced"), sceneSlots ? 2 : 1);
     shader.SetInt(shader.Loc("uInstanceBase"), 0);
     const int layersLoc = shader.Loc("uInstanceLayers");
     int firstNow = -1, layersNow = -1, cullNow = 0;
@@ -302,6 +319,7 @@ int DrawDepthIndirect(Shader& shader, const std::vector<DepthCaster>& casters, c
     }
     if (cullNow != 0) { passCull ? glEnable(GL_CULL_FACE) : glDisable(GL_CULL_FACE); glCullFace((GLenum)passFace); }
     shader.SetInt(shader.Loc("uInstanced"), 0);
+    if (sceneSlots) InstanceBuffer::Rebind(); // 27 back to the ring, for whatever reads it next
     return (int)batches.size();
 }
 } // namespace
@@ -387,16 +405,17 @@ int DrawDepthCastersDirect(Shader& shader, const std::vector<DepthCaster>& caste
 }
 } // namespace
 
-int DrawDepthCasters(Shader& shader, const std::vector<DepthCaster>& casters, int firstLoc) {
+int DrawDepthCasters(Shader& shader, const std::vector<DepthCaster>& casters, int firstLoc, World* sceneWorld) {
     if (casters.empty()) return 0;
     const bool instancing = ProjectSettings::Quality().GpuInstancing;
     if (!instancing || !MultiDrawEnabled()) return DrawDepthCastersDirect(shader, casters, firstLoc);
+    const bool sceneSlots = sceneWorld && GpuScene::Get().SyncOnce(*sceneWorld);
 
     // GPU-driven: the arena models go out as multi-draws; what's left (skinned, partly hidden) draws directly.
     static std::vector<std::uint32_t> rest;
     static std::vector<DepthCaster> restCasters;
     rest.clear();
-    const int indirectDraws = DrawDepthIndirect(shader, casters, GroupCasters(casters, instancing), firstLoc, rest);
+    const int indirectDraws = DrawDepthIndirect(shader, casters, GroupCasters(casters, instancing), firstLoc, rest, sceneSlots);
     if (rest.empty()) return indirectDraws;
     restCasters.clear();
     for (std::uint32_t i : rest) restCasters.push_back(casters[i]);

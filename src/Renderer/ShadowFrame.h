@@ -69,6 +69,7 @@ private:
         glm::mat4 xform;
         AABB bounds;
         bool bounded, twoSided;
+        std::uint32_t slot; // VisibleRenderable::Slot (the GPU scene)
     };
     struct LocalCaster {
         Model* model;
@@ -77,6 +78,7 @@ private:
         glm::mat4 xform;
         AABB bounds;
         std::uint32_t id;
+        std::uint32_t slot;        // VisibleRenderable::Slot (the GPU scene)
         bool bounded, twoSided, animated;
         bool moving;               // moved within the last kMovingFrames (a rolling ball, a door)
         bool settling;             // stopped moving / animating within the last kSettleFrames (see DynamicFor)
@@ -116,6 +118,7 @@ private:
     std::vector<SunCaster> m_SunCasters;
     std::vector<VisibleRenderable> m_Casting;
     std::vector<DepthCaster> m_Draws;
+    World* m_SceneWorld = nullptr; // the world this frame's casters came from: DrawDepthCasters reads the GPU scene
 
     // Spot / point
     std::vector<LocalCaster> m_LocalCasters;

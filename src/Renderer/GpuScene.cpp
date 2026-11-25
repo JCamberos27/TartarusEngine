@@ -3,6 +3,8 @@
 #include "GpuMemTrack.h"
 #include "InstanceBatch.h"
 #include "gl.h"
+#include "World.h"
+#include "Components.h"
 #include "Core/Env.h"
 #include <algorithm>
 #include <cstring>
@@ -91,6 +93,18 @@ void GpuScene::Sync(World& world, bool upload) {
         std::sort(m_Sorted.begin(), m_Sorted.end());
     }
     UploadRuns(m_Sorted);
+}
+
+bool GpuScene::SyncOnce(World& world) {
+    if (!Enabled()) return false;
+    const std::uint64_t stamp = world.TransformCacheStamp();
+    const std::size_t renderables = world.Registry.storage<RenderableComponent>().size();
+    if (Ready() && stamp != 0 && m_OnceWorld == &world && m_OnceStamp == stamp && m_OnceRenderables == renderables) return true;
+    Sync(world);
+    m_OnceWorld = &world;
+    m_OnceStamp = stamp;
+    m_OnceRenderables = renderables;
+    return Ready();
 }
 
 bool GpuScene::EnsureCapacity(std::uint32_t count) {
