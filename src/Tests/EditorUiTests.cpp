@@ -12,6 +12,7 @@
 extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsigned int format); // user32
 #endif
 #include "MotionDemo.h"
+#include "HarnessView.h"
 
 #include "EditorLayer.h"
 #include "EditorPanels.h"
@@ -1076,7 +1077,8 @@ void RegisterMotionDemo() {
                 return ImVec2(p.x + s.x * 0.55f, p.y + s.y * 0.55f);
             }),
             WaitSeconds(0.2),
-            Do("record", [](Ctx&) {
+            Do("record", [](Ctx& c) {
+                HarnessView::Force(c.E, "MotionDemo"); // the clip shows the normal look whatever the prefs say
                 const ImVec2 d = ImGui::GetIO().DisplaySize;
                 MotionDemo::StartRecording((int)d.x, (int)d.y);
             }),

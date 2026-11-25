@@ -9,6 +9,7 @@
 #include "GLStateCache.h"
 #include "FrameLoads.h"
 #include "TextureCache.h"
+#include "Core/Env.h"
 #include "stb_image.h"
 #include "stb_dxt.h"
 #include <glm/glm.hpp>
@@ -675,7 +676,18 @@ void Texture::ForEachLive(const std::function<void(const Texture&)>& fn) {
 }
 
 TextureCpuData Texture::DecodeFile(const std::string& path, const TextureImportSettings& settings) {
-    return Decode(path, {}, 0, 0, settings);
+    TextureCpuData out = Decode(path, {}, 0, 0, settings);
+    // TARTARUS_TEXTURE_DIGEST=1: one line per decode (path, settings hash, format, size, pixel hash), so two runs
+    // (e.g. TARTARUS_NO_TEXTURE_PREFETCH on and off) can be diffed for byte-identical output.
+    static const bool digest = Env::Flag(Env::Var::TextureDigest);
+    if (digest && out.Ok) {
+        char line[64];
+        snprintf(line, sizeof(line), " %016llx %u %dx%d %016llx",
+                 (unsigned long long)TextureCache::HashSettings(settings), (unsigned)out.GLFormat, out.Width, out.Height,
+                 (unsigned long long)HashBytes(out.Pixels.data(), out.Pixels.size(), 1469598103934665603ull));
+        Log::Info("TexDigest " + path + line);
+    }
+    return out;
 }
 
 TextureCpuData Texture::DecodeMemory(const std::string& name, std::vector<unsigned char> bytes, int rawWidth,

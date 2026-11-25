@@ -6,6 +6,8 @@
 #include "CurveEditor.h"
 #include "Editor/GameModuleBuild.h"
 #include "EditorLayer.h"
+#include "Tests/HarnessView.h"
+#include "Core/Log.h"
 #include "EditorModuleAPI.h" // EditorConsoleState
 #include "HotReloadEditorModule.h" // EditorModuleHost::ConsoleState
 #include "EditorPropertyRows.h"
@@ -33,6 +35,9 @@ EditorShot::EditorShot(const LaunchOptions& opt)
 void EditorShot::BeforeUi(EditorLayer& editor, World& world) {
     // --editor-shot: set up the next view a second ahead of its capture (AfterFrame).
     if (m_Dir.empty()) return;
+    // The views draw Shaded and lit whatever the prefs say (HarnessView.h); each capture checks they still do.
+    if (m_Frame == 0 && !HarnessView::Force(editor, "EditorShot")) ++m_Failures;
+    m_ViewLit = HarnessView::Lit(HarnessView::Current(editor));
     const int step = m_Frame++ / kFrames;
     if (m_Frame % kFrames == kFrames / 2 && step < (int)std::size(m_Views)) {
         const std::string view = m_Views[step];
@@ -121,7 +126,10 @@ void EditorShot::AfterFrame(Window& window, bool& exitApproved) {
     // --editor-shot: the whole window, once each view has settled.
     if (!m_Dir.empty() && m_Frame > 0 && m_Frame % kFrames == 0) {
         const int step = m_Frame / kFrames - 1;
-        if (step < (int)std::size(m_Views)) {
+        if (step < (int)std::size(m_Views) && !m_ViewLit) {
+            Log::Error(std::string("[EditorShot] ") + m_Views[step] + ": the view isn't Shaded and lit; not captured");
+            ++m_Failures;
+        } else if (step < (int)std::size(m_Views)) {
             int w = 0, h = 0;
             glfwGetFramebufferSize(window.Handle(), &w, &h);
             std::vector<unsigned char> flipped = FrameCapture::GrabTopDown(0, w, h);
