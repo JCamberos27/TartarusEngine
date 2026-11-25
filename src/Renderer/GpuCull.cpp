@@ -23,12 +23,16 @@
 
 namespace GpuCull {
 
-static_assert(kSlotInactive == kCandInactive && kSlotPoseSource == kCandPoseSource &&
-              kSlotOwnerViewOnly == kCandOwnerViewOnly && kSlotHiddenFromOwner == kCandHiddenFromOwner &&
-              kSlotViewModel == kCandViewModel && kSlotPlayerBody == kCandPlayerBody &&
-              kSlotHiddenInScene == kCandHiddenInScene && kSlotPosed == kCandPosed, "slot bits = CandidateFlag bits");
-static_assert(kSlotCastOff == kSlotFlagCastOff && kSlotShadowsOnly == kSlotFlagShadowsOnly &&
-              kSlotTransparent == kSlotFlagTransparent && kSlotDead == GpuScene::kDead, "slot bits = SceneSlot bits");
+// The slot bits are the candidate cache's and SceneSlot's own (compared as numbers: they are different enums).
+constexpr bool SameBit(std::uint32_t a, std::uint32_t b) { return a == b; }
+static_assert(SameBit(kSlotInactive, kCandInactive) && SameBit(kSlotPoseSource, kCandPoseSource) &&
+              SameBit(kSlotOwnerViewOnly, kCandOwnerViewOnly) && SameBit(kSlotHiddenFromOwner, kCandHiddenFromOwner) &&
+              SameBit(kSlotViewModel, kCandViewModel) && SameBit(kSlotPlayerBody, kCandPlayerBody) &&
+              SameBit(kSlotHiddenInScene, kCandHiddenInScene) && SameBit(kSlotPosed, kCandPosed),
+              "slot bits = CandidateFlag bits");
+static_assert(SameBit(kSlotCastOff, kSlotFlagCastOff) && SameBit(kSlotShadowsOnly, kSlotFlagShadowsOnly) &&
+              SameBit(kSlotTransparent, kSlotFlagTransparent) && SameBit(kSlotDead, GpuScene::kDead),
+              "slot bits = SceneSlot bits");
 
 ViewQuery MakeQuery(const VisibilityQuery& q) {
     ViewQuery v;
@@ -111,7 +115,7 @@ bool Enabled() {
     return !off && VerifyEnabled();
 }
 
-// Stage A + the ordered compaction: one workgroup per group. Inputs mirror SlotData / ViewQuery above.
+// Stage A + the ordered compaction: one workgroup per group. Inputs mirror GpuScene's Bounds and ViewQuery above.
 // Bindings: the HiZ compute's 22-25 per dispatch (no new bindings, W2's G-1 rule), remap 28, commands 29.
 const char* ComputeSource() {
     return R"(#version 460 core
