@@ -707,6 +707,160 @@ void GpuSceneSlotStateBlockBudget() {
     CHECK(without.find("_NO_SLOT_STATE") == std::string::npos);
 }
 
+// The sun caster list's delta path (ShadowFrame::FillSunCasters) against the full loop, side by side: over random frames
+// of moves (a static caster moving once, then still), re-poses, a held far cascade turning, adds and removals, Cast
+// Shadows writes, outfit-hide tags coming, going and swapping their buffer, and frames whose change log wasn't taken,
+// both give the same casters field for field, the same G4-d motion table and the same forced cascades every frame.
+// Skinned casters stand in through a fake pose (no GL here: CPU-only primitives); both paths read the same probe.
+std::unordered_map<const Model*, std::uint64_t> g_FakeSunPose;
+bool FakeSunSkinned(const Model* m) { return g_FakeSunPose.count(m) != 0; }
+static std::uint64_t FakeSunPose(const Model* m) {
+    const auto it = g_FakeSunPose.find(m);
+    return it == g_FakeSunPose.end() ? 0 : it->second;
+}
+void SunCasterListDelta() {
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    auto prop = Model::CreatePrimitive("terrain", "w1_sun_delta_prop.fbx"); // CPU-only stand-ins: no GL in unit tests
+    CHECK(prop != nullptr);
+    if (!prop) return;
+    std::vector<std::shared_ptr<Model>> skins;
+    g_FakeSunPose.clear();
+    for (int i = 0; i < 3; ++i) {
+        skins.push_back(Model::CreatePrimitive("terrain", "w1_sun_delta_skin" + std::to_string(i) + ".fbx"));
+        g_FakeSunPose[skins.back().get()] = 1;
+    }
+    World w;
+    std::vector<entt::entity> props, chars;
+    for (int i = 0; i < 48; ++i)
+        props.push_back(w.CreateModelEntity(prop, glm::vec3((float)(i % 8) * 6.0f, 0.0f, (float)(i / 8) * 6.0f), glm::vec3(0), glm::vec3(1), "P"));
+    for (int i = 0; i < 3; ++i)
+        chars.push_back(w.CreateModelEntity(skins[(size_t)i], glm::vec3(3.0f + i, 0.0f, 3.0f), glm::vec3(0), glm::vec3(1), "C"));
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    GpuScene::ChangeLog log;
+
+    ShadowFrame withDelta, fullOnly;
+    ShadowFrame::SunListIn in;
+    in.world = &w;
+    in.cascadeCount = 4;
+    // A caster reaches far cascade c when its box starts within 12 m of the origin per cascade step: some do, some don't.
+    in.reaches = [](int c, const glm::vec3& lo, const glm::vec3&) { return lo.x + lo.z < 12.0f * (float)c; };
+    in.probe.Skinned = FakeSunSkinned;
+    in.probe.Pose = FakeSunPose;
+    std::mt19937 rng(1248);
+    std::uniform_int_distribution<int> roll(0, 99), pickProp(0, 47);
+    std::uniform_real_distribution<float> step(-3.0f, 3.0f);
+    std::uint64_t lastTake = ~0ull, prevTake = ~0ull;
+    int deltaFrames = 0, fullFrames = 0, untakenFrames = 0, movedOnceChecked = 0, forcedFrames = 0;
+    auto alive = [&](entt::entity e) { return w.Registry.valid(e); };
+    for (std::uint64_t frame = 100; frame < 500; ++frame) {
+        // Edits.
+        if (frame == 160 && alive(props[5])) // a static caster moves once, then stays: in the log this frame only
+            w.Registry.get<TransformComponent>(props[5]).Position += glm::vec3(1.5f, 0.0f, 0.0f);
+        if (roll(rng) < 35) { // a prop moves (then usually stays put)
+            const entt::entity e = props[(size_t)pickProp(rng)];
+            if (alive(e)) w.Registry.get<TransformComponent>(e).Position += glm::vec3(step(rng), 0.0f, step(rng));
+        }
+        for (const auto& s : skins)
+            if (roll(rng) < 80) ++g_FakeSunPose[s.get()]; // characters re-pose most frames
+        if (roll(rng) < 3) { // Cast Shadows written (reported, as the contract asks)
+            const entt::entity e = props[(size_t)pickProp(rng)];
+            if (alive(e)) {
+                auto& r = w.Registry.get<RenderableComponent>(e);
+                r.CastShadows = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided ? RenderableComponent::ShadowCasting::On
+                                                                                              : RenderableComponent::ShadowCasting::TwoSided;
+                NoteRenderSettingsChanged();
+            }
+        }
+        if (roll(rng) < 3) { // an outfit-hide tag comes or goes
+            const entt::entity e = chars[(size_t)(roll(rng) % 3)];
+            if (w.Registry.all_of<OutfitHideTag>(e)) w.Registry.remove<OutfitHideTag>(e);
+            else w.Registry.emplace<OutfitHideTag>(e);
+        }
+        if (roll(rng) < 10) { // a tagged one swaps its visible-triangle buffer (only the pointer is read here)
+            for (const entt::entity e : chars)
+                if (w.Registry.all_of<OutfitHideTag>(e)) {
+                    static int fakeBuffers[64];
+                    w.Registry.get<OutfitHideTag>(e).Visible = std::shared_ptr<VisibleIndexBuffer>(
+                        std::shared_ptr<void>(), reinterpret_cast<VisibleIndexBuffer*>(&fakeBuffers[frame % 64]));
+                    break;
+                }
+        }
+        if (frame % 97 == 13) { // one leaves
+            const entt::entity e = props[(size_t)pickProp(rng)];
+            if (alive(e)) w.Registry.destroy(e);
+        }
+        if (frame % 131 == 29) // one arrives
+            props.push_back(w.CreateModelEntity(prop, glm::vec3(step(rng), 0.0f, step(rng)), glm::vec3(0), glm::vec3(1), "N"));
+        if (frame % 53 == 41) { // a renderable on an unrelated entity: the pool may grow and move every Renderable*
+            const entt::entity e = w.Registry.create();
+            w.Registry.emplace<RenderableComponent>(e);
+        }
+
+        // The frame: transforms, the GPU scene's sync and (most frames) its change log, then the gather.
+        w.RebuildWorldTransformCache();
+        scene.Sync(w, false);
+        const bool taken = roll(rng) >= 8; // now and then RenderLocal took none (G4-c off that frame)
+        if (taken) {
+            scene.TakeChangeLog(w, log);
+            prevTake = lastTake;
+            lastTake = frame;
+        }
+        VisibilityQuery casts;
+        casts.ShadowCasters = true;
+        GatherVisible(w, casts, withDelta.CastingForTest());
+        fullOnly.CastingForTest() = withDelta.CastingForTest();
+        in.frame = frame;
+        const unsigned phase = (unsigned)(frame % 4); // the far cascades' turns: 2 on 0, 3 on 2, both held otherwise
+        in.held = phase == 0 ? 0x8u : phase == 2 ? 0x4u : 0xCu;
+        in.log = taken ? &log : nullptr;
+        in.logPrevFrame = prevTake;
+        in.allowDelta = true;
+        const unsigned forceDelta = withDelta.FillSunCasters(in);
+        in.allowDelta = false;
+        const unsigned forceFull = fullOnly.FillSunCasters(in);
+        CHECK(forceDelta == forceFull);
+        CHECK(withDelta.SameSunListAs(fullOnly));
+        if (forceDelta != forceFull || !withDelta.SameSunListAs(fullOnly)) {
+            std::printf("[SunCasterListDelta] mismatch on frame %llu (delta %d)\n", (unsigned long long)frame,
+                        withDelta.LastSunListWasDelta() ? 1 : 0);
+            break;
+        }
+        CHECK(!fullOnly.LastSunListWasDelta());
+        if (!taken) {
+            CHECK(!withDelta.LastSunListWasDelta()); // no change log this frame: the full loop
+            ++untakenFrames;
+        }
+        // Two views in one frame now and then (Scene + Game): a second list from another set, against the full loop.
+        if (frame % 7 == 3) {
+            std::vector<VisibleRenderable> second = withDelta.CastingForTest();
+            if (second.size() > 4) second.erase(second.begin() + 2); // the other view gathers a different set
+            withDelta.CastingForTest() = second;
+            fullOnly.CastingForTest() = second;
+            in.allowDelta = true;
+            const unsigned f2Delta = withDelta.FillSunCasters(in);
+            in.allowDelta = false;
+            const unsigned f2Full = fullOnly.FillSunCasters(in);
+            CHECK(f2Delta == f2Full);
+            CHECK(withDelta.SameSunListAs(fullOnly));
+            CHECK(!withDelta.LastSunListWasDelta()); // a second list the same frame is never a delta
+        }
+        if (frame == 160 && withDelta.LastSunListWasDelta()) ++movedOnceChecked;
+        if (frame == 161 && withDelta.LastSunListWasDelta()) ++movedOnceChecked; // still, and kept as moved
+        forcedFrames += forceDelta != 0;
+        (withDelta.LastSunListWasDelta() ? deltaFrames : fullFrames)++;
+    }
+    std::printf("[SunCasterListDelta] %d delta frames, %d full, %d without a change log, %d with a forced cascade, moved-once %d\n",
+                deltaFrames, fullFrames, untakenFrames, forcedFrames, movedOnceChecked);
+    CHECK(deltaFrames > 150 && fullFrames > 20 && untakenFrames > 10 && forcedFrames > 50);
+    g_FakeSunPose.clear();
+    ForgetGatherCandidates();
+}
+
 // G4-c: the GPU scene's change log for the cached local shadows. Over random frames (moves, Cast Shadows writes,
 // removals, a quiet frame now and then), every slot whose packed data changed is logged with a box holding where it was
 // and where it is, and a frame that changed nothing logs nothing.
@@ -3523,6 +3677,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Depth casters: the sun's cached grouping is reused only for the same casters + epochs (and rebuilt every 16 frames)", DepthCasterCacheInvalidation});
     tests.push_back({"GpuScene: slot state needs 9 fragment SSBO blocks; below that a global _NO_SLOT_STATE define", GpuSceneSlotStateBlockBudget});
     tests.push_back({"GpuScene: the change log lists every changed slot with where it was and is (300 random frames)", GpuSceneChangeLog});
+    tests.push_back({"Sun caster list: the change-log delta path = the full loop, field for field, every frame (400 random frames)", SunCasterListDelta});
     tests.push_back({"Local shadows (G4-c): a frame's changes wake the quiet lights they reach, and only those", LocalShadowQuietWake});
     tests.push_back({"Local shadows (G4-c): a LOD level change wakes the lights around the renderers it swapped", LocalShadowLodToggles});
     tests.push_back({"GpuScene: upload runs (merge, cap, whole list) and layer packing", GpuSceneRuns});
