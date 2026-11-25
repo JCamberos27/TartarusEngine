@@ -429,6 +429,13 @@ size_t ShareHashBytes(const TextureCpuData& d) {
 }
 }
 
+void Texture::ReleaseStage() {
+    if (!m_Pending || !m_Stage.Valid()) return;
+    UploadStaging::Abandon(m_Stage); // waits for the worker's copy (it reads m_Pending's pixels), then retires the span
+    m_StageHash.reset();
+    m_StageWidened = false;
+}
+
 UploadStaging::Step Texture::UploadStep(bool stage) {
     using UploadStaging::Step;
     if (!m_Pending) return Step::Done;
