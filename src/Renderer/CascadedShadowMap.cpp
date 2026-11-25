@@ -274,7 +274,7 @@ void CascadedShadowMap::ReadRect(int c, float kernelTexels, float normalBias, gl
 }
 
 bool CascadedShadowMap::CasterReachesSlice(int c, const glm::vec3& boundsMin, const glm::vec3& boundsMax,
-                                           float kernelTexels, float normalBias) const {
+                                           float kernelTexels, float normalBias, bool withHold) const {
     if (c < 0 || c >= m_Count) return true;
     if (c == 0) { // the near slice plus the eye's surroundings (ReadRect): its bounding box is the whole test
         glm::vec2 rlo, rhi;
@@ -288,7 +288,8 @@ bool CascadedShadowMap::CasterReachesSlice(int c, const glm::vec3& boundsMin, co
     // cascade), the 2x2 compare, the normal offset (at most one texel x normalBias) and a texel of slack.
     glm::vec2 lo, hi;
     Footprint(m_LightViewProj[c], boundsMin, boundsMax, lo, hi);
-    const float margin = MarginNdc(c, kernelTexels, normalBias);
+    const float margin = withHold ? MarginNdc(c, kernelTexels, normalBias)
+                                  : ReachTexels(c, kernelTexels, normalBias) * 2.0f / (float)std::max(m_Resolution, 1);
     lo -= glm::vec2(margin);
     hi += glm::vec2(margin);
 
@@ -382,17 +383,32 @@ void CascadedShadowMap::BeginLayered(unsigned mask) const {
     if ((mask & all) == all) glClear(GL_DEPTH_BUFFER_BIT); // every layer of a layered attachment
 }
 
+namespace {
+CascadedShadowMap::FarTotals g_FarTotals;
+}
+
+const CascadedShadowMap::FarTotals& CascadedShadowMap::FarCascadeTotals() { return g_FarTotals; }
+
+int CascadedShadowMap::FarRefresh() {
+    static const int n = std::clamp(Env::Int(Env::Var::SunFarRefresh, kFarRefresh), 2, 8);
+    return n;
+}
+
 unsigned CascadedShadowMap::PlanRender(std::uint64_t frame) {
     const unsigned all = (1u << m_Count) - 1u;
     static const bool off = Env::Flag(Env::Var::NoCascadeAlternate);
     const bool once = frame != m_LastPlanFrame; // a second view this frame re-renders everything it samples
     m_LastPlanFrame = frame;
     if (off || m_Count != 4 || !once) return all;
+    const std::uint64_t n = (std::uint64_t)FarRefresh();
+    ++g_FarTotals.Frames;
     unsigned mask = 0b0011u;
     for (int c = 2; c < 4; ++c) {
-        m_HoldTexels[c] = kHoldTexels; // rendered or not, its next render is held a frame
-        const bool turn = ((frame + (std::uint64_t)c) & 1u) == 0u; // 2 on even frames, 3 on odd
-        bool keep = !turn && m_HeldFrame[c] != 0 && m_HeldFrame[c] + 1 == frame &&
+        // Rendered or not, its next render may be held n-1 frames: room for that much camera move and turn.
+        m_HoldTexels[c] = kHoldTexels * (float)(n - 1);
+        const std::uint64_t phase = c == 2 ? 0 : n / 2; // staggered: never both far layers in one frame
+        const bool turn = (frame + n - phase) % n == 0;
+        bool keep = !turn && m_HeldFrame[c] != 0 && frame > m_HeldFrame[c] && frame - m_HeldFrame[c] < n &&
                     glm::dot(m_HeldLightDir[c], m_LightDir) > 0.999999f &&
                     std::abs(m_HeldTexelWorld[c] - m_TexelWorld[c]) <= 1e-3f * m_TexelWorld[c];
         if (keep) {
@@ -407,9 +423,24 @@ unsigned CascadedShadowMap::PlanRender(std::uint64_t frame) {
         if (keep) {
             m_SampleViewProj[c] = m_HeldViewProj[c];
             m_SampleTexelWorld[c] = m_HeldTexelWorld[c];
+            ++g_FarTotals.Held;
         } else {
             mask |= 1u << c;
+            ++(turn ? g_FarTotals.Turn : g_FarTotals.Refit);
         }
+    }
+    return mask;
+}
+
+unsigned CascadedShadowMap::ForceRender(unsigned mask, unsigned force) {
+    for (int c = 0; c < m_Count; ++c) {
+        const unsigned bit = 1u << c;
+        if (!(force & bit) || (mask & bit)) continue;
+        mask |= bit;
+        m_SampleViewProj[c] = m_LightViewProj[c];
+        m_SampleTexelWorld[c] = m_TexelWorld[c];
+        --g_FarTotals.Held;
+        ++g_FarTotals.Mover;
     }
     return mask;
 }

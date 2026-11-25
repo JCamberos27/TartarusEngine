@@ -108,7 +108,7 @@
     X(NoSkinCull, "TARTARUS_NO_SKIN_CULL", Flag, "pre-skin characters no pass drew last frame")                       \
     X(NoAsyncUpload, "TARTARUS_NO_ASYNC_UPLOAD", Flag, "disable async texture/mesh uploads")                          \
     X(NoCascadeAlternate, "TARTARUS_NO_CASCADE_ALTERNATE", Flag, "render every sun cascade every frame")              \
-    X(SunSkipFar, "TARTARUS_SUN_SKIP_FAR", Flag, "debug: never render sun cascades 2-3 (their cost; far shadows go stale)") \
+    X(SunFarRefresh, "TARTARUS_SUN_FAR_REFRESH", Int, "frames between sun cascade 2-3 redraws (2..8, default 4; 2 = alternate frames)") \
     X(NoEngineVariants, "TARTARUS_NO_ENGINE_VARIANTS", Flag, "disable engine shader variants")                        \
     X(NoFur, "TARTARUS_NO_FUR", Flag, "disable fur rendering")                                                        \
     X(NoGrass, "TARTARUS_NO_GRASS", Flag, "disable grass rendering")                                                  \
