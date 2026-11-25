@@ -88,7 +88,7 @@ struct MaterialAsset {
     static std::shared_ptr<MaterialAsset> Load(const std::string& path,
                                                AssetLibrary* lib = nullptr);
     // The built-in maps this material names (absolute paths) and how each is used, as Load(path, lib) would ask
-    // the library for them. For loading them ahead of time (AssetLibrary::PrefetchTextures).
+    // the library for them. For loading them ahead of time (AssetLibrary::PrefetchMaterialTextures).
     std::vector<std::pair<std::string, int /*AssetLibrary::TextureUse*/>> TextureRefs() const;
 
     // Creates a new MaterialAsset at `path` with default (white, 0.5 roughness) settings and

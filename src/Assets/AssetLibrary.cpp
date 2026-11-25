@@ -409,7 +409,14 @@ int AssetLibrary::PrefetchMaterialTextures(const std::vector<std::string>& mater
     const unsigned workers = std::min<unsigned>((unsigned)jobs.size(), std::min(hw - 1, 16u));
     std::atomic<size_t> next{0};
     auto work = [&jobs, &next] {
-        for (size_t i = next++; i < jobs.size(); i = next++) jobs[i].Out = Texture::DecodeFile(jobs[i].Path, jobs[i].Settings);
+        for (size_t i = next++; i < jobs.size(); i = next++) {
+            // An exception must not leave a worker (std::terminate): the job stays !Ok and LoadTexture decodes it itself.
+            try {
+                jobs[i].Out = Texture::DecodeFile(jobs[i].Path, jobs[i].Settings);
+            } catch (...) {
+                jobs[i].Out = {};
+            }
+        }
     };
     std::vector<std::thread> pool;
     pool.reserve(workers);
