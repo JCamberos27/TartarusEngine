@@ -330,9 +330,28 @@ void GpuSceneMirror() {
         }
         return true;
     };
+    // G1-b: what GatherVisible hands out points at its slot - the matrices the batched draws read from the scene are
+    // the ones the item itself carries.
+    std::vector<VisibleRenderable> vis;
+    std::uint64_t slotChecks = 0;
+    auto slotsPoint = [&](int frame) {
+        GatherVisible(w, VisibilityQuery{}, vis);
+        for (const VisibleRenderable& v : vis) {
+            const bool ok = v.Slot < scene.Count() &&
+                            std::memcmp(&scene.XformMirror()[(size_t)v.Slot * 2], &v.Xform, sizeof(glm::mat4)) == 0 &&
+                            scene.XformMirror()[(size_t)v.Slot * 2 + 1] == glm::mat4(v.Normal);
+            if (!ok) {
+                std::printf("[GpuSceneMirror] frame %d: gathered slot %u of %u doesn't hold its item\n", frame, v.Slot, scene.Count());
+                return false;
+            }
+            ++slotChecks;
+        }
+        return true;
+    };
     scene.Sync(w, false);
     CHECK(scene.LastSync().Full && scene.Count() == 300);
     CHECK(matches(-1));
+    CHECK(slotsPoint(-1));
     // A full sync uploads every slot in one span (it once planned just the first and the last).
     CHECK(scene.LastRuns().size() == 1 && scene.LastRuns()[0] == GpuScene::Run(0u, 299u));
     // Nothing changed: nothing written.
@@ -371,14 +390,55 @@ void GpuSceneMirror() {
             written += scene.LastSync().Slots;
             total += scene.Count();
         }
-        const bool same = matches(frame);
+        const bool same = matches(frame) && slotsPoint(frame);
         CHECK(same);
         if (!same) break;
     }
+    CHECK(slotChecks > 0);
     std::printf("[GpuSceneMirror] %d of %d frames incremental, %llu of %llu slots written on them\n", incremental, frames,
                 (unsigned long long)written, (unsigned long long)total);
     CHECK(incremental * 2 > frames);
     CHECK(written * 10 < total); // a few changes a frame: a few slots, not the list
+}
+
+// Every Sync keys SyncOnce: SyncOnce(A), a Sync for another world (a bake, a preview), then SyncOnce(A) must sync A
+// again, or A's depth casters read B's transforms until something in A moves.
+void GpuSceneSyncOnceKey() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World a, b;
+    entt::entity first = entt::null;
+    for (int i = 0; i < 3; ++i) {
+        const entt::entity e = a.CreateModelEntity(model, glm::vec3((float)i, 0.0f, 0.0f), glm::vec3(0), glm::vec3(1), "A");
+        if (i == 0) first = e;
+    }
+    for (int i = 0; i < 5; ++i) b.CreateModelEntity(model, glm::vec3(0.0f, 0.0f, (float)i), glm::vec3(0), glm::vec3(1), "B");
+    a.RebuildWorldTransformCache();
+    b.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    scene.Sync(a, false);
+    const std::uint32_t countA = scene.Count();
+    CHECK(scene.UpToDateFor(a) && !scene.UpToDateFor(b));
+    scene.Sync(b, false); // another world in between
+    CHECK(scene.Count() != countA);
+    CHECK(!scene.UpToDateFor(a) && scene.UpToDateFor(b));
+    scene.Sync(a, false); // what SyncOnce(A) now does
+    CHECK(scene.LastSync().Full && scene.Count() == countA && scene.UpToDateFor(a));
+    a.Registry.get<TransformComponent>(first).Position.y = 2.0f; // A itself moves
+    a.RebuildWorldTransformCache();
+    CHECK(!scene.UpToDateFor(a));
+    ForgetGatherCandidates(); // no cache left pointing at these worlds
 }
 
 // GpuScene's upload plan and packing, without GL.
@@ -2721,6 +2781,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Light bounds: per-face fade (Bounds Fade - / +), uniform = the old single fade", LightBoundsFaceFade});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
     tests.push_back({"GpuScene: the mirror matches the candidate list slot by slot, frame after frame", GpuSceneMirror});
+    tests.push_back({"GpuScene: SyncOnce's key follows every Sync (another world in between syncs again)", GpuSceneSyncOnceKey});
     tests.push_back({"GpuScene: upload runs (merge, cap, whole list) and layer packing", GpuSceneRuns});
     tests.push_back({"GatherPatch", GatherPatch});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
