@@ -11,6 +11,7 @@
 #include "../Renderer/GpuCull.h"
 #include "../Physics/Frustum.h"
 #include "../Renderer/GpuScene.h"
+#include "../Renderer/SceneViewPass.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/TextureCache.h"
 #include "../Renderer/Texture.h"
