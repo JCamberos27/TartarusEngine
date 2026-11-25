@@ -5,6 +5,7 @@
 #include "AI/NpcTest.h"
 #include "AssetDatabase.h"
 #include "AssetLibrary.h"
+#include "BatchCensus.h"
 #include "Camera.h"
 #include "ClusterGrid.h"
 #include "Components.h"
@@ -917,6 +918,7 @@ void SmokeHarness::PerfFrame() {
             m_Perf.ReportPhase(std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string(), phase.c_str(),
                                m_Ctx.editor.GetRenderStats().DrawCalls, m_Ctx.editor.GetRenderStats().Triangles,
                                m_Ctx.window.GetWidth(), m_Ctx.window.GetHeight(), opt.perfSample);
+            BatchCensus::Report(std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string(), phase.c_str());
             // Its own prefix: scripts that parse "[PerfBench] <scene> (<phase>)" rows for numbers don't catch it.
             std::cout << "[PerfBench] view (" << phase << ") " << std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string()
                       << ": " << (m_ViewNotLit.empty() ? "Shaded, lit" : "NOT LIT: " + m_ViewNotLit) << std::endl;
