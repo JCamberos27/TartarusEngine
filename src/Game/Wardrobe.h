@@ -151,8 +151,15 @@ struct Wardrobe {
     std::vector<ExcludeRule> Excludes;
     std::vector<Style> Styles;
     std::vector<std::string> RandomOrder; // the order Randomize fills slots in (empty = Slots' order)
-    // A hat takes the haircut fitted to it ("hatSlot" / "hairSlot": Quantum's hats are its Headwear slot).
-    std::string HatSlot = "Hat", HairSlot = "Hair";
+    // A hat takes the haircut fitted to it ("hatSlot" / "hairSlot": Quantum's hats are its Headwear slot). Empty (the
+    // default): the wardrobe has no fitted haircuts.
+    std::string HatSlot, HairSlot;
+    // The pack's naming, so no pack's names live in code:
+    // "namePrefixes": mesh prefixes a model name drops, first match only, for its display name and for matching a
+    //   haircut to a hat ("SKM_F_Hat_Warm" -> "Hat_Warm").
+    // "femaleFolders" / "femalePrefixes": an item under one of these folders, or whose name starts with one of these,
+    //   is female; anything else is male (an ItemOverride's gender wins over both).
+    std::vector<std::string> NamePrefixes, FemaleFolders, FemalePrefixes;
     std::vector<ItemOverride> Items;
 
     const SlotDef* Slot(const std::string& id) const;
@@ -179,8 +186,9 @@ struct Item {
 // An item's ItemOverride::Fit (1 when it has none). `path` project-relative.
 float FitOf(const Wardrobe& w, const std::string& path);
 
-// The display name for a model file stem: "SKM_F_Hoodie_Zipper_Hood" -> "Hoodie Zipper Hood".
-std::string PrettyName(const std::string& stem);
+// The display name for a model file stem, without the first of `prefixes` it starts with (the pack's mesh prefixes,
+// Wardrobe::NamePrefixes): "SKM_F_Hoodie_Zipper_Hood" with "SKM_F_" -> "Hoodie Zipper Hood".
+std::string PrettyName(const std::string& stem, const std::vector<std::string>& prefixes = {});
 // The file name without folders and extension.
 std::string Stem(const std::string& path);
 // Whether `name` contains `token`, case-insensitively.
@@ -200,12 +208,12 @@ void MarkVariants(const Wardrobe& w, std::vector<Item>& items);
 
 // --- Layers -----------------------------------------------------------------------------------
 
-// A slot's layer and whether it hides, when the .wardrobe doesn't say: body 0, shoes, tucked tops, pants,
-// tops, outerwear, collars, bags and wrists, then hair, beards (Beard / FacialHair) and glasses (which drape over it
-// all but hide nothing), then hats (Hat / Headwear) and headphones over them. Wrists hide nothing either: a watch or bead bracelet shows the skin through
-// its gaps, and the arm posed away from the bind pose slides the hidden band out from under it.
-int DefaultLayer(const std::string& slot);
-bool DefaultHides(const std::string& slot);
+// A slot's layer and whether it hides, when its .wardrobe entry doesn't say ("layer" / "hides"): the middle layer,
+// hiding what pokes through from under it. The wardrobe gives the real order (Quantum: body 0, shoes, tucked tops,
+// pants, tops, outerwear, bags and wrists, then hair, beards and glasses, which drape over it all but hide nothing,
+// then hats and headphones), so the code knows no slot by name.
+inline constexpr int kDefaultLayer = 5;
+inline constexpr bool kDefaultHides = true;
 
 // The part a race's head (RaceDef::Head) is built as: the one body part that is also head-attached, so the scene
 // code finds it by its piece flags (OutfitPieceBodyPart | OutfitPieceHeadAttached), not by this name.
