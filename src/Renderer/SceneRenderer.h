@@ -71,6 +71,30 @@ void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRe
 // Tests: the next GatherVisible reads every renderable again (a from-scratch reference), and how many times it has.
 void ForgetGatherCandidates();
 std::uint64_t GatherCandidateFullBuilds();
+
+// G-1 (GpuScene.h): GatherVisible's candidate list as stable slots. A slot is a list index: it keeps meaning the same
+// renderable until the list is rebuilt in full (a renderable that leaves keeps its slot, flagged inactive; new ones are
+// appended), which is when Full comes back true.
+struct SceneSlot {
+    glm::mat4 Xform{1.0f};
+    glm::mat3 Normal{1.0f};       // transpose(inverse(mat3(Xform)))
+    glm::vec3 WorldMin{0.0f}, WorldMax{0.0f};
+    bool Bounded = false;
+    bool Alive = false;           // false: nothing to draw from it (left, lost its model, or inactive)
+    std::uint16_t Flags = 0;      // the candidate's CandidateFlag bits (SceneViewPass.h)
+    int Layer = 0;
+};
+struct SceneSlotChanges {
+    bool Full = true;                  // every slot [0, Count) must be read again
+    std::uint32_t Count = 0;           // slots in the list now
+    std::vector<std::uint32_t> Slots;  // when not Full: the slots changed since the last call, each once (posed ones always)
+};
+// Brings the candidate list up to date for this frame (as GatherVisible would) and hands out what changed since the
+// last call. The first call turns the change tracking on (and is Full).
+void TakeSceneSlotChanges(World& world, SceneSlotChanges& out);
+// Slot `slot` as GatherVisible would read it now (posed bounds live). False past the list's end. Read after
+// TakeSceneSlotChanges in the same frame.
+bool ReadSceneSlot(std::uint32_t slot, SceneSlot& out);
 // A box holding every renderable GatherVisible knows (a superset of any query's result), cheaply: the sun's cascades
 // fit their near planes to it before the casters are gathered against them. False when there are none.
 bool RenderableBounds(World& world, glm::vec3& outMin, glm::vec3& outMax);

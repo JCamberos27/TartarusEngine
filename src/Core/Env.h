@@ -91,6 +91,7 @@
     X(NoGpuCull, "TARTARUS_NO_GPU_CULL", Flag, "disable GPU-driven culling (G-2): the CPU builds the draw lists")      \
     X(GpuCullVerify, "TARTARUS_GPU_CULL_VERIFY", Flag, "debug: compare GPU culling with the CPU's every frame (slow)") \
     X(NoMdi, "TARTARUS_NO_MDI", Flag, "disable multi-draw indirect")                                                  \
+    X(NoGpuScene, "TARTARUS_NO_GPU_SCENE", Flag, "disable the persistent GPU scene buffers")                          \
     X(NoMeshArena, "TARTARUS_NO_MESH_ARENA", Flag, "disable the static mesh arena")                                   \
     X(NoModelCache, "TARTARUS_NO_MODEL_CACHE", Flag, "import models from their files (skip Library/Models)")          \
     X(NoProgramCache, "TARTARUS_NO_PROGRAM_CACHE", Flag, "compile every shader program (skip Library/ShaderCache)")    \
