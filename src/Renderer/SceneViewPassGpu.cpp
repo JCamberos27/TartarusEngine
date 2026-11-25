@@ -397,6 +397,7 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
     };
     batchGroups(t.OpaqueBatches, t.OpaqueBatchGroups, t.OpaqueBatchAt);
     batchGroups(t.DepthBatches, t.DepthBatchGroups, t.DepthBatchAt);
+    t.RunSlotsCpu.assign(runs.begin(), runs.end());
     GpuCull::UploadTable(t.Gl, slotsBuf, t.Members);
 }
 
@@ -437,6 +438,26 @@ void SceneRenderer::ViewPass::CullGpuView(const VisibilityQuery& framed) {
         t.GroupSeen[g] = 1;
         t.ViewStage.push_back(t.StageGroups[g]);
         t.ViewHiz.push_back(t.HizGroups[g]);
+    }
+    // Verify mode: every member of a skipped group must fail the per-object test the CPU path would give it.
+    if (GpuCull::VerifyEnabled()) {
+        std::uint64_t checked = 0, missing = 0;
+        SceneSlot s;
+        static std::vector<std::uint32_t> runs;
+        for (std::size_t g = 0; g < groups; ++g) {
+            if (t.GroupSeen[g]) continue;
+            const GpuCull::Group& grp = t.StageGroups[g];
+            for (std::uint32_t k = 0; k < grp.Count; ++k) {
+                const std::uint32_t slot = t.RunSlotsCpu[grp.Base + k];
+                if (!ReadSceneSlot(slot, s) || !s.Bounded) continue;
+                ++checked;
+                const bool outside = framed.Cull && !framed.Cull->Intersects(AABB{s.WorldMin, s.WorldMax});
+                const bool small = sizeCull && TooSmallOnScreen(s.WorldMin, s.WorldMax, *framed.SizeCullEye,
+                                                                framed.SizeCullProjScale, framed.MinScreenHeight);
+                if (!outside && !small) ++missing;
+            }
+        }
+        GpuCull::NoteGroupSkips(checked, missing);
     }
     const auto batchesOn = [&](const std::vector<std::uint32_t>& list, const std::vector<std::uint32_t>& at,
                                std::vector<std::uint8_t>& on) {

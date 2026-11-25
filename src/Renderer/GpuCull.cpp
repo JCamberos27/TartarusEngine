@@ -355,6 +355,12 @@ bool CullView(const DrawBuffers& b, const std::vector<Group>& groups, const View
 
 const VerifyTotals& Totals() { return g_Totals; }
 
+void NoteGroupSkips(std::uint64_t checked, std::uint64_t missing) {
+    g_Totals.GroupSkipChecked += checked;
+    g_Totals.GroupSkipMissing += missing;
+    if (missing) Log::Error("[GpuCull] verify: " + std::to_string(missing) + " members of skipped groups would be drawn");
+}
+
 void VerifyView(World& world, const VisibilityQuery& q) {
     GpuScene& scene = GpuScene::Get();
     scene.Sync(world);
@@ -477,6 +483,8 @@ void VerifyView(World& world, const VisibilityQuery& q) {
                     (unsigned long long)g_Totals.Views, (unsigned long long)g_Totals.Expected,
                     (unsigned long long)g_Totals.Missing, (unsigned long long)g_Totals.Extra,
                     (unsigned long long)g_Totals.OrderBad, (unsigned long long)g_Totals.Skipped);
+        std::printf("[GpuCull] verify   group skips: %llu members checked, %llu missing\n",
+                    (unsigned long long)g_Totals.GroupSkipChecked, (unsigned long long)g_Totals.GroupSkipMissing);
         static const char* const kKindNames[VerifyTotals::kKinds] = {"framed", "cell-only", "unculled"};
         for (int k = 0; k < VerifyTotals::kKinds; ++k)
             if (g_Totals.KindViews[k])

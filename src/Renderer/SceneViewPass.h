@@ -130,6 +130,7 @@ struct SceneGpuTable {
     std::vector<glm::vec3> GroupMin, GroupMax; // the members' world bounds, joined
     std::vector<std::uint8_t> GroupAlways;     // a member without bounds: always sent
     std::vector<float> GroupRadius;            // its largest member's bounding sphere (TooSmallOnScreen's radius)
+    std::vector<std::uint32_t> RunSlotsCpu;    // the runs' scene slots (verify mode reads skipped groups' members)
     std::vector<std::uint32_t> OpaqueBatchGroups, DepthBatchGroups; // each batch's groups, back to back
     std::vector<std::uint32_t> OpaqueBatchAt, DepthBatchAt;         // where batch i's start (size + 1)
     std::uint32_t Members = 0;
