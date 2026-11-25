@@ -61,7 +61,8 @@ public:
     };
 
     // Loads `<base>.mmanim` and `<base>.mmdb`. False (with `error`) when either is missing or corrupt, or they disagree.
-    // `between` (optional) runs after each file and before the build; false stops the load there (a cancelled prefetch).
+    // `between` (optional) runs after each file, before the build and along it (per take); false stops the load there (a
+    // cancelled prefetch, shutdown).
     bool Load(const std::string& base, std::string* error = nullptr, const std::function<bool()>& between = {});
     // Takes a stream and a feature set already in memory (the unit tests); the same checks as Load.
     bool Adopt(MotionClipStream&& stream, MotionFeatureSet&& features, std::string* error = nullptr);
@@ -141,4 +142,5 @@ private:
     std::vector<float> m_Mean, m_Scale, m_QA, m_QB;
     std::vector<Box> m_Small, m_Large;
     double m_LoadSeconds = 0.0, m_ReadSeconds = 0.0;
+    const std::function<bool()>* m_Between = nullptr; // Load's `between`, while its Build runs (Build asks it per take)
 };

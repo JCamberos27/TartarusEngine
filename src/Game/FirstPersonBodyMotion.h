@@ -59,6 +59,7 @@ float MmTune(const char* key, float fallback);
 
 // A cooked database shared by every character that plays it, with what is measured off it once.
 struct SharedMotionDatabase {
+    struct RigShape; // (below)
     MotionDatabase Db;
     GaitSpeedTable Gaits;
     float TurnInPlaceRate = 0.0f; // rad/s: the turn-on-the-spot frames' p75 root yaw rate
@@ -106,7 +107,10 @@ struct SharedMotionDatabase {
     // while it is still queued (never two loads), and reads afresh when the files were rewritten since it began or an
     // Invalidate of `base` came in between. Does nothing with no runner, or when a prefetch of `base` is already
     // pending or held, or a kept load of `base` is current. Main thread.
-    static void Prefetch(const std::string& base);
+    // With `rig` (RigShape of the body's driver, taken on the main thread), the job also measures the rig's frames (the
+    // hands-up / bent-over exclusions, the gaits, the turn and the start: the rest of a first Get, ~0.4 s); Get takes that
+    // only when its own rig has the same shape (names, parents, bind pose), else it reads afresh.
+    static void Prefetch(const std::string& base, std::shared_ptr<const RigShape> rig = nullptr);
     // Drops a pending or held prefetch (the scene closed, or one without a first-person controller opened): a queued
     // one never runs, a running one's result is thrown away. Main thread.
     static void CancelPrefetch();
@@ -119,6 +123,15 @@ struct SharedMotionDatabase {
     // Per frame, the higher hand's height over its shoulder (upper arm bone), m, model space of `rig`.
     // ... and (chestTilt) the chest's tilt off its bind pose's upright (deg).
     static std::vector<float> HandOverShoulder(const MotionDatabase& db, const Model& rig, std::vector<float>* chestTilt = nullptr);
+    // What the measuring reads of the driver rig, copied on the main thread (no live Model on the worker): node names,
+    // parents, bind pose and its globals, and the few nodes it looks up. Same() compares two shapes bit for bit.
+    static std::shared_ptr<const RigShape> ShapeOf(const Model& rig);
+    // The rest of a first Get once the files are read and built: the rig's exclusions (`rig` non-null), the gaits, the
+    // turn on the spot and the start frame. `go` (the prefetch worker) is asked along the way: false stops it (false out).
+    static bool Measure(SharedMotionDatabase& db, const std::string& base, const RigShape* rig, const std::function<bool()>& go = {});
+    static bool SameShape(const RigShape& a, const RigShape& b);
+    static std::vector<float> HandOverShoulder(const MotionDatabase& db, const RigShape& rig, std::vector<float>* chestTilt = nullptr,
+                                               const std::function<bool()>& go = {});
 };
 
 class FirstPersonBodyMotion {
