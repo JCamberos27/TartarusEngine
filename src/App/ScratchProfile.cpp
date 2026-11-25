@@ -63,7 +63,13 @@ void ForceShadedPrefs(const char* what, const std::filesystem::path& prefs) {
     if (j.is_object() && j.contains("shadingMode") && j["shadingMode"].is_number_integer()) had = j["shadingMode"].get<int>();
     if (had != 0) {
         j["shadingMode"] = 0; // EditorLayer::ShadingMode::Shaded
-        std::ofstream(prefs, std::ios::trunc) << j.dump(2);
+        std::ofstream out(prefs, std::ios::trunc);
+        out << j.dump(2);
+        out.close();
+        if (!out) {
+            std::cerr << what << ": view mode " << had << " (could not write Shaded into this run's prefs copy)" << std::endl;
+            return;
+        }
     }
     std::cerr << what << ": view mode Shaded"
               << (had != 0 ? " (the user's prefs have mode " + std::to_string(had) + "; this run's copy set to Shaded)" : std::string())
