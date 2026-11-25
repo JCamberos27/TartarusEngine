@@ -10,6 +10,7 @@
 #include "Components.h"
 #include "Core/Env.h"
 #include "GpuScene.h"
+#include "GpuCull.h"
 #include "Core/FrameLoads.h"
 #include "Core/Paths.h"
 #include "Core/Profiler.h"
@@ -31,6 +32,7 @@
 #include "LightSwitch.h"
 #include "SamplingProfiler.h"
 #include "SceneRenderer.h"
+#include "Frustum.h"
 #include "SceneSerializer.h"
 #include "ShadowFrame.h"
 #include "ShadowLimits.h"
@@ -367,6 +369,33 @@ void SmokeHarness::BeginFrame() {
         std::string why;
         if (GpuScene::Get().SelfTest(world, why)) std::cout << "[SmokeTest]   GPU scene matches the candidate list" << std::endl;
         else Log::Error("[SmokeTest] GPU scene: " + why);
+    }
+
+    // smoke_min: GPU culling's stage A + ordered compaction (G-2) against GatherVisible: a camera query and one inside
+    // half the scene's box. Every slot the CPU keeps must come back, in its order (extras are allowed).
+    if (m_SceneActive && m_FramesRendered == 15 &&
+        path.find("smoke_min") != std::string::npos && GpuScene::Enabled()) {
+        const GpuCull::VerifyTotals before = GpuCull::Totals();
+        VisibilityQuery cam;
+        GpuCull::VerifyView(world, cam);
+        glm::vec3 lo, hi;
+        if (RenderableBounds(world, lo, hi)) {
+            const glm::vec3 mid = (lo + hi) * 0.5f;
+            const AABB half{lo, mid};
+            VisibilityQuery inside;
+            inside.ShadowCasters = true;
+            inside.Within = &half;
+            GpuCull::VerifyView(world, inside);
+        }
+        const GpuCull::VerifyTotals& after = GpuCull::Totals();
+        const std::uint64_t views = after.Views - before.Views, missing = after.Missing - before.Missing;
+        const std::uint64_t order = after.OrderBad - before.OrderBad;
+        if (views > 0 && missing == 0 && order == 0)
+            std::cout << "[SmokeTest]   GPU culling matches the CPU gather (" << (after.Expected - before.Expected)
+                      << " kept, " << (after.Extra - before.Extra) << " extra)" << std::endl;
+        else
+            Log::Error("[SmokeTest] GPU culling: " + std::to_string(views) + " views, " + std::to_string(missing) +
+                       " missing, " + std::to_string(order) + " out of order");
     }
 
     // A smoke_ssao_off* scene: rendered with SSAO off; no program may put two sampler types on one unit.

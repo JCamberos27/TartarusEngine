@@ -81,8 +81,18 @@ struct SceneSlot {
     glm::vec3 WorldMin{0.0f}, WorldMax{0.0f};
     bool Bounded = false;
     bool Alive = false;           // false: nothing to draw from it (left, lost its model, or inactive)
-    std::uint16_t Flags = 0;      // the candidate's CandidateFlag bits (SceneViewPass.h)
+    // The candidate's CandidateFlag bits (SceneViewPass.h, bits 0-7) and the renderable's own settings GatherVisible
+    // reads live (the kSlot* bits below).
+    std::uint16_t Flags = 0;
     int Layer = 0;
+    entt::entity Entity{}; // who holds the slot; ReadSceneSlot sets it (entt::null when nobody does now). Not entt::null
+                           // here: this header only forward-declares entt::entity.
+    const RenderableComponent* Renderable = nullptr;  // its renderable (null: it left)
+};
+enum SceneSlotFlag : std::uint16_t {
+    kSlotFlagCastOff = 1 << 8,      // Cast Shadows: Off
+    kSlotFlagShadowsOnly = 1 << 9,  // Cast Shadows: Shadows Only
+    kSlotFlagTransparent = 1 << 10, // first material slot in the Transparent queue
 };
 struct SceneSlotChanges {
     bool Full = true;                  // every slot [0, Count) must be read again
