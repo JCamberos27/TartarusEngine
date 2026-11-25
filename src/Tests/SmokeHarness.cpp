@@ -880,7 +880,7 @@ void SmokeHarness::PerfFrame() {
             m_Perf.ReportCombat(std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string(),
                                 m_Ctx.editor.GetRenderStats().DrawCalls, m_Ctx.editor.GetRenderStats().Triangles,
                                 m_Ctx.window.GetWidth(), m_Ctx.window.GetHeight());
-            std::cout << "[PerfBench] combat view: " << (m_ViewNotLit.empty() ? "Shaded, lit" : "NOT LIT: " + m_ViewNotLit)
+            std::cout << "[PerfBench] view (combat): " << (m_ViewNotLit.empty() ? "Shaded, lit" : "NOT LIT: " + m_ViewNotLit)
                       << std::endl;
         }
     } else if (opt.perfBenchMode) {
@@ -917,8 +917,9 @@ void SmokeHarness::PerfFrame() {
             m_Perf.ReportPhase(std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string(), phase.c_str(),
                                m_Ctx.editor.GetRenderStats().DrawCalls, m_Ctx.editor.GetRenderStats().Triangles,
                                m_Ctx.window.GetWidth(), m_Ctx.window.GetHeight(), opt.perfSample);
-            std::cout << "[PerfBench] " << std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string() << " (" << phase
-                      << ") view: " << (m_ViewNotLit.empty() ? "Shaded, lit" : "NOT LIT: " + m_ViewNotLit) << std::endl;
+            // Its own prefix: scripts that parse "[PerfBench] <scene> (<phase>)" rows for numbers don't catch it.
+            std::cout << "[PerfBench] view (" << phase << ") " << std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string()
+                      << ": " << (m_ViewNotLit.empty() ? "Shaded, lit" : "NOT LIT: " + m_ViewNotLit) << std::endl;
             if (m_FramesRendered < m_FrameBudget) {
                 if (!playing) m_Ctx.togglePlay();
                 else if (!playMaximized) m_Ctx.setMaximized(true);
