@@ -160,6 +160,19 @@ struct CandidateCache {
     size_t Dead = 0;
     std::uint64_t FullBuilds = 0;
     bool Forget = false; // tests: the next call rebuilds in full
+    // G-1 (GpuScene): the List indices patched since the last TakeSceneSlotChanges, each once (DirtyMark), and whether
+    // the list was rebuilt in full since (every index then means another renderable). Kept only once someone asks.
+    bool TrackSlots = false;
+    bool SlotsRebuilt = true;
+    std::vector<std::uint32_t> DirtySlots;
+    std::vector<std::uint8_t> DirtyMark;
+    void MarkSlot(std::uint32_t i) {
+        if (!TrackSlots || SlotsRebuilt) return;
+        if (DirtyMark.size() <= i) DirtyMark.resize((size_t)i + 1, 0);
+        if (DirtyMark[i]) return;
+        DirtyMark[i] = 1;
+        DirtySlots.push_back(i);
+    }
 };
 constexpr std::uint32_t kNoCandidate = ~0u;
 
@@ -245,6 +258,7 @@ void PatchMovedCandidates(World& world, CandidateCache& cache) {
         c.V.Xform = world.GetCachedWorldTransform(e);
         c.V.Normal = NormalMatrix(c.V.Xform);
         FillBounds(c.V, *c.Renderable);
+        cache.MarkSlot(cache.Index[slot]);
         CandidateCell& cell = cache.Cells[c.Cell];
         if (!cell.Always) {
             if (!c.V.Bounded) {
@@ -283,20 +297,23 @@ bool RefreshCandidates(World& world, CandidateCache& cache) {
     constexpr size_t kChunk = 8192;
     const size_t chunks = (n + kChunk - 1) / kChunk;
     static std::vector<size_t> chunkIds, chunkLive;
-    static std::vector<std::vector<std::uint32_t>> chunkGone, chunkFix;
+    static std::vector<std::vector<std::uint32_t>> chunkGone, chunkFix, chunkChanged;
     chunkIds.resize(chunks);
     std::iota(chunkIds.begin(), chunkIds.end(), size_t(0));
     chunkLive.assign(chunks, 0);
     if (chunkGone.size() < chunks) {
         chunkGone.resize(chunks);
         chunkFix.resize(chunks);
+        chunkChanged.resize(chunks);
     }
     constexpr std::uint16_t kOwnCell = kCandPosed | kCandViewModel | kCandPlayerBody; // never in a static cell
     const auto scan = [&](size_t ch) {
         std::vector<std::uint32_t>& gone = chunkGone[ch];
         std::vector<std::uint32_t>& fix = chunkFix[ch];
+        std::vector<std::uint32_t>& changed = chunkChanged[ch]; // flags, layer or model: GpuScene re-reads it
         gone.clear();
         fix.clear();
+        changed.clear();
         size_t live = 0;
         for (size_t i = ch * kChunk, end = std::min(n, i + kChunk); i < end; ++i) {
             Candidate& c = cache.List[i];
@@ -310,9 +327,11 @@ bool RefreshCandidates(World& world, CandidateCache& cache) {
             const std::uint16_t flags = CandidateFlagsOf(reg, e, *r);
             const bool modelChanged = r->ModelRef.get() != c.ModelAtBuild;
             const bool ownCell = (flags & kOwnCell) && !(c.Flags & kOwnCell);
+            const int layer = CandidateLayerOf(reg, e);
+            if (modelChanged || flags != c.Flags || layer != c.Layer) changed.push_back((std::uint32_t)i);
             c.Renderable = c.V.Renderable = r;
             c.Flags = c.V.CandFlags = cache.Hot[i].Flags = flags;
-            c.Layer = c.V.Layer = CandidateLayerOf(reg, e);
+            c.Layer = c.V.Layer = layer;
             if (modelChanged) {
                 c.ModelAtBuild = r->ModelRef.get();
                 FillBounds(c.V, *r);
@@ -337,7 +356,9 @@ bool RefreshCandidates(World& world, CandidateCache& cache) {
             c.Renderable = c.V.Renderable = nullptr;
             c.Flags = c.V.CandFlags = cache.Hot[i].Flags = kCandInactive;
             ++cache.Dead;
+            cache.MarkSlot(i);
         }
+        for (std::uint32_t i : chunkChanged[ch]) cache.MarkSlot(i);
         for (std::uint32_t i : chunkFix[ch]) {
             const Candidate& c = cache.List[i];
             CandidateCell& cell = cache.Cells[c.Cell];
@@ -372,6 +393,7 @@ bool RefreshCandidates(World& world, CandidateCache& cache) {
         cache.Index[slot] = (std::uint32_t)cache.List.size();
         cache.Hot.push_back({c.Entity, c.Flags});
         cache.List.push_back(c);
+        cache.MarkSlot((std::uint32_t)cache.List.size() - 1);
     }
     if (counted != renderPool.size()) return false;
     PatchMovedCandidates(world, cache);
@@ -440,6 +462,9 @@ const CandidateCache& Candidates(World& world) {
         return cache;
     }
     ++cache.FullBuilds;
+    cache.SlotsRebuilt = true; // every slot is another renderable now: GpuScene re-reads them all
+    cache.DirtySlots.clear();
+    cache.DirtyMark.clear();
     cache.Owner = &world;
     cache.Stamp = world.TransformCacheStamp();
     cache.Renderables = storage.size();
@@ -509,6 +534,47 @@ const CandidateCache& Candidates(World& world) {
 } // namespace
 
 void ForgetGatherCandidates() { CandidateStore().Forget = true; }
+
+void TakeSceneSlotChanges(World& world, SceneSlotChanges& out) {
+    CandidateCache& cache = CandidateStore();
+    const bool first = !cache.TrackSlots;
+    cache.TrackSlots = true;
+    const CandidateCache& now = Candidates(world);
+    out.Count = (std::uint32_t)now.List.size();
+    out.Slots.clear();
+    // Rebuilt, first asked, or patched past half the list (cheaper to send it all): every slot.
+    out.Full = first || cache.SlotsRebuilt || cache.DirtySlots.size() * 2 > now.List.size();
+    if (!out.Full) {
+        out.Slots = cache.DirtySlots;
+        // Posed models read their bounds live (GatherVisible): sent every call. They're the Always cells' few.
+        for (const CandidateCell& cell : now.Cells) {
+            if (!cell.Always) continue;
+            for (std::uint32_t i = cell.First, end = cell.First + cell.Count; i < end; ++i)
+                if ((now.List[i].Flags & kCandPosed) && (i >= cache.DirtyMark.size() || !cache.DirtyMark[i])) out.Slots.push_back(i);
+        }
+    }
+    for (std::uint32_t i : cache.DirtySlots) cache.DirtyMark[i] = 0;
+    cache.DirtySlots.clear();
+    cache.SlotsRebuilt = false;
+}
+
+bool ReadSceneSlot(std::uint32_t slot, SceneSlot& out) {
+    const CandidateCache& cache = CandidateStore();
+    if (slot >= cache.List.size()) return false;
+    const Candidate& c = cache.List[slot];
+    out.Alive = c.Renderable && c.Renderable->ModelRef && !(c.Flags & kCandInactive);
+    out.Flags = c.Flags;
+    out.Layer = c.Layer;
+    VisibleRenderable v = c.V;
+    if (c.Renderable && c.Renderable->ModelRef && ((c.Flags & kCandPosed) || c.Renderable->ModelRef.get() != c.ModelAtBuild))
+        FillBounds(v, *c.Renderable); // as GatherVisible reads it
+    out.Xform = v.Xform;
+    out.Normal = v.Normal;
+    out.Bounded = v.Bounded;
+    out.WorldMin = v.WorldMin;
+    out.WorldMax = v.WorldMax;
+    return true;
+}
 std::uint64_t GatherCandidateFullBuilds() { return CandidateStore().FullBuilds; }
 
 bool RenderableBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) {
