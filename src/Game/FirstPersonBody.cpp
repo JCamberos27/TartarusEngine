@@ -873,7 +873,11 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             parents.resize(pose.size());
             for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
             CopyArmShapeCached(m, *armRig, m_ArmsWeight, pose, parents, cfg.ClavicleFollow);
-            IK::ComputeGlobals(pose, parents, globals);
+            // Only the upper arms are read: the root-to-each path, not every node (the same products in the same order,
+            // so the same bits; the rest of `globals` is stale scratch, never read).
+            globals.resize(pose.size());
+            IK::RefreshPath(pose, parents, globals, -1, ul);
+            IK::RefreshPath(pose, parents, globals, -1, ur);
             left = IK::Position(globals[ul]);
             right = IK::Position(globals[ur]);
             break;
