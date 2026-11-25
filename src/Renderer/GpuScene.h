@@ -67,6 +67,23 @@ public:
     // The last Sync's uploads as planned (made even with upload false): slot runs [first, last].
     const std::vector<Run>& LastRuns() const { return m_Runs; }
 
+    // G4-c: what changed for a cached shadow map since the last TakeChangeLog, across every Sync in between. A slot is
+    // logged when its packed transform or bounds changed, or a skinned slot's pose did (posed slots come with every
+    // Sync), with the box it held before and holds now (Bounded false: either had none, so it reaches everything).
+    // All: anything may have changed (the first take, a full rebuild, a Sync for another world, or too many to list).
+    struct SlotChange {
+        std::uint32_t Slot = 0;
+        glm::vec3 Min{0.0f}, Max{0.0f};
+        bool Bounded = false;
+    };
+    struct ChangeLog {
+        bool All = true;
+        std::vector<SlotChange> Changes;
+    };
+    static constexpr std::size_t kMaxLoggedChanges = 4096; // past this, All (a rebuild's worth of work anyway)
+    // Hands out the log for `world` and starts a new one. The first call turns logging on (and is All).
+    void TakeChangeLog(const World& world, ChangeLog& out);
+
     // GL: reads both buffers back and compares them slot by slot with the candidate list (SceneRenderer.h ReadSceneSlot).
     // False with the first mismatch in `why`. For the smoke run; it stalls the pipeline.
     bool SelfTest(World& world, std::string& why);
@@ -79,6 +96,8 @@ private:
     void WriteSlot(std::uint32_t slot, const SceneSlot& s);
     bool EnsureCapacity(std::uint32_t count); // GL; false: the buffers could not be made
     void UploadRuns(const std::vector<Run>& runs);
+    void LogChange(std::uint32_t slot, const glm::vec4 before[2], bool hadBefore, const SceneSlot& now);
+    void LogAll();
 
     std::uint32_t m_Count = 0;
     std::uint32_t m_Capacity = 0; // slots the GL buffers hold
@@ -93,4 +112,9 @@ private:
     const World* m_OnceWorld = nullptr; // the last Sync's world and what it saw (UpToDateFor)
     std::uint64_t m_OnceStamp = 0;
     std::size_t m_OnceRenderables = 0;
+    // TakeChangeLog's log: on once asked; the world its slots belong to; each skinned slot's pose when last logged.
+    bool m_LogOn = false;
+    const World* m_LogWorld = nullptr;
+    ChangeLog m_Log;
+    std::vector<std::uint64_t> m_Pose; // by slot (0: no bones)
 };

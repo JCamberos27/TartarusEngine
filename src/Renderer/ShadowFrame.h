@@ -8,6 +8,8 @@
 
 #include "AABB.h"
 #include "CascadedShadowMap.h"
+#include "Frustum.h"
+#include "GpuScene.h"
 #include "InstanceBatch.h"
 #include "PointShadowMap.h"
 #include "SceneRenderer.h"
@@ -19,12 +21,40 @@ class Model;
 struct MaterialAsset;
 class VisibleIndexBuffer;
 struct FrameLights;
-struct Frustum;
 
 // A local (spot / point) caster's change signature: its id, model, every material slot, transform, hidden-triangle set
 // (VisibleIndexBuffer id, 0 = none) and Two Sided. A still light keeps its static depth while the signatures hold.
 std::uint64_t LocalCasterHash(std::uint32_t id, const Model* model, const std::vector<std::shared_ptr<MaterialAsset>>& materials,
                               const glm::mat4& xform, unsigned visibleId, bool twoSided);
+
+// G4-c: which local lights may keep their maps this frame without gathering their casters or hashing them. A light
+// turns quiet when a full look at it found nothing in it moving, animated or settling, its static cache built and its
+// live layer equal to that cache. It stays quiet until a logged slot change (GpuScene::TakeChangeLog: a moved, posed,
+// swapped, added or removed renderable, where it was and where it is) touches its reach, its own inputs (key: map,
+// resolution, matrices, position, range) change, it goes dark, a reported render-settings write lands
+// (RenderSettingsEpoch: a material or Cast Shadows edit), or the log says anything may have changed.
+struct LocalShadowQuiet {
+    struct Light {
+        bool Quiet = false;
+        std::uint64_t Key = 0;
+    };
+    Light Spots[SpotShadowMap::kMaxSpots];
+    Light Points[PointShadowMap::kMaxPoints];
+    std::uint32_t Epoch = 0;
+    bool EpochSeen = false;
+    struct Lights {
+        int SpotCount = 0, PointCount = 0;
+        const bool* SpotLive = nullptr;
+        const std::uint64_t* SpotKey = nullptr;
+        const Frustum* SpotReach = nullptr;
+        const bool* PointLive = nullptr;
+        const std::uint64_t* PointKey = nullptr;
+        const AABB* PointRange = nullptr;
+    };
+    // Wakes the lights this frame's changes reach and takes their keys.
+    void Wake(const GpuScene::ChangeLog& log, std::uint32_t epoch, const Lights& lights);
+    void Reset(); // every light awake (the next full look decides again)
+};
 
 struct ShadowFrameInputs {
     World* world = nullptr;
@@ -56,8 +86,18 @@ public:
         int PointLive = 0, PointStaticFaces = 0, PointDynamicFaces = 0, PointKeptFaces = 0;
         int CasterDraws = 0;       // casters submitted across every local map this frame
         int StaticCasterDraws = 0; // of them, into a static cache (the re-render cost)
+        int SpotQuiet = 0, PointQuiet = 0; // live lights kept without a look (G4-c)
     };
     const LocalStats& LastLocalStats() const { return m_Stats; }
+
+    // G4-c is on: TARTARUS_NO_SHADOW_SLOT_DIRTY unset and the GPU scene on (its change log).
+    static bool SlotDirtyEnabled();
+    // Verify mode (TARTARUS_SHADOW_CACHE_VERIFY=1, or the smoke run): quiet lights are looked at anyway, and one that
+    // then redraws anything is a miss (Log::Error). Totals since start.
+    static void SetCacheVerify(bool on);
+    static bool CacheVerify();
+    struct VerifyTotals { std::uint64_t Checked = 0, Missed = 0; };
+    static const VerifyTotals& CacheVerifyTotals();
 
 private:
     LocalStats m_Stats;
@@ -92,13 +132,18 @@ private:
 
     void GatherLocalCasters(const ShadowFrameInputs& in);
     void RenderSpots(const ShadowFrameInputs& in);
+    struct LocalPassLocs;
+    bool RenderSpot(const ShadowFrameInputs& in, const LocalPassLocs& locs, int s, bool& lightMoved, bool& busy);
     void RenderPoints(const ShadowFrameInputs& in);
     bool DynamicFor(const LocalCaster& c, int turnSlot, std::uint64_t frame) const;
     // The collect + signature step RenderSpots and RenderPoints share: fills m_Visible / m_VisibleDynamic with the local
     // casters inside `frustum` (a spot) or `range` (a point; the other is null), skipping the player's own copies when
     // `skipPlayer`, and folds each static one's hash into `sig`. Returns whether any visible caster is dynamic.
+    // `busy`: some visible caster is moving, animated or settling (the light can't turn quiet).
     bool CollectLocalCasters(const Frustum* frustum, const AABB* range, bool skipPlayer, int turnSlot, std::uint64_t frame,
-                             std::uint64_t& sig);
+                             std::uint64_t& sig, bool& busy);
+    // A quiet light's verify check: it redrew something (`drawn`) though G4-c would have kept it.
+    static void VerifyQuiet(bool drawn, const char* kind, int light, std::uint64_t frame);
     // The spot and point passes' shared steps. Begin: depth on, back faces culled (the light-facing surface), the local
     // depth program bound; returns its light uniforms. Draw: m_Visible's animated (or static) casters, those outside
     // `clip` (a point light's face) skipped. End: the state both leave behind.
@@ -121,6 +166,14 @@ private:
     World* m_SceneWorld = nullptr; // the world this frame's casters came from: DrawDepthCasters reads the GPU scene
 
     // Spot / point
+    // G4-c: this frame's per-light reach and inputs key (RenderLocal), the quiet lights and the change log.
+    Frustum m_SpotReach[SpotShadowMap::kMaxSpots] = {};
+    std::uint64_t m_SpotKey[SpotShadowMap::kMaxSpots] = {};
+    AABB m_PointRange[PointShadowMap::kMaxPoints] = {};
+    std::uint64_t m_PointKey[PointShadowMap::kMaxPoints] = {};
+    bool m_SlotDirty = false; // G4-c on this frame
+    LocalShadowQuiet m_Quiet;
+    GpuScene::ChangeLog m_ChangeLog;
     std::vector<LocalCaster> m_LocalCasters;
     std::unordered_map<std::uint32_t, CasterMotion> m_CasterMotion;
     std::vector<const LocalCaster*> m_Visible;

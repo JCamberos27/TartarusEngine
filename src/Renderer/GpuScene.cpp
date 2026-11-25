@@ -5,6 +5,7 @@
 #include "gl.h"
 #include "World.h"
 #include "Components.h"
+#include "Model.h"
 #include "Core/Env.h"
 #include <algorithm>
 #include <cstring>
@@ -23,6 +24,11 @@ float AsFloat(std::uint32_t u) {
     float f;
     std::memcpy(&f, &u, sizeof f);
     return f;
+}
+// A skinned slot's pose (Model::PoseVersion; 0: no bones). Posed slots come with every Sync: a new pose is logged.
+std::uint64_t PoseOf(const SceneSlot& s) {
+    const Model* m = s.Renderable && s.Renderable->ModelRef ? s.Renderable->ModelRef.get() : nullptr;
+    return m && m->HasBones() ? m->PoseVersion() : 0;
 }
 } // namespace
 
@@ -55,6 +61,8 @@ void GpuScene::WriteSlot(std::uint32_t slot, const SceneSlot& s) {
 void GpuScene::Sync(World& world, bool upload) {
     m_Last = {};
     if (!Enabled()) return;
+    if (m_LogOn && m_LogWorld != &world) LogAll(); // the slots now mean another world's renderables
+    m_LogWorld = &world;
     // Every Sync keys SyncOnce, so a Sync for another world in between (a bake, a preview) makes the next SyncOnce
     // for this one sync again instead of reading the other world's transforms.
     m_OnceWorld = &world;
@@ -62,20 +70,39 @@ void GpuScene::Sync(World& world, bool upload) {
     m_OnceRenderables = world.Registry.storage<RenderableComponent>().size();
     static SceneSlotChanges changes;
     TakeSceneSlotChanges(world, changes);
+    const std::uint32_t had = m_Count; // slots the mirror held before this Sync
     m_Count = changes.Count;
     m_XformCpu.resize((std::size_t)m_Count * 2);
     m_BoundsCpu.resize((std::size_t)m_Count * 2);
+    if (m_LogOn) m_Pose.resize(m_Count, 0);
     SceneSlot s;
     m_Sorted.clear();
     if (changes.Full) {
-        for (std::uint32_t i = 0; i < m_Count; ++i)
-            if (ReadSceneSlot(i, s)) WriteSlot(i, s);
+        for (std::uint32_t i = 0; i < m_Count; ++i) {
+            if (!ReadSceneSlot(i, s)) continue;
+            WriteSlot(i, s);
+            if (m_LogOn) m_Pose[i] = PoseOf(s);
+        }
+        if (m_LogOn) LogAll();
         m_Last.Full = true;
         m_Last.Slots = m_Count;
     } else {
         for (std::uint32_t i : changes.Slots) {
             if (i >= m_Count || !ReadSceneSlot(i, s)) continue;
-            WriteSlot(i, s);
+            if (m_LogOn) {
+                const std::size_t at = (std::size_t)i * 2;
+                const glm::vec4 before[2] = {m_BoundsCpu[at], m_BoundsCpu[at + 1]};
+                const glm::mat4 xfBefore = m_XformCpu[at];
+                WriteSlot(i, s);
+                const std::uint64_t pose = PoseOf(s);
+                const bool changed = i >= had || pose != m_Pose[i] ||
+                                     std::memcmp(&xfBefore, &m_XformCpu[at], sizeof xfBefore) != 0 ||
+                                     std::memcmp(before, &m_BoundsCpu[at], sizeof before) != 0;
+                m_Pose[i] = pose;
+                if (changed) LogChange(i, before, i < had, s);
+            } else {
+                WriteSlot(i, s);
+            }
             m_Sorted.push_back(i);
         }
         m_Last.Slots = (std::uint32_t)m_Sorted.size();
@@ -97,6 +124,45 @@ void GpuScene::Sync(World& world, bool upload) {
     }
     m_GpuStale = false;
     UploadRuns(m_Runs);
+}
+
+void GpuScene::LogAll() {
+    m_Log.All = true;
+    m_Log.Changes.clear();
+}
+
+void GpuScene::LogChange(std::uint32_t slot, const glm::vec4 before[2], bool hadBefore, const SceneSlot& now) {
+    if (m_Log.All) return; // everything is already in
+    if (m_Log.Changes.size() >= kMaxLoggedChanges) {
+        LogAll();
+        return;
+    }
+    SlotChange& c = m_Log.Changes.emplace_back();
+    c.Slot = slot;
+    c.Min = now.WorldMin;
+    c.Max = now.WorldMax;
+    c.Bounded = now.Bounded;
+    if (hadBefore) { // where it was counts too: a caster that left a light's reach changes that light's map
+        c.Bounded = c.Bounded && before[0].w == 1.0f;
+        c.Min = glm::min(c.Min, glm::vec3(before[0]));
+        c.Max = glm::max(c.Max, glm::vec3(before[1]));
+    }
+}
+
+void GpuScene::TakeChangeLog(const World& world, ChangeLog& out) {
+    out.Changes.clear();
+    if (!m_LogOn || !Enabled()) { // logging starts now: nothing before it is known
+        m_LogOn = Enabled();
+        m_LogWorld = m_OnceWorld;
+        m_Log.All = false;
+        m_Log.Changes.clear();
+        out.All = true;
+        return;
+    }
+    out.All = m_Log.All || m_LogWorld != &world;
+    if (!out.All) out.Changes.swap(m_Log.Changes);
+    m_Log.Changes.clear();
+    m_Log.All = false;
 }
 
 bool GpuScene::SyncOnce(World& world) {

@@ -98,6 +98,7 @@ enum SceneSlotFlag : std::uint16_t {
     kSlotFlagCastOff = 1 << 8,      // Cast Shadows: Off
     kSlotFlagShadowsOnly = 1 << 9,  // Cast Shadows: Shadows Only
     kSlotFlagTransparent = 1 << 10, // first material slot in the Transparent queue
+    kSlotFlagTwoSided = 1 << 11,    // Cast Shadows: Two Sided (a shadow cache's input: G4-c sees the slot change)
 };
 struct SceneSlotChanges {
     bool Full = true;                  // every slot [0, Count) must be read again
