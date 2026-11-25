@@ -25,7 +25,9 @@ bool MotionDatabase::Load(const std::string& base, std::string* error, const std
         return false;
     }
     const double read = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    m_Between = between ? &between : nullptr;
     const bool ok = Adopt(std::move(s), std::move(f), error);
+    m_Between = nullptr;
     m_ReadSeconds = read;
     m_LoadSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     return ok;
@@ -47,6 +49,7 @@ bool MotionDatabase::Build(std::string* error) {
         m_ClipOf.clear();
         return false;
     };
+    const auto go = [&] { return !m_Between || (*m_Between)(); };
     const std::uint32_t n = m_Stream.FrameCount();
     if (n == 0) return fail("the stream is empty");
     if (m_Feat.FrameCount() != n) return fail("the stream and the features cover different frames");
@@ -94,6 +97,7 @@ bool MotionDatabase::Build(std::string* error) {
         std::vector<char> bad(n, 0);
         std::vector<glm::quat> prev((size_t)nb), cur((size_t)nb);
         for (const auto& clip : m_Stream.Clips()) {
+            if (!go()) return fail("cancelled");
             for (int b = 0; b < nb; ++b) prev[(size_t)b] = m_Stream.Rotation(clip.First, b);
             for (std::uint32_t k = 1; k < clip.Count; ++k) {
                 const std::uint32_t i = clip.First + k;
@@ -143,6 +147,7 @@ bool MotionDatabase::Build(std::string* error) {
         m_QB[(size_t)d] = (m_Feat.QOffset(d) - m_Mean[(size_t)d]) / m_Scale[(size_t)d];
     }
 
+    if (!go()) return fail("cancelled");
     m_Frames = n;
     Index();
     return true;
