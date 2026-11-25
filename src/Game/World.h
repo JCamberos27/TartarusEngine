@@ -156,6 +156,13 @@ public:
         const size_t s = (size_t)entt::to_entity(e);
         return s < m_LodCulledOwner.size() && m_LodCulledOwner[s] == e;
     }
+    // The renderers whose LodCulledTag flipped since the last call (either way, maybe more than once; ClearLod's untags
+    // too), for the cached local shadows: a level change swaps which renderers a light gathers without moving any.
+    // `all`: anything may have flipped (the first call, or more than kMaxLodToggles since the last). Nothing is kept
+    // until the first call, and past the cap only the flag: a taker that stops asking (local shadows off, no local
+    // lights) lets the list grow to the cap (~1 MB) at most, then gets one `all` when it asks again.
+    void TakeLodToggles(std::vector<entt::entity>& out, bool& all);
+    static constexpr size_t kMaxLodToggles = size_t(1) << 18;
     // #201 - derives InactiveTag (activeInHierarchy == false) from DeactivatedTag on the entity
     // or any ancestor. RebuildWorldTransformCache() runs it every frame; scene/prefab loads run
     // it on the way out so their callers see a consistent state immediately.
@@ -310,6 +317,9 @@ private:
     LodMemo m_LodMemo; // the last ApplyLod's view, so the same view again within a frame is free
     std::vector<entt::entity> m_LodCulledOwner; // entity slot -> the entity tagged there (IsLodCulled)
     void SetLodCulled(entt::entity e, bool culled);
+    void NoteLodToggle(entt::entity e);
+    std::vector<entt::entity> m_LodToggles; // TakeLodToggles' list
+    bool m_LodTogglesAll = true;
     std::vector<std::pair<entt::entity, bool>> m_LodWalk;
     std::vector<std::int8_t> m_LodNext;       // ApplyLod's incremental pass: each record's new level, picked in parallel
     std::vector<int> m_LodChunkEvaluated;

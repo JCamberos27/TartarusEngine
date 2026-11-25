@@ -561,6 +561,7 @@ std::uint16_t LiveSlotBits(const RenderableComponent& r) {
     std::uint16_t bits = 0;
     if (r.CastShadows == RenderableComponent::ShadowCasting::Off) bits |= kSlotFlagCastOff;
     if (r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) bits |= kSlotFlagShadowsOnly;
+    if (r.CastShadows == RenderableComponent::ShadowCasting::TwoSided) bits |= kSlotFlagTwoSided;
     if (!r.Materials.empty() && r.Materials[0] && r.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent)
         bits |= kSlotFlagTransparent;
     return bits;

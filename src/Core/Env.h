@@ -96,6 +96,8 @@
     X(GpuCullVerify, "TARTARUS_GPU_CULL_VERIFY", Flag, "debug: compare GPU culling with the CPU's every frame (slow)") \
     X(NoMdi, "TARTARUS_NO_MDI", Flag, "disable multi-draw indirect")                                                  \
     X(NoGpuScene, "TARTARUS_NO_GPU_SCENE", Flag, "disable the persistent GPU scene buffers")                          \
+    X(NoShadowSlotDirty, "TARTARUS_NO_SHADOW_SLOT_DIRTY", Flag, "still local lights re-check every caster every frame (no slot-change skip)") \
+    X(ShadowCacheVerify, "TARTARUS_SHADOW_CACHE_VERIFY", Flag, "debug: check every local-shadow skip against the full signature")     \
     X(NoMeshArena, "TARTARUS_NO_MESH_ARENA", Flag, "disable the static mesh arena")                                   \
     X(NoModelCache, "TARTARUS_NO_MODEL_CACHE", Flag, "import models from their files (skip Library/Models)")          \
     X(NoTexturePrefetch, "TARTARUS_NO_TEXTURE_PREFETCH", Flag, "scene open: decode material textures one by one")    \

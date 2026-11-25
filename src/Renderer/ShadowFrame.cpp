@@ -14,6 +14,7 @@
 #include "Components.h"
 #include "CubeFaces.h"
 #include "Core/Env.h"
+#include "Core/Log.h"
 #include "DefaultTextures.h"
 #include "Frustum.h"
 #include "GLStateCache.h"
@@ -27,6 +28,7 @@
 #include "LightGather.h"
 #include "Model.h"
 #include "Profiler.h"
+#include "RenderSettingsEpoch.h"
 #include "Shader.h"
 #include "World.h"
 
@@ -379,8 +381,129 @@ bool ShadowFrame::DynamicFor(const LocalCaster& c, int turnSlot, std::uint64_t f
     return frame < turn;
 }
 
+namespace {
+bool g_CacheVerify = Env::Flag(Env::Var::ShadowCacheVerify);
+ShadowFrame::VerifyTotals g_VerifyTotals;
+ShadowFrame::QuietTotals g_QuietTotals;
+} // namespace
+
+bool ShadowFrame::SlotDirtyEnabled() {
+    static const bool off = Env::Flag(Env::Var::NoShadowSlotDirty);
+    return !off && GpuScene::Enabled();
+}
+void ShadowFrame::SetCacheVerify(bool on) { g_CacheVerify = on; }
+bool ShadowFrame::CacheVerify() { return g_CacheVerify; }
+const ShadowFrame::VerifyTotals& ShadowFrame::CacheVerifyTotals() { return g_VerifyTotals; }
+const ShadowFrame::QuietTotals& ShadowFrame::LocalQuietTotals() { return g_QuietTotals; }
+
+void ShadowFrame::VerifyQuiet(bool wasQuiet, bool drawn, const char* kind, int light, std::uint64_t frame,
+                              std::vector<VerifyCaster>& last) {
+    if (wasQuiet) ++g_VerifyTotals.Checked;
+    if (wasQuiet && drawn && ++g_VerifyTotals.Missed <= 20) { // the first few: a stuck light would fill the log every frame
+        // What differs from the light's last look: a caster added, removed, or one of its signature's fields.
+        std::string why;
+        int listed = 0;
+        auto note = [&](const std::string& s) { if (listed++ < 4) why += " " + s + ";"; };
+        auto name = [](const VerifyCaster& c) {
+            return "entity " + std::to_string(c.Id) + " (" + (c.Mesh ? c.Mesh->Path() : std::string("?")) + ")";
+        };
+        for (const VerifyCaster& n : m_VerifyNow) {
+            const auto it = std::find_if(last.begin(), last.end(), [&](const VerifyCaster& o) { return o.Id == n.Id; });
+            if (it == last.end()) { note("added " + name(n)); continue; }
+            std::string f;
+            if (it->Mesh != n.Mesh) f += " model";
+            if (it->Materials != n.Materials) f += " materials";
+            if (it->Xform != n.Xform) f += " transform";
+            if (it->Visible != n.Visible) f += " hidden-triangles";
+            if (it->TwoSided != n.TwoSided) f += " two-sided";
+            if (!f.empty()) note(name(n) + ":" + f);
+        }
+        for (const VerifyCaster& o : last)
+            if (std::none_of(m_VerifyNow.begin(), m_VerifyNow.end(), [&](const VerifyCaster& n) { return n.Id == o.Id; }))
+                note("removed " + name(o));
+        if (listed > 4) why += " +" + std::to_string(listed - 4) + " more;";
+        Log::Error(std::string("[ShadowCache] ") + kind + " light " + std::to_string(light) + " was quiet but its map changed on frame " +
+                   std::to_string(frame) + " (why bits " + std::to_string(m_LookWhy) + ", " + std::to_string(last.size()) + " -> " +
+                   std::to_string(m_VerifyNow.size()) + " static casters):" + (why.empty() ? std::string(" no static caster changed") : why));
+    }
+    last = m_VerifyNow;
+}
+
+void LocalShadowQuiet::Reset() {
+    for (Light& l : Spots) l.Quiet = false;
+    for (Light& l : Points) l.Quiet = false;
+}
+
+void LocalShadowQuiet::Wake(const GpuScene::ChangeLog& log, std::uint32_t epoch, const Lights& in) {
+    const bool all = log.All || !EpochSeen || epoch != Epoch;
+    Epoch = epoch;
+    EpochSeen = true;
+    int quiet = 0;
+    auto take = [&](Light& l, bool live, std::uint64_t key) {
+        if (!live || all || l.Key != key) l.Quiet = false;
+        if (live) l.Key = key;
+        quiet += l.Quiet ? 1 : 0;
+    };
+    for (int s = 0; s < SpotShadowMap::kMaxSpots; ++s) {
+        const bool live = s < in.SpotCount && in.SpotLive[s];
+        take(Spots[s], live, live ? in.SpotKey[s] : 0);
+    }
+    for (int p = 0; p < PointShadowMap::kMaxPoints; ++p) {
+        const bool live = p < in.PointCount && in.PointLive[p];
+        take(Points[p], live, live ? in.PointKey[p] : 0);
+    }
+    // Each change against each still-quiet light: where the renderable was or is now inside its reach wakes it.
+    for (const GpuScene::SlotChange& c : log.Changes) {
+        if (quiet == 0) return;
+        const AABB box{c.Min, c.Max};
+        for (int s = 0; s < in.SpotCount; ++s)
+            if (Spots[s].Quiet && (!c.Bounded || in.SpotReach[s].Intersects(box))) { Spots[s].Quiet = false; --quiet; }
+        for (int p = 0; p < in.PointCount; ++p)
+            if (Points[p].Quiet && (!c.Bounded || in.PointRange[p].Intersects(box))) { Points[p].Quiet = false; --quiet; }
+    }
+}
+
+void LodToggleWake::Append(World& world, GpuScene::ChangeLog& log) {
+    bool all = false;
+    world.TakeLodToggles(Toggled, all);
+    if (For != &world) { all = true; For = &world; } // another world's entities, or the first look
+    if (all) { // re-read the whole set; every light wakes anyway
+        std::fill(Seen.begin(), Seen.end(), entt::null);
+        for (entt::entity e : world.Registry.view<LodCulledTag>()) {
+            const size_t s = (size_t)entt::to_entity(e);
+            if (s >= Seen.size()) Seen.resize(s + 1, entt::null);
+            Seen[s] = e;
+        }
+        log.All = true;
+        log.Changes.clear();
+        return;
+    }
+    for (entt::entity e : Toggled) {
+        const size_t s = (size_t)entt::to_entity(e);
+        if (s >= Seen.size()) Seen.resize(s + 1, entt::null);
+        const bool now = world.IsLodCulled(e), was = Seen[s] == e;
+        if (now == was) continue; // flipped back since the last look
+        Seen[s] = now ? e : entt::null;
+        if (log.All) continue;
+        const auto* r = world.Registry.valid(e) ? world.Registry.try_get<RenderableComponent>(e) : nullptr;
+        if (!r || !r->ModelRef || r->CastShadows == RenderableComponent::ShadowCasting::Off) continue; // casts nothing
+        GpuScene::SlotChange c;
+        c.Slot = ~0u; // no slot moved: the renderer itself
+        glm::vec3 lo, hi;
+        r->ModelRef->PosedBounds(lo, hi);
+        c.Bounded = lo.x <= hi.x && lo.y <= hi.y && lo.z <= hi.z;
+        if (c.Bounded) {
+            const AABB wb = AABB{lo, hi}.Transformed(world.GetCachedWorldTransform(e));
+            c.Min = wb.Min;
+            c.Max = wb.Max;
+        }
+        if (log.Changes.size() >= GpuScene::kMaxLoggedChanges) { log.All = true; log.Changes.clear(); continue; }
+        log.Changes.push_back(c);
+    }
+}
+
 void ShadowFrame::RenderLocal(const ShadowFrameInputs& in) {
-    const World& world = *in.world;
+    World& world = *in.world;
     const FrameLights& fl = *in.lights;
     // Layers are allocated for the budget, not the hard ceiling (#110); a zero budget still keeps one layer so
     // sampler unit 9 is never unbound.
@@ -390,7 +513,59 @@ void ShadowFrame::RenderLocal(const ShadowFrameInputs& in) {
     }
     m_LocalCasters.clear();
     m_Stats = {};
-    if (!world.Render.ShadowsEnabled || (fl.SpotCount <= 0 && fl.PointCount <= 0)) return;
+    if (!world.Render.ShadowsEnabled || (fl.SpotCount <= 0 && fl.PointCount <= 0)) {
+        m_Quiet.Reset();
+        return;
+    }
+    // Each light's reach (a spot's map frustum, the box of a point's range) and the key of its own inputs: the map,
+    // its size, the light's matrices, position and range (and for a spot, whether it leaves the player out).
+    const unsigned spotArray = in.spotMap->DepthArray(), pointArray = in.pointMap->DepthCubeArray();
+    const int spotRes = in.spotMap->Resolution() * 64 + in.spotMap->Layers();
+    const int pointRes = in.pointMap->Resolution() * 64 + in.pointMap->Cubes();
+    for (int s = 0; s < fl.SpotCount; ++s) {
+        m_SpotReach[s] = Frustum::FromViewProj(fl.SpotVP[s]);
+        const bool torch = s == fl.TorchShadowSlot;
+        std::uint64_t k = HashBytes(kFnvOffset, &spotArray, sizeof spotArray);
+        k = HashBytes(k, &spotRes, sizeof spotRes);
+        k = HashBytes(k, &fl.SpotVP[s], sizeof fl.SpotVP[s]);
+        k = HashBytes(k, &fl.SpotPos[s], sizeof fl.SpotPos[s]);
+        k = HashBytes(k, &fl.SpotFar[s], sizeof fl.SpotFar[s]);
+        m_SpotKey[s] = HashBytes(k, &torch, sizeof torch);
+    }
+    for (int p = 0; p < fl.PointCount; ++p) {
+        m_PointRange[p] = AABB{fl.PointPos[p] - glm::vec3(fl.PointFar[p]), fl.PointPos[p] + glm::vec3(fl.PointFar[p])};
+        std::uint64_t k = HashBytes(kFnvOffset, &pointArray, sizeof pointArray);
+        k = HashBytes(k, &pointRes, sizeof pointRes);
+        k = HashBytes(k, &fl.PointPos[p], sizeof fl.PointPos[p]);
+        k = HashBytes(k, &fl.PointNear[p], sizeof fl.PointNear[p]);
+        m_PointKey[p] = HashBytes(k, &fl.PointFar[p], sizeof fl.PointFar[p]);
+    }
+    // G4-c: the lights nothing touched since their last look keep their maps without a gather or a signature.
+    m_SlotDirty = SlotDirtyEnabled();
+    if (m_SlotDirty) {
+        PROFILE_SCOPE("Local Shadow Wake");
+        GpuScene& scene = GpuScene::Get();
+        {
+            // Its own scope: most of Wake's cost is this Sync, which moved here from the draw's SyncOnce (that one now
+            // finds the scene up to date), so it isn't new work.
+            PROFILE_SCOPE("Local Shadow Wake Sync");
+            scene.Sync(world); // this frame's changes, posed slots included (SyncOnce skips a frame whose transforms held)
+            scene.TakeChangeLog(world, m_ChangeLog);
+        }
+        m_LodWake.Append(world, m_ChangeLog); // ApplyLod ran for this frame's local shadows (Application)
+        LocalShadowQuiet::Lights lights;
+        lights.SpotCount = fl.SpotCount;
+        lights.SpotLive = fl.SpotLive;
+        lights.SpotKey = m_SpotKey;
+        lights.SpotReach = m_SpotReach;
+        lights.PointCount = fl.PointCount;
+        lights.PointLive = fl.PointLive;
+        lights.PointKey = m_PointKey;
+        lights.PointRange = m_PointRange;
+        m_Quiet.Wake(m_ChangeLog, RenderSettingsEpoch(), lights);
+    } else {
+        m_Quiet.Reset();
+    }
     GatherLocalCasters(in);
     GLTargetScope callerTarget; // the caller's framebuffers + viewport come back after the local maps
     if (fl.SpotCount > 0) RenderSpots(in);
@@ -408,13 +583,15 @@ void ShadowFrame::GatherLocalCasters(const ShadowFrameInputs& in) {
     // first, then each caster's bounds. CollectLocalCasters still culls them per light; this keeps a forest's thousands
     // of casters nowhere near a lamp out of the bookkeeping below (~1.9 ms a frame in the Forest).
     const FrameLights& fl = *in.lights;
+    // G4-c: a quiet light is kept as it is, so its casters aren't gathered (verify mode looks at it anyway).
     static std::vector<Frustum> reach;
     reach.clear();
+    const bool keepQuiet = m_SlotDirty && !CacheVerify();
     for (int s = 0; s < fl.SpotCount; ++s)
-        if (fl.SpotLive[s]) reach.push_back(Frustum::FromViewProj(fl.SpotVP[s]));
+        if (fl.SpotLive[s] && !(keepQuiet && m_Quiet.Spots[s].Quiet)) reach.push_back(m_SpotReach[s]);
     for (int p = 0; p < fl.PointCount; ++p) {
-        if (!fl.PointLive[p]) continue;
-        const glm::vec3 lo = fl.PointPos[p] - glm::vec3(fl.PointFar[p]), hi = fl.PointPos[p] + glm::vec3(fl.PointFar[p]);
+        if (!fl.PointLive[p] || (keepQuiet && m_Quiet.Points[p].Quiet)) continue;
+        const glm::vec3 lo = m_PointRange[p].Min, hi = m_PointRange[p].Max;
         Frustum box;
         box.Planes[0] = {glm::vec3(1, 0, 0), -lo.x};
         box.Planes[1] = {glm::vec3(-1, 0, 0), hi.x};
@@ -485,10 +662,12 @@ void ShadowFrame::GatherLocalCasters(const ShadowFrameInputs& in) {
 static std::uint64_t HashCaster(std::uint64_t h, std::uint64_t casterHash) { return (h ^ casterHash) * 1099511628211ull; }
 
 bool ShadowFrame::CollectLocalCasters(const Frustum* frustum, const AABB* range, bool skipPlayer, int turnSlot,
-                                      std::uint64_t frame, std::uint64_t& sig) {
+                                      std::uint64_t frame, std::uint64_t& sig, bool& busy) {
     m_Visible.clear();
     m_VisibleDynamic.clear();
     bool anyDynamic = false;
+    busy = false;
+    m_VerifyNow.clear();
     for (const LocalCaster& c : m_LocalCasters) {
         if (c.bounded && (frustum ? !frustum->Intersects(c.bounds) : !range->Intersects(c.bounds))) continue;
         if (c.player && skipPlayer) continue;
@@ -496,7 +675,13 @@ bool ShadowFrame::CollectLocalCasters(const Frustum* frustum, const AABB* range,
         const bool dynamic = DynamicFor(c, turnSlot, frame);
         m_VisibleDynamic.push_back(dynamic);
         anyDynamic = anyDynamic || dynamic;
+        busy = busy || c.moving || c.animated || c.settling;
         if (!dynamic) sig = HashCaster(sig, c.hash);
+        if (!dynamic && g_CacheVerify) {
+            std::uint64_t mats = kFnvOffset;
+            for (const auto& m : *c.materials) mats = HashWord(mats, (std::uint64_t)(std::uintptr_t)m.get());
+            m_VerifyNow.push_back({c.id, c.model, mats, c.xform, c.visible ? c.visible->Id() : 0u, c.twoSided});
+        }
     }
     return anyDynamic;
 }
@@ -539,98 +724,115 @@ void ShadowFrame::EndLocalPass() {
     GLStateCache::Invalidate();
 }
 
-void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
-    PROFILE_SCOPE("Spot Shadow Pass");
-    PROFILE_GPU_SCOPE("Spot Shadow Pass");
+// One spot light's look (RenderSpots): its signature, then the layer kept (false) or redrawn (true).
+bool ShadowFrame::RenderSpot(const ShadowFrameInputs& in, const LocalPassLocs& locs, int s, bool& lightMoved, bool& busy) {
     const FrameLights& fl = *in.lights;
     SpotShadowMap& spotShadowMap = *in.spotMap;
     Shader& localShadowShader = *in.localShader;
     const std::uint64_t frame = in.frame;
-    const LocalPassLocs locs = BeginLocalPass(localShadowShader);
+    // A light that moves (the flashlight) draws straight into its live layer - caching static depth it would throw
+    // away next frame was a whole extra draw and layer copy.
+    lightMoved = fl.SpotVP[s] != m_SpotLastVP[s];
+    m_SpotLastVP[s] = fl.SpotVP[s];
+    const Frustum& lf = m_SpotReach[s];
+    // The static casters' signature: animated ones redraw every frame anyway.
+    std::uint64_t sig = kFnvOffset;
+    const unsigned int map = spotShadowMap.DepthArray();
+    const int res = spotShadowMap.Resolution() * 64 + spotShadowMap.Layers(); // a reallocation
+    sig = HashBytes(sig, &map, sizeof map);
+    sig = HashBytes(sig, &res, sizeof res);
+    sig = HashBytes(sig, &fl.SpotVP[s], sizeof fl.SpotVP[s]);
+    sig = HashBytes(sig, &fl.SpotPos[s], sizeof fl.SpotPos[s]);
+    sig = HashBytes(sig, &fl.SpotFar[s], sizeof fl.SpotFar[s]);
+    // Animated or recently moved casters are drawn over the cached static depth every frame; the rest are the
+    // static signature. The torch is in the player's hand: no player shadow in its own light.
+    const bool animated = CollectLocalCasters(&lf, nullptr, s == fl.TorchShadowSlot, s, frame, sig, busy);
+    const bool staticChanged = sig != m_SpotShadowSig[s];
+    // Drawn whole when the light last moved, nothing has changed or moved in it since, and it isn't this light's
+    // turn: that layer is still right. Its cache is built on its turn, not all at once the frame after a batch of
+    // lights is reassigned.
+    const bool spotTurn = frame % kSettleFrames == (std::uint64_t)s % kSettleFrames;
+    m_LookWhy = (staticChanged ? 1 : 0) | (animated ? 2 : 0) | (m_SpotHadAnimated[s] ? 4 : 0);
+    if (!lightMoved && m_SpotShadowSig[s] == 0 && sig == m_SpotLiveSig[s] && !animated && !m_SpotHadAnimated[s] && !spotTurn)
+        return false;
+    // Unchanged, and no animated caster in it now or last frame: keep the layer.
+    if (!staticChanged && !animated && !m_SpotHadAnimated[s]) return false;
+    m_SpotHadAnimated[s] = animated;
+    localShadowShader.SetMat4(locs.ViewProj, fl.SpotVP[s]);
+    localShadowShader.SetVec3(locs.LightPos, fl.SpotPos[s]);
+    localShadowShader.SetFloat(locs.Far, fl.SpotFar[s]);
+    // Where this frame's animated casters land in the map: their bounds' corners through the light, a texel of
+    // slack each side. A caster without bounds or reaching behind the light covers it all.
+    const int mapRes = spotShadowMap.Resolution();
+    glm::ivec4 dynRect(mapRes, mapRes, 0, 0); // empty
+    for (size_t vi = 0; vi < m_Visible.size(); ++vi) {
+        if (!m_VisibleDynamic[vi]) continue;
+        const LocalCaster* c = m_Visible[vi];
+        bool whole = !c->bounded;
+        for (int k = 0; k < 8 && !whole; ++k) {
+            const glm::vec3 corner((k & 1) ? c->bounds.Max.x : c->bounds.Min.x, (k & 2) ? c->bounds.Max.y : c->bounds.Min.y,
+                                   (k & 4) ? c->bounds.Max.z : c->bounds.Min.z);
+            const glm::vec4 clip = fl.SpotVP[s] * glm::vec4(corner, 1.0f);
+            if (clip.w <= 1e-4f) { whole = true; break; }
+            const glm::vec2 texel = (glm::vec2(clip) / clip.w * 0.5f + 0.5f) * (float)mapRes;
+            dynRect = glm::ivec4(std::min(dynRect.x, (int)std::floor(texel.x) - 1), std::min(dynRect.y, (int)std::floor(texel.y) - 1),
+                                 std::max(dynRect.z, (int)std::ceil(texel.x) + 1), std::max(dynRect.w, (int)std::ceil(texel.y) + 1));
+        }
+        if (whole) { dynRect = glm::ivec4(0, 0, mapRes, mapRes); break; }
+    }
+    auto drawCasters = [&](bool animatedOnes) { DrawLocalCasters(localShadowShader, animatedOnes, nullptr); };
+    if (lightMoved) {
+        ++m_Stats.SpotWholeRedraws;
+        spotShadowMap.Begin(s);
+        m_CountingStatic = true;
+        drawCasters(false);
+        m_CountingStatic = false;
+        drawCasters(true);
+        m_SpotShadowSig[s] = 0; // no cache: built on a later still frame (see spotTurn)
+        m_SpotLiveSig[s] = sig;
+        m_SpotDynamicRect[s] = glm::ivec4(0, 0, mapRes, mapRes);
+        return true; // drawn whole
+    }
+    // Static casters into the cache only when they changed; then the live layer is that depth plus this frame's
+    // animated casters (an NPC standing in the spot used to redraw the whole arena into it every frame).
+    if (staticChanged) {
+        ++m_Stats.SpotStaticRedraws;
+        spotShadowMap.BeginStatic(s);
+        m_CountingStatic = true;
+        drawCasters(false);
+        m_CountingStatic = false;
+        m_SpotShadowSig[s] = sig;
+    }
+    ++m_Stats.SpotDynamicPasses;
+    // The live layer is the cache plus last frame's animated casters, which stayed within their rect: restoring
+    // that rect and this frame's from the cache is the whole layer's worth (a new cache is copied whole).
+    const glm::ivec4 prev = m_SpotDynamicRect[s];
+    const glm::ivec4 copy = staticChanged ? glm::ivec4(0, 0, mapRes, mapRes)
+                                          : glm::ivec4(glm::min(glm::ivec2(dynRect), glm::ivec2(prev)), glm::max(glm::ivec2(dynRect.z, dynRect.w), glm::ivec2(prev.z, prev.w)));
+    spotShadowMap.BeginFromStatic(s, copy.x, copy.y, copy.z, copy.w);
+    drawCasters(true);
+    m_SpotDynamicRect[s] = dynRect;
+    return true;
+}
+
+void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
+    PROFILE_SCOPE("Spot Shadow Pass");
+    PROFILE_GPU_SCOPE("Spot Shadow Pass");
+    const FrameLights& fl = *in.lights;
+    const LocalPassLocs locs = BeginLocalPass(*in.localShader);
     for (int s = 0; s < fl.SpotCount; ++s) {
         if (!fl.SpotLive[s]) continue;
-        ++m_Stats.SpotLive;
-        // A light that moves (the flashlight) draws straight into its live layer - caching static depth it would throw
-        // away next frame was a whole extra draw and layer copy.
-        const bool lightMoved = fl.SpotVP[s] != m_SpotLastVP[s];
-        m_SpotLastVP[s] = fl.SpotVP[s];
-        const Frustum lf = Frustum::FromViewProj(fl.SpotVP[s]);
-        // The static casters' signature: animated ones redraw every frame anyway.
-        std::uint64_t sig = kFnvOffset;
-        const unsigned int map = spotShadowMap.DepthArray();
-        const int res = spotShadowMap.Resolution() * 64 + spotShadowMap.Layers(); // a reallocation
-        sig = HashBytes(sig, &map, sizeof map);
-        sig = HashBytes(sig, &res, sizeof res);
-        sig = HashBytes(sig, &fl.SpotVP[s], sizeof fl.SpotVP[s]);
-        sig = HashBytes(sig, &fl.SpotPos[s], sizeof fl.SpotPos[s]);
-        sig = HashBytes(sig, &fl.SpotFar[s], sizeof fl.SpotFar[s]);
-        // Animated or recently moved casters are drawn over the cached static depth every frame; the rest are the
-        // static signature. The torch is in the player's hand: no player shadow in its own light.
-        const bool animated = CollectLocalCasters(&lf, nullptr, s == fl.TorchShadowSlot, s, frame, sig);
-        const bool staticChanged = sig != m_SpotShadowSig[s];
-        // Drawn whole when the light last moved, nothing has changed or moved in it since, and it isn't this light's
-        // turn: that layer is still right. Its cache is built on its turn, not all at once the frame after a batch of
-        // lights is reassigned.
-        const bool spotTurn = frame % kSettleFrames == (std::uint64_t)s % kSettleFrames;
-        if (!lightMoved && m_SpotShadowSig[s] == 0 && sig == m_SpotLiveSig[s] && !animated && !m_SpotHadAnimated[s] && !spotTurn)
-            continue;
-        // Unchanged, and no animated caster in it now or last frame: keep the layer.
-        if (!staticChanged && !animated && !m_SpotHadAnimated[s]) continue;
-        m_SpotHadAnimated[s] = animated;
-        localShadowShader.SetMat4(locs.ViewProj, fl.SpotVP[s]);
-        localShadowShader.SetVec3(locs.LightPos, fl.SpotPos[s]);
-        localShadowShader.SetFloat(locs.Far, fl.SpotFar[s]);
-        // Where this frame's animated casters land in the map: their bounds' corners through the light, a texel of
-        // slack each side. A caster without bounds or reaching behind the light covers it all.
-        const int mapRes = spotShadowMap.Resolution();
-        glm::ivec4 dynRect(mapRes, mapRes, 0, 0); // empty
-        for (size_t vi = 0; vi < m_Visible.size(); ++vi) {
-            if (!m_VisibleDynamic[vi]) continue;
-            const LocalCaster* c = m_Visible[vi];
-            bool whole = !c->bounded;
-            for (int k = 0; k < 8 && !whole; ++k) {
-                const glm::vec3 corner((k & 1) ? c->bounds.Max.x : c->bounds.Min.x, (k & 2) ? c->bounds.Max.y : c->bounds.Min.y,
-                                       (k & 4) ? c->bounds.Max.z : c->bounds.Min.z);
-                const glm::vec4 clip = fl.SpotVP[s] * glm::vec4(corner, 1.0f);
-                if (clip.w <= 1e-4f) { whole = true; break; }
-                const glm::vec2 texel = (glm::vec2(clip) / clip.w * 0.5f + 0.5f) * (float)mapRes;
-                dynRect = glm::ivec4(std::min(dynRect.x, (int)std::floor(texel.x) - 1), std::min(dynRect.y, (int)std::floor(texel.y) - 1),
-                                     std::max(dynRect.z, (int)std::ceil(texel.x) + 1), std::max(dynRect.w, (int)std::ceil(texel.y) + 1));
-            }
-            if (whole) { dynRect = glm::ivec4(0, 0, mapRes, mapRes); break; }
-        }
-        auto drawCasters = [&](bool animatedOnes) { DrawLocalCasters(localShadowShader, animatedOnes, nullptr); };
-        if (lightMoved) {
-            ++m_Stats.SpotWholeRedraws;
-            spotShadowMap.Begin(s);
-            m_CountingStatic = true;
-            drawCasters(false);
-            m_CountingStatic = false;
-            drawCasters(true);
-            m_SpotShadowSig[s] = 0; // no cache: built on a later still frame (see spotTurn)
-            m_SpotLiveSig[s] = sig;
-            m_SpotDynamicRect[s] = glm::ivec4(0, 0, mapRes, mapRes);
+        ++m_Stats.SpotLive; ++g_QuietTotals.Live;
+        const bool wasQuiet = m_SlotDirty && m_Quiet.Spots[s].Quiet;
+        if (wasQuiet && !CacheVerify()) { // G4-c: nothing it sees changed since its last look
+            ++m_Stats.SpotQuiet; ++g_QuietTotals.Quiet;
             continue;
         }
-        // Static casters into the cache only when they changed; then the live layer is that depth plus this frame's
-        // animated casters (an NPC standing in the spot used to redraw the whole arena into it every frame).
-        if (staticChanged) {
-            ++m_Stats.SpotStaticRedraws;
-            spotShadowMap.BeginStatic(s);
-            m_CountingStatic = true;
-            drawCasters(false);
-            m_CountingStatic = false;
-            m_SpotShadowSig[s] = sig;
-        }
-        ++m_Stats.SpotDynamicPasses;
-        // The live layer is the cache plus last frame's animated casters, which stayed within their rect: restoring
-        // that rect and this frame's from the cache is the whole layer's worth (a new cache is copied whole).
-        const glm::ivec4 prev = m_SpotDynamicRect[s];
-        const glm::ivec4 copy = staticChanged ? glm::ivec4(0, 0, mapRes, mapRes)
-                                              : glm::ivec4(glm::min(glm::ivec2(dynRect), glm::ivec2(prev)), glm::max(glm::ivec2(dynRect.z, dynRect.w), glm::ivec2(prev.z, prev.w)));
-        spotShadowMap.BeginFromStatic(s, copy.x, copy.y, copy.z, copy.w);
-        drawCasters(true);
-        m_SpotDynamicRect[s] = dynRect;
+        bool lightMoved = false, busy = false;
+        const bool drawn = RenderSpot(in, locs, s, lightMoved, busy);
+        // Quiet from here: a still light with its cache built, its live layer that cache, and nothing in it in motion.
+        m_Quiet.Spots[s].Quiet = m_SlotDirty && !lightMoved && !busy && m_SpotShadowSig[s] != 0 && !m_SpotHadAnimated[s];
+        if (CacheVerify()) VerifyQuiet(wasQuiet, drawn, "spot", s, in.frame, m_VerifySpot[s]);
     }
     EndLocalPass();
 }
@@ -646,11 +848,16 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
     const LocalPassLocs locs = BeginLocalPass(localShadowShader);
     for (int s = 0; s < fl.PointCount; ++s) {
         if (!fl.PointLive[s]) continue;
-        ++m_Stats.PointLive;
+        ++m_Stats.PointLive; ++g_QuietTotals.Live;
+        const bool wasQuiet = m_SlotDirty && m_Quiet.Points[s].Quiet;
+        if (wasQuiet && !CacheVerify()) { // G4-c: nothing it sees changed since its last look
+            ++m_Stats.PointQuiet; ++g_QuietTotals.Quiet;
+            continue;
+        }
         // The light's whole reach: casters outside it can't show on any face.
         const glm::vec3 lp = fl.PointPos[s];
         const float reach = fl.PointFar[s];
-        const AABB range{lp - glm::vec3(reach), lp + glm::vec3(reach)};
+        const AABB& range = m_PointRange[s];
         std::uint64_t sig = kFnvOffset;
         const unsigned int map = pointShadowMap.DepthCubeArray();
         const int res = pointShadowMap.Resolution() * 64 + pointShadowMap.Cubes(); // a reallocation
@@ -662,7 +869,8 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
         // Animated or recently moved casters are drawn over each face's cached static depth; the rest make the static
         // signature (as the spot maps do). A face redraws only when the static casters changed or a moving one is in it
         // (or was, last frame): an NPC walking past a lamp used to redraw all six faces of every cube in reach.
-        CollectLocalCasters(nullptr, &range, false, s + 2, frame, sig);
+        bool busy = false, drawn = false, anyFaceDynamic = false;
+        CollectLocalCasters(nullptr, &range, false, s + 2, frame, sig, busy);
         const bool staticChanged = sig != m_PointShadowSig[s];
         m_PointShadowSig[s] = sig;
         const glm::mat4 proj = MakePerspective(90.0f, 1.0f, fl.PointNear[s], reach); // #202
@@ -679,7 +887,9 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
                 if (m_VisibleDynamic[vi] && (!c->bounded || lf.Intersects(c->bounds))) { dynamicHere = true; break; }
             }
             if (!staticChanged && !dynamicHere && !m_PointFaceHadDynamic[s][f]) { ++m_Stats.PointKeptFaces; continue; } // keep the face
+            drawn = true;
             m_PointFaceHadDynamic[s][f] = dynamicHere;
+            anyFaceDynamic = anyFaceDynamic || dynamicHere;
             localShadowShader.SetMat4(locs.ViewProj, vp);
             const auto drawCasters = [&](bool dynamicOnes) { DrawLocalCasters(localShadowShader, dynamicOnes, &lf); };
             if (staticChanged) {
@@ -693,6 +903,12 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
             }
             pointShadowMap.BeginFaceFromStatic(s, f);
             if (dynamicHere) drawCasters(true);
+        }
+        // Quiet from here: no face holds a moving caster (a kept face had none last frame either) and none is in reach.
+        m_Quiet.Points[s].Quiet = m_SlotDirty && !busy && !anyFaceDynamic;
+        if (CacheVerify()) {
+            m_LookWhy = staticChanged ? 1 : 0;
+            VerifyQuiet(wasQuiet, drawn, "point", s, frame, m_VerifyPoint[s]);
         }
     }
     EndLocalPass();

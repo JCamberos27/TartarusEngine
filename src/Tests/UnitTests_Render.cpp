@@ -539,6 +539,223 @@ void GpuSceneSyncOnceKey() {
     ForgetGatherCandidates(); // no cache left pointing at these worlds
 }
 
+// G4-c: the GPU scene's change log for the cached local shadows. Over random frames (moves, Cast Shadows writes,
+// removals, a quiet frame now and then), every slot whose packed data changed is logged with a box holding where it was
+// and where it is, and a frame that changed nothing logs nothing.
+void GpuSceneChangeLog() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    std::vector<entt::entity> all;
+    for (int i = 0; i < 64; ++i)
+        all.push_back(w.CreateModelEntity(model, glm::vec3((float)(i % 8) * 3.0f, 0.0f, (float)(i / 8) * 3.0f), glm::vec3(0), glm::vec3(1), "L"));
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    GpuScene::ChangeLog log;
+    scene.TakeChangeLog(w, log);
+    CHECK(log.All); // the first take: nothing before it is known
+    scene.Sync(w, false);
+    scene.TakeChangeLog(w, log);
+    CHECK(log.All); // a full sync
+    scene.Sync(w, false);
+    scene.TakeChangeLog(w, log);
+    CHECK(!log.All && log.Changes.empty()); // nothing changed
+    std::mt19937 rng(4242);
+    std::uniform_int_distribution<int> pick(0, (int)all.size() - 1), what(0, 9);
+    std::uniform_real_distribution<float> step(-2.0f, 2.0f);
+    int checked = 0, quietFrames = 0;
+    for (int frame = 0; frame < 300; ++frame) {
+        const std::vector<glm::mat4> xfBefore = scene.XformMirror();
+        const std::vector<glm::vec4> boundsBefore = scene.BoundsMirror();
+        const int edits = what(rng) < 3 ? 0 : 1 + what(rng) % 3; // some frames change nothing
+        for (int k = 0; k < edits; ++k) {
+            const entt::entity e = all[(size_t)pick(rng)];
+            if (!w.Registry.valid(e)) continue;
+            const int kind = what(rng);
+            if (kind < 6) w.Registry.get<TransformComponent>(e).Position += glm::vec3(step(rng), 0.0f, step(rng));
+            else if (kind < 9) {
+                auto& r = w.Registry.get<RenderableComponent>(e);
+                r.CastShadows = (RenderableComponent::ShadowCasting)(((int)r.CastShadows + 1) % 4);
+            } else if (frame % 50 == 7) w.Registry.destroy(e); // now and then one leaves
+        }
+        w.RebuildWorldTransformCache();
+        scene.Sync(w, false);
+        scene.TakeChangeLog(w, log);
+        if (log.All) continue; // a rebuild: anything may have changed, nothing to check slot by slot
+        if (edits == 0) {
+            CHECK(log.Changes.empty());
+            ++quietFrames;
+        }
+        const std::vector<glm::mat4>& xf = scene.XformMirror();
+        const std::vector<glm::vec4>& bounds = scene.BoundsMirror();
+        const std::uint32_t had = (std::uint32_t)(boundsBefore.size() / 2);
+        for (std::uint32_t i = 0; i < scene.Count(); ++i) {
+            const bool changed = i >= had || std::memcmp(&xf[(size_t)i * 2], &xfBefore[(size_t)i * 2], 2 * sizeof(glm::mat4)) != 0 ||
+                                 std::memcmp(&bounds[(size_t)i * 2], &boundsBefore[(size_t)i * 2], 2 * sizeof(glm::vec4)) != 0;
+            const auto it = std::find_if(log.Changes.begin(), log.Changes.end(), [&](const GpuScene::SlotChange& c) { return c.Slot == i; });
+            if (!changed) continue;
+            ++checked;
+            CHECK(it != log.Changes.end());
+            if (it == log.Changes.end()) return;
+            const glm::vec3 lo(bounds[(size_t)i * 2]), hi(bounds[(size_t)i * 2 + 1]);
+            if (it->Bounded) { // holds where it is now and where it was
+                CHECK(glm::all(glm::lessThanEqual(it->Min, lo)) && glm::all(glm::greaterThanEqual(it->Max, hi)));
+                if (i < had) {
+                    const glm::vec3 oldLo(boundsBefore[(size_t)i * 2]), oldHi(boundsBefore[(size_t)i * 2 + 1]);
+                    CHECK(glm::all(glm::lessThanEqual(it->Min, oldLo)) && glm::all(glm::greaterThanEqual(it->Max, oldHi)));
+                }
+            }
+        }
+    }
+    std::printf("[GpuSceneChangeLog] %d changed slots checked, %d quiet frames\n", checked, quietFrames);
+    CHECK(checked > 50 && quietFrames > 10);
+    // Another world synced in between: the next take says All.
+    World other;
+    other.CreateModelEntity(model, glm::vec3(0.0f), glm::vec3(0), glm::vec3(1), "O");
+    other.RebuildWorldTransformCache();
+    scene.Sync(other, false);
+    scene.Sync(w, false);
+    scene.TakeChangeLog(w, log);
+    CHECK(log.All);
+    ForgetGatherCandidates();
+}
+
+// G4-c: which quiet local lights a frame's changes wake. One slot moving inside one spot's reach wakes that spot only;
+// moving out of a point's range (it was there) wakes the point; a light whose inputs moved, a dark light, a reported
+// render-settings write and an All log wake the rest.
+void LocalShadowQuietWake() {
+    LocalShadowQuiet q;
+    bool spotLive[2] = {true, true};
+    bool pointLive[1] = {true};
+    std::uint64_t spotKey[2] = {11, 12}, pointKey[1] = {21};
+    // Spot 0 looks down -Z from (0, 2, 0), spot 1 down -Z from (100, 2, 0); the point sits at (0, 2, 50), range 5.
+    const glm::mat4 proj = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 20.0f);
+    Frustum spotReach[2] = {Frustum::FromViewProj(proj * glm::lookAt(glm::vec3(0, 2, 0), glm::vec3(0, 2, -1), glm::vec3(0, 1, 0))),
+                            Frustum::FromViewProj(proj * glm::lookAt(glm::vec3(100, 2, 0), glm::vec3(100, 2, -1), glm::vec3(0, 1, 0)))};
+    AABB pointRange[1] = {AABB{glm::vec3(-5, -3, 45), glm::vec3(5, 7, 55)}};
+    LocalShadowQuiet::Lights lights;
+    lights.SpotCount = 2;
+    lights.SpotLive = spotLive;
+    lights.SpotKey = spotKey;
+    lights.SpotReach = spotReach;
+    lights.PointCount = 1;
+    lights.PointLive = pointLive;
+    lights.PointKey = pointKey;
+    lights.PointRange = pointRange;
+    GpuScene::ChangeLog none;
+    none.All = false;
+    auto quietAll = [&] {
+        q.Spots[0].Quiet = q.Spots[1].Quiet = q.Points[0].Quiet = true;
+    };
+    q.Wake(none, 7, lights); // the first wake takes the keys and the epoch: everything awake
+    CHECK(!q.Spots[0].Quiet && !q.Spots[1].Quiet && !q.Points[0].Quiet);
+    quietAll();
+    q.Wake(none, 7, lights);
+    CHECK(q.Spots[0].Quiet && q.Spots[1].Quiet && q.Points[0].Quiet); // nothing changed
+    GpuScene::ChangeLog moved;
+    moved.All = false;
+    moved.Changes.push_back({3, glm::vec3(-0.5f, 1.5f, -6.0f), glm::vec3(0.5f, 2.5f, -5.0f), true}); // in front of spot 0
+    q.Wake(moved, 7, lights);
+    CHECK(!q.Spots[0].Quiet && q.Spots[1].Quiet && q.Points[0].Quiet);
+    quietAll();
+    moved.Changes[0] = {4, glm::vec3(-1.0f, 0.0f, 30.0f), glm::vec3(1.0f, 1.0f, 46.0f), true}; // left the point's range
+    q.Wake(moved, 7, lights);
+    CHECK(q.Spots[0].Quiet && q.Spots[1].Quiet && !q.Points[0].Quiet);
+    quietAll();
+    moved.Changes[0] = {5, glm::vec3(0.0f), glm::vec3(0.0f), false}; // unbounded: reaches every light
+    q.Wake(moved, 7, lights);
+    CHECK(!q.Spots[0].Quiet && !q.Spots[1].Quiet && !q.Points[0].Quiet);
+    quietAll();
+    spotKey[1] = 13; // spot 1's light moved
+    q.Wake(none, 7, lights);
+    CHECK(q.Spots[0].Quiet && !q.Spots[1].Quiet && q.Points[0].Quiet);
+    quietAll();
+    spotLive[0] = false; // spot 0 went dark: awake when it comes back
+    q.Wake(none, 7, lights);
+    spotLive[0] = true;
+    q.Wake(none, 7, lights);
+    CHECK(!q.Spots[0].Quiet && q.Spots[1].Quiet && q.Points[0].Quiet);
+    quietAll();
+    q.Wake(none, 8, lights); // a reported render-settings write (a material edit)
+    CHECK(!q.Spots[0].Quiet && !q.Spots[1].Quiet && !q.Points[0].Quiet);
+    quietAll();
+    GpuScene::ChangeLog everything; // All: a rebuild, another world
+    q.Wake(everything, 8, lights);
+    CHECK(!q.Spots[0].Quiet && !q.Spots[1].Quiet && !q.Points[0].Quiet);
+}
+
+// G4-c: a LOD level change wakes the lights around the renderers it swapped (no slot moves), and a flip that is undone
+// before the next look (another view's levels in between) wakes nothing.
+void LocalShadowLodToggles() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity group = w.CreateEmptyEntity(zero, zero, one, "Group");
+    w.Registry.emplace<LODGroupComponent>(group).Size = 2.0f;
+    entt::entity lv[2];
+    for (int i = 0; i < 2; ++i) {
+        lv[i] = w.CreateModelEntity(model, zero, zero, one, "LOD" + std::to_string(i));
+        CHECK(w.SetParent(lv[i], group));
+    }
+    w.RebuildWorldTransformCache();
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    auto lod = [&](float dist) { w.ApplyLod(glm::vec3(0.0f, 0.0f, dist), proj); }; // 1: LOD 0 shows, 2: LOD 1
+    LodToggleWake wake;
+    GpuScene::ChangeLog log;
+    auto look = [&] {
+        log.All = false;
+        log.Changes.clear();
+        wake.Append(w, log);
+    };
+    lod(1.0f);
+    CHECK(w.IsLodCulled(lv[1]) && !w.IsLodCulled(lv[0]));
+    look(); // the first look: everything
+    CHECK(log.All);
+    look(); // nothing flipped
+    CHECK(!log.All && log.Changes.empty());
+    lod(2.0f); // LOD 0 out, LOD 1 in: both renderers' boxes
+    look();
+    CHECK(!log.All && log.Changes.size() == 2);
+    for (const GpuScene::SlotChange& c : log.Changes)
+        CHECK(c.Bounded && glm::all(glm::lessThanEqual(c.Min, glm::vec3(0.01f))) && glm::all(glm::greaterThanEqual(c.Max, glm::vec3(-0.01f))));
+    lod(1.0f); // another view's levels, then this one's again before the next look
+    lod(2.0f);
+    look();
+    CHECK(!log.All && log.Changes.empty());
+    w.Registry.get<RenderableComponent>(lv[0]).CastShadows = RenderableComponent::ShadowCasting::Off;
+    lod(1.0f); // LOD 0 casts nothing: only LOD 1 going out counts
+    look();
+    CHECK(log.Changes.size() == 1);
+    w.ClearLod(); // its untags count too
+    look();
+    CHECK(!log.All && log.Changes.size() == 1);
+    lod(1.0f); // LOD 1 out again, then destroyed before the look: nothing to wake (its slot going is GpuScene's log)
+    w.Registry.destroy(lv[1]);
+    look();
+    CHECK(!log.All && log.Changes.empty());
+    World other; // another world: everything
+    wake.Append(other, log);
+    CHECK(log.All);
+}
+
 // GpuScene's upload plan and packing, without GL.
 void GpuSceneRuns() {
     using Run = GpuScene::Run;
@@ -2990,6 +3207,9 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GpuScene: the mirror matches the candidate list slot by slot, frame after frame", GpuSceneMirror});
     tests.push_back({"GpuScene: in-place render settings reach the slots (reported: next sync; unreported: within a sweep lap)", GpuSceneLiveEpoch});
     tests.push_back({"GpuScene: SyncOnce's key follows every Sync (another world in between syncs again)", GpuSceneSyncOnceKey});
+    tests.push_back({"GpuScene: the change log lists every changed slot with where it was and is (300 random frames)", GpuSceneChangeLog});
+    tests.push_back({"Local shadows (G4-c): a frame's changes wake the quiet lights they reach, and only those", LocalShadowQuietWake});
+    tests.push_back({"Local shadows (G4-c): a LOD level change wakes the lights around the renderers it swapped", LocalShadowLodToggles});
     tests.push_back({"GpuScene: upload runs (merge, cap, whole list) and layer packing", GpuSceneRuns});
     tests.push_back({"GatherPatch", GatherPatch});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
