@@ -134,7 +134,8 @@ void BloodRenderer::EnsureProgram() {
     m_Program = std::make_unique<Shader>(ShaderLibrary::ReadFile("BloodVat.vert.glsl"),
                                          // _NO_SLOT_STATE: BloodVat.vert has no vSlot (the multi-draw's slot state)
                                          WithDefines(ShaderLibrary::ReadFile("ModelFragment.glsl"),
-                                                     "#define _SUBSURFACE 1\n#define _NO_SLOT_STATE 1\n"),
+                                                     // (#ifndef: a GPU short of SSBO blocks already defines it)
+                                                     "#define _SUBSURFACE 1\n#ifndef _NO_SLOT_STATE\n#define _NO_SLOT_STATE 1\n#endif\n"),
                                          "BloodVat");
 }
 

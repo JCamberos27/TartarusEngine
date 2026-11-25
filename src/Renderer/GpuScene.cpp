@@ -7,6 +7,8 @@
 #include "Components.h"
 #include "Model.h"
 #include "Core/Env.h"
+#include "Core/Log.h"
+#include "ShaderLibrary.h"
 #include <algorithm>
 #include <cstring>
 #include <glm/gtc/type_ptr.hpp>
@@ -36,6 +38,39 @@ std::uint64_t PoseOf(const SceneSlot& s) {
 bool GpuScene::Enabled() {
     static const bool off = Env::Flag(Env::Var::NoGpuScene);
     return !off;
+}
+
+namespace {
+int s_MaxFragmentBlocks = 0;
+bool s_SlotStateSupported = true;
+} // namespace
+
+void GpuScene::InitSlotStateSupport() {
+    GLint limit = 0;
+    glGetIntegerv(GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS, &limit);
+    s_MaxFragmentBlocks = std::min((int)limit, Env::Int(Env::Var::FragmentSsboLimit, (int)limit)); // a lower test limit only
+    s_SlotStateSupported = SlotStateFits(s_MaxFragmentBlocks);
+    if (!s_SlotStateSupported) {
+        ShaderLibrary::SetGlobalDefines(ShaderLibrary::GlobalDefines() + "#define _NO_SLOT_STATE 1\n");
+        Log::Warn("GpuScene: GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS = " + std::to_string(s_MaxFragmentBlocks) + " < " +
+                  std::to_string(kSlotStateFragmentBlocks) + ": slot state off (probes + GI mask bound per batch)");
+    }
+}
+
+bool GpuScene::SlotStateSupported() { return s_SlotStateSupported; }
+int GpuScene::MaxFragmentBlocks() { return s_MaxFragmentBlocks; }
+
+int GpuScene::FragmentBlocks(unsigned program) {
+    GLint count = 0;
+    glGetProgramInterfaceiv(program, GL_SHADER_STORAGE_BLOCK, GL_ACTIVE_RESOURCES, &count);
+    int fragment = 0;
+    const GLenum prop = GL_REFERENCED_BY_FRAGMENT_SHADER;
+    for (GLint i = 0; i < count; ++i) {
+        GLint used = 0;
+        glGetProgramResourceiv(program, GL_SHADER_STORAGE_BLOCK, (GLuint)i, 1, &prop, 1, nullptr, &used);
+        fragment += used ? 1 : 0;
+    }
+    return fragment;
 }
 
 GpuScene& GpuScene::Get() {

@@ -69,6 +69,19 @@ public:
         glm::vec4 Probe[4] = {glm::vec4(0.0f), glm::vec4(0.0f), glm::vec4(0.0f), glm::vec4(0.0f)};
     };
     static constexpr unsigned kObjectStateBinding = 38;
+    // The model fragment program's full variant (decals + local lights) has 9 SSBO blocks with SlotStateBlock, and
+    // GL 4.3 only promises 8 per fragment stage (GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS). On a GPU below 9 the run
+    // compiles every program without the block (_NO_SLOT_STATE, a ShaderLibrary global define) and the multi-draw keeps
+    // binding probes and GI masks per batch, as TARTARUS_NO_SLOT_STATE does.
+    static constexpr int kSlotStateFragmentBlocks = 9;
+    static bool SlotStateFits(int maxFragmentBlocks) { return maxFragmentBlocks >= kSlotStateFragmentBlocks; }
+    // GL, once at startup after ShaderLibrary::Init and before the model programs compile: reads the limit and, below
+    // kSlotStateFragmentBlocks, sets the define. Never called (unit tests): supported.
+    static void InitSlotStateSupport();
+    static bool SlotStateSupported();
+    static int MaxFragmentBlocks(); // the queried limit (0 before InitSlotStateSupport)
+    // GL: how many SSBO blocks `program`'s fragment stage references (the startup log and its check).
+    static int FragmentBlocks(unsigned program);
     static ObjectState MakeObjectState(std::uint64_t giMask, const ReflectionProbeArray::Selection& probes);
     // The mirror's entry for `slot` (< Count()) becomes `s`; a change goes up with the next UploadObjectState.
     void SetObjectState(std::uint32_t slot, const ObjectState& s);

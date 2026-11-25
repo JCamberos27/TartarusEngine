@@ -19,6 +19,10 @@ static std::filesystem::path s_Dir;
 // #158 - source-string numbers for #line. Stable for the process, so the same file always maps
 // to the same number whichever shader includes it.
 static std::vector<std::string> s_FileNames{"<source>"};
+static std::string s_GlobalDefines;
+
+void SetGlobalDefines(const std::string& defines) { s_GlobalDefines = defines; }
+const std::string& GlobalDefines() { return s_GlobalDefines; }
 
 static int FileIndex(const std::string& name) {
     for (size_t i = 1; i < s_FileNames.size(); ++i)
@@ -83,7 +87,7 @@ static std::string ResolveIncludes(const std::string& src, const std::filesystem
         }
         if (depth == 0 && t.rfind("#version", 0) == 0) {
             // #line may not precede #version, so the top-level file's numbering starts after it.
-            out << line << '\n' << "#line " << (lineNo + 1) << ' ' << fileIdx << '\n';
+            out << line << '\n' << s_GlobalDefines << "#line " << (lineNo + 1) << ' ' << fileIdx << '\n';
             continue;
         }
         if (t.rfind("#include", 0) == 0) {

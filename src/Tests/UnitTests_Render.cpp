@@ -13,6 +13,7 @@
 #include "../Renderer/GpuCull.h"
 #include "../Physics/Frustum.h"
 #include "../Renderer/GpuScene.h"
+#include "../Renderer/ShaderLibrary.h"
 #include "../Renderer/SceneViewPass.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/TextureCache.h"
@@ -592,6 +593,28 @@ void GpuSceneObjectState() {
     scene.SetObjectState(0, none); // the mirror starts zeroed: nothing changed
     CHECK(scene.PendingObjectStates() == 1);
     ForgetGatherCandidates();
+}
+
+// G-MB: the slot state needs a 9th fragment SSBO block, past GL 4.3's minimum of 8; below it the run compiles without
+// it (a global define every top-level source carries right after #version, ahead of the first #line).
+void GpuSceneSlotStateBlockBudget() {
+    CHECK(GpuScene::kSlotStateFragmentBlocks == 9);
+    CHECK(!GpuScene::SlotStateFits(8) && GpuScene::SlotStateFits(9) && GpuScene::SlotStateFits(16));
+    CHECK(GpuScene::SlotStateSupported()); // InitSlotStateSupport never ran: on
+
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / UnitTestSupport::TempName("tartarus_defines", ".glsl");
+    { std::ofstream(path) << "// lead comment\n#version 430 core\nvoid main() {}\n"; }
+    const std::string saved = ShaderLibrary::GlobalDefines();
+    ShaderLibrary::SetGlobalDefines("#define _NO_SLOT_STATE 1\n");
+    const std::string withDefine = ShaderLibrary::ReadFileAt(path.string());
+    ShaderLibrary::SetGlobalDefines(saved);
+    const std::string without = ShaderLibrary::ReadFileAt(path.string());
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+    const std::size_t version = withDefine.find("#version 430 core\n"), define = withDefine.find("#define _NO_SLOT_STATE 1\n");
+    CHECK(version != std::string::npos && define == version + 18);
+    CHECK(withDefine.find("#line", define) != std::string::npos); // the file's numbering still starts after it
+    CHECK(without.find("_NO_SLOT_STATE") == std::string::npos);
 }
 
 // G4-c: the GPU scene's change log for the cached local shadows. Over random frames (moves, Cast Shadows writes,
@@ -3310,6 +3333,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GpuScene: in-place render settings reach the slots (reported: next sync; unreported: within a sweep lap)", GpuSceneLiveEpoch});
     tests.push_back({"GpuScene: SyncOnce's key follows every Sync (another world in between syncs again)", GpuSceneSyncOnceKey});
     tests.push_back({"GpuScene: slot object state = what the per-draw hook binds (probes, blends, GI mask)", GpuSceneObjectState});
+    tests.push_back({"GpuScene: slot state needs 9 fragment SSBO blocks; below that a global _NO_SLOT_STATE define", GpuSceneSlotStateBlockBudget});
     tests.push_back({"GpuScene: the change log lists every changed slot with where it was and is (300 random frames)", GpuSceneChangeLog});
     tests.push_back({"Local shadows (G4-c): a frame's changes wake the quiet lights they reach, and only those", LocalShadowQuietWake});
     tests.push_back({"Local shadows (G4-c): a LOD level change wakes the lights around the renderers it swapped", LocalShadowLodToggles});

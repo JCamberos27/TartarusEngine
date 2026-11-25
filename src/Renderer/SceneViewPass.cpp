@@ -779,7 +779,8 @@ void SceneRenderer::ViewPass::BuildBatches() {
     // (GpuScene::ObjectState) instead of binding them per batch, so those leave the batch key. Each copy's probes are
     // resolved here, right after its SelectionKey (the same centre: ReflectionProbeArray's memo answers).
     static const bool slotStateOff = Env::Flag(Env::Var::NoSlotState);
-    const bool slotStateWanted = !slotStateOff && m_Instancing && MultiDrawEnabled() && GpuScene::Enabled();
+    const bool slotStateWanted = !slotStateOff && GpuScene::SlotStateSupported() && m_Instancing && MultiDrawEnabled() &&
+                                 GpuScene::Enabled();
     m_S.ProbeSel.resize(slotStateWanted ? m_S.ProbeKeys.size() : 0);
     for (std::size_t i = 0; i < m_S.ProbeKeys.size(); ++i) {
         m_S.ProbeKeys[i] = m_In.probeArray->SelectionKey(drawList[i].Centre);
