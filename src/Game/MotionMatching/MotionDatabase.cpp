@@ -15,15 +15,18 @@ const char* MotionFeature::GroupName(int g) {
     }
 }
 
-bool MotionDatabase::Load(const std::string& base, std::string* error) {
+bool MotionDatabase::Load(const std::string& base, std::string* error, const std::function<bool()>& between) {
     const auto t0 = std::chrono::steady_clock::now();
+    const auto go = [&] { return !between || between(); };
     MotionClipStream s;
     MotionFeatureSet f;
-    if (!s.Load(base + ".mmanim", error) || !f.Load(base + ".mmdb", error)) {
+    if (!s.Load(base + ".mmanim", error) || !go() || !f.Load(base + ".mmdb", error) || !go()) {
         m_Frames = 0;
         return false;
     }
+    const double read = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     const bool ok = Adopt(std::move(s), std::move(f), error);
+    m_ReadSeconds = read;
     m_LoadSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     return ok;
 }

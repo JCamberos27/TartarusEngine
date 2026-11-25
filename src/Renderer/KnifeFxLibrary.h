@@ -33,6 +33,7 @@ public:
     static std::shared_ptr<FileData> ReadFiles(const std::atomic<bool>* cancel = nullptr);
     static std::size_t Bytes(const FileData& files); // the texture data it holds
     bool Loaded() const { return m_Loaded; }
+    bool LoadTried() const { return m_LoadTried; } // Load ran (it may have found no files)
     int Find(const std::string& name) const; // -1 if unknown
     const Entry* At(int id) const { return id >= 0 && id < (int)m_Entries.size() ? &m_Entries[id] : nullptr; }
     // The library's arrays (0 when that library is missing).

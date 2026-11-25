@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <limits>
 #include <random>
+#include <thread>
 
 namespace {
 
@@ -973,6 +974,119 @@ void TestPredictAlong() {
     CHECK(glm::length(out[2].Position - there.Position) < 0.02f);
 }
 
+// The first Play's database read ahead (Prefetch): Get takes the prefetched load (never a second read), loads itself while
+// the prefetch is still queued (the job then does nothing), waits on a running one, and reads afresh after an Invalidate
+// or a rewrite since the prefetch was queued; a cancelled or dropped prefetch never runs.
+void TestSharedDatabasePrefetch() {
+    std::error_code ec;
+    const std::filesystem::path dir = UnitTestSupport::TempDir("mm_prefetch");
+    std::filesystem::create_directories(dir, ec);
+    const std::string base = (dir / "Prefetch").string();
+    std::vector<TakeSpec> takes = StandardTakes();
+    const auto save = [&](const std::vector<TakeSpec>& t) {
+        SynthDb s = Build(t);
+        std::string err;
+        return s.Stream.Save(base + ".mmanim", &err) && s.Feat.Save(base + ".mmdb", &err);
+    };
+    CHECK(save(takes));
+    std::vector<SharedMotionDatabase::PrefetchJob> queued;
+    int waits = 0;
+    const std::atomic<bool> noStop{false};
+
+    SharedMotionDatabase::ReleaseKept();
+    SharedMotionDatabase::SetPrefetchRunner(nullptr);
+    SharedMotionDatabase::Prefetch(base);
+    CHECK(!SharedMotionDatabase::PrefetchPending()); // no runner: nothing
+    SharedMotionDatabase::SetPrefetchRunner([&](SharedMotionDatabase::PrefetchJob job) { queued.push_back(std::move(job)); },
+                                            [&](bool waiting) { waits += waiting ? 1 : 0; });
+
+    // Run, then taken: the files rewritten behind it (one take fewer, the old write times put back) still give the
+    // prefetched frame count - Get never read them.
+    SharedMotionDatabase::Prefetch(base);
+    SharedMotionDatabase::Prefetch(base); // pending: not queued twice
+    CHECK(SharedMotionDatabase::PrefetchPending() && queued.size() == 1);
+    if (queued.size() != 1) return;
+    queued[0](noStop);
+    queued.clear();
+    const auto stampA = std::filesystem::last_write_time(base + ".mmanim", ec), stampD = std::filesystem::last_write_time(base + ".mmdb", ec);
+    std::vector<TakeSpec> fewer = takes;
+    fewer.pop_back();
+    CHECK(save(fewer));
+    std::filesystem::last_write_time(base + ".mmanim", stampA, ec);
+    std::filesystem::last_write_time(base + ".mmdb", stampD, ec);
+    auto got = SharedMotionDatabase::Get(base);
+    CHECK(got != nullptr && !SharedMotionDatabase::PrefetchPending());
+    const std::uint32_t full = got ? got->Db.FrameCount() : 0;
+    CHECK(full == Build(takes).Stream.FrameCount());
+    CHECK(waits == 0);
+    // Kept and current: nothing to prefetch.
+    SharedMotionDatabase::Prefetch(base);
+    CHECK(!SharedMotionDatabase::PrefetchPending() && queued.empty());
+    got.reset();
+    CHECK(save(takes));
+    SharedMotionDatabase::ReleaseKept();
+
+    // Still queued at Get: Get loads; the job then does nothing (one load).
+    SharedMotionDatabase::Prefetch(base);
+    CHECK(queued.size() == 1);
+    got = SharedMotionDatabase::Get(base);
+    CHECK(got && got->Db.FrameCount() == full && !SharedMotionDatabase::PrefetchPending());
+    if (!queued.empty()) queued[0](noStop);
+    queued.clear();
+    CHECK(SharedMotionDatabase::Get(base) == got); // the job didn't replace it
+    got.reset();
+    SharedMotionDatabase::ReleaseKept();
+
+    // Cancelled while queued (the scene closed): nothing held, the job does nothing.
+    SharedMotionDatabase::Prefetch(base);
+    SharedMotionDatabase::CancelPrefetch();
+    CHECK(!SharedMotionDatabase::PrefetchPending());
+    if (!queued.empty()) queued[0](noStop);
+    queued.clear();
+
+    // Invalidate (a rebake) after the prefetch ran: dropped, Get reads the new files.
+    SharedMotionDatabase::Prefetch(base);
+    if (!queued.empty()) queued[0](noStop);
+    queued.clear();
+    CHECK(save(fewer));
+    std::filesystem::last_write_time(base + ".mmanim", stampA, ec);
+    std::filesystem::last_write_time(base + ".mmdb", stampD, ec);
+    SharedMotionDatabase::Invalidate(base);
+    CHECK(!SharedMotionDatabase::PrefetchPending());
+    got = SharedMotionDatabase::Get(base);
+    CHECK(got && got->Db.FrameCount() < full);
+    got.reset();
+    SharedMotionDatabase::ReleaseKept();
+
+    // Rewritten after it was queued (no Invalidate): stale, Get reads afresh.
+    CHECK(save(takes));
+    SharedMotionDatabase::Prefetch(base);
+    if (!queued.empty()) queued[0](noStop);
+    queued.clear();
+    CHECK(save(fewer));
+    std::filesystem::last_write_time(base + ".mmdb", std::filesystem::file_time_type::clock::now() + std::chrono::seconds(5), ec);
+    got = SharedMotionDatabase::Get(base);
+    CHECK(got && got->Db.FrameCount() < full);
+    got.reset();
+    SharedMotionDatabase::ReleaseKept();
+
+    // On a worker: Get waits for a running prefetch (or loads itself if it hasn't started) - one load, the full database.
+    CHECK(save(takes));
+    std::thread worker;
+    SharedMotionDatabase::SetPrefetchRunner([&](SharedMotionDatabase::PrefetchJob job) {
+        worker = std::thread([job = std::move(job), &noStop] { job(noStop); });
+    }, [&](bool waiting) { waits += waiting ? 1 : 0; });
+    SharedMotionDatabase::Prefetch(base);
+    got = SharedMotionDatabase::Get(base);
+    if (worker.joinable()) worker.join();
+    CHECK(got && got->Db.FrameCount() == full && !SharedMotionDatabase::PrefetchPending());
+    got.reset();
+
+    SharedMotionDatabase::SetPrefetchRunner(nullptr);
+    SharedMotionDatabase::ReleaseKept();
+    std::filesystem::remove_all(dir, ec);
+}
+
 // Live rebake (hot reload): a rewritten database stays cached until Invalidate; after it, Get reads the new files while a
 // holder of the old load keeps its copy, and Generation moves (FirstPersonBodyMotion::Stale).
 void TestSharedDatabaseInvalidate() {
@@ -1053,6 +1167,7 @@ void TestSharedDatabaseInvalidate() {
 
 void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: shared database invalidate (live rebake)", TestSharedDatabaseInvalidate});
+    tests.push_back({"Motion matching: shared database prefetch ahead of Play", TestSharedDatabasePrefetch});
     tests.push_back({"Motion matching: database build and boxes", TestDatabaseBuild});
     tests.push_back({"Motion matching: search matches brute force", TestSearchMatchesBruteForce});
     tests.push_back({"Motion matching: search filters and ties", TestSearchFiltersAndTies});
