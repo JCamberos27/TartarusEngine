@@ -1775,6 +1775,7 @@ bool AppSession::Frame() {
                         OutfitWaitGate::kCapSeconds, assets.AsyncInFlight(),
                         npcTest ? "" : " (the _playmax picture may show a half-loaded outfit)");
             if (npcTest) npcTest->Fail("the outfit change's loads finished within the hold cap (the picture would show a half-loaded outfit)");
+            else Log::Error("[SmokeTest] an outfit change's loads did not finish within the hold cap: the --smoke-shots picture may show a half-loaded outfit");
             break;
         }
     }
