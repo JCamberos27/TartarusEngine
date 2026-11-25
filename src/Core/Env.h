@@ -91,6 +91,7 @@
     /* Kill switches */                                                                                                 \
     X(NoHiz, "TARTARUS_NO_HIZ", Flag, "disable Hi-Z occlusion culling")                                               \
     X(NoMdi, "TARTARUS_NO_MDI", Flag, "disable multi-draw indirect")                                                  \
+    X(NoGpuScene, "TARTARUS_NO_GPU_SCENE", Flag, "disable the persistent GPU scene buffers")                          \
     X(NoMeshArena, "TARTARUS_NO_MESH_ARENA", Flag, "disable the static mesh arena")                                   \
     X(NoModelCache, "TARTARUS_NO_MODEL_CACHE", Flag, "import models from their files (skip Library/Models)")          \
     X(NoProgramCache, "TARTARUS_NO_PROGRAM_CACHE", Flag, "compile every shader program (skip Library/ShaderCache)")    \
