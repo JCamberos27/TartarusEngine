@@ -6,6 +6,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -35,6 +36,26 @@ std::string NormalizedSourcePath(const std::string& sourcePath) {
     std::error_code ec;
     std::filesystem::path abs = std::filesystem::absolute(sourcePath, ec);
     return ec ? sourcePath : abs.lexically_normal().string();
+}
+
+// The part of an absolute path after its last "project" folder ("assets/x/y.png"), or "" when it has none.
+std::string ProjectTail(const std::string& absPath) {
+    std::string p = absPath;
+    std::replace(p.begin(), p.end(), '\\', '/');
+    const size_t at = p.rfind("/project/");
+    return at == std::string::npos ? std::string() : p.substr(at + 9);
+}
+
+// An entry's stored source path names this source: the same absolute path, or the same file under another copy of
+// the project (a built game's project folder, a second checkout). The entry is keyed by the asset's GUID and stamped
+// with the source's size and write time already; the path only guards against a key collision.
+bool SameSource(const std::string& stored, const std::string& current) {
+    if (stored == current) return true;
+    const std::string a = ProjectTail(stored), b = ProjectTail(current);
+    if (a.empty() || a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i)
+        if (std::tolower((unsigned char)a[i]) != std::tolower((unsigned char)b[i])) return false;
+    return true;
 }
 
 constexpr char kMagic[4] = {'T', 'T', 'E', 'X'};
@@ -155,7 +176,7 @@ bool Load(const std::string& sourcePath, const TextureImportSettings& settings, 
     if (!Read(f, pathLen) || pathLen > 4096) return false;
     std::string storedPath(pathLen, '\0');
     if (pathLen && !f.read(storedPath.data(), pathLen)) return false;
-    if (storedPath != NormalizedSourcePath(sourcePath)) return false;
+    if (!SameSource(storedPath, NormalizedSourcePath(sourcePath))) return false;
 
     int32_t sw = 0, sh = 0, w = 0, h = 0, ch = 0;
     if (!Read(f, sw) || !Read(f, sh) || !Read(f, w) || !Read(f, h) || !Read(f, ch)) return false;

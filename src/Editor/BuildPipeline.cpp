@@ -1,4 +1,5 @@
 #include "BuildPipeline.h"
+#include "AssetDatabase.h"
 #include "Core/Paths.h"
 #include "Log.h"
 #include "PlayerConfig.h"
@@ -232,6 +233,28 @@ Report BuildUnguarded(const ProjectSettings::BuildSettings& s, Progress* progres
                 return name.size() > 12 && name.compare(name.size() - 12, 12, ".backup.json") == 0;
             }))
             return false;
+        // Cooked data: the editor's import caches for the shipped assets (Library is otherwise editor-only), so the game's
+        // first scene open reads them instead of importing every model and decoding every texture again (Forest: about
+        // 6 min -> 25 s). Both caches stay valid in another folder: a model entry is keyed by its source's contents, a
+        // texture entry by its asset's GUID (name "<guid>_<settings>.ttex"; only GUIDs the project still has go). A source
+        // with no entry yet is imported by the game on first use, as before.
+        for (const char* sub : {"Models", "Textures"}) {
+            const fs::path dir = projectRoot / "Library" / sub;
+            std::error_code dec;
+            if (!fs::is_directory(dir, dec)) continue;
+            for (auto it = fs::directory_iterator(dir, dec); !dec && it != fs::directory_iterator(); it.increment(dec)) {
+                std::error_code fec;
+                if (!it->is_regular_file(fec)) continue;
+                const std::string name = it->path().filename().string();
+                const std::string ext = it->path().extension().string();
+                if (ext != ".tmdl" && ext != ".ttex") continue; // a ".tmp" still being written
+                if (ext == ".ttex") {
+                    const AssetGuid guid = AssetGuid::FromString(name.substr(0, 16));
+                    if (!guid.IsValid() || AssetDatabase::PathForGuid(guid).empty()) continue;
+                }
+                if (!copy.File(it->path(), out / "project" / "Library" / sub / name, "Cooked data")) return false;
+            }
+        }
         for (const std::string& sc : s.Scenes) {
             if (!copy.File(projectRoot / sc, out / "project" / sc, "Scenes")) return false;
             const fs::path meta = projectRoot / (sc + ".meta");

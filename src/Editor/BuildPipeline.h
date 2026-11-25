@@ -13,11 +13,13 @@ namespace ProjectSettings { struct BuildSettings; }
 //   <out>/<Product>.exe     the engine exe; player.json beside it makes it start as the game
 //   <out>/*.dll             runtime + game module (PhysX, TartarusGame, ...)
 //   <out>/assets/           engine assets (shaders, fonts, branding)
-//   <out>/project/          the project's content, minus editor-only folders (Library cache,
-//                           screenshots, layouts) and with only the scenes that are in the build
+//   <out>/project/          the project's content, minus editor-only folders (screenshots, layouts)
+//                           and with only the scenes that are in the build
+//   <out>/project/Library/  the cooked models and textures (Library/Models, Library/Textures) only
 //   <out>/player.json       product name, scene list, resolution, fullscreen, vsync
 //
-// Not yet: a separate editor-free player exe, dependency-walked asset cooking, archives.
+// Not yet: a separate editor-free player exe, dependency-walked asset lists (every project asset
+// ships, cooked or not), archives.
 namespace BuildPipeline {
 
 struct Report {
