@@ -19,6 +19,7 @@
     X(UnlockedFps, "TARTARUS_UNLOCKED_FPS", Flag, "VSync off and no FPS cap, whatever the prefs say (test runs)")     \
     X(WeaponLab, "TARTARUS_WEAPON_LAB", Flag, "same as --weapon-lab (run-weapon-lab.cmd)")                            \
     X(SeeThrough, "TARTARUS_SEE_THROUGH", Flag, "force the see-through (transparent) editor window")                  \
+    X(OpenProfile, "TARTARUS_OPEN_PROFILE", Flag, "print each scene open's stage profile (--perf-bench always does)") \
     X(PerfWarmup, "TARTARUS_PERF_WARMUP", Int, "--perf-bench warm-up frames before each phase")                       \
     X(PerfCsv, "TARTARUS_PERF_CSV", Str, "--perf-bench: append each phase's hitch report to this CSV file")           \
     X(AssetCost, "TARTARUS_ASSET_COST", Str, "--perf-bench: append each phase's per-asset cost table to this CSV")    \

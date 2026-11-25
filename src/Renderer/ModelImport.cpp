@@ -2,6 +2,7 @@
 // bone weights, the node hierarchy and the animation clips.
 
 #include "Model.h"
+#include "Core/OpenProfile.h"
 #include "AnimRetarget.h"
 #include "MaterialAsset.h"
 #include "ShaderAsset.h"
@@ -86,6 +87,7 @@ glm::quat AiToGlm(const aiQuaternion& q) { return {q.w, q.x, q.y, q.z}; }
 } // namespace
 
 bool Model::ImportFromFile(const ModelImportSettings& settings) {
+    OPEN_SCOPE("model: import (cache or Assimp)");
     ImportScratch scratch;
     m_Import = &scratch;
     struct ClearScratch { Model* M; ~ClearScratch() { M->m_Import = nullptr; } } clearScratch{this};
@@ -99,7 +101,10 @@ bool Model::ImportFromFile(const ModelImportSettings& settings) {
     const ModelCache::Key cacheKey = ModelCache::MakeKey(m_Path, settings);
     if (cacheKey.Valid) {
         ModelCache::Cooked cooked;
-        if (ModelCache::Load(cacheKey, cooked)) {
+        bool cacheHit = false;
+        { OPEN_SCOPE("model: import: cache file read"); cacheHit = ModelCache::Load(cacheKey, cooked); }
+        if (cacheHit) {
+            OPEN_SCOPE("model: import: build from cache");
             const std::shared_ptr<SharedData> target = m_D;
             m_D = std::make_shared<SharedData>();
             m_D->Directory = target->Directory;

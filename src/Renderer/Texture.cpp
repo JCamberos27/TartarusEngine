@@ -1,4 +1,5 @@
 #include "Texture.h"
+#include "Core/OpenProfile.h"
 #include <mutex>
 #include <cstring>
 #include <unordered_map>
@@ -524,6 +525,7 @@ double MsSince(std::chrono::steady_clock::time_point start) {
 // The CPU half shared by DecodeFile and DecodeMemory. `memory` empty = read `path` from disk.
 TextureCpuData Decode(const std::string& path, std::vector<unsigned char> memory, int rawW, int rawH,
                       const TextureImportSettings& settings) {
+    OPEN_SCOPE("texture: decode (disk cache or file)");
     const auto start = std::chrono::steady_clock::now();
     TextureCpuData out;
     out.Path = path;
@@ -694,6 +696,7 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
 void Texture::Upload(const TextureCpuData& data, bool staged, std::size_t stagedOffset, bool stagedRgba, const uint64_t* contentHash) {
     InitGpuCaps();
     if (!data.Ok) return;
+    OPEN_SCOPE("texture: GPU upload");
     const auto uploadStart = std::chrono::steady_clock::now();
     const TextureImportSettings effective = Effective(data.Settings);
     m_Width = data.SourceWidth;

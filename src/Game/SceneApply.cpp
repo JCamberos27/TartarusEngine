@@ -1,4 +1,5 @@
 #include "SceneSerializerInternal.h"
+#include "Core/OpenProfile.h"
 
 namespace SceneDetail {
 
@@ -86,6 +87,9 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
         return false;
     }
     auto created = [&](entt::entity e) { if (outCreated) outCreated->push_back(e); };
+    // Scene-open profile stages: the file's own entities only (a nested prefab expansion counts under its prefab).
+    const bool top = g_ApplyDepth == 1;
+    auto stage = [top](const char* name) { return top ? name : nullptr; };
 
     // #195: 0 (the default when the key is absent) means a legacy pre-#195 file or an entity-subset
     // fragment (BuildSceneJson never writes the field for those) — both fall straight through to
@@ -270,6 +274,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     };
 
     if (root.contains("boxes")) {
+        OpenProfile::Scope boxesScope(stage("apply: boxes"));
         for (const auto& b : root["boxes"]) {
             // "alive" is a pre-ECS field: a shot-dead box used to be soft-deleted (kept in the
             // file, flagged inert) rather than removed, so an old save can still contain one —
@@ -300,11 +305,13 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     }
 
     if (root.contains("models")) {
+        OpenProfile::Scope modelsScope(stage("apply: models"));
         for (const auto& m : root["models"]) {
             std::string modelPath = ResolveAssetRef(m, "path", "pathGuid");
             if (modelPath.empty()) continue;
 
-            auto model = assets.InstantiateModel(modelPath);
+            std::shared_ptr<Model> model;
+            { OpenProfile::Scope s(stage("apply: models: instantiate model")); model = assets.InstantiateModel(modelPath); }
 
             std::string name = m.value("name", std::string("Model"));
             glm::vec3 position = JsonToVec3(m.value("position", json::array({0, 0, 0})));
@@ -314,13 +321,16 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             applyRotation(world.Registry.get<TransformComponent>(e), m);
             auto& rc = world.Registry.get<RenderableComponent>(e);
 
-            ReadMaterialSlots(assets, m, rc);
-            // A slot the scene leaves empty uses the model's material remap (its .mat per imported
-            // material, Unity's importer remap), as a newly placed copy does - so remap edits reach
-            // objects placed before them. Slots the scene sets are kept.
-            if (rc.ModelRef) assets.ApplyMaterialRemap(*rc.ModelRef, rc.Materials);
+            {
+                OpenProfile::Scope matScope(stage("apply: models: material slots + remap"));
+                ReadMaterialSlots(assets, m, rc);
+                // A slot the scene leaves empty uses the model's material remap (its .mat per imported
+                // material, Unity's importer remap), as a newly placed copy does - so remap edits reach
+                // objects placed before them. Slots the scene sets are kept.
+                if (rc.ModelRef) assets.ApplyMaterialRemap(*rc.ModelRef, rc.Materials);
+            }
             ReadRendererFlags(m, rc); // #163
-            ReadCommonComponents(m, world, assets, e); // handles the "Audio Source" block + the legacy "sound*" shim
+            { OpenProfile::Scope s(stage("apply: models: components")); ReadCommonComponents(m, world, assets, e); } // handles the "Audio Source" block + the legacy "sound*" shim
             applyOrder(e, m);
             created(e);
 
@@ -332,6 +342,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     }
 
     if (root.contains("empties")) {
+        OpenProfile::Scope emptiesScope(stage("apply: empties"));
         for (const auto& en : root["empties"]) {
             glm::vec3 position = JsonToVec3(en.value("position", json::array({0, 0, 0})));
             glm::vec3 scale = JsonToVec3(en.value("scale", json::array({1, 1, 1})), glm::vec3(1.0f));
@@ -353,6 +364,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     // the stub's transform-only overrides on the root. A missing source becomes a visible
     // broken placeholder rather than a silent hole.
     if (root.contains("prefabInstances") && root["prefabInstances"].is_array()) {
+        OpenProfile::Scope prefabsScope(stage("apply: prefab instances"));
         for (const auto& s : root["prefabInstances"]) {
             const std::string src = ResolveAssetRef(s, "source", "sourceGuid");
             glm::vec3 position = JsonToVec3(s.value("position", json::array({0, 0, 0})));
@@ -399,6 +411,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             // override can't land before its addComponent (matters for hand-edited files; the
             // diff already emits them in order).
             if (!missing && s.contains("overrides") && s["overrides"].is_array()) {
+                OpenProfile::Scope ovScope(stage("apply: prefab instances: overrides"));
                 auto entityFor = [&](const json& ov) -> entt::entity {
                     const int idx = ov.value("e", -1);
                     return (idx >= 0 && idx < (int)instCreated.size() && world.Registry.valid(instCreated[idx]))
@@ -438,6 +451,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
 
     if (clearFirst && maxLoadedOrder >= 0) world.EnsureNextOrderAtLeast(maxLoadedOrder + 1);
 
+    OpenProfile::Scope tailScope(stage("apply: parents, cycles, terrain"));
     for (const auto& [child, parentId] : pendingParents) {
         auto it = idToEntity.find(parentId);
         if (it != idToEntity.end()) world.AttachChildRaw(child, it->second);

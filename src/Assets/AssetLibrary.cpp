@@ -1,4 +1,5 @@
 #include "AssetLibrary.h"
+#include "Core/OpenProfile.h"
 
 #include <atomic>
 #include <fstream>
@@ -189,6 +190,7 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
     auto it = FindAnySpelling(m_ModelCache, m_ModelKeys, m_KeyEpoch, path);
     if (it != m_ModelCache.end()) return it->second;
 
+    OPEN_SCOPE("asset: new model");
     const auto start = std::chrono::steady_clock::now();
     PrepareModelImport(path);
     auto model = RegisterModel(path, std::make_shared<Model>(path, GetModelSettings(path)));
@@ -351,6 +353,7 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path, Text
     auto it = FindAnySpelling(m_TextureCache, m_TextureKeys, m_KeyEpoch, path); // #132 - see LoadModel
     if (it != m_TextureCache.end()) return it->second;
 
+    OPEN_SCOPE("asset: new texture");
     ResolveTextureSettings(path, use);
     AdoptDiskFolder(path);
 
@@ -473,6 +476,7 @@ std::shared_ptr<MaterialAsset> AssetLibrary::LoadMaterial(const std::string& pat
     auto it = FindAnySpelling(m_MaterialCache, m_MaterialKeys, m_KeyEpoch, path); // #132 - see LoadModel
     if (it != m_MaterialCache.end()) return it->second;
 
+    OPEN_SCOPE("asset: new material");
     auto ma = MaterialAsset::Load(path, this);
     if (!ma) return nullptr;
 

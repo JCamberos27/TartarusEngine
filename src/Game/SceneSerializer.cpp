@@ -1,4 +1,5 @@
 #include "SceneSerializerInternal.h"
+#include "Core/OpenProfile.h"
 #include "SceneFileJson.h"
 #include "SceneSnapshotJson.h"
 
@@ -88,11 +89,12 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
         if (!in.is_open()) return false; // (before anything touches the world: a missing file leaves it as it was)
     }
     OutfitSystem::CancelPending(world); // the registry is about to be replaced
-    struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
+    struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { OPEN_SCOPE("load: sync active in hierarchy"); W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
 
     json read;
     if (!parsed) {
         try {
+            OPEN_SCOPE("load: parse scene json");
             in >> read;
         } catch (const std::exception& e) {
             Log::Error("Scene: failed to parse '" + path + "': " + e.what());
@@ -130,17 +132,18 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
     g_MigrationLog.clear();
     // #83 — keep the current world so a malformed file can't leave a half-loaded one behind.
     std::string previous;
-    try { previous = SaveToString(world, assets); }
+    try { OPEN_SCOPE("load: snapshot the previous world"); previous = SaveToString(world, assets); }
     catch (...) { Log::Warn("Scene: couldn't snapshot the current world before loading '" + path + "'; a failed load can't restore it."); }
     bool ok = true;
     std::vector<std::shared_ptr<void>> libraryHold; // the file's own library entries: never released below
     try {
+        OPEN_SCOPE("load: asset library block");
         ApplyAssetLibraryJson(assets, root, false, &libraryHold, /*writeMeta=*/persistMigration); // before ApplySceneJson: library assets should exist first
     } catch (const std::exception& e) {
         Log::Error("Scene: asset library data in '" + path + "' is malformed: " + e.what());
         ok = false;
     }
-    if (ok) ok = ApplySceneJson(world, assets, root);
+    if (ok) { OPEN_SCOPE("load: apply scene"); ok = ApplySceneJson(world, assets, root); }
     if (!ok) {
         Log::Error("Scene: '" + path + "' could not be loaded; the previous scene was kept.");
         if (!previous.empty() && !LoadFromString(world, assets, previous))
@@ -149,6 +152,7 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
     }
 
     {
+        OPEN_SCOPE("load: release unreferenced assets");
         std::set<std::string> keepModels;
         for (auto [e, rc] : world.Registry.view<RenderableComponent>().each())
             if (rc.ModelRef) keepModels.insert(rc.ModelRef->Path());
@@ -506,7 +510,8 @@ bool SceneSerializer::SavePrefab(const World& world, entt::entity root, const st
 
 entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& assets,
     const std::string& path, std::vector<entt::entity>* outAll) {
-    struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
+    OPEN_SCOPE("prefab: instantiate (any depth)");
+    struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { OPEN_SCOPE("prefab: sync active in hierarchy (whole world)"); W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
     std::ifstream in(std::filesystem::u8path(path));
     if (!in.is_open()) {
         Log::Error("Prefab: '" + path + "' could not be opened.");
@@ -515,6 +520,7 @@ entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& asse
     // Parsed once: built from here, then kept as the content this instance was built from.
     json parsed;
     try {
+        OPEN_SCOPE("prefab: read + parse .prefab");
         in >> parsed;
     } catch (const std::exception& e) {
         Log::Error("Prefab: '" + path + "' could not be parsed: " + e.what());

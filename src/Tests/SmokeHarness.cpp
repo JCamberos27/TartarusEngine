@@ -1,4 +1,5 @@
 #include "Tests/SmokeHarness.h"
+#include "Core/OpenProfile.h"
 
 #include "App/LaunchOptions.h"
 #include "App/PlaySession.h"
@@ -284,9 +285,21 @@ void SmokeHarness::LoadScene() {
     const double openStart = glfwGetTime();
     const unsigned long long loadsBefore = FrameLoads::Count();
     const ModelCache::Stats modelsBefore = ModelCache::GetStats();
-    m_SceneLoadOk = SceneSerializer::Load(world, m_Ctx.assets, path, /*persistMigration=*/false);
+    // The open's stages (OpenProfile.h), printed for --perf-bench / --perf-sample runs and TARTARUS_OPEN_PROFILE=1; --perf-sample also samples
+    // the main thread through the open, for the time below the named stages.
+    static const bool s_OpenProfileEnv = Env::Flag(Env::Var::OpenProfile);
+    const bool openProfile = m_Opt.perfBenchMode || m_Opt.perfSample || s_OpenProfileEnv;
+    if (openProfile) OpenProfile::Begin();
+    if (m_Opt.perfSample) SamplingProfiler::Start();
+    {
+        OPEN_SCOPE("open: SceneSerializer::Load");
+        m_SceneLoadOk = SceneSerializer::Load(world, m_Ctx.assets, path, /*persistMigration=*/false);
+    }
     const double loadedAt = glfwGetTime();
-    m_Ctx.warmRenderResources(); // the editor does the same at startup, before its first frame
+    {
+        OPEN_SCOPE("open: warm-up (render resources)");
+        m_Ctx.warmRenderResources(); // the editor does the same at startup, before its first frame
+    }
     const double warmedAt = glfwGetTime();
     // ... and the model cache's share (Library/Models): models read from it and imported + cooked, with their time
     // (summed over the threads that loaded them, so it can exceed the open's wall time).
@@ -299,8 +312,16 @@ void SmokeHarness::LoadScene() {
                 (modelsAfter.CookMs - modelsBefore.CookMs) / 1000.0);
     std::fflush(stdout);
     if (m_SceneLoadOk) {
-        SmokeChecks::SceneLoaded(world, m_Ctx.assets, path, [this](const std::string& label) { MemSnapshot(label); });
-        FirstPersonPresentation::PrefetchPlayAssets(world, m_Ctx.assets); // as the editor's scene open
+        { OPEN_SCOPE("after open: smoke checks (harness only)"); SmokeChecks::SceneLoaded(world, m_Ctx.assets, path, [this](const std::string& label) { MemSnapshot(label); }); }
+        { OPEN_SCOPE("after open: prefetch Play assets"); FirstPersonPresentation::PrefetchPlayAssets(world, m_Ctx.assets); } // as the editor's scene open
+    }
+    if (openProfile) {
+        OpenProfile::End();
+        if (m_Opt.perfSample) {
+            SamplingProfiler::Stop();
+            SamplingProfiler::Report("scene open", 60);
+        }
+        OpenProfile::Report(std::filesystem::path(path).filename().string().c_str(), (warmedAt - openStart) * 1000.0);
     }
     m_FramesRendered = 0;
     m_SceneStartSeconds = glfwGetTime();

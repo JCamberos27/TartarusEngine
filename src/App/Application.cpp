@@ -1,4 +1,5 @@
 #include "App/Application.h"
+#include "Core/OpenProfile.h"
 #include "App/GameShellWiring.h"
 #include "TerrainSystem.h"
 
@@ -1121,17 +1122,15 @@ private:
     // First-use stalls moved behind the load: the programs/volumes a scene is about to need are
     // built now instead of on its first frames (sky ~270 ms, SSAO ~100 ms, shadow array alloc).
     void warmRenderResources() {
-        if (world.Render.SkySourceMode == World::SkySource::Atmosphere) skyAtmosphere.WarmUp(world.Render.Sky.CloudsEnabled);
-        if (world.Render.SsaoEnabled) Ssao::WarmUp(ssaoComputeShader, ssaoBlurShader);
-        if (world.Render.ShadowsEnabled) shadowMap.Configure(world.Render.ShadowResolution, world.Render.ShadowCascades);
-        iblProbe.WarmUp();
-        tonemapper.WarmUp();
-        lightBuffer.WarmUp();
-        clusterGrid.WarmUp();
-        decalSystem.BindForShading(); // valid (placeholder) arrays on units 22-25 before any preview draws
-        if (world.Render.VolumetricEnabled) sceneRenderer.WarmUpVolumetrics();
-        SceneRenderer::WarmShaderVariants(world);
-        SceneRenderer::WarmEffects(world);
+        // OPEN_SCOPE stages: a scene open's profile (OpenProfile.h) names each warm-up's share.
+        if (world.Render.SkySourceMode == World::SkySource::Atmosphere) { OPEN_SCOPE("warm-up: sky"); skyAtmosphere.WarmUp(world.Render.Sky.CloudsEnabled); }
+        if (world.Render.SsaoEnabled) { OPEN_SCOPE("warm-up: SSAO"); Ssao::WarmUp(ssaoComputeShader, ssaoBlurShader); }
+        if (world.Render.ShadowsEnabled) { OPEN_SCOPE("warm-up: shadow map"); shadowMap.Configure(world.Render.ShadowResolution, world.Render.ShadowCascades); }
+        { OPEN_SCOPE("warm-up: IBL probe"); iblProbe.WarmUp(); }
+        { OPEN_SCOPE("warm-up: tonemap, lights, clusters, decals"); tonemapper.WarmUp(); lightBuffer.WarmUp(); clusterGrid.WarmUp(); decalSystem.BindForShading(); } // decals: valid (placeholder) arrays on units 22-25 before any preview draws
+        if (world.Render.VolumetricEnabled) { OPEN_SCOPE("warm-up: volumetrics"); sceneRenderer.WarmUpVolumetrics(); }
+        { OPEN_SCOPE("warm-up: shader variants"); SceneRenderer::WarmShaderVariants(world); }
+        { OPEN_SCOPE("warm-up: effects"); SceneRenderer::WarmEffects(world); }
         glUseProgram(0);
         GLStateCache::Invalidate();
     }
