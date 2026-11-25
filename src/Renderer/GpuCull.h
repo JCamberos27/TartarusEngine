@@ -4,7 +4,10 @@
 #include <vector>
 #include <glm/glm.hpp>
 
+#include "CascadedShadowMap.h"
+
 struct VisibilityQuery;
+struct Frustum;
 class World;
 
 // GPU-driven culling (G-2): the per-view visibility test of GatherVisible, run on the GPU over the persistent GPU scene
@@ -69,8 +72,10 @@ struct Group {
 bool Enabled();
 bool VerifyEnabled();
 
-// The GLSL of stage A + the ordered compaction (exposed for the shader-compile unit test).
+// The GLSL of stage A + the ordered compaction (exposed for the shader-compile unit test). CasterComputeSource is the
+// same source in caster mode (G4-a, below).
 const char* ComputeSource();
+const char* CasterComputeSource();
 
 // The draw table: the GPU scene's batchable slots (alive, not posed, with a model) grouped by model + material set
 // (InstanceBatch's key), groups in the order of their first slot and slots in slot order within a group.
@@ -98,5 +103,54 @@ const VerifyTotals& Totals();
 // compares it group by group with GatherVisible(q). Like HiZCuller::Cull it leaves storage bindings 22-25, 28 and 29
 // as it used them: their users bind their own before they draw. G2-a: nothing draws from it yet.
 void VerifyView(World& world, const VisibilityQuery& q);
+
+// ---- G4-a: the sun's shadow casters (caster mode) ----
+// Stage A with the caster query's flags (MakeQuery of a ShadowCasters query), then per cascade c the cascade's frustum
+// (inclusive, as Frustum::Intersects) and CascadedShadowMap::CasterReachesSlice, gated by bit c of the render mask
+// (held cascades draw nothing). Each group's survivors come out as one entry per (slot, cascade): the slot in the low
+// 30 bits, the cascade in the top 2, slots in slot order and each slot's cascades in ascending order. A group's run in
+// the remap is 4x its slot run (Group::Base * 4), and its commands' instance count is the entry count.
+// G4-a: verify only (nothing draws from it).
+
+// The per-frame block (std140, uniform binding kSunCasterBinding): each cascade's CasterReachesSlice inputs and planes.
+struct SunCascade {
+    CascadedShadowMap::CasterSlice Slice;
+    glm::vec4 Planes[6] = {}; // Frustum::FromViewProj(LightViewProj(c)): xyz normal, w = D
+};
+struct SunCasterBlock {
+    SunCascade Cascades[CascadedShadowMap::kMaxCascades];
+    glm::uvec4 Info{0u}; // x = render mask (bit c: cascade c draws this frame), y = cascade count
+};
+constexpr int kSunCasterBinding = 5; // uniform block (2 sky, 3 clouds, 4 GI are taken)
+constexpr std::uint32_t kCascadeShift = 30;  // remap entry: slot | cascade << 30
+constexpr std::uint32_t kSlotMask = (1u << kCascadeShift) - 1u;
+
+// The block for this frame's fit: `cells` are the cascades' frustums (ShadowFrame's SunPass::cells).
+SunCasterBlock MakeSunCasterBlock(const CascadedShadowMap& map, const Frustum* cells, unsigned renderMask,
+                                  float kernelTexels, float normalBias);
+// The per-cascade test on the CPU, op for op what the compute does without its slack: the cascades (bit c) a slot
+// that passed the flag tests goes into. An unbounded slot goes into every cascade in the render mask.
+unsigned CasterCascades(const glm::vec4 bounds[2], const SunCasterBlock& b);
+
+// Caster-mode verify totals since start.
+struct SunVerifyTotals {
+    std::uint64_t Frames = 0;   // passes compared
+    std::uint64_t Expected = 0; // batched (slot, cascade) pairs the CPU drew
+    std::uint64_t Missing = 0;  // ...that the GPU left out: a bug (hard gate in smoke)
+    std::uint64_t Extra = 0;    // pairs the GPU kept and the CPU didn't (allowed: the slack)
+    std::uint64_t Skipped = 0;
+};
+const SunVerifyTotals& SunTotals();
+// Whether this sun pass should be verified: TARTARUS_GPU_CULL_VERIFY, or a one-shot RequestSunVerify (the smoke check).
+bool SunVerifyDue();
+void RequestSunVerify();
+// One (slot, cascade) pair the CPU drew: its layered draws' runs expanded per cascade (ShadowFrame's m_Draws).
+struct SunPair {
+    std::uint32_t Slot;
+    std::uint32_t Cascade;
+};
+// Runs the caster mode on the GPU for this frame's block, reads it back (waits on the GPU) and compares the batched
+// slots' per-cascade sets with `cpu`. Order doesn't matter (a depth-only pass). Same bindings note as VerifyView.
+void VerifySunCasters(World& world, const SunCasterBlock& block, const std::vector<SunPair>& cpu);
 
 } // namespace GpuCull
