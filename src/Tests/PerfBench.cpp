@@ -5,14 +5,21 @@
 #include "SamplingProfiler.h"
 #include "Texture.h"
 #include "TimeService.h"
+#include "gl.h"
 
 #include <algorithm>
+#include <cstring>
+#include <iterator>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 
 namespace {
 constexpr size_t kKeepWorst = 10;
+// TARTARUS_PERF_CSV's columns. "half" rows (ReportHalves) put a key in rank, its avg / p50 / p95 / p99 / max in
+// ms / p50 / p95 / p99 / max and its sample count in frames.
+constexpr const char* kCsvHeader =
+    "scene,phase,row,rank,frame,ms,p50,p95,p99,p999,max,over2x,over33,frames,cpu,gpu,loads,gpu_starved\n";
 
 // A CSV field: quoted, inner quotes doubled (the scope / load lists hold commas).
 std::string CsvField(const std::string& s) {
@@ -30,7 +37,133 @@ bool GpuStarvedFrame(double frameMs, const std::vector<Profiler::Entry>& cpu) {
         if (e.Name == "Swap Buffers") waitMs = e.Milliseconds;
     return waitMs < 1.0 && frameMs - waitMs > 16.7;
 }
+
+// CpuBucket's map: a scope name (or, ending in '*', a name prefix) to its cpu.* bucket. Only top-level scopes are
+// bucketed, so a nested name here is harmless: it just never matches a bucketed entry.
+struct BucketRule { const char* Scope; const char* Bucket; };
+constexpr BucketRule kCpuBuckets[] = {
+    {"Physics Step", "physics"},
+    {"Animators", "anim"}, {"Animation Update", "anim"}, {"First Person IK", "anim"},
+    {"Player + FP Update", "sim"}, {"Dummies", "sim"}, {"Dummies Late", "sim"}, {"Player Shots + Impacts", "sim"},
+    {"Combat FX + Foley", "sim"}, {"Blood", "sim"}, {"Game Module Tick", "sim"}, {"Particles", "sim"},
+    {"Outfits + Transform Cache", "sim"}, {"AI *", "sim"},
+    {"Audio Update", "audio"}, {"Audio Listener", "audio"},
+    {"Editor UI Build", "ui"}, {"Game View UI", "ui"}, {"ImGui Render", "ui"}, {"UI *", "ui"},
+    {"Asset Pump + Outfit Hiding", "assets"}, {"Asset Pump", "assets"},
+    {"Game View Render", "render"}, {"Scene View Render", "render"}, {"Pre-Skin", "render"}, {"LOD Select", "render"},
+    {"Probe *", "render"}, {"GI Bake", "render"}, {"HDRI Load", "render"}, {"IBL Bake*", "render"},
+    {"Upload Fences", "render"}, {"Sky *", "render"}, {"Atmosphere *", "render"}, {"Cloud *", "render"},
+    {"Volumetric *", "render"}, {"Decal *", "render"}, {"Grass *", "render"}, {"Collider Overlay", "render"},
+    {"Selection Outline", "render"}, {"Scene*", "render"}, {"Sun*", "render"}, {"Spot Shadow*", "render"},
+    {"Point Shadow*", "render"}, {"Local Shadow*", "render"}, {"View Model Draw", "render"}, {"Gather Visible", "render"},
+    {"Swap Buffers", "wait"}, {"Pace Wait", "wait"}, {"Pace Flush", "wait"}, {"Frame Cap", "wait"},
+    {"Project Sync", "editor"}, {"Focus Reimport", "editor"}, {"Shader Reload Poll", "editor"},
+    {"Harness Begin", "editor"}, {"Harness End", "editor"}, {"Undo *", "editor"}, {"PushUndo", "editor"},
+    {"Events + Input", "input"},
+};
+// Every cpu.* bucket, in report order; each gets a sample every frame (0 when nothing ran) so they share one N.
+constexpr const char* kCpuBucketKeys[] = {"sim", "anim", "physics", "ui", "audio", "assets", "render", "wait",
+                                          "editor", "input", "other"};
+
+bool ScopeMatches(const char* rule, const std::string& scope) {
+    const size_t n = std::strlen(rule);
+    if (n > 0 && rule[n - 1] == '*') return scope.compare(0, n - 1, rule, n - 1) == 0;
+    return scope == rule;
+}
+
+// The value at fraction p of sorted samples (nearest rank, as StatsOf).
+double Pct(const std::vector<double>& sorted, double p) {
+    return sorted[std::min(sorted.size() - 1, (size_t)(p * (double)(sorted.size() - 1) + 0.5))];
+}
 } // namespace
+
+const char* PerfBench::CpuBucket(const std::string& scope) {
+    for (const BucketRule& r : kCpuBuckets)
+        if (ScopeMatches(r.Scope, scope)) return r.Bucket;
+    return "other";
+}
+
+void PerfBench::AddHalf(const std::string& key, double ms) {
+    auto it = std::find_if(m_Halves.begin(), m_Halves.end(), [&](const auto& h) { return h.first == key; });
+    if (it == m_Halves.end()) { m_Halves.emplace_back(key, std::vector<double>{}); it = m_Halves.end() - 1; }
+    it->second.push_back(ms);
+}
+
+double PerfBench::LastHalf(const std::string& key) const {
+    for (const auto& [k, samples] : m_Halves)
+        if (k == key) return samples.empty() ? -1.0 : samples.back();
+    return -1.0;
+}
+
+// The profiler's last frame, top-level scopes summed per bucket, plus the frame's wall time and its unscoped part.
+void PerfBench::AddCpuHalves() {
+    const float wallMs = Profiler::LastFrameWallMs();
+    if (wallMs <= 0.0f) return; // no completed profiler frame yet
+    double sums[std::size(kCpuBucketKeys)] = {};
+    for (const Profiler::Entry& e : Profiler::GetLastFrame()) {
+        if (e.Nested) continue; // its time is already in the scope around it
+        const char* bucket = CpuBucket(e.Name);
+        for (size_t i = 0; i < std::size(kCpuBucketKeys); ++i)
+            if (std::strcmp(bucket, kCpuBucketKeys[i]) == 0) sums[i] += e.Milliseconds;
+        if (std::strcmp(bucket, "other") == 0 &&
+            std::find(m_UnmappedCpu.begin(), m_UnmappedCpu.end(), e.Name) == m_UnmappedCpu.end())
+            m_UnmappedCpu.push_back(e.Name);
+    }
+    std::string key;
+    for (size_t i = 0; i < std::size(kCpuBucketKeys); ++i) {
+        key = "cpu.";
+        key += kCpuBucketKeys[i];
+        AddHalf(key, sums[i]);
+    }
+    AddHalf("cpu.unscoped", Profiler::LastFrameUnscopedMs());
+    AddHalf("cpu.frame", wallMs);
+}
+
+// TARTARUS_PERF_MACHINE labels every phase with the machine it ran on (G-0: numbers name their machine). Unset, the
+// line says so and gives what the process can see (the GL renderer, the logical cores).
+void PerfBench::PrintMachine() const {
+    const std::string label = Env::Str(Env::Var::PerfMachine);
+    if (!label.empty()) { std::printf("[PerfBench]   MACHINE %s\n", label.c_str()); return; }
+    const char* gpu = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+    std::printf("[PerfBench]   MACHINE (unlabelled: set TARTARUS_PERF_MACHINE) GPU %s, %d logical cores\n",
+                gpu ? gpu : "?", MachineLoad::Cores());
+}
+
+// The HALF lines (and the CSV's "half" rows): per key avg / p50 / p95 / p99 / max over its own samples, then clears them.
+void PerfBench::ReportHalves(const std::string& sceneFile, const char* label) {
+    PrintMachine();
+    std::ofstream csv;
+    const std::string path = Env::Str(Env::Var::PerfCsv);
+    if (!path.empty()) {
+        std::error_code ec;
+        const bool fresh = !std::filesystem::exists(path, ec) || std::filesystem::file_size(path, ec) == 0;
+        csv.open(path, std::ios::app);
+        if (csv && fresh) csv << kCsvHeader;
+    }
+    for (auto& [key, samples] : m_Halves) {
+        if (samples.empty()) continue;
+        double sum = 0.0;
+        for (double v : samples) sum += v;
+        std::sort(samples.begin(), samples.end());
+        const double avg = sum / (double)samples.size(), p50 = Pct(samples, 0.5), p95 = Pct(samples, 0.95),
+                     p99 = Pct(samples, 0.99), mx = samples.back();
+        std::printf("[PerfBench]   HALF %-24s avg=%8.3f p50=%8.3f p95=%8.3f p99=%8.3f max=%8.3f ms  N=%zu\n", key.c_str(),
+                    avg, p50, p95, p99, mx, samples.size());
+        if (csv) {
+            char buf[160];
+            std::snprintf(buf, sizeof(buf), ",,%.3f,%.3f,%.3f,%.3f,,%.3f,,,%zu,,,,\n", avg, p50, p95, p99, mx,
+                          samples.size());
+            csv << CsvField(sceneFile) << ',' << label << ",half," << CsvField(key) << buf;
+        }
+    }
+    if (!m_UnmappedCpu.empty()) {
+        std::string names;
+        for (const std::string& n : m_UnmappedCpu) names += (names.empty() ? "" : ", ") + n;
+        std::printf("[PerfBench]   HALF cpu.other holds: %s\n", names.c_str());
+    }
+    m_Halves.clear();
+    m_UnmappedCpu.clear();
+}
 
 PerfBench::PerfBench()
     : m_Warmup(std::max(0, Env::Int(Env::Var::PerfWarmup, 100))), m_LastFrameEnd(std::chrono::steady_clock::now()) {
@@ -51,10 +184,12 @@ double PerfBench::TakeFrameMs() {
 }
 
 void PerfBench::Sample(double frameMs, int frameNo) {
-    if (m_Frame.N == 0) m_LoadStart = MachineLoad::Take();
+    if (m_Frame.N == 0) { m_LoadStart = MachineLoad::Take(); m_G0.BeginPhase(); }
     m_Frame.Sum += frameMs; m_Frame.Max = std::max(m_Frame.Max, frameMs); ++m_Frame.N;
     for (const Profiler::Entry& e : Profiler::GetLastFrame()) Add(m_Cpu, e.Name, e.Milliseconds);
     for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) Add(m_Gpu, e.Name, e.Milliseconds);
+    AddCpuHalves();
+    m_G0.Sample([this](const std::string& key, double ms) { AddHalf(key, ms); }); // gpu.*, half.cpu, p48.*, bind
     RecordFrame(frameMs, frameNo);
     for (Worst& w : m_Worst) FillGpu(w);
 }
@@ -169,7 +304,7 @@ void PerfBench::AppendCsv(const std::string& sceneFile, const char* label, const
     const bool fresh = !std::filesystem::exists(path, ec) || std::filesystem::file_size(path, ec) == 0;
     std::ofstream out(path, std::ios::app);
     if (!out) { std::printf("[PerfBench] cannot write the CSV '%s'\n", path.c_str()); return; }
-    if (fresh) out << "scene,phase,row,rank,frame,ms,p50,p95,p99,p999,max,over2x,over33,frames,cpu,gpu,loads,gpu_starved\n";
+    if (fresh) out << kCsvHeader;
     char buf[192];
     auto summary = [&](const char* row, const Stats& s) {
         if (s.N == 0) return;
@@ -203,6 +338,8 @@ void PerfBench::ReportCombat(const std::string& sceneFile, int draws, int tris, 
                 m_Frame.Max, draws, tris, width, height);
     ReportHitches(sceneFile, "combat");
     PrintScopeTable();
+    ReportHalves(sceneFile, "combat");
+    m_G0.Report(sceneFile, "combat");
     std::fflush(stdout);
     m_Cpu.clear(); m_Gpu.clear(); m_Frame = {};
 }
@@ -219,6 +356,8 @@ void PerfBench::ReportPhase(const std::string& sceneFile, const char* mode, int 
     std::printf("[PerfBench]   textures=%d  %.1f MiB on the GPU\n", TextureLoadStats::Get().Count,
                 TextureLoadStats::Get().GpuBytes / (1024.0 * 1024.0));
     PrintScopeTable();
+    ReportHalves(sceneFile, mode);
+    m_G0.Report(sceneFile, mode);
     ReportHitches(sceneFile, mode);
     std::fflush(stdout);
     if (perfSample) SamplingProfiler::Report(mode, 60);
