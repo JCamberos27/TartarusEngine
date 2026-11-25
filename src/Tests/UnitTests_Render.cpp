@@ -950,6 +950,93 @@ void GpuCullStageAMatchesCpu() {
     CHECK(kept > total / 20 && kept < total); // the cases are mixed: some kept, some not
 }
 
+// G4-d: the far sun cascades render every FarRefresh() frames, staggered (never both in one frame), and are sampled
+// with the matrix they were rendered with while held; a sun turn or a camera jump past the hold margin renders them
+// now, ForceRender adds a layer (sampled with this frame's fit), and a second plan in one frame renders everything.
+void SunFarCascadesRefreshSchedule() {
+    CascadedShadowMap csm;
+    glm::vec3 sun = glm::normalize(glm::vec3(-0.4f, -0.8f, 0.3f));
+    const glm::mat4 proj = glm::perspective(glm::radians(70.0f), 16.0f / 9.0f, 0.05f, 500.0f);
+    const glm::vec3 casterMin(-300.0f, -5.0f, -300.0f), casterMax(300.0f, 40.0f, 300.0f);
+    auto fit = [&](const glm::vec3& eye, const glm::vec3& dir) {
+        csm.Update(glm::lookAt(eye, eye + glm::vec3(7.0f, -0.7f, 22.0f), glm::vec3(0, 1, 0)), proj, dir, 150.0f, &casterMin, &casterMax);
+    };
+    const std::uint64_t n = (std::uint64_t)CascadedShadowMap::FarRefresh();
+    CHECK(n >= 2 && n <= 8);
+    glm::vec3 eye(3.0f, 1.7f, -2.0f);
+    fit(eye, sun);
+    CHECK(csm.Count() == 4);
+    std::uint64_t f = 64;
+    csm.MarkRendered(csm.PlanRender(f), f); // the first plan renders everything (nothing held yet)
+    glm::mat4 rendered[4];
+    for (int c = 0; c < 4; ++c) rendered[c] = csm.LightViewProj(c);
+    int bothFar = 0, wrongTurn = 0, wrongSample = 0, renders2 = 0, renders3 = 0;
+    for (int i = 0; i < 32; ++i) {
+        ++f;
+        eye += glm::vec3(0.03f, 0.0f, 0.05f); // a slow walk: the fit shifts by whole texels, well inside the margin
+        fit(eye, sun);
+        const unsigned mask = csm.PlanRender(f);
+        CHECK((mask & 0b0011u) == 0b0011u);
+        if ((mask & 0b1100u) == 0b1100u) ++bothFar;
+        for (int c = 2; c < 4; ++c) {
+            const bool on = (mask >> c) & 1u;
+            const std::uint64_t phase = c == 2 ? 0 : n / 2;
+            if (on != ((f + n - phase) % n == 0)) ++wrongTurn;
+            if (on) {
+                (c == 2 ? renders2 : renders3)++;
+                rendered[c] = csm.LightViewProj(c);
+                if (csm.SampleViewProj(c) != csm.LightViewProj(c)) ++wrongSample;
+            } else if (csm.SampleViewProj(c) != rendered[c]) {
+                ++wrongSample; // held: sampled as rendered, not with this frame's fit
+            }
+        }
+        csm.MarkRendered(mask, f);
+    }
+    CHECK(bothFar == 0);
+    CHECK(wrongTurn == 0);
+    CHECK(wrongSample == 0);
+    CHECK(renders2 >= (int)(32 / n) && renders2 <= (int)(32 / n) + 1);
+    CHECK(renders3 >= (int)(32 / n) && renders3 <= (int)(32 / n) + 1);
+
+    // A held layer (not its turn) renders now when the sun turns...
+    auto heldFrame = [&](int c) { // the next frame cascade c is due to be held
+        for (;;) {
+            const std::uint64_t phase = c == 2 ? 0 : n / 2;
+            if ((f + 1 + n - phase) % n != 0) return;
+            ++f;
+            fit(eye, sun);
+            csm.MarkRendered(csm.PlanRender(f), f);
+        }
+    };
+    heldFrame(2);
+    ++f;
+    sun = glm::normalize(sun + glm::vec3(0.02f, 0.0f, 0.0f));
+    fit(eye, sun);
+    unsigned mask = csm.PlanRender(f);
+    CHECK((mask & 0b1100u) == 0b1100u);
+    csm.MarkRendered(mask, f);
+    // ...and when the camera jumps past the hold margin.
+    heldFrame(2);
+    ++f;
+    eye += glm::vec3(120.0f, 0.0f, 80.0f);
+    fit(eye, sun);
+    mask = csm.PlanRender(f);
+    CHECK((mask & 0b1100u) == 0b1100u);
+    csm.MarkRendered(mask, f);
+    // ForceRender: a held layer renders this frame and samples this frame's fit.
+    heldFrame(2);
+    ++f;
+    eye += glm::vec3(0.03f, 0.0f, 0.05f);
+    fit(eye, sun);
+    mask = csm.PlanRender(f);
+    CHECK(!(mask & 0b0100u));
+    mask = csm.ForceRender(mask, 0b0100u);
+    CHECK((mask & 0b0100u) && csm.SampleViewProj(2) == csm.LightViewProj(2));
+    csm.MarkRendered(mask, f);
+    // A second plan in the same frame (another view) renders every cascade.
+    CHECK(csm.PlanRender(f) == 0b1111u);
+}
+
 // GpuCull caster mode (G4-a): the per-cascade test's CPU twin gives ShadowFrame's castsInto answer for every slot and
 // cascade - the cascade's frustum (Frustum::Intersects) then CascadedShadowMap::CasterReachesSlice, gated by the
 // render mask - over a fitted 4-cascade map, a held cascade, unbounded slots and boxes along the cascades' reach. The
@@ -3271,6 +3358,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GPU occlusion culling: box padding", HiZPieces});
     tests.push_back({"GPU culling: stage A matches the CPU gather", GpuCullStageAMatchesCpu});
     tests.push_back({"GPU culling: sun caster cascades match the CPU", GpuCullCasterCascadesMatchCpu});
+    tests.push_back({"Sun shadows: far cascades refresh every FarRefresh frames, staggered, held as rendered", SunFarCascadesRefreshSchedule});
     tests.push_back({"Scene wind: settings round-trip, old-scene defaults, one bearing convention", SceneWindSettings});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});

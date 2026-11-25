@@ -206,6 +206,7 @@ void PerfBench::Sample(double frameMs, int frameNo) {
     if (m_Frame.N == 0) {
         m_LoadStart = MachineLoad::Take(); m_G0.BeginPhase();
         m_QuietLive0 = ShadowFrame::LocalQuietTotals().Live; m_Quiet0 = ShadowFrame::LocalQuietTotals().Quiet;
+        m_Far0 = CascadedShadowMap::FarCascadeTotals();
     }
     m_Frame.Sum += frameMs; m_Frame.Max = std::max(m_Frame.Max, frameMs); ++m_Frame.N;
     for (const Profiler::Entry& e : Profiler::GetLastFrame()) Add(m_Cpu, e.Name, e.Milliseconds);
@@ -352,6 +353,14 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
                     (unsigned long long)quiet, (unsigned long long)live,
                     ShadowFrame::CacheVerify() ? " (verify on: quiet lights looked at anyway)"
                     : !ShadowFrame::SlotDirtyEnabled() ? " (G4-c off)" : "");
+    }
+    // G4-d: what the far sun cascades did this phase (layer-frames: held, on their turn, refit, for a mover).
+    {
+        const CascadedShadowMap::FarTotals& t = CascadedShadowMap::FarCascadeTotals(), & t0 = m_Far0;
+        std::printf("[PerfBench] %s far cascades (refresh %d): frames=%llu held=%llu turn=%llu refit=%llu mover=%llu\n", label,
+                    CascadedShadowMap::FarRefresh(), (unsigned long long)(t.Frames - t0.Frames),
+                    (unsigned long long)(t.Held - t0.Held), (unsigned long long)(t.Turn - t0.Turn),
+                    (unsigned long long)(t.Refit - t0.Refit), (unsigned long long)(t.Mover - t0.Mover));
     }
     for (const Worst& w : m_Worst) {
         char unscoped[64] = "-";
