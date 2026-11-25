@@ -538,6 +538,60 @@ void GpuSceneSyncOnceKey() {
     ForgetGatherCandidates(); // no cache left pointing at these worlds
 }
 
+// G2-b's CPU side: GatherVisible leaves out exactly the slots set in SkipSlots; the draw table's generation moves on a
+// reported settings write or a model swap but not on a plain move; a move is handed out by TakeMovedSceneSlots once.
+void GpuDrawTableInputs() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    std::vector<entt::entity> all;
+    for (int i = 0; i < 8; ++i)
+        all.push_back(w.CreateModelEntity(model, glm::vec3((float)i * 3.0f, 0.0f, 0.0f), glm::vec3(0), glm::vec3(1), "R"));
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    VisibilityQuery q;
+    std::vector<VisibleRenderable> out;
+    GatherVisible(w, q, out);
+    CHECK(out.size() == all.size());
+    // Skip two of them by slot.
+    std::vector<std::uint32_t> skip((out.size() + 31) / 32 + 1, 0u);
+    const std::uint32_t s0 = out[1].Slot, s1 = out[5].Slot;
+    skip[s0 >> 5] |= 1u << (s0 & 31u);
+    skip[s1 >> 5] |= 1u << (s1 & 31u);
+    q.SkipSlots = skip.data();
+    GatherVisible(w, q, out);
+    CHECK(out.size() == all.size() - 2);
+    for (const VisibleRenderable& v : out) CHECK(v.Slot != s0 && v.Slot != s1);
+    q.SkipSlots = nullptr;
+
+    std::vector<std::uint32_t> moved;
+    TakeMovedSceneSlots(moved); // turns the tracking on
+    SceneSlotChanges changes;
+    TakeSceneSlotChanges(w, changes);
+    const std::uint64_t gen = SceneSlotTableGeneration();
+    // A plain move: the generation stays, the slot is handed out once.
+    w.Registry.get<TransformComponent>(all[3]).Position.y = 1.0f;
+    w.RebuildWorldTransformCache();
+    TakeSceneSlotChanges(w, changes);
+    CHECK(SceneSlotTableGeneration() == gen);
+    TakeMovedSceneSlots(moved);
+    CHECK(moved.size() == 1);
+    TakeMovedSceneSlots(moved);
+    CHECK(moved.empty());
+    // A reported settings write: the generation moves.
+    w.Registry.get<RenderableComponent>(all[2]).CastShadows = RenderableComponent::ShadowCasting::Off;
+    NoteRenderSettingsChanged();
+    TakeSceneSlotChanges(w, changes);
+    CHECK(SceneSlotTableGeneration() != gen);
+    ForgetGatherCandidates();
+}
+
 // GpuScene's upload plan and packing, without GL.
 void GpuSceneRuns() {
     using Run = GpuScene::Run;
@@ -2880,6 +2934,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GpuScene: the mirror matches the candidate list slot by slot, frame after frame", GpuSceneMirror});
     tests.push_back({"GpuScene: in-place render settings reach the slots (reported: next sync; unreported: within a sweep lap)", GpuSceneLiveEpoch});
     tests.push_back({"GpuScene: SyncOnce's key follows every Sync (another world in between syncs again)", GpuSceneSyncOnceKey});
+    tests.push_back({"GPU-driven draws: gather skip bits, draw table generation, moved slots", GpuDrawTableInputs});
     tests.push_back({"GpuScene: upload runs (merge, cap, whole list) and layer packing", GpuSceneRuns});
     tests.push_back({"GatherPatch", GatherPatch});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
