@@ -557,7 +557,8 @@ void GpuSceneObjectState() {
     const std::uint32_t key = probes.SelectionKey(centre);
     const ReflectionProbeArray::Selection sel = probes.Resolve(centre);
     CHECK(sel.Count == 2 && (int)(key >> 30) == 2);
-    CHECK(sel.Center[0] == probeAt[(key >> 20) & 0x3FF] && sel.Center[1] == probeAt[(key >> 10) & 0x3FF]);
+    CHECK(sel.Center[0] == probes.Volume((key >> 20) & 0x3FF).Center && sel.Center[1] == probes.Volume((key >> 10) & 0x3FF).Center);
+    CHECK(sel.Center[0] == probeAt[0] && sel.Center[1] == probeAt[1]); // the nearest two, in order
     CHECK(sel.HalfSize[0] == glm::vec3(2.0f, 1.0f, 3.0f) && sel.Layer[0] == -1 && sel.Layer[1] == -1); // no cube array
     CHECK(std::abs(sel.Blend[0] + sel.Blend[1] - 1.0f) < 1e-6f && sel.Blend[0] > sel.Blend[1]);
     CHECK((std::uint32_t)std::lround(sel.Blend[0] * 64.0f) == (key & 0x7F));

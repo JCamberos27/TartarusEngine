@@ -4,7 +4,7 @@
 # Usage: bash verify/gmb_ab.sh [skipbuild]
 set -u
 cd /c/Users/jacob/tbw1c || exit 4
-L=verify/gmb
+L=verify/gmb${GMB_TAG:-}
 mkdir -p $L
 T0=$(date -u +%s)
 stamp() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a $L/summary.txt; }
@@ -43,7 +43,11 @@ for rep in 1 2; do
   shots lead$rep "TARTARUS_SLOT_STATE_LEAD=1" "$FOREST" forest "$FCAMS"
   shots on$rep "X_GMB=1" "$FOREST" forest "$FCAMS"
 done
-shots off1 "TARTARUS_NO_SLOT_STATE=1" "$HALL" hallway "$HCAMS"
-shots on1 "X_GMB=1" "$HALL" hallway "$HCAMS"
+for rep in 1 2; do
+  shots off$rep "TARTARUS_NO_SLOT_STATE=1" "$HALL" hallway "$HCAMS"
+  shots lead$rep "TARTARUS_SLOT_STATE_LEAD=1" "$HALL" hallway "$HCAMS"
+  shots on$rep "X_GMB=1" "$HALL" hallway "$HCAMS"
+done
+grep -h "GL_INVALID\|FAIL" $L/shots_*/run.log | sort | uniq -c | head -20 | tee -a $L/summary.txt
 python verify/tools/gmb_pixdiff.py $L | tee -a $L/summary.txt
 stamp "DONE total $(( $(date -u +%s) - T0 )) s"

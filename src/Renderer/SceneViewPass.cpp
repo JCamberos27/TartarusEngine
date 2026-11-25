@@ -1079,9 +1079,17 @@ void SceneRenderer::ViewPass::DrawOpaque() {
         m_Stats.DrawCalls += it.Meshes;
         countGroup(grp);
     }
-    // The programs stay shared: a later draw that skips the per-draw hook must not read slot state.
-    for (Shader* p : m_SlotStatePrograms) p->SetInt("uSlotState", 0);
-    m_SlotStatePrograms.clear();
+    // The programs stay shared: a later draw that skips the per-draw hook must not read slot state. A uniform write
+    // goes to the bound program, so each is bound for it, and the one bound before comes back.
+    if (!m_SlotStatePrograms.empty()) {
+        const unsigned bound = GLStateCache::CurrentProgram();
+        for (Shader* p : m_SlotStatePrograms) {
+            p->Bind();
+            p->SetInt("uSlotState", 0);
+        }
+        if (bound) GLStateCache::UseProgram(bound);
+        m_SlotStatePrograms.clear();
+    }
     if (depthWrites != GL_TRUE) {
         glDepthMask(GL_TRUE);
         glDepthFunc(GL_LEQUAL);
