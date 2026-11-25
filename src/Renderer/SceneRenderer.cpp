@@ -1,4 +1,5 @@
 #include "SceneRenderer.h"
+#include "Core/OpenProfile.h"
 #include "SceneViewPass.h"
 #include "Animation.h" // NormalMatrix
 #include <cstdio>
@@ -867,11 +868,15 @@ int WarmMaterials(const RenderableComponent& rc, WarmedVariants& done) {
         if (std::find(keys.begin(), keys.end(), own) != keys.end()) continue;
         keys.push_back(own);
         if (!engine) {
+            OPEN_SCOPE("warm-up: variants: material key");
             ma->Shader->Variant(own);
             ++built;
             continue;
         }
         for (const ShaderVariantKey frame : {0u, kVariantNoLocalLights, kVariantNoDecals, kVariantNoLocalLights | kVariantNoDecals}) {
+            // Split for the scene-open profile: the plain key every view draws first vs the frame variants (no point or
+            // spot lights, no decals) a view only needs once its lights or decals change.
+            OpenProfile::Scope s(frame == 0u ? "warm-up: variants: material key" : "warm-up: variants: no-lights / no-decals");
             ma->Shader->Variant(own | frame);
             ++built;
         }
