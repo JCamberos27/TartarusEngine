@@ -123,6 +123,7 @@ public:
     // The motion matching database was rebaked while playing (MotionRebake): Restart takes the new one.
     bool MotionStale() const { return m_Mm.Stale(); }
     // The rig's name for a standard bone (the Bone Map; the standard name when unmapped).
+    void DiagComparePieces(const World& world, int at); // VERIFY-ONLY
     const std::string& Bone(const std::string& standard) const { return FPBody::MappedBone(m_BoneMap, standard); }
     void Stop(World& world);
     bool IsActive() const { return m_Body != entt::null; }

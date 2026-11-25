@@ -318,6 +318,7 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         PROFILE_SCOPE("First Person IK");
         {
         PROFILE_SCOPE("FP Body LateUpdate");
+        { static double vT = 0.0; vT += gameDt; player.Cam.Pitch = 80.0f * (float)std::sin(vT * 6.2831853 / 4.0); }
         firstPersonBody.LateUpdate(world, player.Cam, gameDt, firstPersonPresentation.ArmsEntity(),
                                    firstPersonPresentation.CameraBone()); // camera into the body's head
         }

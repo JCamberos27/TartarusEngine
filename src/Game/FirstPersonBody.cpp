@@ -1,6 +1,9 @@
 #include "FirstPersonBody.h"
 #include "FirstPersonBodyInternal.h"
 #include "Profiler.h"
+#include "Log.h"
+#include <cstring>
+#include <map>
 #include "BodyDebugDraw.h"
 #include "AnimatorController.h"
 #include "FirstPersonBodyContract.h"
@@ -748,6 +751,81 @@ void FirstPersonBody::TickMotionMatching(World& world, const Player& player, con
     }
 }
 
+namespace {
+struct PieceCmp {
+    unsigned long long checks = 0, bad = 0, nameBad = 0, missing = 0;
+    double maxCm = 0.0, maxDeg = 0.0, maxScale = 0.0;
+    std::string worstBone;
+};
+std::map<std::string, PieceCmp> g_PieceCmp[3];
+unsigned long long g_PieceFrames = 0;
+} // namespace
+void FirstPersonBody::DiagComparePieces(const World& world, int at) {
+    if (at == 1) return;
+    static const char* const kTouched[] = {"pelvis", "spine_01", "spine_02", "spine_03", "spine_04", "spine_05",
+                                           "thigh_l", "thigh_r", "calf_l", "calf_r", "foot_l", "foot_r", "ball_l", "ball_r",
+                                           "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r", "lowerarm_l", "lowerarm_r",
+                                           "hand_l", "hand_r", "neck_01", "head"};
+    struct Stat { unsigned long long n = 0, localBad = 0, globalBad = 0; double lCm = 0, lDeg = 0, gCm = 0, gDeg = 0; int depthD = 0, depthK = 0; };
+    static std::map<std::string, Stat> stats[3];
+    static unsigned long long frames = 0;
+    const Model* drv = nullptr;
+    for (size_t k = 0; k < m_Pieces.size() && k < m_Models.size(); ++k)
+        if (m_Pieces[k] == m_Driver && m_Models[k]) drv = m_Models[k].get();
+    if (!drv) return;
+    thread_local std::vector<int> par;
+    thread_local std::vector<glm::mat4> gd, gk;
+    auto globalsOf = [&](const Model& m, std::vector<glm::mat4>& g) {
+        const IK::Pose& p = m.AppliedLocalPose();
+        par.resize(p.size());
+        for (int i = 0; i < (int)p.size(); ++i) par[i] = m.NodeParent(i);
+        IK::ComputeGlobals(p, par, g);
+        return (int)p.size() == m.NodeCount();
+    };
+    if (!globalsOf(*drv, gd)) return;
+    const IK::Pose& dp = drv->AppliedLocalPose();
+    auto depth = [](const Model& m, int n) { int d = 0; while (n >= 0) { ++d; n = m.NodeParent(n); } return d; };
+    auto angle = [](const glm::quat& a, const glm::quat& b) { return glm::degrees(2.0 * std::acos(std::min(1.0, (double)std::abs(glm::dot(glm::normalize(a), glm::normalize(b)))))); };
+    for (size_t k = 0; k < m_Models.size() && k < m_Pieces.size(); ++k) {
+        if (!m_Models[k] || m_Models[k].get() == drv) continue;
+        const Model& m = *m_Models[k];
+        if (!globalsOf(m, gk)) continue;
+        const IK::Pose& mp = m.AppliedLocalPose();
+        const auto* nm = world.Registry.try_get<NameComponent>(m_Pieces[k]);
+        const std::string piece = nm ? nm->Name : std::string("piece") + std::to_string(k);
+        for (const char* b : kTouched) {
+            const int nd = drv->NodeIndex(Bone(b)), nk = m.NodeIndex(Bone(b));
+            if (nk < 0 || nd < 0) continue;
+            Stat& st = stats[at][piece + " " + b];
+            ++st.n;
+            st.depthD = depth(*drv, nd);
+            st.depthK = depth(m, nk);
+            const LocalTRS& a = dp[(size_t)nd];
+            const LocalTRS& c = mp[(size_t)nk];
+            if (std::memcmp(&a, &c, sizeof(LocalTRS)) != 0) {
+                ++st.localBad;
+                st.lCm = std::max(st.lCm, 100.0 * glm::length(a.T - c.T));
+                st.lDeg = std::max(st.lDeg, angle(a.R, c.R));
+            }
+            if (std::memcmp(&gd[(size_t)nd], &gk[(size_t)nk], sizeof(glm::mat4)) != 0) {
+                ++st.globalBad;
+                st.gCm = std::max(st.gCm, 100.0 * glm::length(IK::Position(gd[(size_t)nd]) - IK::Position(gk[(size_t)nk])));
+                st.gDeg = std::max(st.gDeg, angle(IK::Rotation(gd[(size_t)nd]), IK::Rotation(gk[(size_t)nk])));
+            }
+        }
+    }
+    if (at == 2 && ++frames % 1500 == 0) {
+        for (int a : {0, 2})
+            for (const auto& [key, st] : stats[a])
+                if (st.localBad || st.globalBad || st.depthD != st.depthK)
+                    Log::Info(std::string("PIECEBONE frames=") + std::to_string(frames) + (a == 0 ? " at=A " : " at=C ") + key + " n=" + std::to_string(st.n) +
+                              " localBad=" + std::to_string(st.localBad) + " lCm=" + std::to_string(st.lCm) + " lDeg=" + std::to_string(st.lDeg) +
+                              " globalBad=" + std::to_string(st.globalBad) + " gCm=" + std::to_string(st.gCm) + " gDeg=" + std::to_string(st.gDeg) +
+                              " depth=" + std::to_string(st.depthD) + "/" + std::to_string(st.depthK));
+        Log::Info("PIECEBONE frames=" + std::to_string(frames) + " keysA=" + std::to_string(stats[0].size()) + " keysC=" + std::to_string(stats[2].size()));
+    }
+}
+
 void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::entity weaponArms,
                                  const std::string& rigCameraBone) {
     if (!IsActive()) return;
@@ -795,6 +873,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     BodyDebug::Info().ChestPitchStableDeg = ChestPitchDeg();
     // The clips' feet, before foot IK moves them: what next Tick reads the gait's phase off.
     m_HaveGaitFeet = FootPoints(world, m_GaitFeet);
+    DiagComparePieces(world, 0);
     {
     PROFILE_SCOPE("FPB foot IK");
     ApplyFootIK(world, cfg, dt); // the pelvis and legs first: everything after reads the final pose
@@ -815,6 +894,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             break;
         }
     }
+    DiagComparePieces(world, 1);
     PROFILE_SCOPE("FPB spine + shoulders");
 
     // The chest follows the view's pitch first, so the head (and the camera on it) and the
@@ -1113,6 +1193,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         if (mmLayers && unarmed > 1e-3f) KeepHandsFromEye(glm::inverse(yaw) * (camera.Position - m_Feet) / std::max(t.Scale.y, 1e-3f), unarmed);
     }
     PostureMetrics(world, camera, dt);
+    DiagComparePieces(world, 2);
 }
 
 // Puts each foot on the ground under it: a ray down from the animated foot gives how far the ground
