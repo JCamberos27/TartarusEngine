@@ -5,6 +5,7 @@
 #include "GpuMemTrack.h"
 #include "gl.h"
 #include "Log.h"
+#include "Core/Env.h"
 #include "Core/Paths.h"
 #include "../Game/World.h"
 #include "../Game/Components.h"
@@ -145,9 +146,10 @@ void GIVolumes::Gather(const World& world) {
         v.Spacing = gv.Spacing;
         v.Dims = GI::GridDims(v.Bounds.Half, gv.Spacing);
         v.Fade = std::max(gv.Fade, 0.0f);
+        static const bool fadeAOff = Env::Flag(Env::Var::ExpGiFadeAOff); // TARTARUS_EXP_GI_FADE_A_OFF: A/B only
         for (int a = 0; a < 3; ++a) { // a face without its own fade takes the volume's
-            v.FadeLo[a] = gv.FadeMin[a] > 0.0f ? gv.FadeMin[a] : v.Fade;
-            v.FadeHi[a] = gv.FadeMax[a] > 0.0f ? gv.FadeMax[a] : v.Fade;
+            v.FadeLo[a] = gv.FadeMin[a] > 0.0f && !fadeAOff ? gv.FadeMin[a] : v.Fade;
+            v.FadeHi[a] = gv.FadeMax[a] > 0.0f && !fadeAOff ? gv.FadeMax[a] : v.Fade;
         }
         v.Intensity = std::max(gv.Intensity, 0.0f);
         v.File = m_Override ? m_Override

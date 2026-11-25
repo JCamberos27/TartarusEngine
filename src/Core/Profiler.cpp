@@ -32,6 +32,8 @@ struct GpuFrame {
     std::vector<GpuScopeRecord> Scopes;
     bool Pending = false; // recorded, results not read back yet
     unsigned Serial = 0;  // the frame (BeginFrame count) it was recorded in
+    // The whole frame on the GPU (G-0): a timestamp at BeginFrame and one at EndGpuFrame (just before the swap). -1 = not taken.
+    int FrameBegin = -1, FrameEnd = -1;
 };
 GpuFrame g_GpuFrames[kGpuFrames];
 int g_GpuCurrent = 0;
@@ -42,6 +44,7 @@ constexpr int kGpuHistory = 8;
 struct GpuDone {
     unsigned Serial = 0;
     std::vector<Profiler::Entry> Entries;
+    float FrameMs = -1.0f; // BeginFrame to EndGpuFrame on the GPU; -1 = the frame had no EndGpuFrame
 };
 GpuDone g_GpuHistory[kGpuHistory];
 int g_GpuNewest = -1;
@@ -59,8 +62,8 @@ int TakeQuery(GpuFrame& f) {
 // so the last one being available means all are). Repeated scopes are summed per name, in
 // first-seen order: "Scene Draw" is the frame's total across both views.
 bool TryReadBack(GpuFrame& f) {
-    if (!f.Pending || f.Scopes.empty()) return false;
-    int last = -1;
+    if (!f.Pending) return false;
+    int last = f.FrameEnd;
     for (const GpuScopeRecord& r : f.Scopes) last = std::max(last, r.End);
     if (last < 0) { f.Pending = false; return false; }
     GLint available = 0;
@@ -77,8 +80,15 @@ bool TryReadBack(GpuFrame& f) {
         if (it != out.end()) it->Milliseconds += ms;
         else out.push_back({r.Name, ms});
     }
+    float frameMs = -1.0f;
+    if (f.FrameBegin >= 0 && f.FrameEnd >= 0) {
+        GLuint64 t0 = 0, t1 = 0;
+        glGetQueryObjectui64v(f.Pool[f.FrameBegin], GL_QUERY_RESULT, &t0);
+        glGetQueryObjectui64v(f.Pool[f.FrameEnd], GL_QUERY_RESULT, &t1);
+        frameMs = t1 > t0 ? (float)((double)(t1 - t0) / 1000000.0) : 0.0f;
+    }
     g_GpuNewest = (g_GpuNewest + 1) % kGpuHistory;
-    g_GpuHistory[g_GpuNewest] = {f.Serial, std::move(out)};
+    g_GpuHistory[g_GpuNewest] = {f.Serial, std::move(out), frameMs};
     f.Pending = false;
     return true;
 }
@@ -95,10 +105,14 @@ void Profiler::BeginFrame() {
     g_HaveFrameStart = true;
     ++g_GpuFrameSerial;
 
-    if (!glQueryCounter || !glGetQueryObjectiv || !glGetQueryObjectui64v) return;
+    if (!glGenQueries || !glQueryCounter || !glGetQueryObjectiv || !glGetQueryObjectui64v) return;
     // Close the frame just recorded, then read back every finished frame oldest-first (so the
     // newest finished one is what GetLastFrameGpu shows). Never waits on the GPU.
-    g_GpuFrames[g_GpuCurrent].Pending = !g_GpuFrames[g_GpuCurrent].Scopes.empty();
+    {
+        GpuFrame& done = g_GpuFrames[g_GpuCurrent];
+        if (done.FrameEnd < 0) done.FrameBegin = -1; // no EndGpuFrame (an early-out frame): no whole-frame time
+        done.Pending = !done.Scopes.empty() || done.FrameBegin >= 0;
+    }
     for (int i = 1; i <= kGpuFrames; ++i) TryReadBack(g_GpuFrames[(g_GpuCurrent + i) % kGpuFrames]);
 
     // Recycle the next slot. If its results still aren't in, the GPU is more than kGpuFrames-1
@@ -109,6 +123,17 @@ void Profiler::BeginFrame() {
     next.Scopes.clear();
     next.Pending = false;
     next.Serial = g_GpuFrameSerial;
+    next.FrameEnd = -1;
+    next.FrameBegin = TakeQuery(next);
+    glQueryCounter(next.Pool[next.FrameBegin], GL_TIMESTAMP);
+}
+
+void Profiler::EndGpuFrame() {
+    if (!glQueryCounter) return;
+    GpuFrame& f = g_GpuFrames[g_GpuCurrent];
+    if (f.FrameBegin < 0 || f.FrameEnd >= 0) return; // no BeginFrame yet this slot, or already ended
+    f.FrameEnd = TakeQuery(f);
+    glQueryCounter(f.Pool[f.FrameEnd], GL_TIMESTAMP);
 }
 
 namespace {
@@ -160,6 +185,15 @@ const std::vector<Profiler::Entry>& Profiler::GetLastFrameGpu() {
 }
 
 unsigned Profiler::FrameSerial() { return g_GpuFrameSerial; }
+
+void Profiler::ForEachGpuFrameAfter(unsigned serial, const std::function<void(const GpuFrameResult&)>& fn) {
+    if (g_GpuNewest < 0) return;
+    // Oldest first: the slot after the newest is the oldest in the ring.
+    for (int i = 1; i <= kGpuHistory; ++i) {
+        const GpuDone& d = g_GpuHistory[(g_GpuNewest + i) % kGpuHistory];
+        if (d.Serial > serial) fn({d.Serial, d.FrameMs, &d.Entries});
+    }
+}
 
 const std::vector<Profiler::Entry>* Profiler::GpuFrameScopes(unsigned serial) {
     if (g_GpuNewest < 0) return nullptr;
