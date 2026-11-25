@@ -36,6 +36,12 @@ public:
     // explicit "importer" block in the texture's .meta always wins.
     enum class TextureUse { Color, Data, Normal };
     std::shared_ptr<Texture> LoadTexture(const std::string& path, TextureUse use = TextureUse::Color);
+    // P-51 - scene open: the maps these materials name, not loaded yet, are decoded (disk cache or file) on
+    // worker threads now, and LoadTexture then only uploads them (GL stays on the main thread). Decoded
+    // pixels nobody asked for are dropped by DropPrefetchedTextures(). Returns how many were decoded.
+    // TARTARUS_NO_TEXTURE_PREFETCH=1 turns it off (each texture decodes inside LoadTexture, as before).
+    int PrefetchMaterialTextures(const std::vector<std::string>& materialPaths);
+    void DropPrefetchedTextures();
     // What a texture's file name says it holds ("_Normal", "_Roughness", ...; see
     // AssetImport::GuessTextureKind), and the import settings that follow from it.
     static TextureUse GuessTextureUse(const std::string& path);
@@ -361,6 +367,7 @@ private:
     std::map<std::string, std::shared_ptr<Model>> m_ModelCache;
     std::map<std::string, std::shared_ptr<Model>> m_ClipSourceCache; // by AssetDatabase::PathKey
     std::map<std::string, std::shared_ptr<Texture>> m_TextureCache;
+    std::map<std::string, TextureCpuData> m_PrefetchedTextures; // PrefetchMaterialTextures, until LoadTexture takes it
     std::map<std::string, std::shared_ptr<MaterialAsset>> m_MaterialCache;
     std::map<std::string, std::shared_ptr<ShaderAsset>> m_ShaderCache;
     std::vector<std::shared_ptr<Model>> m_ModelList;

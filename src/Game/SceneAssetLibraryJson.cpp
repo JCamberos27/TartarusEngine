@@ -1,4 +1,5 @@
 #include "SceneSerializerInternal.h"
+#include <algorithm>
 
 namespace SceneDetail {
 
@@ -250,11 +251,28 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
         }
     }
     if (root.contains("libraryMaterials")) {
+        std::vector<std::string> paths;
         for (const auto& p : root["libraryMaterials"]) {
             std::string path = ResolveAssetRef(p);
-            if (path.empty()) continue;
-            auto a = assets.LoadMaterial(path);
-            if (hold && a) hold->push_back(a);
+            if (!path.empty()) paths.push_back(std::move(path));
+        }
+        // P-51: each batch's textures decode on worker threads first; LoadMaterial then only uploads them. Batches
+        // keep the decoded-but-not-uploaded pixels to a few hundred MB (the Forest's whole set is ~4.5 GB).
+        // The leftovers are dropped however a batch ends (an exception out of LoadMaterial too): a later LoadTexture
+        // must never upload pixels decoded for an earlier open.
+        struct DropOnExit {
+            AssetLibrary& Assets;
+            ~DropOnExit() { Assets.DropPrefetchedTextures(); }
+        };
+        constexpr size_t kBatch = 24;
+        for (size_t at = 0; at < paths.size(); at += kBatch) {
+            const std::vector<std::string> batch(paths.begin() + at, paths.begin() + std::min(paths.size(), at + kBatch));
+            DropOnExit drop{assets};
+            assets.PrefetchMaterialTextures(batch);
+            for (const std::string& path : batch) {
+                auto a = assets.LoadMaterial(path);
+                if (hold && a) hold->push_back(a);
+            }
         }
     }
     if (root.contains("librarySounds")) {

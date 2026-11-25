@@ -2,17 +2,28 @@
 
 #include "Core/Env.h"
 #include "AssetCost.h"
+#include "ShadowFrame.h"
 #include "SamplingProfiler.h"
 #include "Texture.h"
+#include "Model.h"
 #include "TimeService.h"
+#include "gl.h"
+#include <GLFW/glfw3.h>
 
 #include <algorithm>
+#include <cstring>
+#include <iterator>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 
 namespace {
 constexpr size_t kKeepWorst = 10;
+// TARTARUS_PERF_CSV's columns. "half" rows (ReportHalves) put a key in rank, its avg / p50 / p95 / p99 / max in
+// ms / p50 / p95 / p99 / max and its sample count in frames.
+constexpr const char* kCsvHeader =
+    "scene,phase,row,rank,frame,ms,p50,p95,p99,p999,max,over2x,over33,frames,cpu,gpu,loads,gpu_starved\n";
 
 // A CSV field: quoted, inner quotes doubled (the scope / load lists hold commas).
 std::string CsvField(const std::string& s) {
@@ -30,7 +41,144 @@ bool GpuStarvedFrame(double frameMs, const std::vector<Profiler::Entry>& cpu) {
         if (e.Name == "Swap Buffers") waitMs = e.Milliseconds;
     return waitMs < 1.0 && frameMs - waitMs > 16.7;
 }
+
+// CpuBucket's map: a scope name (or, ending in '*', a name prefix) to its cpu.* bucket. Only top-level scopes are
+// bucketed, so a nested name here is harmless: it just never matches a bucketed entry.
+struct BucketRule { const char* Scope; const char* Bucket; };
+constexpr BucketRule kCpuBuckets[] = {
+    {"Physics Step", "physics"},
+    {"Animators", "anim"}, {"Animation Update", "anim"}, {"First Person IK", "anim"},
+    {"Player + FP Update", "sim"}, {"Dummies", "sim"}, {"Dummies Late", "sim"}, {"Player Shots + Impacts", "sim"},
+    {"Combat FX + Foley", "sim"}, {"Blood", "sim"}, {"Game Module Tick", "sim"}, {"Particles", "sim"},
+    {"Outfits + Transform Cache", "sim"}, {"AI *", "sim"},
+    {"Audio Update", "audio"}, {"Audio Listener", "audio"},
+    {"Editor UI Build", "ui"}, {"Game View UI", "ui"}, {"ImGui Render", "ui"}, {"UI *", "ui"},
+    {"Asset Pump + Outfit Hiding", "assets"}, {"Asset Pump", "assets"},
+    {"Game View Render", "render"}, {"Scene View Render", "render"}, {"Pre-Skin", "render"}, {"LOD Select", "render"},
+    {"Probe *", "render"}, {"GI Bake", "render"}, {"HDRI Load", "render"}, {"IBL Bake*", "render"},
+    {"Upload Fences", "render"}, {"Sky *", "render"}, {"Atmosphere *", "render"}, {"Cloud *", "render"},
+    {"Volumetric *", "render"}, {"Decal *", "render"}, {"Grass *", "render"}, {"Collider Overlay", "render"},
+    {"Selection Outline", "render"}, {"Scene*", "render"}, {"Sun*", "render"}, {"Spot Shadow*", "render"},
+    {"Point Shadow*", "render"}, {"Local Shadow*", "render"}, {"View Model Draw", "render"}, {"Gather Visible", "render"},
+    {"Swap Buffers", "wait"}, {"Pace Wait", "wait"}, {"Pace Flush", "wait"}, {"Frame Cap", "wait"},
+    {"Project Sync", "editor"}, {"Focus Reimport", "editor"}, {"Shader Reload Poll", "editor"},
+    {"Harness Begin", "editor"}, {"Harness End", "editor"}, {"Undo *", "editor"}, {"PushUndo", "editor"},
+    {"Events + Input", "input"},
+};
+// Every cpu.* bucket, in report order; each gets a sample every frame (0 when nothing ran) so they share one N.
+constexpr const char* kCpuBucketKeys[] = {"sim", "anim", "physics", "ui", "audio", "assets", "render", "wait",
+                                          "editor", "input", "other"};
+
+bool ScopeMatches(const char* rule, const std::string& scope) {
+    const size_t n = std::strlen(rule);
+    if (n > 0 && rule[n - 1] == '*') return scope.compare(0, n - 1, rule, n - 1) == 0;
+    return scope == rule;
+}
+
+// The value at fraction p of sorted samples (nearest rank, as StatsOf).
+double Pct(const std::vector<double>& sorted, double p) {
+    return sorted[std::min(sorted.size() - 1, (size_t)(p * (double)(sorted.size() - 1) + 0.5))];
+}
 } // namespace
+
+const char* PerfBench::CpuBucket(const std::string& scope) {
+    for (const BucketRule& r : kCpuBuckets)
+        if (ScopeMatches(r.Scope, scope)) return r.Bucket;
+    return "other";
+}
+
+void PerfBench::AddHalf(const std::string& key, double ms) {
+    auto it = std::find_if(m_Halves.begin(), m_Halves.end(), [&](const auto& h) { return h.first == key; });
+    if (it == m_Halves.end()) { m_Halves.emplace_back(key, std::vector<double>{}); it = m_Halves.end() - 1; }
+    it->second.push_back(ms);
+}
+
+double PerfBench::LastHalf(const std::string& key) const {
+    for (const auto& [k, samples] : m_Halves)
+        if (k == key) return samples.empty() ? -1.0 : samples.back();
+    return -1.0;
+}
+
+// The profiler's last frame, top-level scopes summed per bucket, plus the frame's wall time and its unscoped part.
+void PerfBench::AddCpuHalves() {
+    const float wallMs = Profiler::LastFrameWallMs();
+    if (wallMs <= 0.0f) return; // no completed profiler frame yet
+    double sums[std::size(kCpuBucketKeys)] = {};
+    for (const Profiler::Entry& e : Profiler::GetLastFrame()) {
+        if (e.Nested) continue; // its time is already in the scope around it
+        const char* bucket = CpuBucket(e.Name);
+        for (size_t i = 0; i < std::size(kCpuBucketKeys); ++i)
+            if (std::strcmp(bucket, kCpuBucketKeys[i]) == 0) sums[i] += e.Milliseconds;
+        if (std::strcmp(bucket, "other") == 0 &&
+            std::find(m_UnmappedCpu.begin(), m_UnmappedCpu.end(), e.Name) == m_UnmappedCpu.end())
+            m_UnmappedCpu.push_back(e.Name);
+    }
+    std::string key;
+    for (size_t i = 0; i < std::size(kCpuBucketKeys); ++i) {
+        key = "cpu.";
+        key += kCpuBucketKeys[i];
+        AddHalf(key, sums[i]);
+    }
+    AddHalf("cpu.unscoped", Profiler::LastFrameUnscopedMs());
+    AddHalf("cpu.frame", wallMs);
+}
+
+// TARTARUS_PERF_MACHINE labels every phase with the machine it ran on (G-0: numbers name their machine). Unset, the
+// line says so and gives what the process can see (the GL renderer, the logical cores).
+void PerfBench::PrintMachine() const {
+    const std::string label = Env::Str(Env::Var::PerfMachine);
+    if (!label.empty()) { std::printf("[PerfBench]   MACHINE %s\n", label.c_str()); return; }
+    const char* gpu = reinterpret_cast<const char*>(glGetString(0x1F01 /* GL_RENDERER */));
+    std::printf("[PerfBench]   MACHINE (unlabelled: set TARTARUS_PERF_MACHINE) GPU %s, %d logical cores\n",
+                gpu ? gpu : "?", MachineLoad::Cores());
+}
+
+// The HALF lines (and the CSV's "half" rows): per key avg / p50 / p95 / p99 / max over its own samples, then clears them.
+void PerfBench::ReportHalves(const std::string& sceneFile, const char* label) {
+    PrintMachine();
+    std::ofstream csv;
+    const std::string path = Env::Str(Env::Var::PerfCsv);
+    if (!path.empty()) {
+        std::error_code ec;
+        const bool fresh = !std::filesystem::exists(path, ec) || std::filesystem::file_size(path, ec) == 0;
+        csv.open(path, std::ios::app);
+        if (csv && fresh) csv << kCsvHeader;
+    }
+    for (auto& [key, samples] : m_Halves) {
+        if (samples.empty()) continue;
+        double sum = 0.0;
+        for (double v : samples) sum += v;
+        std::sort(samples.begin(), samples.end());
+        const double avg = sum / (double)samples.size(), p50 = Pct(samples, 0.5), p95 = Pct(samples, 0.95),
+                     p99 = Pct(samples, 0.99), mx = samples.back();
+        std::printf("[PerfBench]   HALF %-24s avg=%8.3f p50=%8.3f p95=%8.3f p99=%8.3f max=%8.3f ms  N=%zu\n", key.c_str(),
+                    avg, p50, p95, p99, mx, samples.size());
+        if (csv) {
+            char buf[160];
+            std::snprintf(buf, sizeof(buf), ",,%.3f,%.3f,%.3f,%.3f,,%.3f,,,%zu,,,,\n", avg, p50, p95, p99, mx,
+                          samples.size());
+            csv << CsvField(sceneFile) << ',' << label << ",half," << CsvField(key) << buf;
+        }
+    }
+    if (!m_UnmappedCpu.empty()) {
+        std::string names;
+        for (const std::string& n : m_UnmappedCpu) names += (names.empty() ? "" : ", ") + n;
+        std::printf("[PerfBench]   HALF cpu.other holds: %s\n", names.c_str());
+    }
+    m_Halves.clear();
+    m_UnmappedCpu.clear();
+}
+
+const PerfBench::Pacing& PerfBench::Paced() {
+    static const Pacing p = [] {
+        Pacing out;
+        const std::string v = Env::Str(Env::Var::PerfPaced);
+        if (v == "vsync") out.VSync = true;
+        else if (!v.empty()) out.Fps = std::clamp(std::atoi(v.c_str()), 0, 1000);
+        return out;
+    }();
+    return p;
+}
 
 PerfBench::PerfBench()
     : m_Warmup(std::max(0, Env::Int(Env::Var::PerfWarmup, 100))), m_LastFrameEnd(std::chrono::steady_clock::now()) {
@@ -47,16 +195,46 @@ double PerfBench::TakeFrameMs() {
     if (!FrameLoads::Enabled()) FrameLoads::Enable(true); // only --perf-bench calls this: the log is off otherwise
     FrameLoads::Take(m_Loads);
     if (AssetCost::Enabled()) AssetCost::NoteLoads(m_Loads);
+    Model::SetSkinStatsEnabled(true); // G5-0: counted from here on (the first frame's take is empty)
+    const Model::SkinFrameStats k = Model::TakeSkinFrameStats();
+    m_SkinFrame = {1, (double)k.Listed, (double)k.Dispatched, (double)k.Idle, (double)k.Fallback, (double)k.Unseen, (double)k.DispatchedVertices,
+                   (double)k.OffscreenModels, (double)k.OffscreenVertices, (double)k.PosedDraws, k.PosedDrawMs, k.PosedDrawMs};
     return frameMs;
 }
 
 void PerfBench::Sample(double frameMs, int frameNo) {
-    if (m_Frame.N == 0) m_LoadStart = MachineLoad::Take();
+    if (m_Frame.N == 0) {
+        m_LoadStart = MachineLoad::Take(); m_G0.BeginPhase();
+        m_QuietLive0 = ShadowFrame::LocalQuietTotals().Live; m_Quiet0 = ShadowFrame::LocalQuietTotals().Quiet;
+    }
     m_Frame.Sum += frameMs; m_Frame.Max = std::max(m_Frame.Max, frameMs); ++m_Frame.N;
     for (const Profiler::Entry& e : Profiler::GetLastFrame()) Add(m_Cpu, e.Name, e.Milliseconds);
     for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) Add(m_Gpu, e.Name, e.Milliseconds);
+    AddCpuHalves();
+    m_G0.Sample([this](const std::string& key, double ms) { AddHalf(key, ms); }); // gpu.*, half.cpu, p48.*, bind
     RecordFrame(frameMs, frameNo);
     for (Worst& w : m_Worst) FillGpu(w);
+    const SkinSums& f = m_SkinFrame;
+    m_Skin.Frames += f.Frames; m_Skin.Listed += f.Listed; m_Skin.Dispatched += f.Dispatched; m_Skin.Idle += f.Idle;
+    m_Skin.Fallback += f.Fallback; m_Skin.Unseen += f.Unseen; m_Skin.Verts += f.Verts; m_Skin.Offscreen += f.Offscreen; m_Skin.OffscreenVerts += f.OffscreenVerts;
+    m_Skin.PosedDraws += f.PosedDraws; m_Skin.PosedMs += f.PosedMs; m_Skin.PosedMsMax = std::max(m_Skin.PosedMsMax, f.PosedMs);
+}
+
+// G5-0: per measured frame, the skinned models and what skinning them and drawing them cost. "off-screen GPU" is the
+// Pre-Skin GPU time scaled by the share of dispatched vertices no pass then drew (skinning cost goes with the vertices).
+void PerfBench::ReportSkin(const char* mode) {
+    if (m_Skin.Frames <= 0.0) return;
+    const double n = m_Skin.Frames;
+    double preSkinGpu = 0.0;
+    for (const auto& [name, a] : m_Gpu)
+        if (name == "Pre-Skin" && a.N > 0) preSkinGpu = a.Sum / n;
+    const double offShare = m_Skin.Verts > 0.0 ? m_Skin.OffscreenVerts / m_Skin.Verts : 0.0;
+    std::printf("[PerfBench] %s skin: per frame listed=%.1f dispatched=%.1f (%.0f verts) idle=%.1f fallback=%.1f unseen=%.1f  "
+                "off-screen=%.1f (%.0f verts, %.1f%%)  Pre-Skin GPU=%.3f ms, off-screen GPU~%.3f ms  "
+                "posed draws=%.1f CPU=%.3f ms (max %.3f)\n",
+                mode, m_Skin.Listed / n, m_Skin.Dispatched / n, m_Skin.Verts / n, m_Skin.Idle / n, m_Skin.Fallback / n, m_Skin.Unseen / n,
+                m_Skin.Offscreen / n, m_Skin.OffscreenVerts / n, 100.0 * offShare, preSkinGpu, preSkinGpu * offShare,
+                m_Skin.PosedDraws / n, m_Skin.PosedMs / n, m_Skin.PosedMsMax);
 }
 
 void PerfBench::Add(AccumList& v, const std::string& name, double ms) {
@@ -141,10 +319,40 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
     Stats after2s;
     if (m_FrameTimes.size() > 240) after2s = StatsOf(std::vector<double>(m_FrameTimes.begin() + 120, m_FrameTimes.end()));
     print(" after 2 s", after2s);
+    // TARTARUS_PERF_PACED: how even the paced frames came (the frame time here is end of frame to end of frame, after
+    // the present and the cap, so it is the cadence the player sees, up to the driver's own queueing).
+    if (const Pacing& paced = Paced(); paced.On()) {
+        const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+        const int hz = mode ? mode->refreshRate : 60;
+        const double target = 1000.0 / (paced.VSync ? (double)std::max(hz, 1) : (double)paced.Fps);
+        const std::vector<double> t = m_FrameTimes.size() > 240
+                                          ? std::vector<double>(m_FrameTimes.begin() + 120, m_FrameTimes.end())
+                                          : m_FrameTimes;
+        const Stats s = StatsOf(t);
+        int late = 0, run = 0, longest = 0;
+        for (double ms : t) {
+            if (ms > 1.5 * target) { ++late; longest = std::max(longest, ++run); }
+            else run = 0;
+        }
+        char how[32];
+        if (paced.VSync) std::snprintf(how, sizeof(how), "vsync %d Hz", hz);
+        else std::snprintf(how, sizeof(how), "cap %d fps", paced.Fps);
+        std::printf("[PerfBench] %s paced (%s): target %.2f ms  p50=%.2f p99=%.2f max=%.2f  p99/p50=%.2f  late(>1.5x target)=%d of %zu  longest late run=%d\n",
+                    label, how, target, s.P50, s.P99, s.Max, s.P50 > 0.0 ? s.P99 / s.P50 : 0.0, late, s.N, longest);
+    }
     // What else ran during the phase: hitches in a CONTENDED phase are likely other processes, not this one.
     const int cores = MachineLoad::Cores();
     const std::string machine = MachineLoad::Describe(MachineLoad::Between(m_LoadStart, MachineLoad::Take(), cores), cores);
     if (!machine.empty()) std::printf("[PerfBench] %s machine: %s\n", label, machine.c_str());
+    // G4-c: of the live local lights each frame, how many kept their map without a look (0 with verify on or G4-c off).
+    {
+        const ShadowFrame::QuietTotals& q = ShadowFrame::LocalQuietTotals();
+        const std::uint64_t live = q.Live - m_QuietLive0, quiet = q.Quiet - m_Quiet0;
+        std::printf("[PerfBench] %s local shadows: %llu of %llu live light looks kept quiet%s\n", label,
+                    (unsigned long long)quiet, (unsigned long long)live,
+                    ShadowFrame::CacheVerify() ? " (verify on: quiet lights looked at anyway)"
+                    : !ShadowFrame::SlotDirtyEnabled() ? " (G4-c off)" : "");
+    }
     for (const Worst& w : m_Worst) {
         char unscoped[64] = "-";
         if (w.UnscopedMs >= 0.0f) std::snprintf(unscoped, sizeof(unscoped), "%.2f of %.2f", w.UnscopedMs, w.WallMs);
@@ -169,7 +377,7 @@ void PerfBench::AppendCsv(const std::string& sceneFile, const char* label, const
     const bool fresh = !std::filesystem::exists(path, ec) || std::filesystem::file_size(path, ec) == 0;
     std::ofstream out(path, std::ios::app);
     if (!out) { std::printf("[PerfBench] cannot write the CSV '%s'\n", path.c_str()); return; }
-    if (fresh) out << "scene,phase,row,rank,frame,ms,p50,p95,p99,p999,max,over2x,over33,frames,cpu,gpu,loads,gpu_starved\n";
+    if (fresh) out << kCsvHeader;
     char buf[192];
     auto summary = [&](const char* row, const Stats& s) {
         if (s.N == 0) return;
@@ -203,8 +411,10 @@ void PerfBench::ReportCombat(const std::string& sceneFile, int draws, int tris, 
                 m_Frame.Max, draws, tris, width, height);
     ReportHitches(sceneFile, "combat");
     PrintScopeTable();
+    ReportHalves(sceneFile, "combat");
+    m_G0.Report(sceneFile, "combat");
     std::fflush(stdout);
-    m_Cpu.clear(); m_Gpu.clear(); m_Frame = {};
+    m_Cpu.clear(); m_Gpu.clear(); m_Frame = {}; m_Skin = {};
 }
 
 void PerfBench::ReportPhase(const std::string& sceneFile, const char* mode, int draws, int tris, int width, int height,
@@ -219,9 +429,12 @@ void PerfBench::ReportPhase(const std::string& sceneFile, const char* mode, int 
     std::printf("[PerfBench]   textures=%d  %.1f MiB on the GPU\n", TextureLoadStats::Get().Count,
                 TextureLoadStats::Get().GpuBytes / (1024.0 * 1024.0));
     PrintScopeTable();
+    ReportHalves(sceneFile, mode);
+    m_G0.Report(sceneFile, mode);
     ReportHitches(sceneFile, mode);
+    ReportSkin(mode);
     std::fflush(stdout);
     if (perfSample) SamplingProfiler::Report(mode, 60);
     if (AssetCost::Enabled()) AssetCost::WritePhase(sceneFile, mode);
-    m_Cpu.clear(); m_Gpu.clear(); m_Frame = {};
+    m_Cpu.clear(); m_Gpu.clear(); m_Frame = {}; m_Skin = {};
 }

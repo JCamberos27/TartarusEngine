@@ -19,6 +19,9 @@
 #include <cstddef>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 #include "ModelDrawInternal.h"
 
 using ModelInternal::CachedMaterialLocs;
@@ -53,10 +56,20 @@ unsigned int g_SkinnedBuffer = 0;
 GLsizeiptr g_SkinnedBytes = 0;
 bool g_SkinnedBound = false;
 std::uint64_t g_SkinFrame = 1; // PreSkinRange::Frame of the skinning the buffer holds now
+// Counts BeginRenderFrame calls. A model no pass drew last frame (behind the camera and outside every shadow view, or
+// in no view at all) isn't pre-skinned: if a pass draws it after all, that pass skins it in its vertex shader, and
+// from the next frame on it is pre-skinned again.
+std::uint64_t g_RenderFrame = 2;
 // Which model sits where in the buffer. Bumped when a call lays models out differently from the call before it (or the
 // buffer is reallocated); while it holds, a model whose pose hasn't changed still has its vertices in place, so it isn't
 // dispatched again: an idle body, a corpse, a character whose animation is paused costs nothing on the GPU.
 std::uint64_t g_SkinLayout = 1;
+// G5-0 counters (Model::TakeSkinFrameStats): this frame's, the models the last PreSkin dispatched (with their vertex
+// counts) and the skinned models a pass drew since then. Pointers are only compared, never followed.
+bool g_SkinStatsOn = false; // Model::SetSkinStatsEnabled: off unless --perf-bench asks
+Model::SkinFrameStats g_SkinStats;
+std::vector<std::pair<const void*, std::uint64_t>> g_LastDispatched;
+std::unordered_set<const void*> g_DrawnSinceSkin;
 
 // The vertex shaders declare the block whether or not they read it: keep binding 26 on a real buffer.
 void EnsureSkinnedBinding() {
@@ -130,6 +143,7 @@ void Model::BeginRenderFrame() {
     g_BoneCursor = 0;
     ++g_BoneEpoch;
     ++g_SkinFrame; // last frame's skinned vertices are stale
+    ++g_RenderFrame;
 }
 
 const std::vector<glm::mat4>* Model::SkinPalette(int& count) const {
@@ -160,9 +174,35 @@ void Model::BindBonePalette(const std::vector<glm::mat4>& palette, int count) co
     BindBoneRange((GLintptr)u.Offset, bytes);
 }
 
+void Model::SetSkinStatsEnabled(bool on) {
+    g_SkinStatsOn = on;
+    if (!on) {
+        g_SkinStats = {};
+        g_LastDispatched.clear();
+        g_DrawnSinceSkin.clear();
+    }
+}
+
+bool Model::SkinStatsEnabled() { return g_SkinStatsOn; }
+
+Model::SkinFrameStats Model::TakeSkinFrameStats() {
+    const SkinFrameStats s = g_SkinStats;
+    g_SkinStats = {};
+    return s;
+}
+
+void Model::NotePosedDraw(double ms) {
+    ++g_SkinStats.PosedDraws;
+    g_SkinStats.PosedDrawMs += ms;
+}
+
 bool Model::UploadBoneMatrices(Shader& shader) const {
     // #98 — skin whenever there are bones: the clip's pose while playing, else the bind pose.
     const bool skinning = m_D->BoneCounter > 0;
+    if (skinning) {
+        m_PreSkin.Drawn = g_RenderFrame;
+        if (g_SkinStatsOn) g_DrawnSinceSkin.insert(this); // G5-0: a pass drew it
+    }
     const MaterialLocs& locs = CachedMaterialLocs(shader);
     EnsureBoneRing();
     EnsureSkinnedBinding();
@@ -187,8 +227,20 @@ bool Model::UploadBoneMatrices(Shader& shader) const {
 }
 
 void Model::PreSkin(const std::vector<Model*>& models) {
+    // G5-0: what the last call skinned and no pass drew since was skinned for nothing (off-screen).
+    const bool stats = g_SkinStatsOn;
+    if (stats) {
+        for (const auto& [model, verts] : g_LastDispatched)
+            if (!g_DrawnSinceSkin.count(model)) {
+                ++g_SkinStats.OffscreenModels;
+                g_SkinStats.OffscreenVertices += verts;
+            }
+        g_LastDispatched.clear();
+        g_DrawnSinceSkin.clear();
+    }
     ++g_SkinFrame; // a second call in one frame rewrites the buffer: what the first one skinned is stale
     static const bool disabled = Env::Flag(Env::Var::NoPreskin);
+    static const bool skinUnseen = Env::Flag(Env::Var::NoSkinCull);
     if (disabled || models.empty()) return;
 
     // What gets skinned: each model with bones and every sub-mesh on the GPU, once, while the buffer's cap allows
@@ -198,8 +250,11 @@ void Model::PreSkin(const std::vector<Model*>& models) {
     work.clear();
     counts.clear();
     GLsizeiptr vertices = 0;
+    int unseen = 0;
     for (Model* m : models) {
         if (!m || m->m_D->BoneCounter <= 0 || m->m_PreSkin.Frame == g_SkinFrame) continue;
+        // No pass drew it last frame or yet this frame: leave it to the vertex shader if one does.
+        if (PreSkinSkipsUnseen(m->m_PreSkin.Drawn, g_RenderFrame, skinUnseen)) { ++unseen; continue; }
         bool uploaded = true;
         GLsizeiptr n = 0;
         for (const auto& mesh : m->m_D->Meshes) {
@@ -215,10 +270,17 @@ void Model::PreSkin(const std::vector<Model*>& models) {
         work.emplace_back(m, palette);
         counts.push_back(count);
     }
+    if (stats) {
+        const int skinned = (int)std::count_if(models.begin(), models.end(), [](const Model* m) { return m && m->m_D->BoneCounter > 0; });
+        g_SkinStats.Listed += skinned;
+        g_SkinStats.Unseen += unseen;
+        g_SkinStats.Fallback += skinned - unseen - (int)work.size();
+    }
     if (work.empty()) return;
     Shader* cs = BindPreSkinProgram();
     if (!cs) {
         for (const auto& item : work) item.first->m_PreSkin.Frame = ~0ull; // not skinned: they skin per pass
+        if (stats) g_SkinStats.Fallback += (int)work.size();
         return;
     }
 
@@ -259,6 +321,14 @@ void Model::PreSkin(const std::vector<Model*>& models) {
                 first += n;
             }
             dispatched = true;
+            if (stats) {
+                const std::uint64_t verts = first - (unsigned)p.Base;
+                ++g_SkinStats.Dispatched;
+                g_SkinStats.DispatchedVertices += verts;
+                g_LastDispatched.emplace_back(&m, verts);
+            }
+        } else if (stats) {
+            ++g_SkinStats.Idle;
         }
         p.Version = m.m_PoseVersion;
         p.Palette = palette.data();

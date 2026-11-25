@@ -286,6 +286,7 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
     // listener matches the frame that's about to be rendered.
     // #171 - or from an Audio Listener entity, when the scene has one.
     {
+        PROFILE_SCOPE("Audio Listener");
         const entt::entity listener = FindActiveAudioListener(world);
         glm::vec3 earPos = gameCam->Position;
         if (listener != entt::null) {
@@ -311,6 +312,9 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
     }
     // The arms are posed now (clips + IK): seat the gun in this frame's hands.
     if (playUsesPlayer) {
+        // The pose work (IK, arms, the world gun) in one scope, the shots after it in their own: --perf-bench's HALF
+        // report counts the first as anim and the second as sim.
+        {
         PROFILE_SCOPE("First Person IK");
         {
         PROFILE_SCOPE("FP Body LateUpdate");
@@ -339,6 +343,7 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
                                                      haveHolding ? &holdingHand : nullptr);
         }
         if (weaponLab) weaponLab->AfterPose(world, firstPersonBody, firstPersonPresentation, player.Cam, gameDt);
+        }
         // This frame's rounds, down the bore from the muzzle: a hole where each struck.
         PROFILE_SCOPE("Player Shots + Impacts");
         for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits()) {

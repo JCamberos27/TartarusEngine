@@ -1,6 +1,7 @@
 // SceneRenderer::RenderScene, stage by stage (SceneViewPass.h): one ViewPass per call holds the view's state, and
 // Run() calls the stages in drawing order.
 #include "SceneViewPass.h"
+#include "GpuCull.h"
 #include "AssetCost.h"
 #include "OpaqueBatchKey.h"
 #include "RenderFrameContext.h"
@@ -30,6 +31,7 @@
 #include "BloodRenderer.h"
 #include "FurRenderer.h"
 #include "GrassRenderer.h"
+#include "GpuScene.h"
 #include "ImpostorRenderer.h"
 #include "FxSpriteRenderer.h"
 #include "WorldText.h"
@@ -289,6 +291,14 @@ void SceneRenderer::ViewPass::BuildDrawLists() {
     inView.CellCull = viewCells;
     inView.CellCullCount = m_ViewModelPass ? 2 : 1;
     GatherVisible(world, inView, m_S.Visible);
+    if (GpuCull::Enabled()) { // G2-a verify mode: the GPU's stage A against the same query, then with the camera frustum
+        GpuCull::VerifyView(world, inView);
+        VisibilityQuery framed = inView;
+        framed.Cull = &m_CamFrustum;
+        framed.CellCull = nullptr;
+        framed.CellCullCount = 0;
+        GpuCull::VerifyView(world, framed);
+    }
     {
         PROFILE_SCOPE("Scene: Classify Visible"); // per visible: cull, registry reads, draw items (P-42)
         for (const VisibleRenderable& vis : m_S.Visible) {
@@ -442,6 +452,7 @@ void SceneRenderer::ViewPass::BuildDrawLists() {
                 item.WorldMax = vis.WorldMax;
                 item.Bounded = validBounds;
                 item.Normal = vis.Normal;
+                item.Slot = vis.Slot;
                 if (splitSleeves) pushSleeves(item, m_S.ViewModelList);
                 (isViewModel ? m_S.ViewModelList : m_S.DrawList).push_back(item);
             }
@@ -617,8 +628,8 @@ void SceneRenderer::ViewPass::DepthPrepass() {
     std::vector<DepthCaster>& prepass = m_S.Prepass;
     prepass.clear();
     for (const DrawItem& it : m_S.DrawList)
-        if (Prepassed(it)) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
-    DrawDepthCasters(depth, prepass);
+        if (Prepassed(it)) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform, false, 0, 1, it.Slot});
+    DrawDepthCasters(depth, prepass, -1, &m_World);
     if (m_ImpostorsOn) {
         ImpostorRenderer::Get().DrawDepth(ctx.View, ctx.Proj, ctx.ViewPos);
         m_Stats.DrawCalls += ImpostorRenderer::Get().DrawCalls();
@@ -642,8 +653,9 @@ void SceneRenderer::ViewPass::DepthPrepass() {
         glViewport(0, 0, w, h);
         prepass.clear();
         for (const DrawItem& it : m_S.DrawList)
-            if (!Prepassed(it) && !it.NoSsao && it.LodFade == 0.0f) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
-        DrawDepthCasters(depth, prepass);
+            if (!Prepassed(it) && !it.NoSsao && it.LodFade == 0.0f)
+                prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform, false, 0, 1, it.Slot});
+        DrawDepthCasters(depth, prepass, -1, &m_World);
         depth.SetInt("uSplitViewProj", 0);
         viewDepthCopied = true;
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // the occlusion passes write colour
@@ -794,6 +806,20 @@ void SceneRenderer::ViewPass::BuildBatches() {
     HiZCuller::Boxes().clear();
     m_HizCulled = false;
 
+    // The persistent GPU scene (GpuScene.h): the multi-draw copies stage their slot (4 bytes) instead of their two
+    // matrices (128), and the vertex programs read the matrices the scene already holds. Brought up to this view's world
+    // first (its candidate list is the one GatherVisible just read: nothing to patch but posed models, unless another
+    // world drew since). Every opaque item carries its slot; one that doesn't (none should) keeps the view on the ring.
+    m_SceneSlots = false;
+    if (multiDraw && GpuScene::Enabled()) {
+        GpuScene& scene = GpuScene::Get();
+        scene.Sync(m_World);
+        m_SceneSlots = scene.Ready();
+        for (std::size_t i = 0; m_SceneSlots && i < drawList.size(); ++i)
+            m_SceneSlots = drawList[i].Slot < scene.Count();
+    }
+    std::vector<std::uint32_t>& slotStaging = m_S.SlotStaging;
+    slotStaging.clear();
     std::vector<glm::mat4>& staging = InstanceBuffer::Staging();
     staging.clear();
     for (std::size_t g = 0; multiDraw && g < groups.Groups.size(); ++g) {
@@ -802,12 +828,16 @@ void SceneRenderer::ViewPass::BuildBatches() {
         const DrawItem& lead = drawList[leadIndex];
         if (lead.Pass == Model::MeshPass::Transparent || !Batchable(lead) || !lead.Ref->InArena()) continue;
         m_S.GroupIndirect[g] = 1;
-        const std::uint32_t base = (std::uint32_t)(staging.size() / 2);
+        const std::uint32_t base = (std::uint32_t)(m_SceneSlots ? slotStaging.size() : staging.size() / 2);
         m_S.GroupBase[g] = (int)base;
         for (std::uint32_t k = 0; k < grp.Count; ++k) {
             const DrawItem& member = drawList[groups.Order[grp.First + k]];
-            staging.push_back(member.Xform);
-            staging.push_back(glm::mat4(member.Normal));
+            if (m_SceneSlots) {
+                slotStaging.push_back(member.Slot);
+            } else {
+                staging.push_back(member.Xform);
+                staging.push_back(glm::mat4(member.Normal));
+            }
         }
         if (hiz) {
             // Foliage sways past its bounds: the box grows by the most any of its materials can move a vertex.
@@ -875,7 +905,11 @@ void SceneRenderer::ViewPass::BuildBatches() {
         }
     }
     InstanceBuffer::Upload();
+    m_XformsOnScene = false; // the upload bound the ring at 27
     if (!m_S.OpaqueItems.empty()) IndirectBuffer::Upload(m_S.OpaqueCommands);
+    // The slots as the multi-draw reads them (28) - unless the occlusion cull below writes 28 from them (its input, 25).
+    const bool cullSlots = hiz && !m_S.OpaqueItems.empty() && !hizGroups.empty();
+    if (m_SceneSlots && !m_S.OpaqueItems.empty()) GpuScene::Get().BindSlotList(cullSlots ? 25u : 28u, slotStaging);
     if (hiz && !m_S.OpaqueItems.empty() && !hizGroups.empty()) {
         PROFILE_GPU_SCOPE("Occlusion Cull");
         const std::vector<IndirectCommand>& commands = m_S.OpaqueCommands;
@@ -897,9 +931,20 @@ void SceneRenderer::ViewPass::BuildBatches() {
         }
         m_HizCulled = HiZCuller::Cull(m_HizDepth, ctx.TxHdr->Width(), ctx.TxHdr->Height(),
                                       glm::vec4(fs.vp[0], fs.vp[1], fs.vp[2], fs.vp[3]), ctx.Proj * ctx.View, ctx.ViewPos,
-                                      hizGroups, m_S.HizCmdList, IndirectBuffer::Handle(), mdiSlots);
+                                      hizGroups, m_S.HizCmdList, IndirectBuffer::Handle(), mdiSlots, m_SceneSlots);
+        // It did not run: the draws read the slots unculled.
+        if (!m_HizCulled && m_SceneSlots) GpuScene::Get().BindSlotList(28u, slotStaging);
         m_ModelShader.Bind();
     }
+}
+
+// Binding 27 for the opaque pass's next draw: the GPU scene's transforms (multi-draw batches reading slots) or this
+// view's span of the instance ring (the one-by-one instanced groups).
+void SceneRenderer::ViewPass::BindInstanceXforms(bool scene) {
+    if (scene == m_XformsOnScene) return;
+    if (scene) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, InstanceBuffer::kXformBinding, GpuScene::Get().XformBuffer());
+    else InstanceBuffer::Rebind();
+    m_XformsOnScene = scene;
 }
 
 void SceneRenderer::ViewPass::CountDraw(const DrawItem& it) {
@@ -940,7 +985,9 @@ void SceneRenderer::ViewPass::DrawOpaque() {
         }
         m_ProbeItem = &lead;
         m_InstanceBase = 0; // uInstanced on; each command's baseInstance is its group's
-        m_InstanceMode = m_HizCulled ? 2 : 1;
+        // 2: through the remap at 28 (the occlusion cull's output, or the GPU scene slots as staged).
+        m_InstanceMode = m_HizCulled || m_SceneSlots ? 2 : 1;
+        BindInstanceXforms(m_SceneSlots);
         // Everything the per-draw hook reads for a batch's lead (batchable leads have no hiding, fade, pull or blood).
         m_PerDrawKey = t.Object ^ ((std::uint64_t)m_InstanceMode << 32) ^ ((std::uint64_t)floatBits(lead.NearHideWidth) << 13) ^
                        ((std::uint64_t)lead.GIMask * 0x9E3779B97F4A7C15ull);
@@ -996,6 +1043,7 @@ void SceneRenderer::ViewPass::DrawOpaque() {
         m_ProbeItem = &it;
         m_InstanceBase = m_S.GroupBase[g];
         m_InstanceMode = 1;
+        if (m_InstanceBase >= 0) BindInstanceXforms(false);
         it.Ref->DrawSelected(m_ModelShader, it.Xform, *it.Slots, m_Select, 1.0f, m_PerDraw, it.Pass, it.DoubleSided, it.Visible,
                              m_InstanceBase >= 0 ? (int)grp.Count : 1);
         m_Stats.DrawCalls += it.Meshes;
@@ -1015,6 +1063,7 @@ void SceneRenderer::ViewPass::DrawOpaque() {
     }
     }
     m_InstanceBase = -1;
+    BindInstanceXforms(false); // what was bound at 27 before this pass, for whatever reads it next
     // Grass, lit (GrassRenderer): with the opaque pass, so it writes TAA motion for its sway.
     if (m_GrassOn) {
         GrassRenderer& grass = GrassRenderer::Get();

@@ -62,6 +62,7 @@
 #include <cstring>
 #include <functional>
 #include <cfloat>
+#include "RenderSettingsEpoch.h"
 
 using namespace EditorInternal;
 
@@ -2486,6 +2487,7 @@ entt::entity EditorLayer::InstantiateAssetDropInHierarchy(World& world, AssetLib
                                     UniqueNameFor(world, name));
         if (auto* rc = world.Registry.try_get<RenderableComponent>(e); rc && rc->ModelRef)
             assets.ApplyMaterialRemap(*rc->ModelRef, rc->Materials); // its extracted .mat files
+            NoteRenderSettingsChanged();
     } else if (prefabPath && *prefabPath) {
         PushUndo(world, "Place Prefab Instance");
         e = SceneSerializer::InstantiatePrefab(world, assets, prefabPath);

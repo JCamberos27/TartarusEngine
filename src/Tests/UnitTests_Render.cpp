@@ -1,19 +1,26 @@
 #include "UnitTestSupport.h"
+#include <limits>
 #include <random>
+#include <cstring>
 #include "../Renderer/SceneRenderer.h"
+#include "../Renderer/RenderSettingsEpoch.h"
 #include "../Renderer/Model.h"
 #include "../Renderer/InstanceBatch.h"
 #include "../Renderer/OpaqueBatchKey.h"
 #include "../Renderer/UploadStaging.h"
 #include "../Renderer/MeshArena.h"
 #include "../Renderer/HiZCuller.h"
+#include "../Renderer/GpuCull.h"
+#include "../Physics/Frustum.h"
+#include "../Renderer/GpuScene.h"
+#include "../Renderer/SceneViewPass.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/TextureCache.h"
 #include "../Renderer/Texture.h"
 #include "../Renderer/ImpostorLibrary.h"
 #include "../Renderer/AssetCost.h"
-#include "../Renderer/SceneViewPass.h"
 #include "../Renderer/SkyAtmosphere.h"
+#include "../Renderer/ProgramBinaryCache.h"
 #include "../Renderer/Material.h"
 #include "../Renderer/RenderFrameContext.h"
 #include "../Core/TimeService.h"
@@ -39,6 +46,7 @@
 #include "../Game/TimeOfDay.h"
 #include "AssetLibrary.h"
 #include "AsyncTicketCount.h"
+#include "StepPending.h"
 #include "../Game/World.h"
 #include "../Game/Components.h"
 #include "../Physics/Frustum.h"
@@ -273,6 +281,520 @@ void GatherPatch() {
     CHECK(patched * 2 > frames);
 }
 
+// GpuScene (G-1): after every frame of random changes (spawn, destroy, re-parent, model swap or none, tags, layers,
+// moves), its mirror of the GPU buffers holds exactly what the candidate list says for every slot, though most frames
+// write only the slots that changed. The GL buffers themselves are compared with the list by the smoke run
+// (GpuScene::SelfTest, smoke_min).
+void GpuSceneMirror() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    const auto modelA = Model::ImportDeferred(path, ModelImportSettings{});
+    const auto modelB = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(modelA && modelB);
+    if (!modelA || !modelB) return;
+    World w;
+    std::mt19937 rng(1125);
+    auto pick = [&](size_t n) { return (size_t)std::uniform_int_distribution<size_t>(0, n - 1)(rng); };
+    auto at = [&]() { return glm::vec3((float)pick(200) - 100.0f, 0.0f, (float)pick(200) - 100.0f); };
+    std::vector<entt::entity> live;
+    auto spawn = [&]() {
+        const entt::entity e = w.CreateModelEntity(pick(2) ? modelA : modelB, at(), glm::vec3(0), glm::vec3(1), "R");
+        if (!live.empty() && pick(3) == 0) w.SetParent(e, live[pick(live.size())]);
+        live.push_back(e);
+    };
+    for (int i = 0; i < 300; ++i) spawn();
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    // Every slot of the mirror against the list; false with the first that differs.
+    auto matches = [&](int frame) {
+        if (scene.XformMirror().size() != (size_t)scene.Count() * 2 || scene.BoundsMirror().size() != (size_t)scene.Count() * 2)
+            return false;
+        SceneSlot s;
+        glm::mat4 xf[2];
+        glm::vec4 b[2];
+        for (std::uint32_t i = 0; i < scene.Count(); ++i) {
+            if (!ReadSceneSlot(i, s)) return false;
+            GpuScene::Pack(s, xf, b);
+            const bool same = std::memcmp(&scene.XformMirror()[(size_t)i * 2], xf, sizeof xf) == 0 &&
+                              std::memcmp(&scene.BoundsMirror()[(size_t)i * 2], b, sizeof b) == 0;
+            if (!same) {
+                std::printf("[GpuSceneMirror] frame %d: slot %u of %u differs\n", frame, i, scene.Count());
+                return false;
+            }
+        }
+        return true;
+    };
+    // G1-b: what GatherVisible hands out points at its slot - the matrices the batched draws read from the scene are
+    // the ones the item itself carries.
+    std::vector<VisibleRenderable> vis;
+    std::uint64_t slotChecks = 0;
+    auto slotsPoint = [&](int frame) {
+        GatherVisible(w, VisibilityQuery{}, vis);
+        for (const VisibleRenderable& v : vis) {
+            const bool ok = v.Slot < scene.Count() &&
+                            std::memcmp(&scene.XformMirror()[(size_t)v.Slot * 2], &v.Xform, sizeof(glm::mat4)) == 0 &&
+                            scene.XformMirror()[(size_t)v.Slot * 2 + 1] == glm::mat4(v.Normal);
+            if (!ok) {
+                std::printf("[GpuSceneMirror] frame %d: gathered slot %u of %u doesn't hold its item\n", frame, v.Slot, scene.Count());
+                return false;
+            }
+            ++slotChecks;
+        }
+        return true;
+    };
+    scene.Sync(w, false);
+    CHECK(scene.LastSync().Full && scene.Count() == 300);
+    CHECK(matches(-1));
+    CHECK(slotsPoint(-1));
+    // A full sync uploads every slot in one span (it once planned just the first and the last).
+    CHECK(scene.LastRuns().size() == 1 && scene.LastRuns()[0] == GpuScene::Run(0u, 299u));
+    // Nothing changed: nothing written.
+    w.RebuildWorldTransformCache();
+    scene.Sync(w, false);
+    CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 0);
+    // Fields written in place with nothing told (G2-DIRTY): Cast Shadows and the first material's queue. A frame that
+    // changes only one of them, with nothing moved, must still bring that slot up to date.
+    auto glass = std::make_shared<MaterialAsset>();
+    glass->RenderQueue = MaterialAsset::Queue::Transparent;
+    auto castNext = [](RenderableComponent& r) {
+        r.CastShadows = (RenderableComponent::ShadowCasting)(((int)r.CastShadows + 1) % 4);
+    };
+    {
+        auto& r = w.Registry.get<RenderableComponent>(live[0]);
+        r.CastShadows = RenderableComponent::ShadowCasting::Off;
+        scene.Sync(w, false); // transforms untouched: no rebuild, no patch
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+        CHECK(matches(-2));
+        if (r.Materials.empty()) r.Materials.resize(1);
+        r.Materials[0] = glass;
+        scene.Sync(w, false);
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+        CHECK(matches(-3));
+        glass->RenderQueue = MaterialAsset::Queue::Opaque; // the asset edited (Inspector): its users change too
+        scene.Sync(w, false);
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+        CHECK(matches(-4));
+        glass->RenderQueue = MaterialAsset::Queue::Transparent;
+    }
+    int incremental = 0, frames = 0;
+    std::uint64_t written = 0, total = 0;
+    for (int frame = 0; frame < 300; ++frame) {
+        live.erase(std::remove_if(live.begin(), live.end(), [&](entt::entity e) { return !w.Registry.valid(e); }), live.end());
+        const int ops = 1 + (int)pick(4);
+        for (int op = 0; op < ops && !live.empty(); ++op) {
+            live.erase(std::remove_if(live.begin(), live.end(), [&](entt::entity e) { return !w.Registry.valid(e); }), live.end());
+            if (live.empty()) break;
+            const entt::entity e = live[pick(live.size())];
+            switch (pick(13)) {
+            case 0: case 1: spawn(); break;
+            case 2: w.DestroyEntityAndChildren(e); break;
+            case 3: w.Registry.destroy(e); break;
+            case 4: w.SetParent(e, pick(3) == 0 ? entt::entity{entt::null} : live[pick(live.size())]); break;
+            case 5: { auto& r = w.Registry.get<RenderableComponent>(e); r.ModelRef = r.ModelRef == modelA ? modelB : modelA; break; }
+            case 6: if (w.Registry.all_of<DeactivatedTag>(e)) w.Registry.remove<DeactivatedTag>(e); else w.Registry.emplace<DeactivatedTag>(e); break;
+            case 7: if (w.Registry.all_of<HiddenInSceneTag>(e)) w.Registry.remove<HiddenInSceneTag>(e); else w.Registry.emplace<HiddenInSceneTag>(e); break;
+            case 8: w.Registry.emplace_or_replace<LayerComponent>(e).Layer = (int)pick(7) - 2; break; // negatives too
+            case 9: { auto& r = w.Registry.get<RenderableComponent>(e); r.ModelRef = r.ModelRef ? nullptr : modelA; break; }
+            case 10: castNext(w.Registry.get<RenderableComponent>(e)); break;
+            case 11: {
+                auto& r = w.Registry.get<RenderableComponent>(e);
+                if (r.Materials.empty()) r.Materials.resize(1);
+                r.Materials[0] = r.Materials[0] ? nullptr : glass;
+                break;
+            }
+            default: w.Registry.get<TransformComponent>(e).Position = at(); break;
+            }
+        }
+        w.RebuildWorldTransformCache();
+        scene.Sync(w, false);
+        ++frames;
+        // Without an upload the GL buffers are stale, so every sync plans the whole list.
+        CHECK(scene.Count() == 0 || (scene.LastRuns().size() == 1 && scene.LastRuns()[0] == GpuScene::Run(0u, scene.Count() - 1)));
+        if (!scene.LastSync().Full) {
+            ++incremental;
+            written += scene.LastSync().Slots;
+            total += scene.Count();
+        }
+        const bool same = matches(frame) && slotsPoint(frame);
+        CHECK(same);
+        if (!same) break;
+    }
+    CHECK(slotChecks > 0);
+    std::printf("[GpuSceneMirror] %d of %d frames incremental, %llu of %llu slots written on them\n", incremental, frames,
+                (unsigned long long)written, (unsigned long long)total);
+    CHECK(incremental * 2 > frames);
+    CHECK(written * 10 < total); // a few changes a frame: a few slots, not the list
+}
+
+// G2-DIRTY at scale: past one sweep slice, an in-place write that reports itself (NoteRenderSettingsChanged) reaches
+// the next sync; one that doesn't is still caught by the sweep within a lap (slots / 1024 syncs), and a quiet frame
+// sends nothing.
+void GpuSceneLiveEpoch() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    constexpr int kCount = 5000; // 5 sweep slices of 1024
+    std::vector<entt::entity> all;
+    for (int i = 0; i < kCount; ++i)
+        all.push_back(w.CreateModelEntity(model, glm::vec3((float)(i % 100), 0.0f, (float)(i / 100)), glm::vec3(0), glm::vec3(1), "R"));
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    scene.Sync(w, false);
+    CHECK(scene.LastSync().Full);
+    for (int i = 0; i < 6; ++i) { // a full lap of the sweep with nothing changed
+        scene.Sync(w, false);
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 0);
+    }
+    auto syncsUntilSeen = [&](int limit) {
+        for (int n = 1; n <= limit; ++n) {
+            scene.Sync(w, false);
+            if (scene.LastSync().Slots > 0) {
+                CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+                return n;
+            }
+        }
+        return limit + 1;
+    };
+    // Reported: the next sync.
+    w.Registry.get<RenderableComponent>(all[2500]).CastShadows = RenderableComponent::ShadowCasting::Off;
+    NoteRenderSettingsChanged();
+    CHECK(syncsUntilSeen(1) == 1);
+    // The first material swapped to a Transparent one on a still entity (the Inspector's slot writes report it).
+    auto glass = std::make_shared<MaterialAsset>();
+    glass->RenderQueue = MaterialAsset::Queue::Transparent;
+    {
+        auto& r = w.Registry.get<RenderableComponent>(all[1200]);
+        if (r.Materials.empty()) r.Materials.resize(1);
+        r.Materials[0] = glass;
+        NoteRenderSettingsChanged();
+        CHECK(syncsUntilSeen(1) == 1);
+    }
+    // The asset's own queue edited (Inspector Render Mode): no renderable write, its users change.
+    glass->RenderQueue = MaterialAsset::Queue::Opaque;
+    NoteRenderSettingsChanged();
+    CHECK(syncsUntilSeen(1) == 1);
+    // Not reported: within one lap, wherever the sweep stands.
+    for (int k : {10, 2600, 4999}) {
+        w.Registry.get<RenderableComponent>(all[k]).CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
+        CHECK(syncsUntilSeen(5) <= 5);
+    }
+}
+
+// Every Sync keys SyncOnce: SyncOnce(A), a Sync for another world (a bake, a preview), then SyncOnce(A) must sync A
+// again, or A's depth casters read B's transforms until something in A moves.
+void GpuSceneSyncOnceKey() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World a, b;
+    entt::entity first = entt::null;
+    for (int i = 0; i < 3; ++i) {
+        const entt::entity e = a.CreateModelEntity(model, glm::vec3((float)i, 0.0f, 0.0f), glm::vec3(0), glm::vec3(1), "A");
+        if (i == 0) first = e;
+    }
+    for (int i = 0; i < 5; ++i) b.CreateModelEntity(model, glm::vec3(0.0f, 0.0f, (float)i), glm::vec3(0), glm::vec3(1), "B");
+    a.RebuildWorldTransformCache();
+    b.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    scene.Sync(a, false);
+    const std::uint32_t countA = scene.Count();
+    CHECK(scene.UpToDateFor(a) && !scene.UpToDateFor(b));
+    scene.Sync(b, false); // another world in between
+    CHECK(scene.Count() != countA);
+    CHECK(!scene.UpToDateFor(a) && scene.UpToDateFor(b));
+    scene.Sync(a, false); // what SyncOnce(A) now does
+    CHECK(scene.LastSync().Full && scene.Count() == countA && scene.UpToDateFor(a));
+    a.Registry.get<TransformComponent>(first).Position.y = 2.0f; // A itself moves
+    a.RebuildWorldTransformCache();
+    CHECK(!scene.UpToDateFor(a));
+    ForgetGatherCandidates(); // no cache left pointing at these worlds
+}
+
+// G4-c: the GPU scene's change log for the cached local shadows. Over random frames (moves, Cast Shadows writes,
+// removals, a quiet frame now and then), every slot whose packed data changed is logged with a box holding where it was
+// and where it is, and a frame that changed nothing logs nothing.
+void GpuSceneChangeLog() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    std::vector<entt::entity> all;
+    for (int i = 0; i < 64; ++i)
+        all.push_back(w.CreateModelEntity(model, glm::vec3((float)(i % 8) * 3.0f, 0.0f, (float)(i / 8) * 3.0f), glm::vec3(0), glm::vec3(1), "L"));
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    GpuScene::ChangeLog log;
+    scene.TakeChangeLog(w, log);
+    CHECK(log.All); // the first take: nothing before it is known
+    scene.Sync(w, false);
+    scene.TakeChangeLog(w, log);
+    CHECK(log.All); // a full sync
+    scene.Sync(w, false);
+    scene.TakeChangeLog(w, log);
+    CHECK(!log.All && log.Changes.empty()); // nothing changed
+    std::mt19937 rng(4242);
+    std::uniform_int_distribution<int> pick(0, (int)all.size() - 1), what(0, 9);
+    std::uniform_real_distribution<float> step(-2.0f, 2.0f);
+    int checked = 0, quietFrames = 0;
+    for (int frame = 0; frame < 300; ++frame) {
+        const std::vector<glm::mat4> xfBefore = scene.XformMirror();
+        const std::vector<glm::vec4> boundsBefore = scene.BoundsMirror();
+        const int edits = what(rng) < 3 ? 0 : 1 + what(rng) % 3; // some frames change nothing
+        for (int k = 0; k < edits; ++k) {
+            const entt::entity e = all[(size_t)pick(rng)];
+            if (!w.Registry.valid(e)) continue;
+            const int kind = what(rng);
+            if (kind < 6) w.Registry.get<TransformComponent>(e).Position += glm::vec3(step(rng), 0.0f, step(rng));
+            else if (kind < 9) {
+                auto& r = w.Registry.get<RenderableComponent>(e);
+                r.CastShadows = (RenderableComponent::ShadowCasting)(((int)r.CastShadows + 1) % 4);
+            } else if (frame % 50 == 7) w.Registry.destroy(e); // now and then one leaves
+        }
+        w.RebuildWorldTransformCache();
+        scene.Sync(w, false);
+        scene.TakeChangeLog(w, log);
+        if (log.All) continue; // a rebuild: anything may have changed, nothing to check slot by slot
+        if (edits == 0) {
+            CHECK(log.Changes.empty());
+            ++quietFrames;
+        }
+        const std::vector<glm::mat4>& xf = scene.XformMirror();
+        const std::vector<glm::vec4>& bounds = scene.BoundsMirror();
+        const std::uint32_t had = (std::uint32_t)(boundsBefore.size() / 2);
+        for (std::uint32_t i = 0; i < scene.Count(); ++i) {
+            const bool changed = i >= had || std::memcmp(&xf[(size_t)i * 2], &xfBefore[(size_t)i * 2], 2 * sizeof(glm::mat4)) != 0 ||
+                                 std::memcmp(&bounds[(size_t)i * 2], &boundsBefore[(size_t)i * 2], 2 * sizeof(glm::vec4)) != 0;
+            const auto it = std::find_if(log.Changes.begin(), log.Changes.end(), [&](const GpuScene::SlotChange& c) { return c.Slot == i; });
+            if (!changed) continue;
+            ++checked;
+            CHECK(it != log.Changes.end());
+            if (it == log.Changes.end()) return;
+            const glm::vec3 lo(bounds[(size_t)i * 2]), hi(bounds[(size_t)i * 2 + 1]);
+            if (it->Bounded) { // holds where it is now and where it was
+                CHECK(glm::all(glm::lessThanEqual(it->Min, lo)) && glm::all(glm::greaterThanEqual(it->Max, hi)));
+                if (i < had) {
+                    const glm::vec3 oldLo(boundsBefore[(size_t)i * 2]), oldHi(boundsBefore[(size_t)i * 2 + 1]);
+                    CHECK(glm::all(glm::lessThanEqual(it->Min, oldLo)) && glm::all(glm::greaterThanEqual(it->Max, oldHi)));
+                }
+            }
+        }
+    }
+    std::printf("[GpuSceneChangeLog] %d changed slots checked, %d quiet frames\n", checked, quietFrames);
+    CHECK(checked > 50 && quietFrames > 10);
+    // Another world synced in between: the next take says All.
+    World other;
+    other.CreateModelEntity(model, glm::vec3(0.0f), glm::vec3(0), glm::vec3(1), "O");
+    other.RebuildWorldTransformCache();
+    scene.Sync(other, false);
+    scene.Sync(w, false);
+    scene.TakeChangeLog(w, log);
+    CHECK(log.All);
+    ForgetGatherCandidates();
+}
+
+// G4-c: which quiet local lights a frame's changes wake. One slot moving inside one spot's reach wakes that spot only;
+// moving out of a point's range (it was there) wakes the point; a light whose inputs moved, a dark light, a reported
+// render-settings write and an All log wake the rest.
+void LocalShadowQuietWake() {
+    LocalShadowQuiet q;
+    bool spotLive[2] = {true, true};
+    bool pointLive[1] = {true};
+    std::uint64_t spotKey[2] = {11, 12}, pointKey[1] = {21};
+    // Spot 0 looks down -Z from (0, 2, 0), spot 1 down -Z from (100, 2, 0); the point sits at (0, 2, 50), range 5.
+    const glm::mat4 proj = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 20.0f);
+    Frustum spotReach[2] = {Frustum::FromViewProj(proj * glm::lookAt(glm::vec3(0, 2, 0), glm::vec3(0, 2, -1), glm::vec3(0, 1, 0))),
+                            Frustum::FromViewProj(proj * glm::lookAt(glm::vec3(100, 2, 0), glm::vec3(100, 2, -1), glm::vec3(0, 1, 0)))};
+    AABB pointRange[1] = {AABB{glm::vec3(-5, -3, 45), glm::vec3(5, 7, 55)}};
+    LocalShadowQuiet::Lights lights;
+    lights.SpotCount = 2;
+    lights.SpotLive = spotLive;
+    lights.SpotKey = spotKey;
+    lights.SpotReach = spotReach;
+    lights.PointCount = 1;
+    lights.PointLive = pointLive;
+    lights.PointKey = pointKey;
+    lights.PointRange = pointRange;
+    GpuScene::ChangeLog none;
+    none.All = false;
+    auto quietAll = [&] {
+        q.Spots[0].Quiet = q.Spots[1].Quiet = q.Points[0].Quiet = true;
+    };
+    q.Wake(none, 7, lights); // the first wake takes the keys and the epoch: everything awake
+    CHECK(!q.Spots[0].Quiet && !q.Spots[1].Quiet && !q.Points[0].Quiet);
+    quietAll();
+    q.Wake(none, 7, lights);
+    CHECK(q.Spots[0].Quiet && q.Spots[1].Quiet && q.Points[0].Quiet); // nothing changed
+    GpuScene::ChangeLog moved;
+    moved.All = false;
+    moved.Changes.push_back({3, glm::vec3(-0.5f, 1.5f, -6.0f), glm::vec3(0.5f, 2.5f, -5.0f), true}); // in front of spot 0
+    q.Wake(moved, 7, lights);
+    CHECK(!q.Spots[0].Quiet && q.Spots[1].Quiet && q.Points[0].Quiet);
+    quietAll();
+    moved.Changes[0] = {4, glm::vec3(-1.0f, 0.0f, 30.0f), glm::vec3(1.0f, 1.0f, 46.0f), true}; // left the point's range
+    q.Wake(moved, 7, lights);
+    CHECK(q.Spots[0].Quiet && q.Spots[1].Quiet && !q.Points[0].Quiet);
+    quietAll();
+    moved.Changes[0] = {5, glm::vec3(0.0f), glm::vec3(0.0f), false}; // unbounded: reaches every light
+    q.Wake(moved, 7, lights);
+    CHECK(!q.Spots[0].Quiet && !q.Spots[1].Quiet && !q.Points[0].Quiet);
+    quietAll();
+    spotKey[1] = 13; // spot 1's light moved
+    q.Wake(none, 7, lights);
+    CHECK(q.Spots[0].Quiet && !q.Spots[1].Quiet && q.Points[0].Quiet);
+    quietAll();
+    spotLive[0] = false; // spot 0 went dark: awake when it comes back
+    q.Wake(none, 7, lights);
+    spotLive[0] = true;
+    q.Wake(none, 7, lights);
+    CHECK(!q.Spots[0].Quiet && q.Spots[1].Quiet && q.Points[0].Quiet);
+    quietAll();
+    q.Wake(none, 8, lights); // a reported render-settings write (a material edit)
+    CHECK(!q.Spots[0].Quiet && !q.Spots[1].Quiet && !q.Points[0].Quiet);
+    quietAll();
+    GpuScene::ChangeLog everything; // All: a rebuild, another world
+    q.Wake(everything, 8, lights);
+    CHECK(!q.Spots[0].Quiet && !q.Spots[1].Quiet && !q.Points[0].Quiet);
+}
+
+// G4-c: a LOD level change wakes the lights around the renderers it swapped (no slot moves), and a flip that is undone
+// before the next look (another view's levels in between) wakes nothing.
+void LocalShadowLodToggles() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity group = w.CreateEmptyEntity(zero, zero, one, "Group");
+    w.Registry.emplace<LODGroupComponent>(group).Size = 2.0f;
+    entt::entity lv[2];
+    for (int i = 0; i < 2; ++i) {
+        lv[i] = w.CreateModelEntity(model, zero, zero, one, "LOD" + std::to_string(i));
+        CHECK(w.SetParent(lv[i], group));
+    }
+    w.RebuildWorldTransformCache();
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    auto lod = [&](float dist) { w.ApplyLod(glm::vec3(0.0f, 0.0f, dist), proj); }; // 1: LOD 0 shows, 2: LOD 1
+    LodToggleWake wake;
+    GpuScene::ChangeLog log;
+    auto look = [&] {
+        log.All = false;
+        log.Changes.clear();
+        wake.Append(w, log);
+    };
+    lod(1.0f);
+    CHECK(w.IsLodCulled(lv[1]) && !w.IsLodCulled(lv[0]));
+    look(); // the first look: everything
+    CHECK(log.All);
+    look(); // nothing flipped
+    CHECK(!log.All && log.Changes.empty());
+    lod(2.0f); // LOD 0 out, LOD 1 in: both renderers' boxes
+    look();
+    CHECK(!log.All && log.Changes.size() == 2);
+    for (const GpuScene::SlotChange& c : log.Changes)
+        CHECK(c.Bounded && glm::all(glm::lessThanEqual(c.Min, glm::vec3(0.01f))) && glm::all(glm::greaterThanEqual(c.Max, glm::vec3(-0.01f))));
+    lod(1.0f); // another view's levels, then this one's again before the next look
+    lod(2.0f);
+    look();
+    CHECK(!log.All && log.Changes.empty());
+    w.Registry.get<RenderableComponent>(lv[0]).CastShadows = RenderableComponent::ShadowCasting::Off;
+    lod(1.0f); // LOD 0 casts nothing: only LOD 1 going out counts
+    look();
+    CHECK(log.Changes.size() == 1);
+    w.ClearLod(); // its untags count too
+    look();
+    CHECK(!log.All && log.Changes.size() == 1);
+    lod(1.0f); // LOD 1 out again, then destroyed before the look: nothing to wake (its slot going is GpuScene's log)
+    w.Registry.destroy(lv[1]);
+    look();
+    CHECK(!log.All && log.Changes.empty());
+    World other; // another world: everything
+    wake.Append(other, log);
+    CHECK(log.All);
+}
+
+// GpuScene's upload plan and packing, without GL.
+void GpuSceneRuns() {
+    using Run = GpuScene::Run;
+    std::vector<Run> runs;
+    GpuScene::BuildRuns({}, runs);
+    CHECK(runs.empty());
+    GpuScene::BuildRuns({5}, runs);
+    CHECK(runs.size() == 1 && runs[0] == Run(5u, 5u));
+    // A gap of up to kMergeGap unchanged slots is uploaded with its neighbours; one more splits the run.
+    GpuScene::BuildRuns({0, 1 + GpuScene::kMergeGap}, runs);
+    CHECK(runs.size() == 1 && runs[0] == Run(0u, 1 + GpuScene::kMergeGap));
+    GpuScene::BuildRuns({0, 2 + GpuScene::kMergeGap, 2 + GpuScene::kMergeGap, 2 * GpuScene::kMergeGap + 3}, runs); // a repeat merges too
+    CHECK(runs.size() == 2 && runs[0] == Run(0u, 0u) && runs[1] == Run(2 + GpuScene::kMergeGap, 2 * GpuScene::kMergeGap + 3));
+    // Past kMaxRuns runs: one span over all of them.
+    std::vector<std::uint32_t> sparse;
+    for (std::uint32_t i = 0; i <= GpuScene::kMaxRuns; ++i) sparse.push_back(i * 100);
+    GpuScene::BuildRuns(sparse, runs);
+    CHECK(runs.size() == 1 && runs[0] == Run(0u, sparse.back()));
+    sparse.pop_back();
+    GpuScene::BuildRuns(sparse, runs);
+    CHECK(runs.size() == GpuScene::kMaxRuns);
+    // The layer goes in as its low 16 bits: a negative one is not folded into layer 0.
+    SceneSlot s;
+    s.Alive = true;
+    glm::mat4 xf[2];
+    glm::vec4 b[2];
+    auto layerBits = [&](int layer) {
+        s.Layer = layer;
+        GpuScene::Pack(s, xf, b);
+        std::uint32_t bits;
+        std::memcpy(&bits, &b[1].w, sizeof bits);
+        return bits >> 16;
+    };
+    CHECK(layerBits(3) == 3u);
+    CHECK(layerBits(0) == 0u);
+    CHECK(layerBits(-1) == 0xFFFFu);
+    CHECK(layerBits(-2) != layerBits(0));
+}
+
 // mergeByMaterial: the same geometry and bounds in fewer meshes. Needs the model library (Drive assets).
 void MergeByMaterial() {
     const char* rel = "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx";
@@ -366,6 +888,135 @@ void MeshArenaFreeList() {
     CHECK(f.Take(100) == 0 && f.Take(1) == ~0u);
 }
 
+// GpuCull (G-2): stage A's CPU reference gives GatherVisible's answer for every slot - the same flag tests, Frustum::
+// Intersects, the Within box and TooSmallOnScreen - over random boxes, flags, layers and queries (camera, owner view,
+// editor view with a layer mask, shadow casters with a Within box). Slots are packed by GpuScene::Pack, so the GPU
+// scene's layout is what is tested. The compute is held to this reference.
+void GpuCullStageAMatchesCpu() {
+    std::mt19937 rng(1225);
+    std::uniform_real_distribution<float> pos(-60.0f, 60.0f), size(0.001f, 6.0f), unit(0.0f, 1.0f);
+    const glm::mat4 proj = glm::perspective(glm::radians(70.0f), 16.0f / 9.0f, 0.1f, 200.0f);
+    const glm::vec3 eye(1.0f, 1.7f, 2.0f);
+    const glm::mat4 view = glm::lookAt(eye, eye + glm::vec3(0.3f, -0.1f, -1.0f), glm::vec3(0, 1, 0));
+    const Frustum frustum = Frustum::FromViewProj(proj * view);
+    const AABB within{glm::vec3(-20.0f, -5.0f, -20.0f), glm::vec3(20.0f, 10.0f, 20.0f)};
+    constexpr std::uint16_t kSettingBits[] = {kSlotFlagCastOff, kSlotFlagShadowsOnly, kSlotFlagTransparent};
+    int mismatches = 0, kept = 0, total = 0;
+    for (int qi = 0; qi < 4; ++qi) {
+        VisibilityQuery q;
+        q.Cull = &frustum;
+        if (qi == 0) { q.OwnerView = true; q.SizeCullEye = &eye; q.SizeCullProjScale = proj[1][1]; q.MinScreenHeight = 0.01f; }
+        if (qi == 1) { q.SkipViewModels = true; q.SkipPlayerBody = true; q.SkipTransparent = true; }
+        if (qi == 2) { q.EditorView = true; q.LayerVisibleMask = 0x0000FF0Fu; }
+        if (qi == 3) { q.ShadowCasters = true; q.Within = &within; q.Cull = nullptr; }
+        const GpuCull::ViewQuery gq = GpuCull::MakeQuery(q);
+        for (int i = 0; i < 6000; ++i) {
+            SceneSlot s;
+            const glm::vec3 c(pos(rng), pos(rng) * 0.2f, pos(rng)), h(size(rng), size(rng), size(rng));
+            s.WorldMin = c - h * 0.5f;
+            s.WorldMax = c + h * 0.5f;
+            s.Bounded = unit(rng) < 0.9f;
+            s.Alive = unit(rng) < 0.95f;
+            for (std::uint32_t bit = 0; bit < 8; ++bit)
+                if (unit(rng) < 0.06f) s.Flags |= (std::uint16_t)(1u << bit);
+            for (std::uint16_t bit : kSettingBits)
+                if (unit(rng) < 0.06f) s.Flags |= bit;
+            s.Layer = (int)(unit(rng) * 34.0f) - 1; // -1..32: out-of-range layers are never hidden
+            const bool lod = unit(rng) < 0.05f;
+            glm::mat4 xf[2];
+            glm::vec4 bounds[2];
+            GpuScene::Pack(s, xf, bounds);
+            // GatherVisible's consider(), restated on the slot.
+            bool cpu = s.Alive && !(s.Flags & (GpuCull::kSlotInactive | GpuCull::kSlotPoseSource)) && !lod;
+            if (cpu && (s.Flags & ((q.ShadowCasters || !q.OwnerView) ? GpuCull::kSlotOwnerViewOnly : GpuCull::kSlotHiddenFromOwner))) cpu = false;
+            if (cpu && q.SkipViewModels && (s.Flags & GpuCull::kSlotViewModel)) cpu = false;
+            if (cpu && q.SkipPlayerBody && (s.Flags & GpuCull::kSlotPlayerBody)) cpu = false;
+            if (cpu && q.EditorView && ((s.Flags & GpuCull::kSlotHiddenInScene) ||
+                                        (s.Layer >= 0 && s.Layer < 32 && !((q.LayerVisibleMask >> s.Layer) & 1u)))) cpu = false;
+            if (cpu && (s.Flags & (q.ShadowCasters ? kSlotFlagCastOff : kSlotFlagShadowsOnly))) cpu = false;
+            if (cpu && q.SkipTransparent && (s.Flags & kSlotFlagTransparent)) cpu = false;
+            if (cpu && s.Bounded) {
+                if (q.Cull && !q.Cull->Intersects(AABB{s.WorldMin, s.WorldMax})) cpu = false;
+                if (cpu && q.Within && !q.Within->Intersects(AABB{s.WorldMin, s.WorldMax})) cpu = false;
+                if (cpu && q.SizeCullEye && TooSmallOnScreen(s.WorldMin, s.WorldMax, *q.SizeCullEye, q.SizeCullProjScale, q.MinScreenHeight)) cpu = false;
+            }
+            const bool gpu = GpuCull::PassesStageA(bounds, gq, lod);
+            mismatches += cpu != gpu;
+            kept += gpu;
+            ++total;
+        }
+    }
+    CHECK(mismatches == 0);
+    CHECK(kept > total / 20 && kept < total); // the cases are mixed: some kept, some not
+}
+
+// GpuCull caster mode (G4-a): the per-cascade test's CPU twin gives ShadowFrame's castsInto answer for every slot and
+// cascade - the cascade's frustum (Frustum::Intersects) then CascadedShadowMap::CasterReachesSlice, gated by the
+// render mask - over a fitted 4-cascade map, a held cascade, unbounded slots and boxes along the cascades' reach. The
+// slice data goes through CasterSliceOf (what the compute reads), so the upload is what is tested; the compute is
+// held to this twin (plus its slack) by the verify mode and the smoke_min check.
+void GpuCullCasterCascadesMatchCpu() {
+    CascadedShadowMap csm;
+    const glm::vec3 eye(3.0f, 1.7f, -2.0f);
+    const glm::mat4 view = glm::lookAt(eye, glm::vec3(10.0f, 1.0f, 20.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::mat4 proj = glm::perspective(glm::radians(70.0f), 16.0f / 9.0f, 0.05f, 500.0f);
+    const glm::vec3 casterMin(-150.0f, -5.0f, -150.0f), casterMax(150.0f, 40.0f, 150.0f);
+    csm.Update(view, proj, glm::normalize(glm::vec3(-0.4f, -0.8f, 0.3f)), 150.0f, &casterMin, &casterMax);
+    CHECK(csm.Count() == 4);
+    Frustum cells[CascadedShadowMap::kMaxCascades];
+    for (int c = 0; c < csm.Count(); ++c) cells[c] = Frustum::FromViewProj(csm.LightViewProj(c));
+    std::mt19937 rng(4401);
+    std::uniform_real_distribution<float> along(-0.2f, 1.0f), side(-1.0f, 1.0f), size(0.02f, 8.0f), unit(0.0f, 1.0f);
+    const glm::vec3 fwd = glm::normalize(glm::vec3(7.0f, -0.7f, 22.0f)), right = glm::normalize(glm::cross(fwd, glm::vec3(0, 1, 0)));
+    int mismatches = 0, twinMismatches = 0, pairs = 0, total = 0;
+    unsigned seen = 0;
+    for (const unsigned renderMask : {0xFu, 0xBu, 0x7u}) { // all, cascade 2 held, cascade 3 held
+        for (const float kernel : {0.0f, 2.5f}) {
+            const float bias = kernel > 0.0f ? 1.0f : 0.0f;
+            const GpuCull::SunCasterBlock block = GpuCull::MakeSunCasterBlock(csm, cells, renderMask, kernel, bias);
+            for (int c = 0; c < csm.Count(); ++c) CHECK(((block.Info.x >> c) & 1u) == ((renderMask >> c) & 1u));
+            for (int i = 0; i < 4000; ++i) {
+                // Boxes spread along the view out past the shadow distance, near the slices and well off to the sides.
+                const float d = along(rng) * 200.0f;
+                const glm::vec3 c = eye + fwd * d + right * side(rng) * (10.0f + 0.8f * std::abs(d)) +
+                                    glm::vec3(0.0f, side(rng) * 15.0f, 0.0f);
+                const glm::vec3 h(size(rng), size(rng), size(rng));
+                SceneSlot s;
+                s.WorldMin = c - h * 0.5f;
+                s.WorldMax = c + h * 0.5f;
+                s.Bounded = unit(rng) < 0.97f;
+                s.Alive = true;
+                glm::mat4 xf[2];
+                glm::vec4 bounds[2];
+                GpuScene::Pack(s, xf, bounds);
+                // castsInto, restated on the slot.
+                unsigned cpu = 0;
+                for (int k = 0; k < csm.Count(); ++k) {
+                    if (!((renderMask >> k) & 1u)) continue;
+                    if (!s.Bounded || (cells[k].Intersects(AABB{s.WorldMin, s.WorldMax}) &&
+                                       csm.CasterReachesSlice(k, s.WorldMin, s.WorldMax, kernel, bias)))
+                        cpu |= 1u << k;
+                    // The flat slice alone, bit for bit what CasterReachesSlice answers.
+                    twinMismatches += CascadedShadowMap::ReachesSlice(block.Cascades[k].Slice, s.WorldMin, s.WorldMax) !=
+                                      csm.CasterReachesSlice(k, s.WorldMin, s.WorldMax, kernel, bias);
+                }
+                const unsigned gpu = GpuCull::CasterCascades(bounds, block);
+                mismatches += cpu != gpu;
+                for (unsigned m = gpu; m; m &= m - 1) ++pairs;
+                seen |= gpu;
+                ++total;
+            }
+        }
+    }
+    CHECK(mismatches == 0);
+    CHECK(twinMismatches == 0);
+    CHECK(seen == 0xFu);                          // every cascade gets casters
+    CHECK(pairs > total / 4 && pairs < total * 3); // and the cases are mixed: in some cascades, not all
+    // The remap word: a slot and its cascade share one uint.
+    CHECK(GpuCull::kSlotMask == 0x3FFFFFFFu);
+    CHECK(((7u | (3u << GpuCull::kCascadeShift)) & GpuCull::kSlotMask) == 7u);
+}
+
 // HiZCuller: the occlusion boxes are padded past the object, and swaying foliage pads them further.
 void HiZPieces() {
     glm::vec3 lo(0.0f), hi(1.0f);
@@ -417,6 +1068,37 @@ void AssetPumpWaitingTickets() {
     CHECK(CountWaitingTickets(tickets) == 1);
     loading->Ready = true;
     CHECK(CountWaitingTickets(tickets) == 0);
+}
+
+// A model's pending uploads share the staging ring. The first one waits for ring space that a later one holds (its copy
+// is done and only a step retires it): stepping just the first never frees it. Every pending item gets a step.
+void ModelUploadStepsFreeTheRing() {
+    struct Up { bool Pending = true, Holds = false, CopyDone = false; };
+    int freeSlots = 0; // the ring has room for one reservation, and the second upload holds it
+    std::vector<Up> ups(2);
+    ups[1].Holds = true;
+    ups[1].CopyDone = true;
+    const auto isPending = [](const Up& u) { return u.Pending; };
+    const auto step = [&](Up& u) {
+        if (u.Holds && u.CopyDone) { u.Pending = false; u.Holds = false; ++freeSlots; return true; } // upload + retire
+        if (!u.Holds) {
+            if (freeSlots == 0) return false;                  // the ring is full for now
+            --freeSlots; u.Holds = true; u.CopyDone = true;    // reserved; the worker's copy lands
+        }
+        return false;                                          // copy not in yet: waiting
+    };
+    CHECK(StepPending(ups, isPending, step) == PendingStep::Progress); // the later upload retires its span...
+    int steps = 1;
+    while (StepPending(ups, isPending, step) != PendingStep::None && steps < 10) ++steps;
+    CHECK(!ups[0].Pending && !ups[1].Pending);                         // ...so the first gets its space and finishes
+    CHECK(steps <= 4);
+    // Everything waiting is reported as waiting, nothing pending as none.
+    std::vector<Up> stuck(2);
+    int none = 0;
+    CHECK(StepPending(stuck, isPending, [&](Up&) { return none != 0; }) == PendingStep::Waiting);
+    std::vector<Up> done(2);
+    done[0].Pending = done[1].Pending = false;
+    CHECK(StepPending(done, isPending, step) == PendingStep::None);
 }
 
 // Material slots batch when they draw alike: the same asset, or separate copies with the same values; a different
@@ -1277,6 +1959,53 @@ void TestLocalCasterHashSlots() {
     CHECK(LocalCasterHash(7, nullptr, before, xf, 0, true) != h0);
     CHECK(LocalCasterHash(8, nullptr, before, xf, 0, false) != h0);
     CHECK(LocalCasterHash(7, nullptr, before, glm::translate(xf, glm::vec3(0, 0.01f, 0)), 0, false) != h0);
+}
+
+// Material edits written into the same MaterialAsset (the Inspector's Alpha Cutoff slider, Double Sided, a reload's
+// copy into the same object) keep every slot pointer, so the signature must also read what the depth draw reads, and
+// the edit must report itself (RenderSettingsEpoch) so a quiet light wakes to look.
+void TestLocalCasterHashMaterialContent() {
+    auto model = Model::CreatePrimitive("terrain", "w2_caster_content.fbx"); // CPU-only stand-in: no GL in unit tests
+    CHECK(model && model->MeshCount() >= 1);
+    if (!model || model->MeshCount() < 1) return;
+    auto leaf = std::make_shared<MaterialAsset>();
+    leaf->Mat.Foliage = true; // the depth draw binds this material's own values (sway, cutoff)
+    const std::vector<std::shared_ptr<MaterialAsset>> slots{leaf};
+    const glm::mat4 xf(1.0f);
+    const auto sig = [&]() { Material::NextHashFrame(); return LocalCasterHash(7, model.get(), slots, xf, 0, false); };
+
+    const std::uint64_t h0 = sig();
+    const std::uint32_t e0 = RenderSettingsEpoch();
+    CHECK(sig() == h0);                      // stable across frames
+    CHECK(RenderSettingsEpoch() == e0);      // and no change reported
+    leaf->Mat.AlphaCutoff = 0.8f;            // the Inspector slider: in place, no call
+    const std::uint64_t h1 = sig();
+    CHECK(h1 != h0);
+    CHECK(RenderSettingsEpoch() != e0);      // the hash's depth watch reported it
+    const std::uint32_t e1 = RenderSettingsEpoch();
+    leaf->Mat.BaseColor = glm::vec3(0.2f);   // colour only: not a depth field, nothing reported, no redraw
+    CHECK(sig() == h1);
+    CHECK(RenderSettingsEpoch() == e1);
+    leaf->Mat.BaseColor = glm::vec3(1.0f);
+
+    leaf->Mat.DoubleSided = true;            // the depth draw's cull
+    CHECK(sig() != h1);
+    leaf->Mat.DoubleSided = false;
+    CHECK(sig() == h1);
+
+    MaterialAsset fresh = *leaf;             // a reload: a new object copied INTO the old one
+    fresh.Mat.AlphaCutoff = 0.3f;
+    const std::uint32_t e2 = RenderSettingsEpoch();
+    fresh.Mat.Hash();                        // a copy starts unseen: hashing it reports nothing
+    CHECK(RenderSettingsEpoch() == e2);
+    *leaf = fresh;
+    CHECK(sig() != h1);
+    CHECK(RenderSettingsEpoch() != e2);
+
+    leaf->RenderQueue = MaterialAsset::Queue::Transparent; // casts nothing now
+    const std::uint64_t ht = sig();
+    leaf->RenderQueue = MaterialAsset::Queue::Opaque;
+    CHECK(sig() != ht);
 }
 
 // GI Phase 1 (W2): room-aware, stable shadow slots that fade instead of popping (ShadowSlotScoring).
@@ -2315,8 +3044,44 @@ void TestPhysicalSky() {
     CHECK(clamped.Render.Sky.CloudsEnabled); // a non-boolean is ignored, keeping the default
 }
 
-// --- TextureCache: one texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's)
-// keeps both entries - they used to share one and evict each other every session, re-decoding (and re-compressing) both.
+// --- TextureCache. P-53: the size cap never evicts this session's working set (loaded, stored or requested), grows with
+// it, and keeps 20 GB of disk free.
+void TestTextureCachePinEvict() {
+    constexpr uint64_t GiB = 1024ull * 1024 * 1024;
+    constexpr uint64_t unknownFree = std::numeric_limits<uint64_t>::max();
+    CHECK(TextureCache::CapBytes(0) == 8 * GiB);
+    CHECK(TextureCache::CapBytes(4 * GiB) == 8 * GiB);
+    CHECK(TextureCache::CapBytes(8 * GiB) == 10 * GiB);
+    using E = TextureCache::EntryInfo;
+    // The Forest case: a 4.47 GB working set fits the 8 GB floor, nothing goes.
+    std::vector<E> forest;
+    for (int i = 0; i < 45; ++i) forest.push_back({"f" + std::to_string(i), GiB / 10, i, false});
+    CHECK(TextureCache::ChooseEvictions(forest, unknownFree).empty());
+    // 12 GB on disk, 9 GB of it pinned (cap 11.25 GB): only unpinned, oldest first, until it fits.
+    std::vector<E> e = {{"old", 1 * GiB, 1, false}, {"pinOld", 9 * GiB, 0, true}, {"mid", 1 * GiB, 2, false},
+                        {"new", 1 * GiB, 3, false}};
+    std::vector<size_t> v = TextureCache::ChooseEvictions(e, unknownFree);
+    CHECK(v.size() == 1 && v[0] == 0);
+    // Disk nearly full: cap clamps to (total + free) - 20 GB, but pinned entries still stay.
+    v = TextureCache::ChooseEvictions(e, 10 * GiB); // room 22 GB -> cap 2 GB
+    CHECK(v.size() == 3);
+    for (size_t i : v) CHECK(!e[i].Pinned);
+    // Under the cap with plenty of disk: nothing.
+    CHECK(TextureCache::ChooseEvictions({{"a", GiB, 0, false}}, 500 * GiB).empty());
+    // Pinned at request time (the async loader, before its decode): Prune keeps it, and the pin check doesn't expect it
+    // on disk yet.
+    const std::string queued = (std::filesystem::temp_directory_path() / "tt_cache_pin_request_test.png").string();
+    TextureImportSettings s;
+    s.MaxTextureSize = 333; // a variant nothing else uses
+    const int missingBefore = TextureCache::SessionEntriesMissing();
+    CHECK(!TextureCache::Pinned(queued, s));
+    TextureCache::Pin(queued, s);
+    CHECK(TextureCache::Pinned(queued, s));
+    CHECK(TextureCache::SessionEntriesMissing() == missingBefore);
+}
+
+// One texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's) keeps both
+// entries - they used to share one and evict each other every session, re-decoding (and re-compressing) both.
 void TestTextureCacheVariants() {
     const std::string src = (std::filesystem::temp_directory_path() / "tt_cache_variant_test.png").string();
     {
@@ -2418,7 +3183,66 @@ void TestMaterialRobustness() {
 
 } // namespace
 
+// A-2: the linked-program cache's key and entry file. A changed source, a stage boundary moved, another driver, a
+// corrupt or truncated file are all misses; a clean entry reads back byte-exact; Prune keeps a fresh entry.
+void ProgramBinaryCacheKeyAndEntry() {
+    namespace PBC = ProgramBinaryCache;
+    const PBC::Key a = PBC::MakeKeyFor({"#version 460\nvoid main(){}", "#version 460\nout vec4 c; void main(){c=vec4(1);}"});
+    CHECK(a.Valid);
+    CHECK(a.Source == PBC::MakeKeyFor({"#version 460\nvoid main(){}", "#version 460\nout vec4 c; void main(){c=vec4(1);}"}).Source);
+    // One character changed (a variant #define) -> a different key.
+    CHECK(a.Source != PBC::MakeKeyFor({"#version 460\nvoid main(){}", "#version 460\nout vec4 c; void main(){c=vec4(0);}"}).Source);
+    // The same text split differently between stages -> a different key.
+    CHECK(PBC::MakeKeyFor({"ab", "c"}).Source != PBC::MakeKeyFor({"a", "bc"}).Source);
+    // A compute program with the vertex stage's text is not the vertex+fragment program.
+    CHECK(PBC::MakeKeyFor({"x"}).Source != PBC::MakeKeyFor({"x", ""}).Source);
+    CHECK(a.SourceBytes == 26 + 48);
+
+    const std::string driver = "NVIDIA Corporation | GeForce Test | 4.6.0 NVIDIA 999.99";
+    std::string blob(4096, '\0');
+    for (size_t i = 0; i < blob.size(); ++i) blob[i] = (char)(i * 31 + 7);
+    std::uint32_t format = 0;
+    std::string out;
+
+    const std::string entry = PBC::EncodeEntry(a, driver, 0x8E21u, blob);
+    CHECK(PBC::DecodeEntry(entry, a, driver, format, out) && format == 0x8E21u && out == blob);
+    CHECK(!PBC::DecodeEntry(entry, a, driver + " (updated)", format, out)); // another driver
+    PBC::Key other = a;
+    other.Source ^= 1;
+    CHECK(!PBC::DecodeEntry(entry, other, driver, format, out)); // another program's entry
+    other = a;
+    other.SourceBytes += 1;
+    CHECK(!PBC::DecodeEntry(entry, other, driver, format, out)); // a hash collision with a different length
+    std::string corrupt = entry;
+    corrupt[corrupt.size() - 100] ^= 0x40;
+    CHECK(!PBC::DecodeEntry(corrupt, a, driver, format, out)); // a flipped bit in the binary
+    CHECK(!PBC::DecodeEntry(std::string_view(entry).substr(0, entry.size() - 1), a, driver, format, out)); // truncated
+    CHECK(!PBC::DecodeEntry(entry + "x", a, driver, format, out));                                        // trailing bytes
+    CHECK(!PBC::DecodeEntry({}, a, driver, format, out));
+    CHECK(!PBC::DecodeEntry(PBC::EncodeEntry(a, driver, 1, {}), a, driver, format, out)); // an empty binary
+
+    // Through the folder: write, read back, a miss for another driver, Prune keeps it, Clear removes it.
+    const std::filesystem::path dir = UnitTestSupport::TempDir("program_cache");
+    PBC::SetDirectoryForTests((dir / "ShaderCache").string());
+    struct Restore { ~Restore() { ProgramBinaryCache::SetDirectoryForTests(""); } } restore;
+    PBC::Clear();
+    CHECK(PBC::DiskUsage().Entries == 0);
+    CHECK(!PBC::ReadEntryForTests(a, driver, format, out)); // nothing stored yet
+    CHECK(PBC::WriteEntryForTests(a, driver, 0x8E21u, blob));
+    CHECK(PBC::DiskUsage().Entries == 1);
+    out.clear();
+    CHECK(PBC::ReadEntryForTests(a, driver, format, out) && out == blob);
+    CHECK(!PBC::ReadEntryForTests(a, "AMD | Radeon | 4.6", format, out));
+    CHECK(PBC::WriteEntryForTests(a, driver, 0x8E21u, blob + "more")); // a re-store replaces the entry in place
+    CHECK(PBC::DiskUsage().Entries == 1);
+    CHECK(PBC::ReadEntryForTests(a, driver, format, out) && out == blob + "more");
+    PBC::Prune();
+    CHECK(PBC::DiskUsage().Entries == 1);
+    CHECK(PBC::Clear() == 1 && PBC::DiskUsage().Entries == 0);
+}
+
 void RegisterRenderTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"Program binary cache: key, entry checks, folder round trip", ProgramBinaryCacheKeyAndEntry});
     tests.push_back({"GI: L1 SH projection of known environments", GISphericalHarmonics});
     tests.push_back({"GI: volume lookup, bake file, weights follow circuits", GIVolumeLookup});
     tests.push_back({"Shader constants match their C++ sources", ShaderConstantsMatch});
@@ -2427,6 +3251,13 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Light distance fade: by projected size, smooth, then dropped", LightDistanceFade});
     tests.push_back({"Light bounds: per-face fade (Bounds Fade - / +), uniform = the old single fade", LightBoundsFaceFade});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
+    tests.push_back({"GpuScene: the mirror matches the candidate list slot by slot, frame after frame", GpuSceneMirror});
+    tests.push_back({"GpuScene: in-place render settings reach the slots (reported: next sync; unreported: within a sweep lap)", GpuSceneLiveEpoch});
+    tests.push_back({"GpuScene: SyncOnce's key follows every Sync (another world in between syncs again)", GpuSceneSyncOnceKey});
+    tests.push_back({"GpuScene: the change log lists every changed slot with where it was and is (300 random frames)", GpuSceneChangeLog});
+    tests.push_back({"Local shadows (G4-c): a frame's changes wake the quiet lights they reach, and only those", LocalShadowQuietWake});
+    tests.push_back({"Local shadows (G4-c): a LOD level change wakes the lights around the renderers it swapped", LocalShadowLodToggles});
+    tests.push_back({"GpuScene: upload runs (merge, cap, whole list) and layer packing", GpuSceneRuns});
     tests.push_back({"GatherPatch", GatherPatch});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
     tests.push_back({"GPU instancing: grouping keeps first-appearance order, kNoBatch stands alone", InstanceGrouping});
@@ -2434,9 +3265,12 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Async uploads: staging ring placement wraps and never overlaps", UploadStagingRing});
     tests.push_back({"Async uploads: the pump budget follows the frame headroom in Play", AssetPumpBudget});
     tests.push_back({"Async uploads: a ticket the budget deferred still counts as in flight", AssetPumpWaitingTickets});
+    tests.push_back({"Async uploads: a model's later upload that holds ring space is stepped too", ModelUploadStepsFreeTheRing});
     tests.push_back({"GPU-driven draws: indirect batches by key, in first-appearance order", IndirectBuilder});
     tests.push_back({"GPU-driven draws: mesh arena free list is first-fit and coalesces", MeshArenaFreeList});
     tests.push_back({"GPU occlusion culling: box padding", HiZPieces});
+    tests.push_back({"GPU culling: stage A matches the CPU gather", GpuCullStageAMatchesCpu});
+    tests.push_back({"GPU culling: sun caster cascades match the CPU", GpuCullCasterCascadesMatchCpu});
     tests.push_back({"Scene wind: settings round-trip, old-scene defaults, one bearing convention", SceneWindSettings});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});
@@ -2457,10 +3291,12 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"MaterialRobustness", TestMaterialRobustness});
     tests.push_back({"MaterialTextureDefaults", TestMaterialTextureDefaults});
     tests.push_back({"TextureCacheVariants", TestTextureCacheVariants});
+    tests.push_back({"TextureCachePinEvict", TestTextureCachePinEvict});
     tests.push_back({"TextureCacheHash", TestTextureCacheHash});
     tests.push_back({"CameraFrustumValidation", TestCameraFrustumValidation});
     tests.push_back({"CameraRoll", TestCameraRoll});
     tests.push_back({"OpaqueBatchKey", TestOpaqueBatchKey});
     tests.push_back({"LocalCasterHashSlots", TestLocalCasterHashSlots});
+    tests.push_back({"LocalCasterHashMaterialContent", TestLocalCasterHashMaterialContent});
     tests.push_back({"ShadowSlotScoring", TestShadowSlotScoring});
 }

@@ -9,6 +9,9 @@
 #include "ClusterGrid.h"
 #include "Components.h"
 #include "Core/Env.h"
+#include "GpuScene.h"
+#include "GpuCull.h"
+#include "CascadedShadowMap.h"
 #include "Core/FrameLoads.h"
 #include "Core/Paths.h"
 #include "Core/Profiler.h"
@@ -16,6 +19,7 @@
 #include "EditorLayer.h"
 #include "EditorSettings.h"
 #include "FKeyRow.h"
+#include "Tests/HarnessView.h"
 #include "FirstPersonPresentation.h"
 #include "Framebuffer.h"
 #include "GIVolumes.h"
@@ -30,6 +34,7 @@
 #include "LightSwitch.h"
 #include "SamplingProfiler.h"
 #include "SceneRenderer.h"
+#include "Frustum.h"
 #include "SceneSerializer.h"
 #include "ShadowFrame.h"
 #include "ShadowLimits.h"
@@ -38,7 +43,9 @@
 #include "Tests/SmokeChecks.h"
 #include "Window.h"
 #include "World.h"
+#include "Renderer/ImpostorLibrary.h"
 #include "Renderer/MemReport.h"
+#include "Renderer/TextureCache.h"
 
 #include <atomic>
 #include <chrono>
@@ -161,7 +168,8 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
         }
     }
     m_ShotCameraStart = Env::IsSet(Env::Var::ShotStart) ? std::max(1, Env::Int(Env::Var::ShotStart, 0)) : 40;
-    m_FrameBudget = opt.npcTestMode ? 60 * 60 * 6 : opt.perfBenchMode ? 3 * PerfBench::kPhaseFrames
+    m_PerfPlays = std::clamp(Env::Int(Env::Var::PerfPlays, 1), 1, 8);
+    m_FrameBudget = opt.npcTestMode ? 60 * 60 * 6 : opt.perfBenchMode ? (2 + m_PerfPlays) * PerfBench::kPhaseFrames
                   : m_Cinematic ? Cinematic::Warmup() + (int)(Cinematic::Duration() * 60.0f) + 2
                   : !m_ShotCameras.empty() ? m_ShotCameraStart + kShotCameraSettle * (int)m_ShotCameras.size() + 1 : 100;
     m_MemReportDir = Env::Str(Env::Var::MemReport);
@@ -170,6 +178,10 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
     m_LightsOnly = Env::Str(Env::Var::LightsOnly);
 
     if (opt.smokeTestMode) {
+        // G4-c's hard gate: every local light kept quiet is looked at anyway, and one whose map changed is a log error.
+        // Not in --perf-bench: verify does the full look the quiet path skips, so timings would measure verify, not the
+        // feature. A perf-bench gate run sets TARTARUS_SHADOW_CACHE_VERIFY=1 instead.
+        if (!opt.perfBenchMode) ShadowFrame::SetCacheVerify(true);
         // Scene source: explicit --smoke-test <dir> arg, else the engine's committed
         // regression scenes, else the user project's scenes/ (audit TEST-101).
         std::string scenesDir;
@@ -267,6 +279,16 @@ void SmokeHarness::MemSnapshot(const std::string& label) const {
 void SmokeHarness::LoadScene() {
     World& world = m_Ctx.world;
     const std::string& path = m_ScenePaths[m_SceneIndex];
+    // Every scene draws Shaded and lit whatever the prefs say (HarnessView.h); EndFrame checks it stays so.
+    m_ViewNotLit.clear();
+    // smoke_min: the guard's own check. Plant what an Unlit + F5 Albedo prefs file would leave (the scratch prefs are
+    // a copy of the user's), then force and check the scene draws lit (frame 15 below, and every frame in EndFrame).
+    m_ViewPlanted = path.find("smoke_min") != std::string::npos;
+    if (m_ViewPlanted) {
+        m_Ctx.editor.SetShadingModeIndex(2);
+        EditorSettings::Get().FRowLightDebug = FKeyRow::LightAlbedo;
+    }
+    if (!HarnessView::Force(m_Ctx.editor, "SmokeTest")) m_ViewNotLit = HarnessView::Describe(HarnessView::Current(m_Ctx.editor));
     // Baseline BEFORE the load, so an asset error logged *during* Load() (a
     // missing model/texture) counts against this scene instead of being folded
     // into the baseline and ignored (audit #356).
@@ -298,11 +320,36 @@ void SmokeHarness::LoadScene() {
                 (modelsAfter.HitMs - modelsBefore.HitMs) / 1000.0, modelsAfter.Cooked - modelsBefore.Cooked,
                 (modelsAfter.CookMs - modelsBefore.CookMs) / 1000.0);
     std::fflush(stdout);
+    // P-53 pin check: prune with the scene open, as an editor session's later prune would, under a deliberately
+    // small cap. The scene's own textures (loaded or stored by this process) must all survive. Material textures
+    // decode on the async loader, and an entry is pinned only once its load or store ran, so wait for it to drain.
+    if (const int pruneMb = Env::Int(Env::Var::TexturePruneAfterOpenMb, 0); pruneMb > 0 && m_SceneLoadOk) {
+        const double waitStart = glfwGetTime();
+        while (m_Ctx.assets.AsyncInFlight() > 0 && glfwGetTime() - waitStart < 300.0) {
+            m_Ctx.assets.PumpAsync(50.0);
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        const int inFlight = m_Ctx.assets.AsyncInFlight();
+        const TextureCache::PruneStats ps = TextureCache::Prune(nullptr, (uint64_t)pruneMb * 1024 * 1024);
+        const int missing = TextureCache::SessionEntriesMissing(); // the scene's entries no longer on disk
+        constexpr double MB = 1024.0 * 1024.0;
+        std::printf("[SmokeTest] Texture cache pin check: async in flight %d (waited %.1f s); %d entries %.0f MB, %d pinned "
+                    "%.0f MB, cap %.0f MB; evicted %d (%.0f MB); this scene's entries missing after: %d%s\n",
+                    inFlight, glfwGetTime() - waitStart, ps.Entries, ps.Bytes / MB, ps.Pinned, ps.PinnedBytes / MB,
+                    ps.CapBytes / MB, ps.Evicted, ps.EvictedBytes / MB, missing,
+                    (missing == 0 && inFlight == 0) ? "" : "  FAIL");
+        std::fflush(stdout);
+        if (missing != 0 || inFlight != 0)
+            Log::Error("[SmokeTest] texture cache pin check: " + std::to_string(missing) + " of this scene's entries evicted, " +
+                       std::to_string(inFlight) + " decodes still in flight");
+    }
     if (m_SceneLoadOk) {
         SmokeChecks::SceneLoaded(world, m_Ctx.assets, path, [this](const std::string& label) { MemSnapshot(label); });
         FirstPersonPresentation::PrefetchPlayAssets(world, m_Ctx.assets); // as the editor's scene open
     }
     m_FramesRendered = 0;
+    m_PerfPlay = 1;
+    m_PerfReplay = false;
     m_SceneStartSeconds = glfwGetTime();
     m_WallFrames = 0;
     m_UnfocusedFrames = 0;
@@ -336,6 +383,80 @@ void SmokeHarness::BeginFrame() {
         std::string preSkinWhy;
         if (Model::PreSkinSelfTest(preSkinWhy)) std::cout << "[SmokeTest]   pre-skin matches the CPU skinning" << std::endl;
         else Log::Error("[SmokeTest] pre-skin: " + preSkinWhy);
+    }
+
+    // smoke_min: the persistent GPU scene's buffers (G-1), read back slot by slot against the candidate list. Nothing
+    // draws from them yet; this is what keeps them right until something does, on CI's software GL too.
+    if (m_SceneActive && m_FramesRendered == 15 &&
+        path.find("smoke_min") != std::string::npos) {
+        std::string why;
+        if (GpuScene::Get().SelfTest(world, why)) std::cout << "[SmokeTest]   GPU scene matches the candidate list" << std::endl;
+        else Log::Error("[SmokeTest] GPU scene: " + why);
+    }
+
+    // smoke_min: the view guard (HarnessView) undid the planted Unlit + F5 Albedo.
+    if (m_SceneActive && m_FramesRendered == 15 && m_ViewPlanted) {
+        const HarnessView::Mode view = HarnessView::Current(m_Ctx.editor);
+        if (HarnessView::Lit(view)) std::cout << "[SmokeTest]   view guard: planted Unlit + F5 Albedo, drawing Shaded and lit" << std::endl;
+        else Log::Error("[SmokeTest] view guard: the planted prefs were not undone: " + HarnessView::Describe(view));
+    }
+
+    // smoke_min: GPU culling's stage A + ordered compaction (G-2) against GatherVisible: a camera query and one inside
+    // half the scene's box. Every slot the CPU keeps must come back, in its order (extras are allowed).
+    if (m_SceneActive && m_FramesRendered == 15 &&
+        path.find("smoke_min") != std::string::npos && GpuScene::Enabled()) {
+        const GpuCull::VerifyTotals before = GpuCull::Totals();
+        VisibilityQuery cam;
+        GpuCull::VerifyView(world, cam);
+        glm::vec3 lo, hi;
+        if (RenderableBounds(world, lo, hi)) {
+            const glm::vec3 mid = (lo + hi) * 0.5f;
+            const AABB half{lo, mid};
+            VisibilityQuery inside;
+            inside.ShadowCasters = true;
+            inside.Within = &half;
+            GpuCull::VerifyView(world, inside);
+        }
+        const GpuCull::VerifyTotals& after = GpuCull::Totals();
+        const std::uint64_t views = after.Views - before.Views, missing = after.Missing - before.Missing;
+        const std::uint64_t order = after.OrderBad - before.OrderBad;
+        if (views > 0 && missing == 0 && order == 0)
+            std::cout << "[SmokeTest]   GPU culling matches the CPU gather (" << (after.Expected - before.Expected)
+                      << " kept, " << (after.Extra - before.Extra) << " extra)" << std::endl;
+        else
+            Log::Error("[SmokeTest] GPU culling: " + std::to_string(views) + " views, " + std::to_string(missing) +
+                       " missing, " + std::to_string(order) + " out of order");
+    }
+
+    // Every scene: how many quiet local lights the verify mode checked so far (a miss is already a log error).
+    if (m_SceneActive && m_FramesRendered == 15 && ShadowFrame::SlotDirtyEnabled() && ShadowFrame::CacheVerify()) {
+        const ShadowFrame::VerifyTotals& v = ShadowFrame::CacheVerifyTotals();
+        std::cout << "[SmokeTest]   local shadow quiet lights: " << v.Checked << " checked, " << v.Missed << " missed" << std::endl;
+    }
+
+    // smoke_min: the sun's GPU caster cull (G4-a) against the CPU's cascade runs: asked for on frame 15, run by the next
+    // sun pass, checked on frame 20. Every (caster, cascade) the CPU draws must come back (extras are allowed).
+    if (m_SceneActive && path.find("smoke_min") != std::string::npos && GpuScene::Enabled() &&
+        CascadedShadowMap::LayeredSupported()) {
+        if (m_FramesRendered == 15) {
+            const GpuCull::SunVerifyTotals& t = GpuCull::SunTotals();
+            m_SunVerifyBefore[0] = t.Frames;
+            m_SunVerifyBefore[1] = t.Expected;
+            m_SunVerifyBefore[2] = t.Missing;
+            m_SunVerifyBefore[3] = t.Extra;
+            GpuCull::RequestSunVerify();
+        } else if (m_FramesRendered == 20) {
+            const GpuCull::SunVerifyTotals& after = GpuCull::SunTotals();
+            const std::uint64_t passes = after.Frames - m_SunVerifyBefore[0];
+            const std::uint64_t expected = after.Expected - m_SunVerifyBefore[1];
+            const std::uint64_t missing = after.Missing - m_SunVerifyBefore[2];
+            if (passes > 0 && expected > 0 && missing == 0)
+                std::cout << "[SmokeTest]   GPU sun caster cull matches the CPU cascades (" << expected << " kept, "
+                          << (after.Extra - m_SunVerifyBefore[3]) << " extra)" << std::endl;
+            else
+                Log::Error("[SmokeTest] GPU sun caster cull: " + std::to_string(passes) + " passes, " +
+                           std::to_string(expected) + " expected, " + std::to_string(missing) + " missing");
+        }
     }
 
     // A smoke_ssao_off* scene: rendered with SSAO off; no program may put two sampler types on one unit.
@@ -795,20 +916,50 @@ void SmokeHarness::PerfFrame() {
             m_Perf.ReportCombat(std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string(),
                                 m_Ctx.editor.GetRenderStats().DrawCalls, m_Ctx.editor.GetRenderStats().Triangles,
                                 m_Ctx.window.GetWidth(), m_Ctx.window.GetHeight());
+            std::cout << "[PerfBench] view (combat): " << (m_ViewNotLit.empty() ? "Shaded, lit" : "NOT LIT: " + m_ViewNotLit)
+                      << std::endl;
         }
     } else if (opt.perfBenchMode) {
         const double frameMs = m_Perf.TakeFrameMs();
+        // The edit phase starts once the scene has streamed in. On a cold open the impostor atlases were still
+        // decoding, so the far trees drew as full meshes (Forest: 767 draws / 2.1M tris vs 631 / 1.4M warm).
+        if (m_FramesRendered == 1 && !playing) {
+            constexpr int kPerfStreamHold = 3000;
+            const bool streaming = m_Ctx.decalSystem.Streaming() || m_Ctx.assets.AsyncInFlight() > 0 ||
+                                   (ImpostorLibrary::Wanted() && !ImpostorLibrary::Enabled());
+            if (streaming && m_PerfHold < kPerfStreamHold) {
+                ++m_PerfHold;
+                --m_FramesRendered; // this frame again next time round
+                return;
+            }
+            if (m_PerfHold > 0 || streaming)
+                std::cout << "[PerfBench] waited " << m_PerfHold << " frame(s) for streaming"
+                          << (streaming ? " - still streaming, measuring anyway" : "")
+                          << " [decals=" << m_Ctx.decalSystem.Streaming() << " async=" << m_Ctx.assets.AsyncInFlight()
+                          << " impostors=" << (ImpostorLibrary::Wanted() && !ImpostorLibrary::Enabled()) << "]" << std::endl;
+            m_PerfHold = 0;
+        }
+        if (m_PerfReplay) { // the next Play (its Enter Play frame is this phase's first)
+            m_PerfReplay = false;
+            ++m_PerfPlay;
+            m_Ctx.togglePlay();
+            m_Ctx.setMaximized(true);
+        }
         const int phaseFrame = (m_FramesRendered - 1) % PerfBench::kPhaseFrames + 1;
         if (opt.perfSample && phaseFrame == std::max(m_Perf.Warmup(), 1)) SamplingProfiler::Start(); // warmup 0: from frame 1
         if (phaseFrame > m_Perf.Warmup()) m_Perf.Sample(frameMs, phaseFrame);
         if (phaseFrame == PerfBench::kPhaseFrames) {
-            m_Perf.ReportPhase(std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string(),
-                               !playing ? "edit" : playMaximized ? "play-max" : "play",
+            const std::string phase = !playing ? "edit" : !playMaximized ? "play" : m_PerfPlay > 1 ? "play-max-" + std::to_string(m_PerfPlay) : "play-max";
+            m_Perf.ReportPhase(std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string(), phase.c_str(),
                                m_Ctx.editor.GetRenderStats().DrawCalls, m_Ctx.editor.GetRenderStats().Triangles,
                                m_Ctx.window.GetWidth(), m_Ctx.window.GetHeight(), opt.perfSample);
+            // Its own prefix: scripts that parse "[PerfBench] <scene> (<phase>)" rows for numbers don't catch it.
+            std::cout << "[PerfBench] view (" << phase << ") " << std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string()
+                      << ": " << (m_ViewNotLit.empty() ? "Shaded, lit" : "NOT LIT: " + m_ViewNotLit) << std::endl;
             if (m_FramesRendered < m_FrameBudget) {
                 if (!playing) m_Ctx.togglePlay();
                 else if (!playMaximized) m_Ctx.setMaximized(true);
+                else if (m_PerfPlay < m_PerfPlays) { m_Ctx.togglePlay(); m_PerfReplay = true; } // Stop; Play again next frame
             }
         }
     }
@@ -832,6 +983,7 @@ void SmokeHarness::ScoreScene() {
     cause += m_SetupError;
     m_SetupError.clear(); // counted once, against the first scene
     if (!clipOk)             cause += "cinematic clip incomplete; ";
+    if (!m_ViewNotLit.empty()) cause += "view not Shaded and lit (" + m_ViewNotLit + "); ";
     if (newLogErrors > 0)    cause += std::to_string(newLogErrors) + " new log error(s); ";
     if (npcTest) {
         if (!npcTest->Done()) cause += "npc test didn't finish; ";
@@ -869,6 +1021,7 @@ void SmokeHarness::ScoreScene() {
               << " newGlErrors=" << newErrors
               << " newLogErrors=" << newLogErrors
               << " drawCalls=" << drawCalls
+              << " view=" << (m_ViewNotLit.empty() ? "Shaded-lit" : "NOT-LIT")
               << (m_PlayScene ? ("  playCycles=" + std::to_string(m_PlayCycles)) : "")
               << (variants.empty() ? "" : ("  variants:" + variants))
               << (pass ? "" : ("  cause: " + cause)) << std::endl;
@@ -886,6 +1039,17 @@ void SmokeHarness::EndFrame() {
     Camera& editorCamera = m_Ctx.editorCamera;
     ++m_FramesRendered;
     ++m_WallFrames;
+    // A frame drawn with anything but the normal look (a key press in a visible run, a script) fails the scene: its
+    // numbers and pictures would be wrong.
+    if (m_ViewNotLit.empty()) {
+        HarnessView::Mode view = HarnessView::Current(m_Ctx.editor);
+        if (opt.giTourMode) view.LightView = FKeyRow::LightOff; // the GI tour picks its own F5 view (gi / full shots)
+        if (!HarnessView::Lit(view)) {
+            m_ViewNotLit = HarnessView::Describe(view);
+            Log::Error("[SmokeTest] frame " + std::to_string(m_FramesRendered) + " drew with " + m_ViewNotLit +
+                       ", not Shaded and lit: this scene fails");
+        }
+    }
     if (glfwGetWindowAttrib(m_Ctx.window.Handle(), GLFW_FOCUSED) == 0) ++m_UnfocusedFrames;
     if (opt.giTourMode) {
         GiTourFrame();
