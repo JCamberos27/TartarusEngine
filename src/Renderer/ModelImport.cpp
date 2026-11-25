@@ -381,6 +381,7 @@ Model::~Model() {
     // An upload that never finished (a Play-scoped load dropped at Stop): a texture another model shares keeps the staging
     // ring span it reserved here, and no one is left to step it, so the span stays live until that texture is first
     // used and the ring fills up behind it. Give the span back; the texture asks for a new one when it is stepped again.
+    // Main thread only (the ring's span list has no lock): the async pump drops its jobs there, never the copy worker.
     if (m_GpuPending)
         for (auto& [key, tex] : m_D->TextureCache)
             if (tex && tex.use_count() > 1 && tex->IsPendingUpload()) tex->ReleaseStage();
