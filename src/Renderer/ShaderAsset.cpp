@@ -3,6 +3,7 @@
 #endif
 #include "gl.h"
 #include "ShaderAsset.h"
+#include "Core/OpenProfile.h"
 #include "ShaderVariant.h" // kVariantMaterialKeywords
 #include "Shader.h"
 #include "ShaderLibrary.h"
@@ -12,6 +13,7 @@
 #include "TextureUnits.h"
 #include "SkyAtmosphere.h"
 
+#include <chrono>
 #include <fstream>
 #include <sstream>
 #include <cctype>
@@ -520,6 +522,18 @@ void ShaderAsset::CompileVariant(ShaderVariantKey key) {
     char keyHex[24];
     std::snprintf(keyHex, sizeof(keyHex), " #%llx", (unsigned long long)key);
     const std::string debugName = std::filesystem::path(m_Path).filename().string() + keyHex;
+    // A scene open's profile (OpenProfile.h) counts and times every program built, and names each one with its time.
+    const bool profiled = OpenProfile::Active();
+    const auto compileStart = std::chrono::steady_clock::now();
+    struct NoteCompile {
+        bool On; const std::string& Name; std::chrono::steady_clock::time_point Start;
+        ~NoteCompile() {
+            if (!On) return;
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Start).count();
+            OpenProfile::Add("shader: compile + link a variant", ms);
+            std::printf("[OpenProfile] variant %8.1f ms  %s\n", ms, Name.c_str());
+        }
+    } noteCompile{profiled, debugName, compileStart};
     try {
         if (fragSrc.empty())
             m_Variants[key] = std::make_unique<Shader>(vertSrc, debugName.c_str());      // compute
