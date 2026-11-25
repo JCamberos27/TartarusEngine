@@ -6,6 +6,7 @@
 #include "InstanceBatch.h"
 #include "HiZCuller.h"
 #include "Model.h"
+#include "ReflectionProbeArray.h"
 
 #include <glm/glm.hpp>
 #include <array>
@@ -111,6 +112,7 @@ struct SceneViewScratch {
     std::vector<SceneDrawItem> SortScratch;
     std::vector<DepthCaster> Prepass, ViewModelPrepass;
     std::vector<std::uint32_t> ProbeKeys;
+    std::vector<ReflectionProbeArray::Selection> ProbeSel; // G-MB: each item's probes as data (GpuScene::ObjectState)
     InstanceGroups OpaqueGroups;
     std::vector<int> GroupBase;
     std::vector<std::uint8_t> GroupIndirect; // 1: drawn by the multi-draw batches
@@ -210,6 +212,11 @@ private:
     // they draw and 28 each copy's slot (HiZCuller's remap, or SlotStaging as it is); the instance ring otherwise.
     bool m_SceneSlots = false;
     bool m_XformsOnScene = false; // binding 27 holds the GPU scene now, not this view's instance ring span
+    // G-MB: the multi-draw batches read each copy's probes and GI mask from its GPU scene slot (GpuScene::ObjectState,
+    // written by BuildBatches) - with the scene slots, unless TARTARUS_NO_SLOT_STATE. The programs the hook set
+    // uSlotState on, reset when the opaque pass ends.
+    bool m_SlotState = false;
+    std::vector<Shader*> m_SlotStatePrograms;
     void BindInstanceXforms(bool scene);
     bool m_VelocityOut = false;
 };

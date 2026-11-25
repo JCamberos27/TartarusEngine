@@ -132,7 +132,9 @@ void BloodRenderer::EnsureProgram() {
     if (m_Program) return;
     // ModelFragment's subsurface lobe gives thin sheets and drops their back-lit red glow.
     m_Program = std::make_unique<Shader>(ShaderLibrary::ReadFile("BloodVat.vert.glsl"),
-                                         WithDefines(ShaderLibrary::ReadFile("ModelFragment.glsl"), "#define _SUBSURFACE 1\n"),
+                                         // _NO_SLOT_STATE: BloodVat.vert has no vSlot (the multi-draw's slot state)
+                                         WithDefines(ShaderLibrary::ReadFile("ModelFragment.glsl"),
+                                                     "#define _SUBSURFACE 1\n#define _NO_SLOT_STATE 1\n"),
                                          "BloodVat");
 }
 

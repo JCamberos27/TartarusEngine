@@ -38,6 +38,9 @@ uniform int uSkinBase;
 
 out vec3 vWorldPos;
 out vec3 vNormal;
+// uInstanced 2: the copy's remapped index - its GPU scene slot when the batch reads the scene (ModelFragment.glsl
+// SlotStateBlock, read only while uSlotState is 1); 0 otherwise.
+flat out uint vSlot;
 out vec2 vUV;
 out mat3 vTBN;
 out vec4 vColor;
@@ -124,11 +127,14 @@ void main() {
 
     mat4 model = uModel;
     mat3 normalMat = mat3(uNormalMatrix); // inverse-transpose of uModel, computed once on the CPU (#104)
+    vSlot = 0u;
     if (uInstanced != 0) {
         // gl_BaseInstance: the multi-draw command's group
-        int at = (uInstanced == 2 ? uInstanceRemap[gl_BaseInstance + gl_InstanceID] : uInstanceBase + gl_BaseInstance + gl_InstanceID) * 2;
+        int copy = uInstanced == 2 ? uInstanceRemap[gl_BaseInstance + gl_InstanceID] : uInstanceBase + gl_BaseInstance + gl_InstanceID;
+        int at = copy * 2;
         model = uInstances[at];
         normalMat = mat3(uInstances[at + 1]);
+        if (uInstanced == 2) vSlot = uint(copy);
     }
     precise vec4 world = model * localPos;
     world.xyz += FoliageWindOffset(localPos.xyz, aNormal, aColor, model); // opt-in; zero unless uFoliage (bind normal: as ShadowDepth.vert)
