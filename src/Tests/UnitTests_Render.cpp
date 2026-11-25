@@ -7,6 +7,8 @@
 #include "../Renderer/UploadStaging.h"
 #include "../Renderer/MeshArena.h"
 #include "../Renderer/HiZCuller.h"
+#include "../Renderer/GpuCull.h"
+#include "../Physics/Frustum.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/TextureCache.h"
 #include "../Renderer/Texture.h"
@@ -364,6 +366,59 @@ void MeshArenaFreeList() {
     f.Give(c, 30); // and everything joins up again
     CHECK(f.Runs() == 1 && f.FreeUnits() == 100);
     CHECK(f.Take(100) == 0 && f.Take(1) == ~0u);
+}
+
+// GpuCull (G-2): stage A's CPU reference gives GatherVisible's answer for every slot - the same flag tests, Frustum::
+// Intersects, the Within box and TooSmallOnScreen - over random boxes, flags, layers and queries (camera, owner view,
+// editor view with a layer mask, shadow casters with a Within box). The compute is held to this reference.
+void GpuCullStageAMatchesCpu() {
+    std::mt19937 rng(1225);
+    std::uniform_real_distribution<float> pos(-60.0f, 60.0f), size(0.001f, 6.0f), unit(0.0f, 1.0f);
+    const glm::mat4 proj = glm::perspective(glm::radians(70.0f), 16.0f / 9.0f, 0.1f, 200.0f);
+    const glm::vec3 eye(1.0f, 1.7f, 2.0f);
+    const glm::mat4 view = glm::lookAt(eye, eye + glm::vec3(0.3f, -0.1f, -1.0f), glm::vec3(0, 1, 0));
+    const Frustum frustum = Frustum::FromViewProj(proj * view);
+    const AABB within{glm::vec3(-20.0f, -5.0f, -20.0f), glm::vec3(20.0f, 10.0f, 20.0f)};
+    int mismatches = 0, kept = 0, total = 0;
+    for (int qi = 0; qi < 4; ++qi) {
+        VisibilityQuery q;
+        q.Cull = &frustum;
+        if (qi == 0) { q.OwnerView = true; q.SizeCullEye = &eye; q.SizeCullProjScale = proj[1][1]; q.MinScreenHeight = 0.01f; }
+        if (qi == 1) { q.SkipViewModels = true; q.SkipPlayerBody = true; q.SkipTransparent = true; }
+        if (qi == 2) { q.EditorView = true; q.LayerVisibleMask = 0x0000FF0Fu; }
+        if (qi == 3) { q.ShadowCasters = true; q.Within = &within; q.Cull = nullptr; }
+        const GpuCull::ViewQuery gq = GpuCull::MakeQuery(q);
+        for (int i = 0; i < 6000; ++i) {
+            GpuCull::SlotData s;
+            const glm::vec3 c(pos(rng), pos(rng) * 0.2f, pos(rng)), h(size(rng), size(rng), size(rng));
+            s.Min = c - h * 0.5f;
+            s.Max = c + h * 0.5f;
+            for (std::uint32_t bit = 0; bit < 12; ++bit)
+                if (unit(rng) < (bit == 10 ? 0.9f : 0.06f)) s.Flags |= 1u << bit;
+            s.Layer = (int)(unit(rng) * 34.0f) - 1; // -1..32: out-of-range layers are never hidden
+            const bool lod = unit(rng) < 0.05f;
+            // GatherVisible's consider(), restated on the slot.
+            bool cpu = !(s.Flags & (GpuCull::kSlotInactive | GpuCull::kSlotPoseSource | GpuCull::kSlotNoModel)) && !lod;
+            if (cpu && (s.Flags & ((q.ShadowCasters || !q.OwnerView) ? GpuCull::kSlotOwnerViewOnly : GpuCull::kSlotHiddenFromOwner))) cpu = false;
+            if (cpu && q.SkipViewModels && (s.Flags & GpuCull::kSlotViewModel)) cpu = false;
+            if (cpu && q.SkipPlayerBody && (s.Flags & GpuCull::kSlotPlayerBody)) cpu = false;
+            if (cpu && q.EditorView && ((s.Flags & GpuCull::kSlotHiddenInScene) ||
+                                        (s.Layer >= 0 && s.Layer < 32 && !((q.LayerVisibleMask >> s.Layer) & 1u)))) cpu = false;
+            if (cpu && (s.Flags & (q.ShadowCasters ? GpuCull::kSlotCastOff : GpuCull::kSlotShadowsOnly))) cpu = false;
+            if (cpu && q.SkipTransparent && (s.Flags & GpuCull::kSlotTransparent)) cpu = false;
+            if (cpu && (s.Flags & GpuCull::kSlotBounded)) {
+                if (q.Cull && !q.Cull->Intersects(AABB{s.Min, s.Max})) cpu = false;
+                if (cpu && q.Within && !q.Within->Intersects(AABB{s.Min, s.Max})) cpu = false;
+                if (cpu && q.SizeCullEye && TooSmallOnScreen(s.Min, s.Max, *q.SizeCullEye, q.SizeCullProjScale, q.MinScreenHeight)) cpu = false;
+            }
+            const bool gpu = GpuCull::PassesStageA(s, gq, lod);
+            mismatches += cpu != gpu;
+            kept += gpu;
+            ++total;
+        }
+    }
+    CHECK(mismatches == 0);
+    CHECK(kept > total / 20 && kept < total); // the cases are mixed: some kept, some not
 }
 
 // HiZCuller: the occlusion boxes are padded past the object, and swaying foliage pads them further.
@@ -2437,6 +2492,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GPU-driven draws: indirect batches by key, in first-appearance order", IndirectBuilder});
     tests.push_back({"GPU-driven draws: mesh arena free list is first-fit and coalesces", MeshArenaFreeList});
     tests.push_back({"GPU occlusion culling: box padding", HiZPieces});
+    tests.push_back({"GPU culling: stage A matches the CPU gather", GpuCullStageAMatchesCpu});
     tests.push_back({"Scene wind: settings round-trip, old-scene defaults, one bearing convention", SceneWindSettings});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});

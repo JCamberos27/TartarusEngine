@@ -1,0 +1,78 @@
+#pragma once
+
+#include <cstdint>
+#include <vector>
+#include <glm/glm.hpp>
+
+struct VisibilityQuery;
+
+// GPU-driven culling (G-2): the per-view visibility test of GatherVisible, run on the GPU over the persistent GPU scene
+// (GpuScene: one slot per candidate), packing each multi-draw group's visible slots IN SLOT ORDER into its remap run
+// and setting its commands' instance counts, so the batched draws come out exactly as the CPU path would order them.
+//
+// Exactness (never a missing object): stage A is the same test as GatherVisible's, on the same data. Where the GPU's
+// float order can differ (frustum planes) it may only draw MORE; the size cull is the CPU formula op for op.
+// TARTARUS_GPU_CULL_VERIFY=1 reads the result back every frame (debug only: it waits for the GPU) and compares it with
+// GatherVisible: a slot the CPU keeps and the GPU drops is "missing" (a bug), one the GPU keeps extra is counted.
+//
+// Off with TARTARUS_NO_GPU_CULL=1, without the GPU scene or multi-draw, or when the compute program fails to build.
+namespace GpuCull {
+
+// Per-slot bits stage A reads (the candidate cache's flags as the GPU needs them, plus the renderable's own settings).
+enum SlotFlag : std::uint32_t {
+    kSlotInactive = 1u << 0,        // inactive GameObject (kCandInactive)
+    kSlotPoseSource = 1u << 1,      // first-person arms rig: animated only, never drawn
+    kSlotOwnerViewOnly = 1u << 2,   // split pose: the first-person copy
+    kSlotHiddenFromOwner = 1u << 3, // split pose: the world copy
+    kSlotViewModel = 1u << 4,
+    kSlotPlayerBody = 1u << 5,
+    kSlotHiddenInScene = 1u << 6,   // editor Scene view's per-entity hide
+    kSlotCastOff = 1u << 7,         // Cast Shadows: Off
+    kSlotShadowsOnly = 1u << 8,     // Cast Shadows: Shadows Only
+    kSlotTransparent = 1u << 9,     // first material slot is in the Transparent queue
+    kSlotBounded = 1u << 10,        // has bounds; unbounded draws and casts without a frustum test
+    kSlotNoModel = 1u << 11,        // no model (never drawn)
+};
+
+// One slot as the compute reads it (std430: 32 bytes).
+struct SlotData {
+    glm::vec3 Min;
+    std::uint32_t Flags = 0;
+    glm::vec3 Max;
+    std::int32_t Layer = 0;
+};
+static_assert(sizeof(SlotData) == 32, "SlotData must match the GLSL struct");
+
+// A VisibilityQuery flattened into what the compute's uniform block holds.
+struct ViewQuery {
+    glm::vec4 Planes[6] = {};      // xyz normal, w = D; unused when !HasFrustum
+    glm::vec4 WithinMin{0.0f}, WithinMax{0.0f};
+    glm::vec4 SizeEye{0.0f};       // xyz eye, w = projScaleY
+    std::uint32_t RejectFlags = 0; // any of these set -> left out
+    std::uint32_t LayerMask = ~0u; // editor view only (CheckLayer)
+    float MinScreenHeight = 0.0f;
+    std::uint32_t Bits = 0;        // kQ* below
+};
+enum QueryBit : std::uint32_t { kQHasFrustum = 1u, kQHasWithin = 2u, kQHasSizeCull = 4u, kQCheckLayer = 8u };
+
+// The query's settings as a ViewQuery (which flags reject, which tests run).
+ViewQuery MakeQuery(const VisibilityQuery& q);
+
+// Stage A on the CPU, op for op what the compute does: the reference the unit test and the verify mode hold the GPU to.
+// `lodCulled` is the slot's bit in the view's LOD bitset.
+bool PassesStageA(const SlotData& s, const ViewQuery& q, bool lodCulled);
+
+// A multi-draw group: its run of slots (in draw order) and its commands (same layout as HiZCuller::Group).
+struct Group {
+    std::uint32_t Base, Count;
+    std::uint32_t CmdFirst, CmdCount;
+};
+
+// The setting, the env switch, the GPU scene and the compute program.
+bool Enabled();
+bool VerifyEnabled();
+
+// The GLSL of stage A + the ordered compaction (exposed for the shader-compile unit test).
+const char* ComputeSource();
+
+} // namespace GpuCull

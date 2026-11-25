@@ -87,6 +87,8 @@
     X(GlassFullCapture, "TARTARUS_GLASS_FULL_CAPTURE", Flag, "editor glass: capture the full window")                 \
     /* Kill switches */                                                                                                 \
     X(NoHiz, "TARTARUS_NO_HIZ", Flag, "disable Hi-Z occlusion culling")                                               \
+    X(NoGpuCull, "TARTARUS_NO_GPU_CULL", Flag, "disable GPU-driven culling (G-2): the CPU builds the draw lists")      \
+    X(GpuCullVerify, "TARTARUS_GPU_CULL_VERIFY", Flag, "debug: compare GPU culling with the CPU's every frame (slow)") \
     X(NoMdi, "TARTARUS_NO_MDI", Flag, "disable multi-draw indirect")                                                  \
     X(NoMeshArena, "TARTARUS_NO_MESH_ARENA", Flag, "disable the static mesh arena")                                   \
     X(NoModelCache, "TARTARUS_NO_MODEL_CACHE", Flag, "import models from their files (skip Library/Models)")          \
