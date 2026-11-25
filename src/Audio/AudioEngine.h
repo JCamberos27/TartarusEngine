@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <memory>
 #include <cstdint>
@@ -44,8 +45,10 @@ public:
     struct PreloadFormat { unsigned Channels = 2, SampleRate = 48000; };
     static PreloadFormat PreloadDecodeFormat();
     struct DecodedSounds; // AudioVoices.cpp
+    // `pause`: slept after each file, so a worker sharing the machine with the editor's frames takes its time.
     static std::shared_ptr<DecodedSounds> DecodeForPreload(const std::vector<std::string>& paths, PreloadFormat format,
-                                                          const std::atomic<bool>* cancel = nullptr);
+                                                          const std::atomic<bool>* cancel = nullptr,
+                                                          std::chrono::microseconds pause = std::chrono::microseconds(0));
     static int AdoptPreloaded(DecodedSounds& sounds);
     static std::size_t DecodedBytes(const DecodedSounds& sounds); // the decoded PCM it holds
     static int DecodedCount(const DecodedSounds& sounds);         // the files it tried (failures included)

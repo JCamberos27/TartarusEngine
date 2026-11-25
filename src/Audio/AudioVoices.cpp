@@ -3,6 +3,8 @@
 #include "AssetDatabase.h"
 #include "Core/Paths.h"
 #include <algorithm>
+#include <chrono>
+#include <thread>
 #include <cmath>
 #include <filesystem>
 
@@ -114,12 +116,14 @@ AudioEngine::PreloadFormat AudioEngine::PreloadDecodeFormat() {
 }
 
 std::shared_ptr<AudioEngine::DecodedSounds> AudioEngine::DecodeForPreload(const std::vector<std::string>& paths,
-                                                                          PreloadFormat format, const std::atomic<bool>* cancel) {
+                                                                          PreloadFormat format, const std::atomic<bool>* cancel,
+                                                                          std::chrono::microseconds pause) {
     auto out = std::make_shared<DecodedSounds>();
     out->Clips.reserve(paths.size());
     for (const std::string& p : paths) {
         if (cancel && cancel->load(std::memory_order_relaxed)) break;
         out->Clips.emplace_back(p, DecodeClip(p, format));
+        if (pause.count() > 0) std::this_thread::sleep_for(pause); // a breather between files for the frames it overlaps
     }
     return out;
 }

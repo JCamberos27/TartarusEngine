@@ -21,6 +21,7 @@
 #endif
 
 namespace {
+constexpr std::chrono::microseconds kPause{1000};
 double MsSince(std::chrono::steady_clock::time_point t0) {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
@@ -73,15 +74,16 @@ void PlayAssetsWarmup::Tick(const World& world, int asyncInFlight, bool playing)
                 manifest = ss.str();
             }
         }
-        m_Sounds = AudioEngine::DecodeForPreload(ManifestSoundFiles(manifest), format, &m_Cancel);
+        m_Sounds = AudioEngine::DecodeForPreload(ManifestSoundFiles(manifest), format, &m_Cancel, kPause);
         if (!m_Cancel.load(std::memory_order_relaxed)) m_Blood = BloodRenderer::ReadFiles(&m_Cancel);
         if (!m_Cancel.load(std::memory_order_relaxed)) m_Knife = KnifeFxLibrary::ReadFiles(&m_Cancel);
         m_WorkerMs = MsSince(t0);
         m_Done.store(true, std::memory_order_release);
     });
 #ifdef _WIN32
-    // Below normal: the editor's (or the load screen's) own frames come first; this only has to be done before Play.
-    SetThreadPriority((HANDLE)m_Thread.native_handle(), THREAD_PRIORITY_BELOW_NORMAL);
+    // Lowest, with a breather after each sound (kPause): the editor's (or the load screen's) own frames come first;
+    // this only has to be done before Play.
+    SetThreadPriority((HANDLE)m_Thread.native_handle(), THREAD_PRIORITY_LOWEST);
 #endif
 }
 
