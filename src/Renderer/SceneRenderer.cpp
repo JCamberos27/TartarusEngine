@@ -651,6 +651,7 @@ void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRe
                                                   q.MinScreenHeight)) return;
         }
         to.push_back(v);
+        to.back().Slot = i;
     };
     // The cells the query can see. The Always cell (animated, unbounded: posed bounds are resolved on the model as they
     // are read) stays on this thread; the static cells of a big scene go out in chunks of about kChunk candidates, each

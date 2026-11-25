@@ -100,6 +100,8 @@ std::vector<glm::mat4>& Staging();
 // no normal matrix, but the shader's layout is still two mat4s per instance).
 void Append(std::vector<glm::mat4>& staging, const glm::mat4& xform);
 void Upload();
+// Binds the last Upload's transforms at 27 again (after something else, the GPU scene, was bound there).
+void Rebind();
 // Any per-frame data through the same ring: copies `bytes` into a fresh span and binds it as SSBO `binding` (a range).
 // False when the ring can't take it (too big, or no ring): the caller uploads its own way.
 bool UploadRange(unsigned binding, const void* data, std::size_t bytes);

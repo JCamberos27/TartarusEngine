@@ -63,6 +63,8 @@ layout(std430, binding = 23) readonly buffer GroupBlock { uvec4 uGroups[]; };
 layout(std430, binding = 24) readonly buffer CmdListBlock { uint uCmdList[]; };
 layout(std430, binding = 29) buffer CommandBlock { uint uCommands[]; };
 layout(std430, binding = 28) writeonly buffer RemapBlock { int uRemap[]; };
+layout(std430, binding = 25) readonly buffer SceneSlotBlock { uint uSceneSlot[]; }; // read when uSceneSlots is 1
+uniform int uSceneSlots;
 uniform mat4 uViewProj;
 uniform vec4 uViewport; // x, y, w, h in level-0 pixels
 uniform ivec2 uSize;
@@ -119,7 +121,7 @@ void main() {
             sScan[lid] += t;
             barrier();
         }
-        if (v) uRemap[g.x + written + sScan[lid] - 1u] = int(g.x + k);
+        if (v) uRemap[g.x + written + sScan[lid] - 1u] = int(uSceneSlots != 0 ? uSceneSlot[g.x + k] : g.x + k);
         uint total = sScan[63];
         barrier();
         written += total;
@@ -242,7 +244,7 @@ void HiZCuller::PadBounds(glm::vec3& wmin, glm::vec3& wmax) {
 
 bool HiZCuller::Cull(unsigned depthTex, int w, int h, const glm::vec4& viewport, const glm::mat4& viewProj,
                      const glm::vec3& eye, const std::vector<Group>& groups, const std::vector<std::uint32_t>& cmdList,
-                     unsigned indirectBuffer, std::uint32_t slotCount) {
+                     unsigned indirectBuffer, std::uint32_t slotCount, bool sceneSlots) {
     if (groups.empty() || !depthTex || w <= 0 || h <= 0 || !indirectBuffer || !EnsurePrograms()) return false;
     Resources& r = Res();
     const Resources::Pyramid& pyr = EnsurePyramid(w, h);
@@ -299,6 +301,7 @@ bool HiZCuller::Cull(unsigned depthTex, int w, int h, const glm::vec4& viewport,
     r.Cull->SetInt("uMaxLevel", pyr.Levels - 1);
     r.Cull->SetVec3("uEye", eye);
     r.Cull->SetFloat("uNearMargin", kNearMargin);
+    r.Cull->SetInt("uSceneSlots", sceneSlots ? 1 : 0);
     glBindTextureUnit(40, pyr.Tex);
     r.Cull->DispatchCompute((unsigned)groups.size(), 1, 1);
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);

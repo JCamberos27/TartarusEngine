@@ -48,6 +48,8 @@ namespace {
 constexpr GLuint kBinding = 27; // ModelVertex.glsl / ShadowDepth.vert.glsl InstanceBlock
 GLuint g_Buffer = 0; // the fallback: an upload the ring can't take (or no ring)
 std::vector<glm::mat4> g_Staging;
+GLuint g_LastBuffer = 0; // what the last Upload bound at kBinding (Rebind)
+std::size_t g_LastAt = 0, g_LastBytes = 0;
 
 // Each Upload used to re-specify one buffer (glNamedBufferData). On NVIDIA's threaded driver that waits for the driver
 // thread to drain, and so does every fence query: either way the CPU stopped until the GPU had caught up, and the two
@@ -135,12 +137,24 @@ void Upload() {
     if (at != ~std::size_t(0)) {
         std::memcpy(R().Base + at, g_Staging.data(), bytes);
         glBindBufferRange(GL_SHADER_STORAGE_BUFFER, kBinding, R().Buffer, (GLintptr)at, (GLsizeiptr)bytes);
+        g_LastBuffer = R().Buffer;
+        g_LastAt = at;
+        g_LastBytes = bytes;
         return;
     }
     if (!g_Buffer) glCreateBuffers(1, &g_Buffer);
     // A new data store each time: the draws already issued against the old one still read their own transforms.
     glNamedBufferData(g_Buffer, (GLsizeiptr)(g_Staging.size() * sizeof(glm::mat4)), g_Staging.data(), GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kBinding, g_Buffer);
+    g_LastBuffer = g_Buffer;
+    g_LastAt = 0;
+    g_LastBytes = 0;
+}
+
+void Rebind() {
+    if (!g_LastBuffer) return;
+    if (g_LastBytes) glBindBufferRange(GL_SHADER_STORAGE_BUFFER, kBinding, g_LastBuffer, (GLintptr)g_LastAt, (GLsizeiptr)g_LastBytes);
+    else glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kBinding, g_LastBuffer);
 }
 
 bool UploadRange(unsigned binding, const void* data, std::size_t bytes) {
