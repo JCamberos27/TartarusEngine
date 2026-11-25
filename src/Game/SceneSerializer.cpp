@@ -363,6 +363,40 @@ std::string SceneSerializer::SaveToString(const World& world, const AssetLibrary
     return root.dump();
 }
 
+namespace {
+json LibraryStateJson(const AssetLibrary& assets) {
+    json lib = json::object();
+    lib["hasAssetLibrarySnapshot"] = true;
+    AppendAssetLibraryJson(lib, assets, /*includeAssetMetadata=*/true);
+    return lib;
+}
+double MsSince(std::chrono::steady_clock::time_point t0) {
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+}
+} // namespace
+
+void SceneSerializer::SaveToStrings(const World& world, std::string& entityOnly, const AssetLibrary* assets,
+                                    std::string* withLibrary, SnapshotTimes* times) {
+    SnapshotTimes local;
+    SnapshotTimes& t = times ? *times : local;
+    auto t0 = std::chrono::steady_clock::now();
+    json root = BuildSceneJson(world);
+    t.BuildMs = MsSince(t0);
+    t0 = std::chrono::steady_clock::now();
+    entityOnly = root.dump();
+    t.DumpMs = MsSince(t0);
+    if (!assets || !withLibrary) return;
+    // SaveToString(world, assets) is this root plus the marker and the library keys: added on top here (an object's
+    // keys are kept sorted, so the order they go in doesn't change the text).
+    t0 = std::chrono::steady_clock::now();
+    json lib = LibraryStateJson(*assets);
+    t.LibraryMs = MsSince(t0);
+    t0 = std::chrono::steady_clock::now();
+    for (auto it = lib.begin(); it != lib.end(); ++it) root[it.key()] = std::move(*it);
+    *withLibrary = root.dump();
+    t.LibraryDumpMs = MsSince(t0);
+}
+
 bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const std::string& data) {
     json root;
     try {

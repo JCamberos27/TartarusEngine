@@ -3,6 +3,7 @@
 // EditorLayer.cpp for build time (#179).
 
 #include <chrono>
+#include <cstdio>
 #include <future>
 #include <iterator>
 #include "EditorSound.h"
@@ -1345,10 +1346,31 @@ void EditorLayer::JumpToRedoEntry(World& world, AssetLibrary& assets, size_t red
 
 void EditorLayer::OnEnterPlayMode(const World& world) {
     FinishGlobalUndo(world,true);
-    JournalUnrecordedChange(world); // #15 - Stop drops the baseline; keep that change a step
+    // P-55: one walk of the scene gives both the Play snapshot (entities only) and the with-library snapshot the #15
+    // check below compares with the undo baseline. They used to be two full saves.
+    const auto playT0 = std::chrono::steady_clock::now();
+    const bool journal = !m_InPlayMode && !m_CurrentUndoScene.empty() && m_AssetsPtr; // as JournalUnrecordedChange(world) checked
+    SceneSerializer::SnapshotTimes snapTimes;
+    std::string withLibrary;
+    {
+        PROFILE_SCOPE("Play Snapshot");
+        SceneSerializer::SaveToStrings(world, m_PlayModeSnapshot, journal ? m_AssetsPtr : nullptr,
+                                       journal ? &withLibrary : nullptr, &snapTimes);
+    }
+    const auto journalT0 = std::chrono::steady_clock::now();
+    if (journal) JournalUnrecordedChange(world, withLibrary); // #15 - Stop drops the baseline; keep that change a step
+    const double journalMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - journalT0).count();
+    const double snapshotMs = std::chrono::duration<double, std::milli>(journalT0 - playT0).count();
+    auto FormatMs = [](double ms) {
+        char text[32];
+        std::snprintf(text, sizeof text, "%.1f ms", ms);
+        return std::string(text);
+    };
+    Log::Info("Play snapshot: " + FormatMs(snapshotMs) + " (scene build " + FormatMs(snapTimes.BuildMs) + ", text " +
+              FormatMs(snapTimes.DumpMs) + ", library " + FormatMs(snapTimes.LibraryMs) + ", library text " +
+              FormatMs(snapTimes.LibraryDumpMs) + "); unrecorded-change check " + FormatMs(journalMs) + ".");
     CancelEyedropper(); // #93
     m_InPlayMode = true;
-    m_PlayModeSnapshot = SceneSerializer::SaveToString(world);
     m_PrePlayHistoryValid = true; // #91
     // Remember what's selected by OrderComponent value, not entt id: Stop rebuilds the whole
     // registry and entt recycles ids, so a retained handle can pass valid() yet denote a
