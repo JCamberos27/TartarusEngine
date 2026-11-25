@@ -1,5 +1,16 @@
 {
+  "folder": "assets/Characters/Quantum/Textures/Clothing/Pants/F_Pants_Jeans",
   "guid": "d19a4dc2b56e5fb5",
+  "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 2048,
+    "textureType": 1,
+    "wrapMode": 0
+  },
   "metaVersion": 1,
   "type": "texture"
 }
