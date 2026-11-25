@@ -247,6 +247,7 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
     t.GroupMin.clear();
     t.GroupMax.clear();
     t.GroupAlways.clear();
+    t.GroupRadius.clear();
     opaqueItems.clear();
     depthItems.clear();
     t.Leads.reserve(groups.Groups.size());
@@ -260,14 +261,17 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
             runs.push_back(slot);
             SetBit(t.Owned, slot);
             const Member& mb = items[i];
+            const float radius = glm::length(mb.WorldMax - mb.WorldMin) * 0.5f;
             if (k == 0) {
                 t.GroupMin.push_back(mb.WorldMin);
                 t.GroupMax.push_back(mb.WorldMax);
                 t.GroupAlways.push_back(mb.Bounded ? 0 : 1);
+                t.GroupRadius.push_back(radius);
             } else {
                 t.GroupMin.back() = glm::min(t.GroupMin.back(), mb.WorldMin);
                 t.GroupMax.back() = glm::max(t.GroupMax.back(), mb.WorldMax);
                 if (!mb.Bounded) t.GroupAlways.back() = 1;
+                t.GroupRadius.back() = std::max(t.GroupRadius.back(), radius);
             }
             t.MemberEntity[slot] = items[i].Entity;
             maxEntity = std::max(maxEntity, (std::uint32_t)entt::to_entity(entt::entity{items[i].Entity}));
@@ -415,8 +419,21 @@ void SceneRenderer::ViewPass::CullGpuView(const VisibilityQuery& framed) {
     t.GroupSeen.assign(groups, 0);
     t.ViewStage.clear();
     t.ViewHiz.clear();
+    // Too small to see, the whole group: even its largest member, at the group box's nearest point, is under the
+    // query's screen height. Each member's own test (TooSmallOnScreen: its centre is no nearer, its sphere no bigger)
+    // then culls every one, so nothing the CPU path would draw is left out.
+    const bool sizeCull = framed.SizeCullEye && framed.MinScreenHeight > 0.0f && framed.SizeCullProjScale > 0.0f;
     for (std::size_t g = 0; g < groups; ++g) {
-        if (!t.GroupAlways[g] && framed.Cull && !framed.Cull->Intersects(AABB{t.GroupMin[g], t.GroupMax[g]})) continue;
+        if (t.GroupAlways[g]) {
+            // sent
+        } else if (framed.Cull && !framed.Cull->Intersects(AABB{t.GroupMin[g], t.GroupMax[g]})) {
+            continue;
+        } else if (sizeCull) {
+            const glm::vec3& eye = *framed.SizeCullEye;
+            const float dist = glm::length(glm::max(glm::max(t.GroupMin[g] - eye, eye - t.GroupMax[g]), glm::vec3(0.0f)));
+            const float r = t.GroupRadius[g];
+            if (dist > r && r * framed.SizeCullProjScale / dist < framed.MinScreenHeight) continue;
+        }
         t.GroupSeen[g] = 1;
         t.ViewStage.push_back(t.StageGroups[g]);
         t.ViewHiz.push_back(t.HizGroups[g]);
