@@ -22,6 +22,7 @@
 #include <map>
 #include "Log.h" // #178 stack traces
 #include "FrameLoads.h"
+#include "Tests/PerfG0.h"
 #include "InputMap.h"
 #include "AssetDatabase.h"
 #include "AssetGuid.h"
@@ -533,6 +534,14 @@ void TestProfilerUnscoped() {
     Profiler::BeginFrame(); // leave an empty frame behind
 }
 
+// --perf-bench's G-0 keys: scope names become lowercase words joined by '_'.
+void TestPerfG0Keys() {
+    CHECK(PerfG0::KeyOf("Scene: Classify Visible") == "scene_classify_visible");
+    CHECK(PerfG0::KeyOf("Sun: Fit + Gather") == "sun_fit_gather");
+    CHECK(PerfG0::KeyOf("SSAO Depth From Pre-pass") == "ssao_depth_from_pre_pass");
+    CHECK(PerfG0::KeyOf("  ") == "");
+}
+
 void TestFrameLoads() {
     std::vector<FrameLoads::Event> got;
     FrameLoads::Enable(false);
@@ -755,6 +764,7 @@ void RegisterCoreTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Utf8Truncate", TestUtf8Truncate});
     tests.push_back({"FrameLoads", TestFrameLoads});
     tests.push_back({"ProfilerUnscoped", TestProfilerUnscoped});
+    tests.push_back({"PerfG0Keys", TestPerfG0Keys});
     tests.push_back({"PhysicMaterial", TestPhysicMaterial});
     tests.push_back({"PhysicsHitchCatchUp", TestPhysicsHitchCatchUp});
     tests.push_back({"PhysicsApplySettings", TestPhysicsApplySettings});
