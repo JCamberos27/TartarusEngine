@@ -207,6 +207,7 @@ void PerfBench::Sample(double frameMs, int frameNo) {
         m_LoadStart = MachineLoad::Take(); m_G0.BeginPhase();
         m_QuietLive0 = ShadowFrame::LocalQuietTotals().Live; m_Quiet0 = ShadowFrame::LocalQuietTotals().Quiet;
         m_Far0 = CascadedShadowMap::FarCascadeTotals();
+        m_SunCache0 = DepthCasterCache::AllTotals();
     }
     m_Frame.Sum += frameMs; m_Frame.Max = std::max(m_Frame.Max, frameMs); ++m_Frame.N;
     for (const Profiler::Entry& e : Profiler::GetLastFrame()) Add(m_Cpu, e.Name, e.Milliseconds);
@@ -353,6 +354,13 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
                     (unsigned long long)quiet, (unsigned long long)live,
                     ShadowFrame::CacheVerify() ? " (verify on: quiet lights looked at anyway)"
                     : !ShadowFrame::SlotDirtyEnabled() ? " (G4-c off)" : "");
+    }
+    // The sun casters' grouping + commands (DepthCasterCache): the calls this phase that reused the last build.
+    {
+        const DepthCasterCache::Totals t = DepthCasterCache::AllTotals();
+        const std::uint64_t reused = t.Reused - m_SunCache0.Reused, calls = reused + (t.Rebuilt - m_SunCache0.Rebuilt);
+        std::printf("[PerfBench] %s sun caster cache: reused %llu of %llu calls\n", label, (unsigned long long)reused,
+                    (unsigned long long)calls);
     }
     // G4-d: what the far sun cascades did this phase (layer-frames: held, on their turn, refit, for a mover).
     {

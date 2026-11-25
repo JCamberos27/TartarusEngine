@@ -181,6 +181,9 @@ private:
     std::vector<SunCaster> m_SunCasters;
     std::vector<VisibleRenderable> m_Casting;
     std::vector<DepthCaster> m_Draws;
+    // The layered sun pass's grouping + commands, kept while its casters hold: one per set of cascades drawn (the
+    // render mask), as the far cascades take their turns on different frames.
+    DepthCasterCache m_SunCasterCache[1u << CascadedShadowMap::kMaxCascades];
     World* m_SceneWorld = nullptr; // the world this frame's casters came from: DrawDepthCasters reads the GPU scene
 
     // Spot / point

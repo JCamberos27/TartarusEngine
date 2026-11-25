@@ -540,6 +540,96 @@ void GpuSceneSyncOnceKey() {
     ForgetGatherCandidates(); // no cache left pointing at these worlds
 }
 
+// The sun casters' cached grouping + commands (DepthCasterCache) are reused only for the same caster list - caster for
+// caster - under the same epochs, only after a build, and never once the build is kMaxAgeFrames old.
+void DepthCasterCacheInvalidation() {
+    std::vector<std::shared_ptr<MaterialAsset>> slotsA{std::make_shared<MaterialAsset>()};
+    std::vector<std::shared_ptr<MaterialAsset>> slotsB{std::make_shared<MaterialAsset>(), std::make_shared<MaterialAsset>()};
+    const glm::mat4 xf(1.0f);
+    auto caster = [&](std::vector<std::shared_ptr<MaterialAsset>>* slots, std::uint32_t slot, int first, int layers) {
+        DepthCaster c{nullptr, slots, nullptr, &xf};
+        c.Slot = slot;
+        c.LayerFirst = first;
+        c.Layers = layers;
+        return c;
+    };
+    std::vector<DepthCaster> list;
+    for (std::uint32_t i = 0; i < 40; ++i) list.push_back(caster(i % 3 ? &slotsA : &slotsB, i, (int)(i % 2), 2));
+    const DepthCasterCache::Epochs ep{7, 100};
+    DepthCasterCache cache;
+    std::uint64_t frame = 1000; // one call a frame
+    auto reuse = [&](const std::vector<DepthCaster>& l, const DepthCasterCache::Epochs& e) { return cache.Reuse(l, e, ++frame); };
+    auto settle = [&](const std::vector<DepthCaster>& l, const DepthCasterCache::Epochs& e) { // a miss, then built
+        const bool hit = cache.Reuse(l, e, ++frame);
+        if (!hit) cache.Built(frame);
+        return hit;
+    };
+
+    CHECK(!settle(list, ep)); // first sight: build
+    CHECK(reuse(list, ep));   // the same list: reuse
+    CHECK(reuse(list, ep));
+
+    std::vector<DepthCaster> added = list;
+    added.push_back(caster(&slotsA, 40, 0, 1));
+    CHECK(!settle(added, ep)); // a caster added
+    CHECK(!settle(list, ep));  // ...and removed again
+    std::vector<DepthCaster> moved = list;
+    moved[4].LayerFirst = 1; // its cascade run moved (the fit slid it into the next cascades)
+    CHECK(!settle(moved, ep));
+    std::vector<DepthCaster> held = moved;
+    held[7].Layers = 1; // a held far cascade: the caster's run now stops a cascade short
+    CHECK(!settle(held, ep));
+    std::vector<DepthCaster> swapped = held;
+    std::swap(swapped[0], swapped[1]); // same casters, another order: the commands' copy order differs
+    CHECK(!settle(swapped, ep));
+    CHECK(reuse(swapped, ep));
+
+    const std::shared_ptr<MaterialAsset> was = slotsA[0];
+    slotsA[0] = std::make_shared<MaterialAsset>(); // a material swapped into the same slot list, in place
+    CHECK(!settle(swapped, ep));
+    slotsA[0] = was;
+    CHECK(!settle(swapped, ep));
+    std::vector<DepthCaster> sided = swapped;
+    sided[3].TwoSided = !sided[3].TwoSided; // Cast Shadows: Two Sided turned on
+    CHECK(!settle(sided, ep));
+    VisibleIndexBuffer* const fakeMask = reinterpret_cast<VisibleIndexBuffer*>(&slotsB); // only its address is read
+    std::vector<DepthCaster> masked = sided;
+    masked[4].Visible = fakeMask; // an outfit piece partly hidden: it draws directly now
+    CHECK(!settle(masked, ep));
+    std::vector<DepthCaster> reslotted = masked;
+    reslotted[9].Slot = 77; // a new GPU scene slot
+    CHECK(!settle(reslotted, ep));
+
+    CHECK(!settle(reslotted, {8, 100})); // the render settings epoch moved (a material's depth fields, a queue)
+    CHECK(!settle(reslotted, {8, 101})); // the GPU scene grew (the slotless test reads its count)
+    const DepthCasterCache::Epochs ep2{8, 101};
+
+    // A build is reused for kMaxAgeFrames - 1 frames after it, then rebuilt (what nothing reports is picked up). The
+    // sun keeps one cache per cascade set, so a cache sees only some frames: the age is in frames, not calls.
+    const std::uint64_t built = frame;
+    for (std::uint64_t k = 1; k < DepthCasterCache::kMaxAgeFrames; k += 3) CHECK(cache.Reuse(reslotted, ep2, built + k));
+    CHECK(!cache.Reuse(reslotted, ep2, built + DepthCasterCache::kMaxAgeFrames));
+    cache.Built(built + DepthCasterCache::kMaxAgeFrames);
+    frame = built + DepthCasterCache::kMaxAgeFrames;
+    CHECK(reuse(reslotted, ep2));
+    CHECK(!cache.Reuse(reslotted, ep2, built + DepthCasterCache::kMaxAgeFrames - 1)); // before its build: rebuild
+    cache.Built(frame);
+
+    // A miss that wasn't followed by a build (the caller drew without the cache) is never reused.
+    cache.Invalidate();
+    CHECK(!reuse(reslotted, ep2));
+    CHECK(!reuse(reslotted, ep2)); // still not built
+    cache.Built(frame);
+    CHECK(reuse(reslotted, ep2));
+    CHECK(cache.Reused() > 0 && cache.Rebuilt() > 0);
+    const DepthCasterCache::Totals all = DepthCasterCache::AllTotals();
+    CHECK(all.Reused >= cache.Reused() && all.Rebuilt >= cache.Rebuilt());
+
+    std::vector<DepthCaster> empty;
+    CHECK(!settle(empty, ep2));
+    CHECK(reuse(empty, ep2));
+}
+
 // G-MB: a multi-draw copy's slot state holds what the per-draw hook would bind for it (ReflectionProbeArray::Bind's
 // probes and blends, GIVolumes::SetMask's mask), probes picked like SelectionKey; the mirror marks only real changes.
 void GpuSceneObjectState() {
@@ -3430,6 +3520,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GpuScene: in-place render settings reach the slots (reported: next sync; unreported: within a sweep lap)", GpuSceneLiveEpoch});
     tests.push_back({"GpuScene: SyncOnce's key follows every Sync (another world in between syncs again)", GpuSceneSyncOnceKey});
     tests.push_back({"GpuScene: slot object state = what the per-draw hook binds (probes, blends, GI mask)", GpuSceneObjectState});
+    tests.push_back({"Depth casters: the sun's cached grouping is reused only for the same casters + epochs (and rebuilt every 16 frames)", DepthCasterCacheInvalidation});
     tests.push_back({"GpuScene: slot state needs 9 fragment SSBO blocks; below that a global _NO_SLOT_STATE define", GpuSceneSlotStateBlockBudget});
     tests.push_back({"GpuScene: the change log lists every changed slot with where it was and is (300 random frames)", GpuSceneChangeLog});
     tests.push_back({"Local shadows (G4-c): a frame's changes wake the quiet lights they reach, and only those", LocalShadowQuietWake});
