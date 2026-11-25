@@ -266,29 +266,6 @@ bool EnsureProgram() {
     return true;
 }
 
-// The storage bindings the dispatch takes, put back after it (the passes after keep theirs).
-constexpr unsigned kBindings[] = {22, 23, 24, 25, 28, 29};
-constexpr int kBindingCount = (int)(sizeof(kBindings) / sizeof(kBindings[0]));
-struct SavedBinding {
-    GLint Buffer = 0;
-    GLint64 Start = 0, Size = 0;
-};
-void SaveBindings(SavedBinding (&out)[kBindingCount]) {
-    for (int i = 0; i < kBindingCount; ++i) {
-        glGetIntegeri_v(GL_SHADER_STORAGE_BUFFER_BINDING, kBindings[i], &out[i].Buffer);
-        glGetInteger64i_v(GL_SHADER_STORAGE_BUFFER_START, kBindings[i], &out[i].Start);
-        glGetInteger64i_v(GL_SHADER_STORAGE_BUFFER_SIZE, kBindings[i], &out[i].Size);
-    }
-}
-void RestoreBindings(const SavedBinding (&in)[kBindingCount]) {
-    for (int i = 0; i < kBindingCount; ++i) {
-        if (in[i].Buffer && in[i].Size > 0)
-            glBindBufferRange(GL_SHADER_STORAGE_BUFFER, kBindings[i], (GLuint)in[i].Buffer, (GLintptr)in[i].Start,
-                              (GLsizeiptr)in[i].Size);
-        else
-            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kBindings[i], (GLuint)in[i].Buffer);
-    }
-}
 } // namespace
 
 const VerifyTotals& Totals() { return g_Totals; }
@@ -326,8 +303,6 @@ void VerifyView(World& world, const VisibilityQuery& q) {
     }
 
     Resources& r = Res();
-    SavedBinding saved[kBindingCount];
-    SaveBindings(saved);
     glNamedBufferData(r.Groups, (GLsizeiptr)(table.Groups.size() * sizeof(Group)), table.Groups.data(), GL_STREAM_DRAW);
     glNamedBufferData(r.Slots, (GLsizeiptr)(table.Slots.size() * sizeof(std::uint32_t)), table.Slots.data(), GL_STREAM_DRAW);
     glNamedBufferData(r.Lod, (GLsizeiptr)(lod.size() * sizeof(std::uint32_t)), lod.data(), GL_STREAM_DRAW);
@@ -346,7 +321,9 @@ void VerifyView(World& world, const VisibilityQuery& q) {
     const ViewQuery vq = MakeQuery(q);
     Shader& prog = *r.Program;
     prog.Bind();
-    glUniform4fv(prog.Loc("uPlanes"), 6, &vq.Planes[0].x);
+    static const char* const kPlaneNames[6] = {"uPlanes[0]", "uPlanes[1]", "uPlanes[2]",
+                                               "uPlanes[3]", "uPlanes[4]", "uPlanes[5]"};
+    for (int i = 0; i < 6; ++i) prog.SetVec4(kPlaneNames[i], vq.Planes[i]);
     prog.SetVec4("uWithinMin", vq.WithinMin);
     prog.SetVec4("uWithinMax", vq.WithinMax);
     prog.SetVec4("uSizeEye", vq.SizeEye);
@@ -367,7 +344,6 @@ void VerifyView(World& world, const VisibilityQuery& q) {
     remap.resize(table.Slots.size());
     glGetNamedBufferSubData(r.Remap, 0, (GLsizeiptr)(remap.size() * sizeof(std::uint32_t)), remap.data());
     glGetNamedBufferSubData(r.Commands, 0, (GLsizeiptr)(commands.size() * sizeof(IndirectCommand)), commands.data());
-    RestoreBindings(saved);
     GLStateCache::Invalidate();
 
     // The CPU's answer for the same query: each group's slots in GatherVisible's order.

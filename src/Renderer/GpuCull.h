@@ -95,8 +95,8 @@ struct VerifyTotals {
 const VerifyTotals& Totals();
 
 // Runs stage A + the compaction on the GPU for `q` over the draw table, reads the result back (waits on the GPU) and
-// compares it group by group with GatherVisible(q). Puts back the storage bindings it took. G2-a: nothing draws from
-// it yet.
+// compares it group by group with GatherVisible(q). Like HiZCuller::Cull it leaves storage bindings 22-25, 28 and 29
+// as it used them: their users bind their own before they draw. G2-a: nothing draws from it yet.
 void VerifyView(World& world, const VisibilityQuery& q);
 
 } // namespace GpuCull
