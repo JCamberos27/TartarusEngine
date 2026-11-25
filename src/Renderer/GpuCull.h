@@ -76,6 +76,7 @@ bool VerifyEnabled();
 // same source in caster mode (G4-a, below).
 const char* ComputeSource();
 const char* CasterComputeSource();
+const char* NearFirstComputeSource(); // G2-b's draw path (CullView): each group's survivors nearest first
 
 // The draw table: the GPU scene's batchable slots (alive, not posed, with a model) grouped by model + material set
 // (InstanceBatch's key), groups in the order of their first slot and slots in slot order within a group.
@@ -97,7 +98,7 @@ bool DrawsEnabled();
 // A draw table's GL side, uploaded when the table is rebuilt; one set, reused by every view in turn.
 struct DrawBuffers {
     unsigned Slots = 0;      // the runs' scene slots, then the command lists (binding 24 for both stages)
-    unsigned StageA = 0;     // per view: each run's stage-A survivors (scene slots), in slot order
+    unsigned StageA = 0;     // per view: each run's stage-A survivors (scene slots), nearest first
     unsigned Final = 0;      // per view: what Hi-Z then kept (HiZCuller::CullChained)
     std::uint32_t RunSlots = 0;
 };
@@ -105,10 +106,11 @@ struct DrawBuffers {
 void UploadTable(DrawBuffers& b, const std::vector<std::uint32_t>& slots, std::uint32_t runSlots);
 // Per view: stage A for `q` over `groups` (the ones this view can see; run base, count, command list at, command
 // count), rejecting the slots set in `reject` (1 bit per scene slot: LOD-culled, or drawn on the CPU path this frame),
-// into `b.StageA` and the instanceCount of the commands bound at storage 29 (the caller's upload). The GPU scene must be
-// synced. False: it did not run.
+// into `b.StageA` and the instanceCount of the commands bound at storage 29 (the caller's upload). Each group's
+// survivors come out nearest `eye` first (by box distance, one bucket per doubling), for the depth pre-pass. The GPU
+// scene must be synced. False: it did not run.
 bool CullView(const DrawBuffers& b, const std::vector<Group>& groups, const ViewQuery& q,
-              const std::vector<std::uint32_t>& reject);
+              const std::vector<std::uint32_t>& reject, const glm::vec3& eye);
 
 // Verify mode totals since start (TARTARUS_GPU_CULL_VERIFY=1).
 struct VerifyTotals {

@@ -44,9 +44,6 @@ bool TestBit(const std::vector<std::uint32_t>& bits, std::uint32_t i) {
     return (i >> 5) < bits.size() && ((bits[i >> 5] >> (i & 31u)) & 1u) != 0;
 }
 constexpr std::uint32_t kNone = ~0u;
-// The ground cell a member's group is split by (metres, on x and z): a group's box is then at most about this wide, so
-// a view sends only the groups around it, whatever model they draw.
-constexpr float kGpuTableCell = 32.0f;
 } // namespace
 
 bool SceneRenderer::ViewPass::GpuDrawsWanted() const {
@@ -155,7 +152,6 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
         int LayerBit;
         bool ReceiveShadows;
         bool Bounded;
-        std::uint64_t Cell; // kGpuTableCell square of its centre (~0: no bounds)
         glm::vec3 WorldMin, WorldMax;
     };
     auto& reg = m_World.Registry;
@@ -189,12 +185,8 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
         const glm::vec3 centre = s.Bounded ? glm::vec3(model * glm::vec4((s.LocalMin + s.LocalMax) * 0.5f, 1.0f))
                                            : glm::vec3(model[3]);
         const std::uint64_t giMask = gi ? (s.Bounded ? gi->MaskFor(s.WorldMin, s.WorldMax) : gi->AllMask()) : 0;
-        const std::uint64_t cell =
-            s.Bounded ? ((std::uint64_t)(std::uint32_t)(std::int32_t)std::floor(centre.x / kGpuTableCell) << 32) |
-                            (std::uint64_t)(std::uint32_t)(std::int32_t)std::floor(centre.z / kGpuTableCell)
-                      : ~0ull;
         items.push_back({m, &slots, giMask, centre, slot, (std::uint32_t)entt::to_integral(e),
-                         (int)(1u << std::clamp(s.Layer, 0, 31)), r.ReceiveShadows, s.Bounded, cell, s.WorldMin, s.WorldMax});
+                         (int)(1u << std::clamp(s.Layer, 0, 31)), r.ReceiveShadows, s.Bounded, s.WorldMin, s.WorldMax});
     }
     // A group's lead as the classify step would make its draw item (what the batches bind and the per-draw hook reads).
     const auto makeLead = [&](const Member& mb) {
@@ -230,15 +222,14 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
             const Member& it = items[i];
             std::uint64_t seed = (std::uint64_t)(std::uintptr_t)it.Ref->ImportId() * 0x9E3779B97F4A7C15ull;
             seed ^= (std::uint64_t)Model::MeshPass::All | ((std::uint64_t)it.ReceiveShadows << 5) | ((std::uint64_t)(std::uint32_t)it.LayerBit << 8) |
-                    ((std::uint64_t)probeKey[i] << 32) ^ ((std::uint64_t)it.GIMask * 0xC2B2AE3D27D4EB4Full) ^
-                    (it.Cell * 0xD6E8FEB86659FD93ull);
+                    ((std::uint64_t)probeKey[i] << 32) ^ ((std::uint64_t)it.GIMask * 0xC2B2AE3D27D4EB4Full);
             return HashSlots(*it.Slots, seed);
         },
         [&](std::uint32_t a, std::uint32_t b) {
             const Member& x = items[a];
             const Member& y = items[b];
             return x.Ref->ImportId() == y.Ref->ImportId() && x.ReceiveShadows == y.ReceiveShadows && x.LayerBit == y.LayerBit &&
-                   probeKey[a] == probeKey[b] && x.GIMask == y.GIMask && x.Cell == y.Cell && SameSlots(*x.Slots, *y.Slots);
+                   probeKey[a] == probeKey[b] && x.GIMask == y.GIMask && SameSlots(*x.Slots, *y.Slots);
         },
         groups);
 
@@ -548,7 +539,7 @@ void SceneRenderer::ViewPass::CullGpuView(const VisibilityQuery& framed) {
     m_GpuCmdBuffer = IndirectBuffer::Handle();
     m_GpuCmdBase = IndirectBuffer::Base();
     IndirectBuffer::BindStorage(29);
-    m_GpuCulled = GpuCull::CullView(t.Gl, t.ViewStage, GpuCull::MakeQuery(framed), t.Reject);
+    m_GpuCulled = GpuCull::CullView(t.Gl, t.ViewStage, GpuCull::MakeQuery(framed), t.Reject, m_Ctx.ViewPos);
     m_GpuRemap = t.Gl.StageA;
     m_ModelShader.Bind();
 }

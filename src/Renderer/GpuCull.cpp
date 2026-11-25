@@ -219,6 +219,46 @@ uint CasterMask(vec4 mn, vec4 mx) {
 }
 #endif
 
+#ifdef NEAR_FIRST
+// G2-b's draw path: each group's survivors nearest first (one bucket per doubling of the box's distance from the eye,
+// 1 m to 32 km), so the depth pre-pass lays down near occluders before what they hide. Order within a bucket is the
+// atomics'. The verify keeps the ordered compaction below (it checks GatherVisible's order).
+uniform vec3 uEye;
+shared uint sBucket[16];
+uint BucketOf(uint slot) {
+    vec4 mn = uBounds[slot * 2u], mx = uBounds[slot * 2u + 1u];
+    if (mn.w == 0.0) return 0u;
+    vec3 d = max(max(mn.xyz - uEye, uEye - mx.xyz), vec3(0.0));
+    return uint(clamp(log2(max(length(d), 1.0)), 0.0, 15.0));
+}
+void main() {
+    uvec4 g = uGroups[uGroupOffset + gl_WorkGroupID.x];
+    uint lid = gl_LocalInvocationID.x;
+    if (lid < 16u) sBucket[lid] = 0u;
+    barrier();
+    for (uint k = lid; k < g.y; k += 64u) {
+        uint slot = uGroupSlots[g.x + k];
+        if (Visible(slot)) atomicAdd(sBucket[BucketOf(slot)], 1u);
+    }
+    barrier();
+    if (lid == 0u) {
+        uint run = 0u;
+        for (uint b = 0u; b < 16u; ++b) {
+            uint n = sBucket[b];
+            sBucket[b] = run;
+            run += n;
+        }
+        sScan[0] = run;
+    }
+    barrier();
+    uint written = sScan[0];
+    for (uint k = lid; k < g.y; k += 64u) {
+        uint slot = uGroupSlots[g.x + k];
+        if (Visible(slot)) uRemap[g.x + atomicAdd(sBucket[BucketOf(slot)], 1u)] = slot;
+    }
+    for (uint i = lid; i < g.w; i += 64u) uCommands[uGroupSlots[g.z + i] * 5u + 1u] = written;
+}
+#else
 // One workgroup per group: test its slots 64 at a time and append the survivors in slot order (a prefix sum per
 // chunk), then give the group's commands the count. Caster mode appends one entry per (slot, cascade) instead, into a
 // run 4x the group's.
@@ -256,15 +296,25 @@ void main() {
     }
     for (uint i = lid; i < g.w; i += 64u) uCommands[uGroupSlots[g.z + i] * 5u + 1u] = written;
 }
+#endif
 )";
 }
 
+namespace {
+std::string WithDefine(const char* define) {
+    std::string s = ComputeSource();
+    const std::size_t eol = s.find('\n');
+    return s.substr(0, eol + 1) + "#define " + define + " 1\n" + s.substr(eol + 1);
+}
+} // namespace
+
 const char* CasterComputeSource() {
-    static const std::string source = [] {
-        std::string s = ComputeSource();
-        const std::size_t eol = s.find('\n');
-        return s.substr(0, eol + 1) + "#define CASTERS 1\n" + s.substr(eol + 1);
-    }();
+    static const std::string source = WithDefine("CASTERS");
+    return source.c_str();
+}
+
+const char* NearFirstComputeSource() {
+    static const std::string source = WithDefine("NEAR_FIRST");
     return source.c_str();
 }
 
@@ -321,6 +371,8 @@ struct Resources {
     std::unique_ptr<Shader> CasterProgram; // G4-a caster mode
     bool CasterFailed = false;
     unsigned SunBlock = 0;
+    std::unique_ptr<Shader> NearProgram; // G2-b's draw path: survivors nearest first
+    bool NearFailed = false;
 };
 Resources& Res() {
     static Resources* r = new Resources(); // never destroyed: the GL context is gone by the time statics are
@@ -453,7 +505,7 @@ void UploadTable(DrawBuffers& b, const std::vector<std::uint32_t>& slots, std::u
 }
 
 bool CullView(const DrawBuffers& b, const std::vector<Group>& groups, const ViewQuery& q,
-              const std::vector<std::uint32_t>& reject) {
+              const std::vector<std::uint32_t>& reject, const glm::vec3& eye) {
     GpuScene& scene = GpuScene::Get();
     if (groups.empty() || !b.Slots || !scene.Ready() || !scene.BoundsBuffer() || scene.Count() == 0 || !EnsureProgram())
         return false;
@@ -474,9 +526,23 @@ bool CullView(const DrawBuffers& b, const std::vector<Group>& groups, const View
     }
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 24, b.Slots);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 28, b.StageA);
-    Shader& prog = *Res().Program;
+    // Nearest first when that program built; else the ordered one (same survivors, slot order).
+    Resources& r = Res();
+    if (!r.NearProgram && !r.NearFailed) {
+        try {
+            r.NearProgram = std::make_unique<Shader>(std::string(NearFirstComputeSource()), "GpuCull (near first)");
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "[GpuCull] near-first compute program failed, slot order: %s\n", e.what());
+        }
+        if (!r.NearProgram || !r.NearProgram->Program()) {
+            r.NearProgram.reset();
+            r.NearFailed = true;
+        }
+    }
+    Shader& prog = r.NearProgram ? *r.NearProgram : *r.Program;
     prog.Bind();
     SetQueryUniforms(prog, q);
+    if (r.NearProgram) prog.SetVec3("uEye", eye);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT); // the GPU scene's uploads land first
     Dispatch(prog, (std::uint32_t)groups.size());
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);

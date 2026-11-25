@@ -123,8 +123,9 @@ struct SceneGpuTable {
     std::vector<IndirectBatch> DepthBatches;   // First indexes Commands (after the opaque ones)
     std::vector<IndirectCommand> Commands;     // the opaque batches' commands, then the depth batches'
     std::uint32_t OpaqueCommands = 0;
-    // Groups are split by ground cell (kGpuTableCell), so each has a box the view tests before anything is sent: only
-    // groups that can be seen are culled on the GPU, and only batches holding one are drawn.
+    // One group per model + materials + bind state (no spatial split: fewer, bigger batches). Each has its members'
+    // joined box, which the view tests before anything is sent: only groups that can be seen are culled on the GPU,
+    // and only batches holding one are drawn.
     std::vector<GpuCull::Group> StageGroups;   // per group: run base, count, command list at, every command
     std::vector<glm::uvec4> HizGroups;         // per group: run base, foliage sway bits, command list at, opaque commands
     std::vector<glm::vec3> GroupMin, GroupMax; // the members' world bounds, joined
