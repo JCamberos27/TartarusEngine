@@ -76,6 +76,7 @@
 
 #include "UndoTrigger.h"
 #include <ImGuizmo.h>
+#include "RenderSettingsEpoch.h"
 
 using namespace EditorInternal;
 
@@ -1725,6 +1726,7 @@ void EditorLayer::ExtractMaterialsFor(World& world, AssetLibrary& assets, const 
             auto& rc = world.Registry.get<RenderableComponent>(e);
             assets.ApplyMaterialRemap(*rc.ModelRef, rc.Materials);
         }
+        NoteRenderSettingsChanged();
     }
     Log::Info("Extracted materials for '" + file + "': " + std::to_string(ex.Created) + " created, " +
               std::to_string(ex.Reused) + " already there, in '" + ProjectPaths::Relativize(ex.Folder) + "'" +

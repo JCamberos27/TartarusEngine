@@ -20,6 +20,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <utility>
+#include "RenderSettingsEpoch.h"
 
 using json = nlohmann::json;
 
@@ -561,6 +562,7 @@ bool MaterialAsset::SetShader(const std::string& reference, AssetLibrary& assets
     }
     const auto& state = Shader->RenderState();
     RenderQueue = state.Queue >= 0 ? (Queue)state.Queue : Queue::Opaque;
+    NoteRenderSettingsChanged();
     QueueIndex = state.Queue >= 0 ? state.QueueIndex : 2000;
     Mat.AlphaClip = RenderQueue == Queue::AlphaTest;
     return true;

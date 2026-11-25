@@ -20,6 +20,7 @@
 #include <json.hpp>
 #include <charconv>
 #include <cstdlib>
+#include "RenderSettingsEpoch.h"
 
 using json = nlohmann::json;
 
@@ -1077,6 +1078,7 @@ bool AssetLibrary::ReloadMaterial(const std::string& path) {
         auto fresh = MaterialAsset::Load(k, this);
         if (!fresh || fresh->Missing) return false;
         *mat = *fresh; // same object: every renderer slot holding it sees the new values
+        NoteRenderSettingsChanged(); // its queue may have changed under live renderables
         return true;
     }
     return false;

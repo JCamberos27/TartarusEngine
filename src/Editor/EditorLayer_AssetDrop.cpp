@@ -15,6 +15,7 @@
 #include "Log.h"
 
 #include <filesystem>
+#include "RenderSettingsEpoch.h"
 
 using namespace EditorInternal;
 
@@ -109,6 +110,7 @@ bool EditorLayer::ApplyAssetDrop(World& world, AssetLibrary& assets, entt::entit
         PushUndo(world, "Assign Material");
         if ((int)rc->Materials.size() <= slot) rc->Materials.resize(slot + 1);
         rc->Materials[slot] = mat;
+        NoteRenderSettingsChanged();
         return true;
     }
 
@@ -120,6 +122,7 @@ bool EditorLayer::ApplyAssetDrop(World& world, AssetLibrary& assets, entt::entit
         PushUndo(world, "Set Albedo Map");
         if ((int)rc->Materials.size() <= slot) rc->Materials.resize(slot + 1);
         auto& m = rc->Materials[slot];
+        NoteRenderSettingsChanged();
         if (!m) {
             // No material in this slot yet: start from the imported one's other maps.
             m = std::make_shared<MaterialAsset>();

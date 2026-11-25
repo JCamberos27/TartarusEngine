@@ -1,4 +1,5 @@
 #include "SceneSerializerInternal.h"
+#include "RenderSettingsEpoch.h"
 
 namespace SceneDetail {
 
@@ -319,6 +320,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             // material, Unity's importer remap), as a newly placed copy does - so remap edits reach
             // objects placed before them. Slots the scene sets are kept.
             if (rc.ModelRef) assets.ApplyMaterialRemap(*rc.ModelRef, rc.Materials);
+            NoteRenderSettingsChanged(); // existing entities too (undo, reload)
             ReadRendererFlags(m, rc); // #163
             ReadCommonComponents(m, world, assets, e); // handles the "Audio Source" block + the legacy "sound*" shim
             applyOrder(e, m);

@@ -42,6 +42,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <unordered_map>
+#include "RenderSettingsEpoch.h"
 
 namespace fs = std::filesystem;
 
@@ -447,6 +448,7 @@ void EditorLayer::OnExternalModify(World& world, AssetLibrary& assets, const std
             for (auto [e, rc] : world.Registry.view<RenderableComponent>().each())
                 if (rc.ModelRef && AssetDatabase::PathKey(rc.ModelRef->Path()) == key)
                     assets.ApplyMaterialRemap(*rc.ModelRef, rc.Materials);
+                    NoteRenderSettingsChanged();
         }
     }
     else if (type == "material" && !listed.empty()) reloaded = assets.ReloadMaterial(listed);
