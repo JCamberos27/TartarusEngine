@@ -970,15 +970,6 @@ void SceneRenderer::ViewPass::BindInstanceXforms(bool scene) {
     m_XformsOnScene = scene;
 }
 
-// Binding 27 for the opaque pass's next draw: the GPU scene's transforms (multi-draw batches reading slots) or this
-// view's span of the instance ring (the one-by-one instanced groups).
-void SceneRenderer::ViewPass::BindInstanceXforms(bool scene) {
-    if (scene == m_XformsOnScene) return;
-    if (scene) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, InstanceBuffer::kXformBinding, GpuScene::Get().XformBuffer());
-    else InstanceBuffer::Rebind();
-    m_XformsOnScene = scene;
-}
-
 void SceneRenderer::ViewPass::CountDraw(const DrawItem& it) {
     m_Stats.DrawCalls += it.Meshes;
     m_Stats.Triangles += it.Tris;
