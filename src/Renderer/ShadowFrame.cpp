@@ -294,8 +294,10 @@ bool ShadowFrame::SunGatherHolds(World& world, const FrameLights& fl, const Casc
     return true;
 }
 
-// Verify mode: this frame's fresh gather against the kept list. Every caster it holds must be in the list with the same
-// fields; every extra the list holds must miss each cascade the way DrawSunCasters tests it.
+// Verify mode: this frame's fresh gather against the kept list. Every caster it holds that can draw (DrawSunCasters'
+// test: its bounds in some cascade's frustum and reaching that cascade's slice) must be in the list with the same fields,
+// and every extra the list holds must fail that test for each cascade. A caster the fresh gather holds only because its
+// ground cell's box touches a cascade - its own bounds miss them all - is counted, not an error: it draws nothing.
 void ShadowFrame::VerifySunGather(SunPass& p) {
     VisibilityQuery casts;
     casts.ShadowCasters = true;
@@ -308,24 +310,29 @@ void ShadowFrame::VerifySunGather(SunPass& p) {
         if (s >= m_SunVerifyIndex.size()) m_SunVerifyIndex.resize((std::size_t)s + 1, -1);
         m_SunVerifyIndex[s] = (std::int32_t)i;
     }
+    const float kernel = p.kernelTexels, bias = p.fl.SunShadowNormalBias;
+    auto draws = [&](const VisibleRenderable& v) {
+        if (!v.Bounded) return true;
+        for (int c = 0; c < p.cascadeCount; ++c)
+            if (p.cells[c].Intersects(AABB{v.WorldMin, v.WorldMax}) && p.map.CasterReachesSlice(c, v.WorldMin, v.WorldMax, kernel, bias))
+                return true;
+        return false;
+    };
     std::uint64_t missing = 0, extraDraws = 0;
     for (const VisibleRenderable& f : m_SunVerify) {
         const std::int32_t i = f.Slot < m_SunVerifyIndex.size() ? m_SunVerifyIndex[f.Slot] : -1;
         const VisibleRenderable* k = i >= 0 ? &m_Casting[(std::size_t)i] : nullptr;
-        if (!k || k->Entity != f.Entity || k->Renderable != f.Renderable || k->Xform != f.Xform || k->Bounded != f.Bounded ||
-            k->WorldMin != f.WorldMin || k->WorldMax != f.WorldMax)
-            ++missing;
+        if (!k) {
+            if (draws(f)) ++missing;
+            else ++g_SunGatherTotals.VerifyAbsentNoDraw;
+        } else if (k->Entity != f.Entity || k->Renderable != f.Renderable || k->Xform != f.Xform || k->Bounded != f.Bounded ||
+                   k->WorldMin != f.WorldMin || k->WorldMax != f.WorldMax) {
+            ++missing; // stale: held differently
+        }
         if (i >= 0) m_SunVerifyIndex[f.Slot] = -2; // in both
     }
-    const float kernel = p.kernelTexels, bias = p.fl.SunShadowNormalBias;
-    for (const VisibleRenderable& k : m_Casting) {
-        if (m_SunVerifyIndex[k.Slot] == -2) continue;
-        bool draws = !k.Bounded;
-        for (int c = 0; c < p.cascadeCount && !draws; ++c)
-            draws = p.cells[c].Intersects(AABB{k.WorldMin, k.WorldMax}) &&
-                    p.map.CasterReachesSlice(c, k.WorldMin, k.WorldMax, kernel, bias);
-        if (draws) ++extraDraws;
-    }
+    for (const VisibleRenderable& k : m_Casting)
+        if (m_SunVerifyIndex[k.Slot] != -2 && draws(k)) ++extraDraws;
     ++g_SunGatherTotals.VerifyChecked;
     g_SunGatherTotals.VerifyMissing += missing;
     g_SunGatherTotals.VerifyExtraDraws += extraDraws;

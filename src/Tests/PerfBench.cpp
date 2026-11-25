@@ -371,9 +371,10 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
         // The sun's static-cell gather (ShadowFrame::kSunGatherPadTexels): the calls this phase that kept the last one.
         const ShadowFrame::SunGatherTotals g = ShadowFrame::SunGatherTotalsSoFar();
         const std::uint64_t kept = g.Reused - m_SunReused0, gathers = kept + (g.Gathered - m_SunGathered0);
-        std::printf("[PerfBench] %s sun gather: reused %llu of %llu calls (verify so far: %llu checked, %llu missing, %llu extra draws)\n",
+        std::printf("[PerfBench] %s sun gather: reused %llu of %llu calls (verify so far: %llu checked, %llu missing, %llu extra draws, %llu cell-only)\n",
                     label, (unsigned long long)kept, (unsigned long long)gathers, (unsigned long long)g.VerifyChecked,
-                    (unsigned long long)g.VerifyMissing, (unsigned long long)g.VerifyExtraDraws);
+                    (unsigned long long)g.VerifyMissing, (unsigned long long)g.VerifyExtraDraws,
+                    (unsigned long long)g.VerifyAbsentNoDraw);
     }
     // G4-d: what the far sun cascades did this phase (layer-frames: held, on their turn, refit, for a mover).
     {

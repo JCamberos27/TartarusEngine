@@ -134,13 +134,17 @@ public:
     // light space, so a padded cascade's cell test takes every cell the cascade's own takes: the kept list holds all a
     // fresh gather would, and its extras lie outside every cascade (their draws are culled as before). Every
     // kSunGatherFullEvery frames it gathers anew anyway. TARTARUS_NO_SUN_GATHER_REUSE=1: gather every frame.
-    // Verify mode (CacheVerify) also runs a fresh gather on every reused frame and counts any caster it holds that the
-    // kept list lacks or holds differently, and any extra that would draw (Log::Error).
+    // Verify mode (CacheVerify) also runs a fresh gather on every reused frame and counts any caster it holds that could
+    // draw and the kept list lacks or holds differently, and any extra that would draw (Log::Error).
     static constexpr float kSunGatherPadTexels = 16.0f;
     static constexpr std::uint64_t kSunGatherFullEvery = 64;
     // Whether every corner of `now`'s n cascades lies inside `base`'s, each grown by `margin` in clip space.
     static bool CascadesInside(const glm::mat4* base, const glm::mat4* now, int n, float margin);
-    struct SunGatherTotals { std::uint64_t Reused = 0, Gathered = 0, VerifyChecked = 0, VerifyMissing = 0, VerifyExtraDraws = 0; };
+    // Verify: reused frames checked; casters that can draw missing from (or held stale in) the kept list; extras in it
+    // that would draw; and casters only a fresh gather holds that draw nothing (their ground cell touches a cascade).
+    struct SunGatherTotals {
+        std::uint64_t Reused = 0, Gathered = 0, VerifyChecked = 0, VerifyMissing = 0, VerifyExtraDraws = 0, VerifyAbsentNoDraw = 0;
+    };
     static SunGatherTotals SunGatherTotalsSoFar();
 
     // What the last RenderLocal redrew (GI Phase 1 perf: slot re-renders vs per-caster cost; --gi-tour writes it per
