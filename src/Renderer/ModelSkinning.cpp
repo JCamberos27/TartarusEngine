@@ -254,7 +254,7 @@ void Model::PreSkin(const std::vector<Model*>& models) {
     for (Model* m : models) {
         if (!m || m->m_D->BoneCounter <= 0 || m->m_PreSkin.Frame == g_SkinFrame) continue;
         // No pass drew it last frame or yet this frame: leave it to the vertex shader if one does.
-        if (!skinUnseen && m->m_PreSkin.Drawn + 1 < g_RenderFrame) { ++unseen; continue; }
+        if (PreSkinSkipsUnseen(m->m_PreSkin.Drawn, g_RenderFrame, skinUnseen)) { ++unseen; continue; }
         bool uploaded = true;
         GLsizeiptr n = 0;
         for (const auto& mesh : m->m_D->Meshes) {

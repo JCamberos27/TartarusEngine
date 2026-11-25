@@ -284,6 +284,11 @@ public:
     // out, or whose pose changes after it, skins in the vertex shader as before. Models without bones
     // are skipped. TARTARUS_NO_PRESKIN=1 turns it off (for A/B benches).
     static void PreSkin(const std::vector<Model*>& models);
+    // PreSkin's skip test: a model last drawn in render frame `drawn` (0 = never) isn't pre-skinned in `renderFrame`
+    // unless a pass drew it last frame or already this one. `skinUnseen` (TARTARUS_NO_SKIN_CULL) skins it anyway.
+    static bool PreSkinSkipsUnseen(std::uint64_t drawn, std::uint64_t renderFrame, bool skinUnseen) {
+        return !skinUnseen && drawn + 1 < renderFrame;
+    }
     // --smoke-test: skins random vertices (none to eight influences) with PreSkin's shader and compares them with the
     // CPU's blend. False, with the reason, when they differ or the shader doesn't build.
     static bool PreSkinSelfTest(std::string& why);
