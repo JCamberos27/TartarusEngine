@@ -23,6 +23,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -60,11 +61,13 @@ public:
     };
 
     // Loads `<base>.mmanim` and `<base>.mmdb`. False (with `error`) when either is missing or corrupt, or they disagree.
-    bool Load(const std::string& base, std::string* error = nullptr);
+    // `between` (optional) runs after each file and before the build; false stops the load there (a cancelled prefetch).
+    bool Load(const std::string& base, std::string* error = nullptr, const std::function<bool()>& between = {});
     // Takes a stream and a feature set already in memory (the unit tests); the same checks as Load.
     bool Adopt(MotionClipStream&& stream, MotionFeatureSet&& features, std::string* error = nullptr);
     bool Loaded() const { return m_Frames > 0; }
     double LoadSeconds() const { return m_LoadSeconds; }
+    double ReadSeconds() const { return m_ReadSeconds; } // of LoadSeconds: reading the two files (the rest builds)
 
     const MotionClipStream& Stream() const { return m_Stream; }
     const MotionFeatureSet& Features() const { return m_Feat; }
@@ -137,5 +140,5 @@ private:
     std::uint32_t m_Glitches = 0, m_ProneApproach = 0;
     std::vector<float> m_Mean, m_Scale, m_QA, m_QB;
     std::vector<Box> m_Small, m_Large;
-    double m_LoadSeconds = 0.0;
+    double m_LoadSeconds = 0.0, m_ReadSeconds = 0.0;
 };

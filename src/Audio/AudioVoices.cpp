@@ -117,13 +117,14 @@ AudioEngine::PreloadFormat AudioEngine::PreloadDecodeFormat() {
 
 std::shared_ptr<AudioEngine::DecodedSounds> AudioEngine::DecodeForPreload(const std::vector<std::string>& paths,
                                                                           PreloadFormat format, const std::atomic<bool>* cancel,
-                                                                          std::chrono::microseconds pause) {
+                                                                          std::chrono::microseconds pause, const std::atomic<bool>* hurry) {
     auto out = std::make_shared<DecodedSounds>();
     out->Clips.reserve(paths.size());
     for (const std::string& p : paths) {
         if (cancel && cancel->load(std::memory_order_relaxed)) break;
         out->Clips.emplace_back(p, DecodeClip(p, format));
-        if (pause.count() > 0) std::this_thread::sleep_for(pause); // a breather between files for the frames it overlaps
+        if (pause.count() > 0 && !(hurry && hurry->load(std::memory_order_relaxed)))
+            std::this_thread::sleep_for(pause); // a breather between files for the frames it overlaps (none once waited on)
     }
     return out;
 }

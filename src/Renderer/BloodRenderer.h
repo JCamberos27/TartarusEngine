@@ -49,6 +49,7 @@ public:
     static std::shared_ptr<FileData> ReadFiles(const std::atomic<bool>* cancel = nullptr);
     static std::size_t Bytes(const FileData& files); // the texel data it holds
     bool Loaded() const { return m_Loaded; }
+    bool LoadTried() const { return m_LoadTried; } // Load ran (it may have found no files)
     int SimIndex(const std::string& name) const; // -1 if unknown
     const SimInfo* Sim(int index) const { return index >= 0 && index < (int)m_Sims.size() ? &m_Sims[index] : nullptr; }
 

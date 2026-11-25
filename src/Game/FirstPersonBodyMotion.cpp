@@ -12,6 +12,9 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <chrono>
+#include <condition_variable>
+#include <thread>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -126,6 +129,122 @@ std::string BaseSpelling(const std::string& base) {
     for (char& c : s) c = (char)std::tolower((unsigned char)c);
     return s;
 }
+
+// The prefetch (Prefetch): at most one, of one base. Lock order: s_SharedLock, then s_PrefetchLock (the job takes only
+// the second, so Get may wait on it holding the first).
+struct PrefetchLoad {
+    enum class State { Queued, Running, Done, Taken };
+    std::string Base, Spelling;
+    std::vector<std::filesystem::file_time_type> Stamps; // the database's two files, when it was queued
+    State St = State::Queued;
+    std::atomic<bool> Cancel{false};
+    std::shared_ptr<SharedMotionDatabase> Result; // Done: the loaded database (null: failed or cancelled)
+    double ReadMs = 0.0, BuildMs = 0.0;
+};
+std::mutex s_PrefetchLock;
+std::condition_variable s_PrefetchDone;
+std::shared_ptr<PrefetchLoad> s_Prefetch;
+std::function<void(SharedMotionDatabase::PrefetchJob)> s_PrefetchRun;
+std::function<void(bool)> s_PrefetchOnWait;
+
+std::vector<std::filesystem::file_time_type> DatabaseStamps(const std::string& base) { return FileStamps(base, std::string()); }
+
+void DropPrefetchLocked() { // s_PrefetchLock held
+    if (!s_Prefetch) return;
+    s_Prefetch->Cancel = true;
+    if (s_Prefetch->St == PrefetchLoad::State::Queued) s_Prefetch->St = PrefetchLoad::State::Taken; // never runs
+    s_Prefetch.reset();
+}
+
+// Get's load of `base`, if a prefetch has it (s_SharedLock held): waits while it runs; null when there is none, it was
+// still queued (Get reads, the job then does nothing), it failed, or the files changed since it was queued.
+std::shared_ptr<SharedMotionDatabase> TakePrefetch(const std::string& base) {
+    std::unique_lock<std::mutex> lock(s_PrefetchLock);
+    std::shared_ptr<PrefetchLoad> p = s_Prefetch;
+    if (!p || p->Spelling != BaseSpelling(base)) return nullptr;
+    s_Prefetch.reset();
+    if (p->St == PrefetchLoad::State::Queued) {
+        p->St = PrefetchLoad::State::Taken;
+        std::printf("[MotionMatching] prefetch still queued at the first Get: loaded here instead\n");
+        return nullptr;
+    }
+    double waitMs = 0.0;
+    if (p->St == PrefetchLoad::State::Running) {
+        const auto t0 = std::chrono::steady_clock::now();
+        lock.unlock();
+        if (s_PrefetchOnWait) s_PrefetchOnWait(true);
+        lock.lock();
+        s_PrefetchDone.wait(lock, [&] { return p->St == PrefetchLoad::State::Done; });
+        lock.unlock();
+        if (s_PrefetchOnWait) s_PrefetchOnWait(false);
+        lock.lock();
+        waitMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    }
+    p->St = PrefetchLoad::State::Taken;
+    const bool current = p->Stamps == DatabaseStamps(base);
+    std::printf("[MotionMatching] prefetched database %s (read %.0f ms + build %.0f ms on the worker; Get waited %.0f ms)\n",
+                !p->Result ? "failed: loaded here" : current ? "taken" : "stale (files rewritten): loaded here", p->ReadMs,
+                p->BuildMs, waitMs);
+    return current ? p->Result : nullptr;
+}
+}
+
+void SharedMotionDatabase::SetPrefetchRunner(std::function<void(PrefetchJob)> run, std::function<void(bool)> onWait) {
+    std::lock_guard<std::mutex> lock(s_PrefetchLock);
+    s_PrefetchRun = std::move(run);
+    s_PrefetchOnWait = std::move(onWait);
+}
+
+void SharedMotionDatabase::Prefetch(const std::string& base) {
+    const std::string spelling = BaseSpelling(base);
+    const std::vector<std::filesystem::file_time_type> stamps = DatabaseStamps(base);
+    std::lock_guard<std::mutex> shared(s_SharedLock);
+    for (const auto& [key, kept] : s_SharedKept) // already loaded and current: a later Play reuses it
+        if (BaseSpelling(key.substr(0, key.rfind('|'))) == spelling && kept.Stamps.size() >= 2 &&
+            std::equal(stamps.begin(), stamps.end(), kept.Stamps.begin()))
+            return;
+    std::lock_guard<std::mutex> lock(s_PrefetchLock);
+    if (!s_PrefetchRun) return;
+    if (s_Prefetch && s_Prefetch->Spelling == spelling) return; // pending or held: the same files
+    DropPrefetchLocked();
+    auto p = std::make_shared<PrefetchLoad>();
+    p->Base = base;
+    p->Spelling = spelling;
+    p->Stamps = stamps;
+    s_Prefetch = p;
+    s_PrefetchRun([p](const std::atomic<bool>& stop) {
+        {
+            std::lock_guard<std::mutex> lock(s_PrefetchLock);
+            if (p->St != PrefetchLoad::State::Queued || p->Cancel) return;
+            p->St = PrefetchLoad::State::Running;
+        }
+        auto db = std::make_shared<SharedMotionDatabase>();
+        std::string err;
+        // A breather after each file and before the build (the worker's frames-first rule), and the place to stop.
+        const bool ok = db->Db.Load(p->Base, &err, [&] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            return !p->Cancel && !stop;
+        });
+        {
+            std::lock_guard<std::mutex> lock(s_PrefetchLock);
+            p->ReadMs = db->Db.ReadSeconds() * 1000.0;
+            p->BuildMs = (db->Db.LoadSeconds() - db->Db.ReadSeconds()) * 1000.0;
+            if (ok && !p->Cancel) p->Result = std::move(db);
+            p->St = PrefetchLoad::State::Done;
+        }
+        s_PrefetchDone.notify_all();
+        if (ok) std::printf("[MotionMatching] prefetch: %s read in %.0f ms, built in %.0f ms (worker)\n", p->Base.c_str(), p->ReadMs, p->BuildMs);
+    });
+}
+
+void SharedMotionDatabase::CancelPrefetch() {
+    std::lock_guard<std::mutex> lock(s_PrefetchLock);
+    DropPrefetchLocked();
+}
+
+bool SharedMotionDatabase::PrefetchPending() {
+    std::lock_guard<std::mutex> lock(s_PrefetchLock);
+    return s_Prefetch != nullptr;
 }
 
 void SharedMotionDatabase::Invalidate(const std::string& base) {
@@ -140,6 +259,10 @@ void SharedMotionDatabase::Invalidate(const std::string& base) {
         const size_t bar = it->first.rfind('|');
         if (BaseSpelling(it->first.substr(0, bar)) == want) it = s_SharedKept.erase(it);
         else ++it;
+    }
+    {
+        std::lock_guard<std::mutex> prefetch(s_PrefetchLock); // read before the rebake (or during it): the next Get reads
+        if (s_Prefetch && s_Prefetch->Spelling == want) DropPrefetchLocked();
     }
     ++s_SharedGeneration;
 }
@@ -178,8 +301,11 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
         }
         s_SharedKept.erase(kept);
     }
-    auto shared = std::make_shared<SharedMotionDatabase>();
-    if (!shared->Db.Load(base, error)) return nullptr;
+    std::shared_ptr<SharedMotionDatabase> shared = TakePrefetch(base); // read ahead of Play (Prefetch)
+    if (!shared) {
+        shared = std::make_shared<SharedMotionDatabase>();
+        if (!shared->Db.Load(base, error)) return nullptr;
+    }
     std::vector<float> tilt;
     if (rig) {
         const std::vector<float> over = HandOverShoulder(shared->Db, *rig, &tilt);
@@ -346,6 +472,8 @@ std::vector<std::string> SharedMotionDatabase::WatchedFiles(const std::string& b
 void SharedMotionDatabase::ReleaseKept() {
     std::lock_guard<std::mutex> lock(s_SharedLock);
     s_SharedKept.clear();
+    std::lock_guard<std::mutex> prefetch(s_PrefetchLock);
+    DropPrefetchLocked();
 }
 
 // --- the body's motion -----------------------------------------------------------------------------------------------
@@ -375,12 +503,14 @@ float FirstPersonBodyMotion::RootYawRate(const MotionDatabase& db, std::uint32_t
     return Wrap(db.Stream().Root(b).Yaw - db.Stream().Root(a).Yaw) * db.Fps() / (float)(b - a);
 }
 
+std::string FirstPersonBodyMotion::PlayerDatabase() { return ProjectPaths::Resolve("assets/Animations/MotionMatching/Manny"); }
+
 bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& models, size_t driver, std::string& error,
                                   const FirstPersonBodyMotion* carry) {
     Stop();
     std::string err;
     const std::uint64_t generation = SharedMotionDatabase::Generation(); // before the load: a rebake during it reads stale
-    auto shared = SharedMotionDatabase::Get(ProjectPaths::Resolve("assets/Animations/MotionMatching/Manny"), &err,
+    auto shared = SharedMotionDatabase::Get(PlayerDatabase(), &err,
                                             driver < models.size() ? models[driver].get() : nullptr);
     if (!shared) { error = "the motion matching database isn't baked (" + err + ")"; return false; }
     const MotionClipStream& stream = shared->Db.Stream();
