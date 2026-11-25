@@ -7,6 +7,7 @@
 #include <json.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -18,6 +19,8 @@ struct State {
     bool read = false, active = false;
     std::vector<Key> keys;
     std::vector<LightCue> lights;
+    std::vector<SunKey> sun;
+    std::vector<MoverCue> movers;
     std::string out = "cinematic.mp4", ffmpeg;
     int warmup = 240, crf = 14;
     FfmpegPipe pipe;
@@ -65,6 +68,8 @@ bool Load(const std::string& path, std::string& error) {
         f >> j;
         s.keys.clear();
         s.lights.clear();
+        s.sun.clear();
+        s.movers.clear();
         s.out = j.value("out", s.out);
         s.ffmpeg = j.value("ffmpeg", Env::Str(Env::Var::Ffmpeg));
         s.warmup = std::max(1, j.value("warmup", s.warmup));
@@ -84,6 +89,22 @@ bool Load(const std::string& path, std::string& error) {
         if (j.contains("lights"))
             for (const auto& l : j.at("lights"))
                 s.lights.push_back({l.at("t").get<float>(), l.at("circuit").get<std::string>(), l.value("on", true), false});
+        if (j.contains("sun"))
+            for (const auto& k : j.at("sun")) s.sun.push_back({k.at("t").get<float>(), k.at("hours").get<float>()});
+        std::stable_sort(s.sun.begin(), s.sun.end(), [](const SunKey& a, const SunKey& b) { return a.T < b.T; });
+        if (j.contains("movers"))
+            for (const auto& m : j.at("movers")) {
+                MoverCue c;
+                c.Name = m.at("name").get<std::string>();
+                const auto& n = m.at("near");
+                c.Near = glm::vec3(n[0].get<float>(), n[1].get<float>(), n[2].get<float>());
+                const auto& o = m.at("offset");
+                c.Offset = glm::vec3(o[0].get<float>(), o[1].get<float>(), o[2].get<float>());
+                c.Period = std::max(m.value("period", c.Period), 0.05f);
+                c.T0 = m.value("t0", 0.0f);
+                c.T1 = m.value("t1", 1e9f);
+                s.movers.push_back(c);
+            }
     } catch (const std::exception& e) {
         error = std::string("bad cinematic json: ") + e.what();
         return false;
@@ -125,6 +146,22 @@ Pose Evaluate(const std::vector<Key>& keys, float t) {
 
 const std::vector<Key>& Keys() { return s_State.keys; }
 std::vector<LightCue>& Lights() { return s_State.lights; }
+bool SunHours(float t, float& hours) {
+    const std::vector<SunKey>& k = s_State.sun;
+    if (k.empty()) return false;
+    if (t <= k.front().T) { hours = k.front().Hours; return true; }
+    if (t >= k.back().T) { hours = k.back().Hours; return true; }
+    size_t i = 0;
+    while (i + 1 < k.size() && k[i + 1].T <= t) ++i;
+    const float u = (t - k[i].T) / std::max(k[i + 1].T - k[i].T, 1e-4f);
+    hours = k[i].Hours + (k[i + 1].Hours - k[i].Hours) * u;
+    return true;
+}
+const std::vector<MoverCue>& Movers() { return s_State.movers; }
+glm::vec3 MoverOffset(const MoverCue& m, float t) {
+    if (t < m.T0 || t > m.T1) return glm::vec3(0.0f);
+    return m.Offset * std::sin(6.2831853f * (t - m.T0) / m.Period);
+}
 float Duration() { return s_State.keys.empty() ? 0.0f : s_State.keys.back().T; }
 int Warmup() { return s_State.warmup; }
 

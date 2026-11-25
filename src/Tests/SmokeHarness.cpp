@@ -594,6 +594,33 @@ void SmokeHarness::CinematicFrame() {
         if (c.Circuit == "*") LightSwitch::SetAll(m_Ctx.world, c.On);
         else if (!LightSwitch::Set(m_Ctx.world, c.Circuit, c.On)) Log::Warn("Cinematic: no light circuit '" + c.Circuit + "'");
     }
+    if (float hours = 0.0f; Cinematic::SunHours(next, hours)) m_Ctx.world.Render.Sky.TimeOfDayHours = hours;
+    // Movers: each cue's entity (the one by that name nearest `near`, found once) swings about where it started.
+    static std::vector<std::pair<entt::entity, glm::vec3>> movers; // entity, its local position at the start
+    const std::vector<Cinematic::MoverCue>& cues = Cinematic::Movers();
+    if (movers.size() != cues.size()) {
+        movers.clear();
+        for (const Cinematic::MoverCue& c : cues) {
+            entt::entity best = entt::null;
+            float bestD = std::numeric_limits<float>::max();
+            for (auto [e, n, t] : m_Ctx.world.Registry.view<NameComponent, TransformComponent>().each()) {
+                if (n.Name != c.Name) continue;
+                const float d = glm::length(glm::vec3(m_Ctx.world.GetCachedWorldTransform(e)[3]) - c.Near);
+                if (d < bestD) { bestD = d; best = e; }
+            }
+            if (best == entt::null) Log::Warn("Cinematic: no mover named '" + c.Name + "'");
+            else std::cout << "[SmokeTest] cinematic mover '" << c.Name << "' at " << bestD << " m from its near point" << std::endl;
+            movers.push_back({best, best == entt::null ? glm::vec3(0.0f) : m_Ctx.world.Registry.get<TransformComponent>(best).Position});
+        }
+    }
+    for (size_t i = 0; i < cues.size(); ++i)
+        if (movers[i].first != entt::null)
+            m_Ctx.world.Registry.get<TransformComponent>(movers[i].first).Position = movers[i].second + Cinematic::MoverOffset(cues[i], next);
+    if (r == (int)(Cinematic::Duration() * 60.0f)) {
+        const CascadedShadowMap::FarTotals& t = CascadedShadowMap::FarCascadeTotals();
+        std::cout << "[SmokeTest] far cascades (refresh " << CascadedShadowMap::FarRefresh() << "): frames=" << t.Frames
+                  << " held=" << t.Held << " turn=" << t.Turn << " refit=" << t.Refit << " mover=" << t.Mover << std::endl;
+    }
     const Cinematic::Pose p = Cinematic::Evaluate(Cinematic::Keys(), next);
     cam.Position = p.Pos;
     cam.Yaw = p.Yaw;
