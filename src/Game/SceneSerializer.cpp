@@ -375,12 +375,8 @@ double MsSince(std::chrono::steady_clock::time_point t0) {
 }
 } // namespace
 
-std::string SceneSerializer::LibraryStateString(const AssetLibrary& assets) {
-    return LibraryStateJson(assets).dump();
-}
-
 void SceneSerializer::SaveToStrings(const World& world, std::string& entityOnly, const AssetLibrary* assets,
-                                    std::string* withLibrary, std::string* libraryOnly, SnapshotTimes* times) {
+                                    std::string* withLibrary, SnapshotTimes* times) {
     SnapshotTimes local;
     SnapshotTimes& t = times ? *times : local;
     auto t0 = std::chrono::steady_clock::now();
@@ -396,7 +392,6 @@ void SceneSerializer::SaveToStrings(const World& world, std::string& entityOnly,
     json lib = LibraryStateJson(*assets);
     t.LibraryMs = MsSince(t0);
     t0 = std::chrono::steady_clock::now();
-    if (libraryOnly) *libraryOnly = lib.dump();
     for (auto it = lib.begin(); it != lib.end(); ++it) root[it.key()] = std::move(*it);
     *withLibrary = root.dump();
     t.LibraryDumpMs = MsSince(t0);

@@ -1266,7 +1266,7 @@ void TestRestartMoveAsideSet() {
 }
 
 // P-55: Play entry takes its two snapshots from one walk of the scene, byte for byte what the two SaveToString calls
-// give; Stop takes the pre-Play one back as the undo baseline; an edit made without an undo step still journals.
+// give; Stop restores the scene and drops the baseline as before; an edit made without an undo step still journals.
 static void TestPlaySnapshotsOneWalk() {
     auto* previous=ImGui::GetCurrentContext();auto* context=ImGui::CreateContext();
     auto& io=ImGui::GetIO();io.DisplaySize={800,600};io.DeltaTime=1.0f/60;io.IniFilename=nullptr;
@@ -1277,12 +1277,11 @@ static void TestPlaySnapshotsOneWalk() {
     assets.RegisterSound("assets/Audio/p55_fixture.wav");
     assets.RegisterSound("assets/Audio/p55_fixture_b.wav"); // library entries that write nothing to disk (a folder would persist to settings.json)
     {
-        std::string entityOnly,withLibrary,library;
+        std::string entityOnly,withLibrary;
         SceneSerializer::SnapshotTimes times;
-        SceneSerializer::SaveToStrings(world,entityOnly,&assets,&withLibrary,&library,&times);
+        SceneSerializer::SaveToStrings(world,entityOnly,&assets,&withLibrary,&times);
         CHECK(entityOnly==SceneSerializer::SaveToString(world));
         CHECK(withLibrary==SceneSerializer::SaveToString(world,assets));
-        CHECK(library==SceneSerializer::LibraryStateString(assets));
         CHECK(withLibrary.find("p55_fixture.wav")!=std::string::npos && withLibrary.find("p55_fixture_b.wav")!=std::string::npos);
         CHECK(times.BuildMs>=0.0 && times.DumpMs>=0.0 && times.LibraryMs>=0.0 && times.LibraryDumpMs>=0.0);
         std::string alone;
@@ -1294,12 +1293,14 @@ static void TestPlaySnapshotsOneWalk() {
         ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();
         const std::string before=SceneSerializer::SaveToString(world,assets);
         CHECK(EditorHistoryTestAccess::Current(editor)==before);
-        // Play and Stop with nothing changed: no step, and the baseline is back without a fresh save.
+        auto nextFrame=[&]{ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();};
+        // Play and Stop with nothing changed: no step; the next frame's baseline is the scene again.
         EditorHistoryTestAccess::EnterPlay(editor,world);
         CHECK(EditorHistoryTestAccess::Count(editor)==0);
         world.Render.ExposureEV=3.0f; // Play's own change, reverted by Stop
         EditorHistoryTestAccess::ExitPlay(editor,world,assets);
         CHECK(SceneSerializer::SaveToString(world,assets)==before);
+        nextFrame();
         CHECK(EditorHistoryTestAccess::Current(editor)==before);
         CHECK(EditorHistoryTestAccess::Count(editor)==0);
         // A change made without an undo step before Play is journaled at Play, as before.
@@ -1310,12 +1311,9 @@ static void TestPlaySnapshotsOneWalk() {
         CHECK(EditorHistoryTestAccess::TopLabel(editor)=="Unrecorded Change");
         EditorHistoryTestAccess::ExitPlay(editor,world,assets);
         CHECK(SceneSerializer::SaveToString(world,assets)==edited);
+        nextFrame();
         CHECK(EditorHistoryTestAccess::Current(editor)==edited);
-        // The library changed during Play (a sound registered): Stop leaves the baseline to a fresh save.
-        EditorHistoryTestAccess::EnterPlay(editor,world);
-        assets.RegisterSound("assets/Audio/p55_made_in_play.wav");
-        EditorHistoryTestAccess::ExitPlay(editor,world,assets);
-        CHECK(EditorHistoryTestAccess::Current(editor).empty());
+        CHECK(EditorHistoryTestAccess::Count(editor)==1); // Play and Stop added nothing after it
         EditorHistoryTestAccess::Clear(editor);
     }
     ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);
@@ -1325,7 +1323,7 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Hierarchy creation order cache follows create, destroy, reorder and reparent",TestHierarchyCreationOrderCache);
     tests.emplace_back("Hierarchy child order: Children follow OrderComponent, a reorder bumps the version and moves LOD levels",TestHierarchyChildOrder);
     tests.emplace_back("Editor navigation undo avoids scene snapshots and preserves transactions",TestEditorNavigationUndo);
-    tests.emplace_back("Play snapshots: one scene walk, the same bytes as two saves; Stop keeps the baseline (P-55)",TestPlaySnapshotsOneWalk);
+    tests.emplace_back("Play snapshots: one scene walk, the same bytes as two saves; Stop and the #15 journal unchanged (P-55)",TestPlaySnapshotsOneWalk);
     tests.emplace_back("Prefab toolbar replaces Play and returns from hidden Scene tab",TestPrefabToolbarReturn);
     tests.emplace_back("Script IDE text editing, completion undo and source preservation",TestScriptIDETextEditing);
     tests.emplace_back("Global file undo, coalescing, creation, deletion and rename",TestGlobalFileUndo);
