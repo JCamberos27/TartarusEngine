@@ -76,11 +76,12 @@ std::vector<std::string> Folders(const std::string& path) {
     return out;
 }
 
-// A model's name without the pack's mesh prefix: "SKM_F_Hat_Warm" -> "Hat_Warm" (a hat's name as a haircut suffix).
-// A static (SM_) cut or hat and a skinned (SKM_) one compare equal this way: SM_F_Beret fits SKM_F_Haircut_Bobcut.
-std::string HatToken(const std::string& stem) {
-    for (const char* p : {"SKM_F_", "SM_F_", "SKM_", "SM_"})
-        if (StartsWithI(stem, p)) return stem.substr(std::string(p).size());
+// A model's name without the pack's mesh prefix (Wardrobe::NamePrefixes): "SKM_F_Hat_Warm" -> "Hat_Warm" (a hat's
+// name as a haircut suffix). A static (SM_) cut or hat and a skinned (SKM_) one compare equal this way: SM_F_Beret
+// fits SKM_F_Haircut_Bobcut.
+std::string StripPrefix(const std::string& stem, const std::vector<std::string>& prefixes) {
+    for (const auto& p : prefixes)
+        if (!p.empty() && StartsWithI(stem, p)) return stem.substr(p.size());
     return stem;
 }
 
@@ -105,10 +106,8 @@ std::string Stem(const std::string& path) {
     return dot == std::string::npos ? p : p.substr(0, dot);
 }
 
-std::string PrettyName(const std::string& stem) {
-    std::string s = stem;
-    for (const char* p : {"SKM_F_", "SM_F_", "SKM_", "SM_", "Quantum_"})
-        if (StartsWithI(s, p)) { s = s.substr(std::string(p).size()); break; }
+std::string PrettyName(const std::string& stem, const std::vector<std::string>& prefixes) {
+    const std::string s = StripPrefix(stem, prefixes);
     std::string out;
     std::stringstream ss(s);
     for (std::string word; std::getline(ss, word, '_');) {
@@ -147,8 +146,11 @@ bool Parse(const std::string& jsonText, Wardrobe& out, std::string* error) {
     w.ItemFolders = Strings(j, "itemFolders");
     w.ExcludeFolders = Strings(j, "excludeFolders");
     w.SkinMaterials = Strings(j, "skinMaterials");
-    w.HatSlot = String(j, "hatSlot", w.HatSlot);
-    w.HairSlot = String(j, "hairSlot", w.HairSlot);
+    w.HatSlot = String(j, "hatSlot");
+    w.HairSlot = String(j, "hairSlot");
+    w.NamePrefixes = Strings(j, "namePrefixes");
+    w.FemaleFolders = Strings(j, "femaleFolders");
+    w.FemalePrefixes = Strings(j, "femalePrefixes");
 
     if (j.contains("slots") && j["slots"].is_array())
         for (const auto& s : j["slots"]) {
@@ -160,8 +162,8 @@ bool Parse(const std::string& jsonText, Wardrobe& out, std::string* error) {
             d.Folders = Strings(s, "folders");
             d.NameSuffix = String(s, "nameSuffix");
             d.HeadAttached = s.value("headAttached", false);
-            d.Layer = s.contains("layer") && s["layer"].is_number() ? s["layer"].get<int>() : DefaultLayer(d.Id);
-            d.Hides = s.contains("hides") && s["hides"].is_boolean() ? s["hides"].get<bool>() : DefaultHides(d.Id);
+            d.Layer = s.contains("layer") && s["layer"].is_number() ? s["layer"].get<int>() : kDefaultLayer;
+            d.Hides = s.contains("hides") && s["hides"].is_boolean() ? s["hides"].get<bool>() : kDefaultHides;
             w.Slots.push_back(std::move(d));
         }
 
@@ -321,10 +323,14 @@ bool Classify(const Wardrobe& w, const std::string& path, const std::vector<std:
         }
     if (item.Slot.empty() || !w.Slot(item.Slot)) return false;
 
-    const bool femaleFolder = std::any_of(folders.begin(), folders.end(), [](const std::string& f) { return IEquals(f, "Female"); });
-    item.Sex = (femaleFolder || StartsWithI(item.Stem, "SKM_F_")) ? Gender::Female : Gender::Male;
+    const bool femaleFolder = std::any_of(folders.begin(), folders.end(), [&](const std::string& f) {
+        return std::any_of(w.FemaleFolders.begin(), w.FemaleFolders.end(), [&](const std::string& ff) { return IEquals(f, ff); });
+    });
+    const bool femaleName = std::any_of(w.FemalePrefixes.begin(), w.FemalePrefixes.end(),
+                                        [&](const std::string& p) { return !p.empty() && StartsWithI(item.Stem, p); });
+    item.Sex = (femaleFolder || femaleName) ? Gender::Female : Gender::Male;
     if (ov && ov->Gender >= 0) item.Sex = (Gender)ov->Gender;
-    item.Name = ov && !ov->Name.empty() ? ov->Name : PrettyName(item.Stem);
+    item.Name = ov && !ov->Name.empty() ? ov->Name : PrettyName(item.Stem, w.NamePrefixes);
     item.Skin = std::any_of(materials.begin(), materials.end(), [&](const std::string& m) { return !SkinBase(w, m).empty(); });
     for (const auto& rule : w.TagRules) // in order: a rule may match the tags an earlier one gave
         if (Matches(rule.When, item))
@@ -342,7 +348,7 @@ void MarkVariants(const Wardrobe& w, std::vector<Item>& items) {
     };
     auto hasCut = [&](const Item& like, const std::string& bare) { // by name without the mesh prefix
         return std::any_of(items.begin(), items.end(), [&](const Item& i) {
-            return i.Sex == like.Sex && i.Slot == like.Slot && IEquals(HatToken(i.Stem), bare);
+            return i.Sex == like.Sex && i.Slot == like.Slot && IEquals(StripPrefix(i.Stem, w.NamePrefixes), bare);
         });
     };
     for (auto& it : items) {
@@ -350,7 +356,7 @@ void MarkVariants(const Wardrobe& w, std::vector<Item>& items) {
         if (it.Slot == w.HairSlot)
             for (const auto& hat : items)
                 if (hat.Sex == it.Sex && hat.Slot == w.HatSlot) {
-                    const std::string t = "_" + HatToken(hat.Stem), bare = HatToken(it.Stem);
+                    const std::string t = "_" + StripPrefix(hat.Stem, w.NamePrefixes), bare = StripPrefix(it.Stem, w.NamePrefixes);
                     if (EndsWithI(bare, t) && hasCut(it, bare.substr(0, bare.size() - t.size()))) { it.Variant = true; break; }
                 }
         for (const auto& rule : w.Pairs)
@@ -409,26 +415,26 @@ Resolved Resolve(const Wardrobe& w, const std::vector<Item>& catalog, const Requ
         for (const auto& it : catalog)
             if (it.Sex == request.Sex && it.Slot == w.HatSlot) hats.push_back(&it);
         std::stable_sort(hats.begin(), hats.end(),
-                         [](const Item* a, const Item* b) { return HatToken(a->Stem).size() > HatToken(b->Stem).size(); });
+                         [&](const Item* a, const Item* b) { return StripPrefix(a->Stem, w.NamePrefixes).size() > StripPrefix(b->Stem, w.NamePrefixes).size(); });
         // A fitted cut that carries the hat itself (the pack's Bobcut_Cap has the cap in it): the hat goes.
         auto builtIn = [&](const Item& cut, const Item& hat) {
             return std::any_of(w.Excludes.begin(), w.Excludes.end(), [&](const ExcludeRule& e) {
                 return !e.Soft && Matches(e.A, cut) && Matches(e.B, hat);
             });
         };
-        std::string base = HatToken(hair->second->Stem);
+        std::string base = StripPrefix(hair->second->Stem, w.NamePrefixes);
         const Item* fittedTo = nullptr; // the hat the asked-for cut is fitted to (null: a plain cut)
         for (const Item* h : hats) {
-            const std::string t = "_" + HatToken(h->Stem);
+            const std::string t = "_" + StripPrefix(h->Stem, w.NamePrefixes);
             if (EndsWithI(base, t)) { base = base.substr(0, base.size() - t.size()); fittedTo = h; break; }
         }
         auto cut = [&](const std::string& bare) -> const Item* {
-            if (IEquals(HatToken(hair->second->Stem), bare)) return hair->second; // the one asked for, before a namesake
-            return find(w.HairSlot, [&](const Item& i) { return IEquals(HatToken(i.Stem), bare); });
+            if (IEquals(StripPrefix(hair->second->Stem, w.NamePrefixes), bare)) return hair->second; // the one asked for, before a namesake
+            return find(w.HairSlot, [&](const Item& i) { return IEquals(StripPrefix(i.Stem, w.NamePrefixes), bare); });
         };
         const Item* desired = cut(base);
         if (auto hat = chosen.find(w.HatSlot); hat != chosen.end()) {
-            if (const Item* fitted = cut(base + "_" + HatToken(hat->second->Stem))) desired = fitted;
+            if (const Item* fitted = cut(base + "_" + StripPrefix(hat->second->Stem, w.NamePrefixes))) desired = fitted;
         } else if (fittedTo && builtIn(*hair->second, *fittedTo)) {
             // No hat asked for, but the cut is the hat too: an outfit read back from its pieces (the hat went into
             // the cut) keeps it.
@@ -511,7 +517,7 @@ Resolved Resolve(const Wardrobe& w, const std::vector<Item>& catalog, const Requ
                 for (auto& [part, model] : parts)
                     if (part == rule.Replace && !IEquals(model, with)) {
                         model = with;
-                        result.Notes.push_back(rule.Replace + " -> " + PrettyName(Stem(with)));
+                        result.Notes.push_back(rule.Replace + " -> " + PrettyName(Stem(with), w.NamePrefixes));
                     }
             }
     }
@@ -644,28 +650,12 @@ bool Essential(const Wardrobe& w, const std::string& slot, Gender g) {
     return any;
 }
 
-int DefaultLayer(const std::string& slot) {
-    static const std::pair<const char*, int> layers[] = {
-        {"Shoes", 2}, {"Pants", 3}, {"Top", 4}, {"Outerwear", 6}, {"Collar", 7}, {"Bag", 8}, {"Wrist L", 8},
-        {"Wrist R", 8}, {"Hair", 9}, {"Beard", 9}, {"FacialHair", 9}, {"Glasses", 9}, {"Hat", 10}, {"Headwear", 10},
-        {"Headphones", 11},
-    };
-    for (const auto& [name, layer] : layers)
-        if (IEquals(slot, name)) return layer;
-    return 5;
-}
-
-bool DefaultHides(const std::string& slot) {
-    return !IEquals(slot, "Hair") && !IEquals(slot, "Beard") && !IEquals(slot, "FacialHair") && !IEquals(slot, "Glasses") &&
-           !IEquals(slot, "Wrist L") && !IEquals(slot, "Wrist R");
-}
-
 Layering LayerOf(const Wardrobe& w, const std::string& slot, const std::string& itemPath, bool bodyPart) {
     Layering l;
     if (bodyPart) return l;
     const SlotDef* def = w.Slot(slot);
-    l.Layer = def ? def->Layer : DefaultLayer(slot);
-    l.Hides = def ? def->Hides : DefaultHides(slot);
+    l.Layer = def ? def->Layer : kDefaultLayer;
+    l.Hides = def ? def->Hides : kDefaultHides;
     const std::string stem = Stem(itemPath);
     for (const auto& rule : w.Layers) {
         if (!IEquals(rule.Slot, slot) || (!rule.NameHasAny.empty() && !AnyIn(stem, rule.NameHasAny)) ||

@@ -6,6 +6,9 @@
   "skinMaterials": ["M_Quantum_Body", "M_Quantum_Arms", "M_Quantum_Head", "M_F_Vivian_Body", "M_F_Vivian_Arms", "M_F_Vivian_Head"],
   "hatSlot": "Headwear",
   "hairSlot": "Hair",
+  "namePrefixes": ["SKM_F_", "SM_F_", "SKM_", "SM_", "Quantum_"],
+  "femaleFolders": ["Female"],
+  "femalePrefixes": ["SKM_F_"],
   "slots": [
     { "id": "Hair",      "label": "Hair",       "icon": "hair",      "folders": ["Hair"],               "headAttached": true, "layer": 9, "hides": false },
     { "id": "FacialHair","label": "Facial hair","icon": "beard",     "folders": ["FacialHair"],         "headAttached": true, "layer": 9, "hides": false },

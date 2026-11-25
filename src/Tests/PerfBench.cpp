@@ -208,6 +208,7 @@ void PerfBench::Sample(double frameMs, int frameNo) {
         m_QuietLive0 = ShadowFrame::LocalQuietTotals().Live; m_Quiet0 = ShadowFrame::LocalQuietTotals().Quiet;
         m_Far0 = CascadedShadowMap::FarCascadeTotals();
         m_SunCache0 = DepthCasterCache::AllTotals();
+        m_SunDelta0 = ShadowFrame::SunListTotalsSoFar().Delta; m_SunFull0 = ShadowFrame::SunListTotalsSoFar().Full;
     }
     m_Frame.Sum += frameMs; m_Frame.Max = std::max(m_Frame.Max, frameMs); ++m_Frame.N;
     for (const Profiler::Entry& e : Profiler::GetLastFrame()) Add(m_Cpu, e.Name, e.Milliseconds);
@@ -361,6 +362,11 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
         const std::uint64_t reused = t.Reused - m_SunCache0.Reused, calls = reused + (t.Rebuilt - m_SunCache0.Rebuilt);
         std::printf("[PerfBench] %s sun caster cache: reused %llu of %llu calls\n", label, (unsigned long long)reused,
                     (unsigned long long)calls);
+        // The sun caster list (ShadowFrame::FillSunCasters): the gathers this phase that took the change-log delta path.
+        const ShadowFrame::SunListTotals l = ShadowFrame::SunListTotalsSoFar();
+        const std::uint64_t delta = l.Delta - m_SunDelta0, lists = delta + (l.Full - m_SunFull0);
+        std::printf("[PerfBench] %s sun caster list: delta %llu of %llu gathers\n", label, (unsigned long long)delta,
+                    (unsigned long long)lists);
     }
     // G4-d: what the far sun cascades did this phase (layer-frames: held, on their turn, refit, for a mover).
     {

@@ -5,6 +5,7 @@
 
 #include "App/LaunchOptions.h"
 #include "Core/Env.h"
+#include "Core/Profiler.h"
 #include "AssetLibrary.h"
 #include "BloodRenderer.h"
 #include "BulletHoles.h"
@@ -19,6 +20,7 @@
 #include "EditorModuleAPI.h"
 #include "FirstPersonBody.h"
 #include "FirstPersonPresentation.h"
+#include "MeshArena.h"
 #include "Flashlight.h"
 #include "FxSpriteRenderer.h"
 #include "GameModuleAPI.h"
@@ -98,6 +100,7 @@ void PlaySession::Start() {
     if (EditorModuleHost::ConsoleState().ClearOnPlay) Log::Clear(); // #236 A5
     m_Editor.OnEnterPlayMode(m_World);
     m_Assets.BeginPlayScope(); // Stop forgets what Play loads (OnExitPlayMode)
+    { PROFILE_SCOPE("Skinned VAO Reserve"); MeshArena::SkinnedPlayBegin(); } // P-56: Play's vertex arrays now, not mid-Play
     EditorSound::Play(EditorSound::Event::PlayEnter);
     // Character Outfit's Randomize On Play: dressed afresh, after the snapshot so Stop brings the
     // edited outfit back. It loads in the background; FirstPersonBody takes the new pieces once
@@ -277,6 +280,7 @@ void PlaySession::Stop() {
     m_FxSprites.Clear();
     FxSpriteRenderer::Get().BeginFrame();
     m_ShellCasings.Clear(m_World);
+    MeshArena::SkinnedPlayEnd(); // P-56: what this Play took sizes the next one's reserve (before the reload's own takes)
     m_Editor.OnExitPlayMode(m_World, m_Assets);
     m_State.Playing = false;
     EditorSound::Play(EditorSound::Event::PlayExit);

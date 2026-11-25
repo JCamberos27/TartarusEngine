@@ -119,6 +119,7 @@ struct ShadowFrame::SunPass {
     Shader& shader;
     std::optional<Profiler::ScopeTimer>& stage;
     std::uint64_t frame = 0;
+    std::uint64_t inFrame = 0; // ShadowFrameInputs::frame: the clock RenderLocal stamps its change log with
     unsigned renderMask = 0;
     Frustum cells[CascadedShadowMap::kMaxCascades];
     int cascadeCount = 0;
@@ -144,6 +145,7 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
     SunPass p{world, fl, shadowMap, shadowShader, stage};
     p.cascadeCount = shadowMap.Count();
     p.kernelTexels = CascadedShadowMap::SunKernelTexels(fl.SunAngularDeg, fl.SunShadowSoftness);
+    p.inFrame = in.frame;
     GatherSunCasters(p, fitView, fitProj);
     DrawSunCasters(p);
     DrawSunImpostors(p);
@@ -166,7 +168,6 @@ void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const g
     std::optional<Profiler::ScopeTimer>& stage = p.stage;
     stage.emplace("Sun: Fit + Gather");
     // Gather the casters once - registry lookups, world transform, world bounds - and reuse the list for every cascade.
-    m_SunCasters.clear();
     // #160 - the cascades' near planes reach every occluder: fitted to a box around everything that can draw
     // (RenderableBounds, a cheap superset of the casters), so the casters can then be gathered against the fitted
     // cascades - a forest's casters outside every cascade are never read at all.
@@ -184,43 +185,21 @@ void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const g
     casts.CellCullCount = shadowMap.Count();
     GatherVisible(world, casts, m_Casting);
     m_SceneWorld = &world;
-    // G4-d: the held far layers a caster that moved or re-posed since its last gather reaches (CasterReachesSlice,
-    // what receivers read now - not the hold margin), where it was or is now: its old shadow must go as its new one
-    // lands. One new to its slot (first seen, a world switch) counts as moved. Unbounded movers reach every cascade.
-    const unsigned held = p.renderMask ^ ((1u << shadowMap.Count()) - 1u);
-    unsigned force = 0;
+    // The caster list, and G4-d's held far cascades a moved or re-posed caster forces (FillSunCasters).
+    SunListIn li;
+    li.world = &world;
+    li.frame = p.inFrame;
+    li.held = p.renderMask ^ ((1u << shadowMap.Count()) - 1u);
+    li.cascadeCount = shadowMap.Count();
     const float kernel = p.kernelTexels, bias = fl.SunShadowNormalBias;
-    auto reach = [&](bool bounded, const glm::vec3& lo, const glm::vec3& hi) {
-        for (int c = 2; c < shadowMap.Count(); ++c)
-            if ((held & ~force & (1u << c)) && (!bounded || shadowMap.CasterReachesSlice(c, lo, hi, kernel, bias, false)))
-                force |= 1u << c;
+    li.reaches = [&](int c, const glm::vec3& lo, const glm::vec3& hi) {
+        return shadowMap.CasterReachesSlice(c, lo, hi, kernel, bias, false);
     };
-    for (const VisibleRenderable& v : m_Casting) {
-        const auto& r = *v.Renderable;
-        SunCaster& sc = m_SunCasters.emplace_back();
-        sc.model = r.ModelRef.get();
-        sc.materials = &r.Materials;
-        const auto* hide = world.Registry.try_get<OutfitHideTag>(v.Entity);
-        sc.visible = hide ? hide->Visible.get() : nullptr;
-        sc.xform = v.Xform;
-        sc.slot = v.Slot;
-        // #163 - Cast Shadows: Two Sided draws without back-face culling.
-        sc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
-        // As posed (Model::PosedBounds), the bounds the main pass culls with.
-        sc.bounded = v.Bounded;
-        sc.bounds = AABB{v.WorldMin, v.WorldMax};
-        if (v.Slot >= m_SunMotion.size()) m_SunMotion.resize((size_t)v.Slot + 1);
-        SunMotion& m = m_SunMotion[v.Slot];
-        const std::uint32_t id = static_cast<std::uint32_t>(v.Entity);
-        const std::uint64_t pose = sc.model->HasBones() ? sc.model->PoseVersion() : 0;
-        if (m.id != id || m.pose != pose || m.xform != sc.xform) {
-            if (held & ~force) {
-                reach(sc.bounded, v.WorldMin, v.WorldMax);
-                if (m.id == id) reach(m.bounded, m.lo, m.hi);
-            }
-            m = SunMotion{id, pose, sc.xform, v.WorldMin, v.WorldMax, sc.bounded};
-        }
-    }
+    li.log = m_SlotDirty && m_ChangeLogFrame == p.inFrame ? &m_ChangeLog : nullptr;
+    li.logPrevFrame = m_ChangeLogPrevFrame;
+    static const bool noDelta = Env::Flag(Env::Var::NoSunCasterDelta);
+    li.allowDelta = !noDelta && MultiDrawEnabled(); // the per-draw path sorts the list below: its order isn't m_Casting's
+    const unsigned force = FillSunCasters(li);
     p.renderMask = shadowMap.ForceRender(p.renderMask, force);
     // Consecutive draws of the same model share its VAO and (usually) its material, which the state cache then skips.
     // The multi-draw path doesn't need it: GroupCasters groups by hash in any order, its batches bind by page and state,
@@ -229,6 +208,139 @@ void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const g
     stage.emplace("Sun: Sort + Masks");
     if (!MultiDrawEnabled())
         std::sort(m_SunCasters.begin(), m_SunCasters.end(), [](const SunCaster& a, const SunCaster& b) { return a.model < b.model; });
+}
+
+namespace {
+ShadowFrame::SunListTotals g_SunListTotals;
+bool RealSkinned(const Model* m) { return m->HasBones(); }
+std::uint64_t RealPose(const Model* m) { return m->HasBones() ? m->PoseVersion() : 0; }
+} // namespace
+
+ShadowFrame::SunListTotals ShadowFrame::SunListTotalsSoFar() { return g_SunListTotals; }
+
+// One caster's fields: the full loop and the delta path both fill a caster only through here.
+void ShadowFrame::FillSunCaster(World& world, const VisibleRenderable& v, SunCaster& sc) {
+    const auto& r = *v.Renderable;
+    sc.model = r.ModelRef.get();
+    sc.materials = &r.Materials;
+    const auto* hide = world.Registry.try_get<OutfitHideTag>(v.Entity);
+    sc.visible = hide ? hide->Visible.get() : nullptr;
+    sc.xform = v.Xform;
+    sc.slot = v.Slot;
+    // #163 - Cast Shadows: Two Sided draws without back-face culling.
+    sc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
+    // As posed (Model::PosedBounds), the bounds the main pass culls with.
+    sc.bounded = v.Bounded;
+    sc.bounds = AABB{v.WorldMin, v.WorldMax};
+}
+
+// G4-d: the held far layers a caster that moved or re-posed since its last gather reaches (CasterReachesSlice, what
+// receivers read now - not the hold margin), where it was or is now: its old shadow must go as its new one lands. One
+// new to its slot (first seen, a world switch) counts as moved. Unbounded movers reach every cascade.
+void ShadowFrame::TrackSunMotion(const SunListIn& in, const VisibleRenderable& v, const SunCaster& sc, unsigned& force) {
+    auto reach = [&](bool bounded, const glm::vec3& lo, const glm::vec3& hi) {
+        for (int c = 2; c < in.cascadeCount; ++c)
+            if ((in.held & ~force & (1u << c)) && (!bounded || in.reaches(c, lo, hi))) force |= 1u << c;
+    };
+    if (v.Slot >= m_SunMotion.size()) m_SunMotion.resize((size_t)v.Slot + 1);
+    SunMotion& m = m_SunMotion[v.Slot];
+    const std::uint32_t id = static_cast<std::uint32_t>(v.Entity);
+    const std::uint64_t pose = (in.probe.Pose ? in.probe.Pose : RealPose)(sc.model);
+    if (m.id != id || m.pose != pose || m.xform != sc.xform) {
+        if (in.held & ~force) {
+            reach(sc.bounded, v.WorldMin, v.WorldMax);
+            if (m.id == id) reach(m.bounded, m.lo, m.hi);
+        }
+        m = SunMotion{id, pose, sc.xform, v.WorldMin, v.WorldMax, sc.bounded};
+    }
+}
+
+unsigned ShadowFrame::FillSunCasters(const SunListIn& in) {
+    PROFILE_SCOPE("Sun: Caster List");
+    World& world = *in.world;
+    bool (*skinned)(const Model*) = in.probe.Skinned ? in.probe.Skinned : RealSkinned;
+    unsigned force = 0;
+
+    // The outfit-hidden entities now (a handful): a tag added or removed is a full refill.
+    static std::vector<std::uint32_t> hidden;
+    hidden.clear();
+    for (const entt::entity e : world.Registry.view<OutfitHideTag>()) hidden.push_back(static_cast<std::uint32_t>(e));
+    std::sort(hidden.begin(), hidden.end());
+
+    // The delta path: only when every check holds; anything else is the full loop below.
+    bool delta = in.allowDelta && m_SunListValid && in.log && !in.log->All && m_SunListFrame == in.logPrevFrame &&
+                 in.frame > m_SunFullFrame && in.frame - m_SunFullFrame < kSunFullEvery &&
+                 m_SunSetEpoch == RenderSettingsEpoch() && hidden == m_SunHiddenSet && m_SunSet.size() == m_Casting.size() &&
+                 m_SunCasters.size() == m_Casting.size();
+    for (std::size_t i = 0; delta && i < m_Casting.size(); ++i) {
+        const VisibleRenderable& v = m_Casting[i];
+        delta = m_SunSet[i] == SunSetEntry{v.Slot, static_cast<std::uint32_t>(v.Entity), v.Renderable};
+    }
+    if (delta) {
+        // Refill and re-check what can differ: the casters the change log names (moved, re-bounded, posed), and every
+        // skinned and outfit-hidden one. The rest are as the list holds them, and the motion check would find them
+        // unchanged (same entity, pose 0, same transform).
+        auto redo = [&](std::uint32_t i) {
+            FillSunCaster(world, m_Casting[i], m_SunCasters[i]);
+            TrackSunMotion(in, m_Casting[i], m_SunCasters[i], force);
+        };
+        for (const GpuScene::SlotChange& c : in.log->Changes)
+            if (c.Slot < m_SunSlotIndex.size() && m_SunSlotIndex[c.Slot] >= 0) redo((std::uint32_t)m_SunSlotIndex[c.Slot]);
+        for (const std::uint32_t i : m_SunAlwaysCheck) redo(i);
+        m_SunListFrame = in.frame;
+        m_SunLastDelta = true;
+        ++g_SunListTotals.Delta;
+        return force;
+    }
+
+    // The full loop (the reference): every caster filled and checked.
+    m_SunCasters.clear();
+    for (const VisibleRenderable& v : m_Casting) {
+        SunCaster& sc = m_SunCasters.emplace_back();
+        FillSunCaster(world, v, sc);
+        TrackSunMotion(in, v, sc, force);
+    }
+    // What the next frames' delta path compares against and re-checks.
+    m_SunSet.resize(m_Casting.size());
+    m_SunAlwaysCheck.clear();
+    for (std::int32_t& s : m_SunSlotIndex) s = -1;
+    for (std::size_t i = 0; i < m_Casting.size(); ++i) {
+        const VisibleRenderable& v = m_Casting[i];
+        m_SunSet[i] = SunSetEntry{v.Slot, static_cast<std::uint32_t>(v.Entity), v.Renderable};
+        if (v.Slot >= m_SunSlotIndex.size()) m_SunSlotIndex.resize((std::size_t)v.Slot + 1, -1);
+        m_SunSlotIndex[v.Slot] = (std::int32_t)i;
+        if (skinned(m_SunCasters[i].model) || m_SunCasters[i].visible ||
+            std::binary_search(hidden.begin(), hidden.end(), static_cast<std::uint32_t>(v.Entity)))
+            m_SunAlwaysCheck.push_back((std::uint32_t)i);
+    }
+    m_SunHiddenSet = hidden;
+    m_SunSetEpoch = RenderSettingsEpoch();
+    m_SunListValid = true;
+    m_SunListFrame = m_SunFullFrame = in.frame;
+    m_SunLastDelta = false;
+    ++g_SunListTotals.Full;
+    return force;
+}
+
+bool ShadowFrame::SameSunListAs(const ShadowFrame& o) const {
+    if (m_SunCasters.size() != o.m_SunCasters.size()) return false;
+    for (std::size_t i = 0; i < m_SunCasters.size(); ++i) {
+        const SunCaster& a = m_SunCasters[i];
+        const SunCaster& b = o.m_SunCasters[i];
+        if (a.model != b.model || a.materials != b.materials || a.visible != b.visible || a.xform != b.xform ||
+            a.bounds.Min != b.bounds.Min || a.bounds.Max != b.bounds.Max || a.bounded != b.bounded || a.twoSided != b.twoSided ||
+            a.slot != b.slot)
+            return false;
+    }
+    const std::size_t n = std::max(m_SunMotion.size(), o.m_SunMotion.size());
+    for (std::size_t s = 0; s < n; ++s) {
+        const SunMotion none{};
+        const SunMotion& a = s < m_SunMotion.size() ? m_SunMotion[s] : none;
+        const SunMotion& b = s < o.m_SunMotion.size() ? o.m_SunMotion[s] : none;
+        if (a.id != b.id || a.pose != b.pose || a.xform != b.xform || a.lo != b.lo || a.hi != b.hi || a.bounded != b.bounded)
+            return false;
+    }
+    return true;
 }
 
 // The casters into the cascades: one layered pass (each caster once, instanced over its cascades), or one pass per
@@ -590,6 +702,8 @@ void ShadowFrame::RenderLocal(const ShadowFrameInputs& in) {
             PROFILE_SCOPE("Local Shadow Wake Sync");
             scene.Sync(world); // this frame's changes, posed slots included (SyncOnce skips a frame whose transforms held)
             scene.TakeChangeLog(world, m_ChangeLog);
+            m_ChangeLogPrevFrame = m_ChangeLogFrame; // the sun's caster list reads it too (FillSunCasters)
+            m_ChangeLogFrame = in.frame;
         }
         m_LodWake.Append(world, m_ChangeLog); // ApplyLod ran for this frame's local shadows (Application)
         LocalShadowQuiet::Lights lights;

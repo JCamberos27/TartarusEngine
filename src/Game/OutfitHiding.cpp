@@ -61,7 +61,7 @@ OutfitCoverage::Mesh Geometry(const World& world, entt::entity e) {
     return m;
 }
 
-// Where a piece is worn (Wardrobe::LayerOf); with no wardrobe, by the default layers of its slot.
+// Where a piece is worn (Wardrobe::LayerOf); with no wardrobe, every piece gets layer 5 and hides what is under it (Wardrobe defaults).
 Wardrobe::Layering PieceLayer(const Wardrobe::Wardrobe* w, const OutfitPieceComponent& p) {
     static const Wardrobe::Wardrobe none;
     return Wardrobe::LayerOf(w ? *w : none, p.Slot, p.Item, (p.Flags & OutfitPieceBodyPart) != 0);
