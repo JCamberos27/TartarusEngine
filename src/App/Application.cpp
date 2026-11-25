@@ -131,6 +131,7 @@
 #include "Log.h"
 #include "TextureCache.h"
 #include "ModelCache.h"
+#include "ProgramBinaryCache.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -882,6 +883,7 @@ private:
         }
         // The cooked model cache: entries unused for a month, crash leftovers, the size cap (Library/Models).
         ModelCache::Prune();
+        ProgramBinaryCache::Prune(); // the linked-program cache (Library/ShaderCache): same rules
         const ModelCache::Stats models = ModelCache::GetStats();
         if (models.Hits + models.Cooked > 0)
             Log::Info("Model cache: " + std::to_string(models.Hits) + " models read (" + std::to_string((int)models.HitMs) +
@@ -1627,6 +1629,8 @@ bool AppSession::Frame() {
     // Reap voices that have finished so repeated Play/Stop cycles don't accumulate
     // ma_sound objects and open file handles (#200).
     // #171 - game audio follows the editor's Pause / Error Pause (resumes mid-clip).
+    {
+    PROFILE_SCOPE("Audio Update");
     AudioEngine::SetPaused(playing && paused);
     if (playing && (playing && paused) != soundWasPaused)
         EditorSound::Play((playing && paused) ? EditorSound::Event::Pause : EditorSound::Event::Resume);
@@ -1647,6 +1651,7 @@ bool AppSession::Frame() {
     }
     EditorSound::Update(); // the notification sounds for what was logged this frame
     AudioEngine::Update();
+    }
 
     // Whether gameplay actually advances this frame: playing and not paused, or a
     // single-frame Step was requested while paused (#236). Everything else about play mode
@@ -2695,6 +2700,7 @@ bool AppSession::Frame() {
         MotionDemo::CaptureFrame(w, h);
     }
     lastFrameWorkMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frameWorkStart).count();
+    Profiler::EndGpuFrame(); // the frame's last GPU command before the present: the GPU half's end (G-0)
     {
         PROFILE_SCOPE("Swap Buffers");
         // A smoke-harness run (smoke, perf-bench, npc-test) in a window that never shows (KeepsWindowHidden):
@@ -2787,6 +2793,8 @@ bool AppSession::Frame() {
 
 // After the last frame: the test runs report, the editor saves its state, everything shuts down. The exit code.
 int AppSession::Finish() {
+    // How many programs this run read from Library/ShaderCache vs compiled (perf-bench / test logs read it).
+    if (const std::string programs = ProgramBinaryCache::Summary(); !programs.empty()) Log::Info(programs);
     if (opt.editorTestsMode) {
         // Like the smoke test: nothing from this run is saved back (the scene is in memory only).
         const int code = EditorUiTests::ExitCode();

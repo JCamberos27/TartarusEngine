@@ -719,9 +719,11 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         program.SetFloatArray("uPointShadowBias[0]",       fs.pointCountForView, in.pointShadowBias);
         program.SetFloatArray("uPointShadowNormalBias[0]", fs.pointCountForView, in.pointShadowNormalBias);
         // S2: the PCF radius in cube texels per slot (PointShadowMap::KernelTexels), 0 = the hard single compare.
+        // TARTARUS_EXP_POINT_PCF_OFF: every slot hard (the tent PCF's cost, A/B only).
+        static const bool pcfOff = Env::Flag(Env::Var::ExpPointPcfOff);
         std::array<float, PointShadowMap::kMaxPoints> kernel{};
         for (int i = 0; i < fs.pointCountForView && i < PointShadowMap::kMaxPoints; ++i)
-            kernel[i] = in.pointShadowSoftness ? PointShadowMap::KernelTexels(in.pointShadowSoftness[i]) : 0.0f;
+            kernel[i] = in.pointShadowSoftness && !pcfOff ? PointShadowMap::KernelTexels(in.pointShadowSoftness[i]) : 0.0f;
         program.SetFloatArray("uPointShadowSoftness[0]",   fs.pointCountForView, kernel.data());
         program.SetFloatArray("uPointShadowWeight[0]",     fs.pointCountForView, ShadowWeightsOrFull(in.pointShadowWeight));
     }
