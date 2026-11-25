@@ -23,6 +23,8 @@
     X(PerfCsv, "TARTARUS_PERF_CSV", Str, "--perf-bench: append each phase's hitch report to this CSV file")           \
     X(PerfMachine, "TARTARUS_PERF_MACHINE", Str, "--perf-bench: the machine label printed with every phase")          \
     X(AssetCost, "TARTARUS_ASSET_COST", Str, "--perf-bench: append each phase's per-asset cost table to this CSV")    \
+    X(TexturePruneAfterOpenMb, "TARTARUS_TEXTURE_PRUNE_AFTER_OPEN_MB", Int,                                           \
+      "smoke: prune Library/Textures to N MB once a scene opens; evicts every other entry (later scenes re-decode)")  \
     X(PerfTurn, "TARTARUS_PERF_TURN", Float, "--perf-bench: the player view turns this many degrees a second in Play") \
     X(MemReport, "TARTARUS_MEM_REPORT", Str, "smoke harness: write per-scene model memory snapshots to this folder")  \
     X(OpenAll, "TARTARUS_OPEN_ALL", Flag, "smoke shots: open every door/drawer on the first frame")                   \
@@ -88,7 +90,10 @@
     X(GlassFullCapture, "TARTARUS_GLASS_FULL_CAPTURE", Flag, "editor glass: capture the full window")                 \
     /* Kill switches */                                                                                                 \
     X(NoHiz, "TARTARUS_NO_HIZ", Flag, "disable Hi-Z occlusion culling")                                               \
+    X(NoGpuCull, "TARTARUS_NO_GPU_CULL", Flag, "disable GPU-driven culling (G-2): the CPU builds the draw lists")      \
+    X(GpuCullVerify, "TARTARUS_GPU_CULL_VERIFY", Flag, "debug: compare GPU culling with the CPU's every frame (slow)") \
     X(NoMdi, "TARTARUS_NO_MDI", Flag, "disable multi-draw indirect")                                                  \
+    X(NoGpuScene, "TARTARUS_NO_GPU_SCENE", Flag, "disable the persistent GPU scene buffers")                          \
     X(NoMeshArena, "TARTARUS_NO_MESH_ARENA", Flag, "disable the static mesh arena")                                   \
     X(NoModelCache, "TARTARUS_NO_MODEL_CACHE", Flag, "import models from their files (skip Library/Models)")          \
     X(NoTexturePrefetch, "TARTARUS_NO_TEXTURE_PREFETCH", Flag, "scene open: decode material textures one by one")    \

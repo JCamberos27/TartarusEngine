@@ -9,6 +9,8 @@
 #include "ClusterGrid.h"
 #include "Components.h"
 #include "Core/Env.h"
+#include "GpuScene.h"
+#include "GpuCull.h"
 #include "Core/FrameLoads.h"
 #include "Core/Paths.h"
 #include "Core/Profiler.h"
@@ -30,6 +32,7 @@
 #include "LightSwitch.h"
 #include "SamplingProfiler.h"
 #include "SceneRenderer.h"
+#include "Frustum.h"
 #include "SceneSerializer.h"
 #include "ShadowFrame.h"
 #include "ShadowLimits.h"
@@ -39,6 +42,7 @@
 #include "Window.h"
 #include "World.h"
 #include "Renderer/MemReport.h"
+#include "Renderer/TextureCache.h"
 
 #include <atomic>
 #include <chrono>
@@ -298,6 +302,26 @@ void SmokeHarness::LoadScene() {
                 (modelsAfter.HitMs - modelsBefore.HitMs) / 1000.0, modelsAfter.Cooked - modelsBefore.Cooked,
                 (modelsAfter.CookMs - modelsBefore.CookMs) / 1000.0);
     std::fflush(stdout);
+    // P-53 pin check: prune with the scene open, as an editor session's later prune would, under a deliberately
+    // small cap. The scene's own textures (loaded or stored by this process) must all survive. Material textures
+    // decode on the async loader, and an entry is pinned only once its load or store ran, so wait for it to drain.
+    if (const int pruneMb = Env::Int(Env::Var::TexturePruneAfterOpenMb, 0); pruneMb > 0 && m_SceneLoadOk) {
+        const double waitStart = glfwGetTime();
+        while (m_Ctx.assets.AsyncInFlight() > 0 && glfwGetTime() - waitStart < 300.0) {
+            m_Ctx.assets.PumpAsync(50.0);
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        const int inFlight = m_Ctx.assets.AsyncInFlight();
+        const TextureCache::PruneStats ps = TextureCache::Prune(nullptr, (uint64_t)pruneMb * 1024 * 1024);
+        const int missing = TextureCache::SessionEntriesMissing(); // the scene's entries no longer on disk
+        constexpr double MB = 1024.0 * 1024.0;
+        std::printf("[SmokeTest] Texture cache pin check: async in flight %d (waited %.1f s); %d entries %.0f MB, %d pinned "
+                    "%.0f MB, cap %.0f MB; evicted %d (%.0f MB); this scene's entries missing after: %d%s\n",
+                    inFlight, glfwGetTime() - waitStart, ps.Entries, ps.Bytes / MB, ps.Pinned, ps.PinnedBytes / MB,
+                    ps.CapBytes / MB, ps.Evicted, ps.EvictedBytes / MB, missing,
+                    (missing == 0 && inFlight == 0) ? "" : "  FAIL");
+        std::fflush(stdout);
+    }
     if (m_SceneLoadOk) {
         SmokeChecks::SceneLoaded(world, m_Ctx.assets, path, [this](const std::string& label) { MemSnapshot(label); });
         FirstPersonPresentation::PrefetchPlayAssets(world, m_Ctx.assets); // as the editor's scene open
@@ -336,6 +360,42 @@ void SmokeHarness::BeginFrame() {
         std::string preSkinWhy;
         if (Model::PreSkinSelfTest(preSkinWhy)) std::cout << "[SmokeTest]   pre-skin matches the CPU skinning" << std::endl;
         else Log::Error("[SmokeTest] pre-skin: " + preSkinWhy);
+    }
+
+    // smoke_min: the persistent GPU scene's buffers (G-1), read back slot by slot against the candidate list. Nothing
+    // draws from them yet; this is what keeps them right until something does, on CI's software GL too.
+    if (m_SceneActive && m_FramesRendered == 15 &&
+        path.find("smoke_min") != std::string::npos) {
+        std::string why;
+        if (GpuScene::Get().SelfTest(world, why)) std::cout << "[SmokeTest]   GPU scene matches the candidate list" << std::endl;
+        else Log::Error("[SmokeTest] GPU scene: " + why);
+    }
+
+    // smoke_min: GPU culling's stage A + ordered compaction (G-2) against GatherVisible: a camera query and one inside
+    // half the scene's box. Every slot the CPU keeps must come back, in its order (extras are allowed).
+    if (m_SceneActive && m_FramesRendered == 15 &&
+        path.find("smoke_min") != std::string::npos && GpuScene::Enabled()) {
+        const GpuCull::VerifyTotals before = GpuCull::Totals();
+        VisibilityQuery cam;
+        GpuCull::VerifyView(world, cam);
+        glm::vec3 lo, hi;
+        if (RenderableBounds(world, lo, hi)) {
+            const glm::vec3 mid = (lo + hi) * 0.5f;
+            const AABB half{lo, mid};
+            VisibilityQuery inside;
+            inside.ShadowCasters = true;
+            inside.Within = &half;
+            GpuCull::VerifyView(world, inside);
+        }
+        const GpuCull::VerifyTotals& after = GpuCull::Totals();
+        const std::uint64_t views = after.Views - before.Views, missing = after.Missing - before.Missing;
+        const std::uint64_t order = after.OrderBad - before.OrderBad;
+        if (views > 0 && missing == 0 && order == 0)
+            std::cout << "[SmokeTest]   GPU culling matches the CPU gather (" << (after.Expected - before.Expected)
+                      << " kept, " << (after.Extra - before.Extra) << " extra)" << std::endl;
+        else
+            Log::Error("[SmokeTest] GPU culling: " + std::to_string(views) + " views, " + std::to_string(missing) +
+                       " missing, " + std::to_string(order) + " out of order");
     }
 
     // A smoke_ssao_off* scene: rendered with SSAO off; no program may put two sampler types on one unit.

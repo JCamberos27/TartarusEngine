@@ -1,6 +1,6 @@
 #pragma once
 // SceneRenderer::RenderScene's stages (SceneViewPass.cpp). Internal to the renderer: SceneRenderer.cpp and
-// SceneViewPass.cpp include it, nothing else.
+// SceneViewPass.cpp include it (and GpuCull.cpp, for the candidate flag bits), nothing else.
 #include "SceneRenderer.h"
 #include "Frustum.h"
 #include "InstanceBatch.h"
