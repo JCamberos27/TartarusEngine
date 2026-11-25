@@ -20,6 +20,17 @@ public:
     // --perf-bench measures each scene twice: kPhaseFrames in edit mode, then as many in Play.
     static constexpr int kPhaseFrames = 600;
 
+    // TARTARUS_PERF_PACED (A-3): measure the frames as a player gets them, paced by VSync ("vsync") or a software FPS
+    // cap (a number), instead of --perf-bench's default of no VSync and no cap. Only a visible run (TARTARUS_SHOW=1)
+    // presents; a hidden one keeps its fence pacing and ignores this. The phase report then adds a "paced" line: the
+    // target interval, and the frames that came later than 1.5x it.
+    struct Pacing {
+        bool VSync = false;
+        int Fps = 0;
+        bool On() const { return VSync || Fps > 0; }
+    };
+    static const Pacing& Paced();
+
     // Warmup is the frames skipped at the start of each phase. TARTARUS_PERF_WARMUP=0 keeps them, to measure first-use hitches.
     PerfBench();
 

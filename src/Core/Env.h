@@ -21,6 +21,7 @@
     X(SeeThrough, "TARTARUS_SEE_THROUGH", Flag, "force the see-through (transparent) editor window")                  \
     X(PerfWarmup, "TARTARUS_PERF_WARMUP", Int, "--perf-bench warm-up frames before each phase")                       \
     X(PerfPlays, "TARTARUS_PERF_PLAYS", Int, "--perf-bench: Plays per scene (Stop + Play again, each measured)")      \
+    X(PerfPaced, "TARTARUS_PERF_PACED", Str, "--perf-bench: paced frames, 'vsync' or an FPS cap (with TARTARUS_SHOW=1)") \
     X(PerfCsv, "TARTARUS_PERF_CSV", Str, "--perf-bench: append each phase's hitch report to this CSV file")           \
     X(PerfMachine, "TARTARUS_PERF_MACHINE", Str, "--perf-bench: the machine label printed with every phase")          \
     X(AssetCost, "TARTARUS_ASSET_COST", Str, "--perf-bench: append each phase's per-asset cost table to this CSV")    \
