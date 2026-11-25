@@ -390,6 +390,11 @@ void VerifyView(World& world, const VisibilityQuery& q) {
     g_Totals.Missing += missing;
     g_Totals.Extra += extra;
     g_Totals.OrderBad += orderBad;
+    const int kind = q.Cull ? VerifyTotals::kFramed : (q.CellCull && q.CellCullCount > 0) ? VerifyTotals::kCellOnly
+                                                                                          : VerifyTotals::kUnculled;
+    ++g_Totals.KindViews[kind];
+    g_Totals.KindExpected[kind] += cpuKept;
+    g_Totals.KindExtra[kind] += extra;
     if (missing || orderBad)
         Log::Error("[GpuCull] verify: " + std::to_string(missing) + " missing, " + std::to_string(orderBad) +
                    " groups out of order (" + std::to_string(cpuKept) + " expected in " +
@@ -401,6 +406,12 @@ void VerifyView(World& world, const VisibilityQuery& q) {
                     (unsigned long long)g_Totals.Views, (unsigned long long)g_Totals.Expected,
                     (unsigned long long)g_Totals.Missing, (unsigned long long)g_Totals.Extra,
                     (unsigned long long)g_Totals.OrderBad, (unsigned long long)g_Totals.Skipped);
+        static const char* const kKindNames[VerifyTotals::kKinds] = {"framed", "cell-only", "unculled"};
+        for (int k = 0; k < VerifyTotals::kKinds; ++k)
+            if (g_Totals.KindViews[k])
+                std::printf("[GpuCull] verify   %s: %llu views, %llu expected, %llu extra\n", kKindNames[k],
+                            (unsigned long long)g_Totals.KindViews[k], (unsigned long long)g_Totals.KindExpected[k],
+                            (unsigned long long)g_Totals.KindExtra[k]);
         std::fflush(stdout);
     }
 }

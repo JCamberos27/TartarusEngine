@@ -91,6 +91,12 @@ struct VerifyTotals {
     std::uint64_t Extra = 0;    // batched slots the GPU kept and GatherVisible didn't (allowed)
     std::uint64_t OrderBad = 0; // groups whose survivors came out in another order than GatherVisible's
     std::uint64_t Skipped = 0;  // views not compared (no GPU scene buffers, or the program failed)
+    // Expected / Extra split by the query's own test: a per-object frustum (Cull), only the coarse cell test
+    // (CellCull: the per-object test comes later), or neither. Tells which query the GPU's extras come from.
+    enum Kind { kFramed, kCellOnly, kUnculled, kKinds };
+    std::uint64_t KindViews[kKinds] = {};
+    std::uint64_t KindExpected[kKinds] = {};
+    std::uint64_t KindExtra[kKinds] = {};
 };
 const VerifyTotals& Totals();
 
