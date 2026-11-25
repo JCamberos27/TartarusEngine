@@ -57,6 +57,16 @@ void Test_LaunchOptions_Modes() {
     CHECK(Parse({"--gi-tour", "tour.json", "--out", "o", "--gi-tour-view", "gi"}, o, err) && o.giTourView == "gi");
     CHECK(!Parse({"--gi-tour", "tour.json", "--out", "o", "--gi-tour-view", "direct"}, o, err) && err.find("full, gi or nogi") != std::string::npos);
     CHECK(!Parse({"--smoke-test", "--gi-tour-view", "gi"}, o, err));
+    // --bake-gi-doors (GI Phase 2 Part A): the doors as Play starts them by default, open / shut on request, bake-gi only.
+    CHECK(Parse({"--bake-gi", "s.json"}, o, err) && o.mode == LaunchMode::BakeGI && o.bakeGiDoors == "start");
+    CHECK(Parse({"--bake-gi", "s.json", "--bake-gi-doors", "open"}, o, err) && o.bakeGiDoors == "open");
+    CHECK(Parse({"--bake-gi", "s.json", "--bake-gi-doors", "shut"}, o, err) && o.bakeGiDoors == "shut");
+    CHECK(Parse({"--bake-gi", "s.json", "--bake-gi-doors", "hidden"}, o, err) && o.bakeGiDoors == "hidden");
+    CHECK(!Parse({"--bake-gi", "s.json", "--bake-gi-doors", "ajar"}, o, err) &&
+          err.find("start, open, shut or hidden") != std::string::npos);
+    CHECK(!Parse({"--bake-gi", "s.json", "--bake-gi-doors", "bogus"}, o, err) &&
+          err.find("start, open, shut or hidden") != std::string::npos);
+    CHECK(!Parse({"--smoke-test", "--bake-gi-doors", "open"}, o, err));
 }
 
 void Test_LaunchOptions_Lists() {

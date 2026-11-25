@@ -13,7 +13,7 @@ taskkill /F /IM TartarusEngine.exe >nul 2>&1
 rem A fresh clone has no build folder yet; configure it once (the first build is slow).
 if not exist "build\CMakeCache.txt" (
   echo First run: configuring the build - this can take a couple of minutes...
-  cmake -S . -B build -A x64
+  cmake -S . -B build -G "Visual Studio 18 2026" -A x64
   if errorlevel 1 (
     echo.
     echo *** CMAKE CONFIGURE FAILED - see the error above. ***
@@ -24,7 +24,7 @@ if not exist "build\CMakeCache.txt" (
 
 echo.
 echo Building (Release)...
-cmake --build build --config Release --parallel
+cmake --build build --config Release --parallel -- /nodeReuse:false
 if errorlevel 1 (
   echo.
   echo *** BUILD FAILED - see the errors above. ***

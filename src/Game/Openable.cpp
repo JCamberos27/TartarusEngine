@@ -9,6 +9,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <sstream>
 
@@ -61,6 +62,11 @@ float ParentDepth(World& world, entt::entity e) {
     return (r->ModelRef->BoundsMax().z - r->ModelRef->BoundsMin().z) * (t ? std::abs(t->Scale.z) : 1.0f);
 }
 
+// Where Play starts it: shut, open, or (Start Ajar) part of the way, with its full swing still Amount.
+float StartProgress(const OpenableComponent& o) {
+    return o.StartOpen ? (o.StartAjar > 0.0f ? Uneased(std::max(o.StartAjar, 0.01f)) : 1.0f) : 0.0f;
+}
+
 void Apply(OpenableComponent& o, TransformComponent& t) {
     glm::vec3 pos;
     glm::quat rot;
@@ -84,7 +90,7 @@ void Start(World& world, entt::entity e, OpenableComponent& o, TransformComponen
     }
     o.ResolvedAmount = o.Amount > 0.0f ? o.Amount : DefaultAmount(o.Motion, m.BoundsMin(), m.BoundsMax(), ParentDepth(world, e));
     // Ajar: it starts part of the way, but its full swing is still Amount, so one Interact opens it the rest of the way.
-    o.Progress = o.Target = o.StartOpen ? (o.StartAjar > 0.0f ? Uneased(std::max(o.StartAjar, 0.01f)) : 1.0f) : 0.0f;
+    o.Progress = o.Target = StartProgress(o);
     if (o.Progress > 0.0f) Apply(o, t); // posed where it starts: a Start Open door is open when Play begins, not only flagged
 }
 
@@ -292,6 +298,121 @@ void SetAll(World& world, float t) {
         Apply(o, view.get<TransformComponent>(e));
     }
 }
+
+std::vector<Saved> Save(World& world) {
+    std::vector<Saved> out;
+    auto view = world.Registry.view<OpenableComponent, TransformComponent>();
+    for (auto e : view) {
+        const auto& o = view.get<OpenableComponent>(e);
+        const auto& t = view.get<TransformComponent>(e);
+        out.push_back({e, t.Position, t.Rotation, o.Started, o.Progress, o.Target, world.Registry.all_of<DeactivatedTag>(e)});
+    }
+    return out;
+}
+
+void Restore(World& world, const std::vector<Saved>& saved) {
+    for (const Saved& s : saved) {
+        if (!world.Registry.valid(s.Entity)) continue;
+        auto* o = world.Registry.try_get<OpenableComponent>(s.Entity);
+        auto* t = world.Registry.try_get<TransformComponent>(s.Entity);
+        if (!o || !t) continue;
+        t->Position = s.Position;
+        t->Rotation = s.Rotation;
+        o->Started = s.Started;
+        o->Progress = s.Progress;
+        o->Target = s.Target;
+        const bool tagged = world.Registry.all_of<DeactivatedTag>(s.Entity);
+        if (s.Deactivated && !tagged) world.Registry.emplace<DeactivatedTag>(s.Entity);
+        else if (!s.Deactivated && tagged) world.Registry.remove<DeactivatedTag>(s.Entity);
+    }
+}
+
+Posed PoseStart(World& world) {
+    Posed out;
+    // The view Play's Update uses: an inactive openable isn't started by Play, so it isn't posed here either.
+    auto view = world.Registry.view<OpenableComponent, TransformComponent, RenderableComponent>(entt::exclude<InactiveTag>);
+    for (auto e : view) {
+        auto& o = view.get<OpenableComponent>(e);
+        const auto& r = view.get<RenderableComponent>(e);
+        if (!r.ModelRef) continue;
+        if (!o.Started) {
+            Start(world, e, o, view.get<TransformComponent>(e), *r.ModelRef); // poses it only when it starts open
+        } else {
+            // Already started (an earlier Play or SetAll): back to its start pose, as a fresh Play would begin it.
+            o.Progress = o.Target = StartProgress(o);
+            Apply(o, view.get<TransformComponent>(e));
+        }
+        if (o.Progress > 0.0f) {
+            const auto* nc = world.Registry.try_get<NameComponent>(e);
+            out.Open.push_back(nc ? nc->Name : std::string("(unnamed)"));
+        } else {
+            ++out.Shut;
+        }
+    }
+    return out;
+}
+
+Hidden HideDoorLeaves(World& world, const std::function<bool(const glm::vec3&)>& indoors) {
+    Hidden out;
+    world.RebuildWorldTransformCache(); // the leaves measured where they stand now
+    std::vector<entt::entity> hide;
+    auto view = world.Registry.view<OpenableComponent, TransformComponent>();
+    for (auto e : view) {
+        const auto& o = view.get<OpenableComponent>(e);
+        const auto* r = world.Registry.try_get<RenderableComponent>(e);
+        using M = OpenableComponent::MotionKind;
+        const M m = (M)o.Motion;
+        const bool leafMotion = m == M::HingeLeft || m == M::HingeRight || m == M::SlideLeft || m == M::SlideRight;
+        if (!leafMotion || !r || !r->ModelRef || world.Registry.any_of<InactiveTag, DeactivatedTag>(e)) {
+            ++out.Other;
+            continue;
+        }
+        // The model's box in the world: door-sized?
+        const glm::mat4 x = world.GetCachedWorldTransform(e);
+        const glm::vec3 lo = r->ModelRef->BoundsMin(), hi = r->ModelRef->BoundsMax();
+        glm::vec3 wlo(1e30f), whi(-1e30f);
+        for (int c = 0; c < 8; ++c) {
+            const glm::vec3 q((c & 1) ? hi.x : lo.x, (c & 2) ? hi.y : lo.y, (c & 4) ? hi.z : lo.z);
+            const glm::vec3 w = glm::vec3(x * glm::vec4(q, 1.0f));
+            wlo = glm::min(wlo, w);
+            whi = glm::max(whi, w);
+        }
+        const glm::vec3 size = whi - wlo;
+        if (size.y < kDoorMinHeight || std::max(size.x, size.z) < kDoorMinWidth) {
+            ++out.Other;
+            continue;
+        }
+        const auto* nc = world.Registry.try_get<NameComponent>(e);
+        const std::string name = nc ? nc->Name : std::string("(unnamed)");
+        // Exterior: a side of the leaf is outside every baked room. Its sides are along its thinnest axis in the world
+        // (local +Z for the usual model, front facing +Z), flattened: a door's two rooms are side by side.
+        const glm::vec3 mid = glm::vec3(x * glm::vec4((lo + hi) * 0.5f, 1.0f));
+        int thin = 2;
+        float thinLen = 1e30f;
+        for (int i = 0; i < 3; ++i) {
+            const float len = glm::length(glm::vec3(x[i])) * (hi[i] - lo[i]);
+            if (len < thinLen) { thinLen = len; thin = i; }
+        }
+        glm::vec3 front = glm::vec3(x[thin]);
+        front.y = 0.0f;
+        if (glm::length(front) < 1e-6f) front = glm::vec3(x[2].x, 0.0f, x[2].z);
+        front = glm::length(front) > 1e-6f ? glm::normalize(front) : glm::vec3(0.0f, 0.0f, 1.0f);
+        if (!indoors || !indoors(mid + front * kDoorSideProbe) || !indoors(mid - front * kDoorSideProbe)) {
+            out.Exterior.push_back(name);
+            continue;
+        }
+        hide.push_back(e);
+        out.Leaves.push_back(name);
+    }
+    for (entt::entity e : hide) world.Registry.emplace<DeactivatedTag>(e); // after the walk: the view stays untouched
+    return out;
+}
+
+namespace {
+std::atomic<bool> g_BakePosed{false};
+}
+void SetBakePosed(bool posed) { g_BakePosed.store(posed); }
+bool BakePosed() { return g_BakePosed.load(); }
 
 bool Open(World& world, entt::entity e) {
     auto* o = world.Registry.valid(e) ? world.Registry.try_get<OpenableComponent>(e) : nullptr;

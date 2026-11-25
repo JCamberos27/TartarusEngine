@@ -67,6 +67,13 @@ bool Parse(const std::string& text, Tour& out, std::string& error, std::vector<s
             return false;
         }
     }
+    if (doc.contains("stillFrames")) {
+        if (!doc["stillFrames"].is_number_integer() || doc["stillFrames"].get<int>() < 0 || doc["stillFrames"].get<int>() > 3600) {
+            error = "'stillFrames' must be an integer from 0 to 3600";
+            return false;
+        }
+        out.StillFrames = doc["stillFrames"].get<int>();
+    }
     if (doc.value("snapToFloor", false) && warnings)
         warnings->push_back("snapToFloor is ignored: the camera sits at feet.y + eyeHeight as given");
 
@@ -162,6 +169,7 @@ std::vector<Frame> BuildTimeline(const Tour& tour, const TimelineOptions& opt) {
         }
     };
 
+    const int stillFrames = tour.StillFrames >= 0 ? tour.StillFrames : opt.StillFrames;
     for (int i = 0; i < (int)tour.Waypoints.size(); ++i) {
         const Waypoint& w = tour.Waypoints[i];
         if (i > 0 && !w.Cut) {
@@ -173,7 +181,7 @@ std::vector<Frame> BuildTimeline(const Tour& tour, const TimelineOptions& opt) {
         hold(Step::Settle, w, i, opt.ViewSettle, "settle:" + w.Id);
         hold(Step::ShotGi, w, i, 1, "shot:" + w.Id);
         hold(Step::Settle, w, i, opt.ViewSettle, "settle:" + w.Id);
-        hold(Step::Still, w, i, opt.StillFrames, "still:" + w.Id);
+        hold(Step::Still, w, i, stillFrames, "still:" + w.Id);
     }
     for (const Route& r : tour.Routes) {
         const float speed = r.Speed > 0.0f ? r.Speed : tour.WalkSpeed;

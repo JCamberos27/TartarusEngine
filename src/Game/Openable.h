@@ -1,7 +1,9 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <functional>
 #include <string>
+#include <vector>
 #include <entt/entt.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -51,5 +53,49 @@ bool Open(World& world, entt::entity e);
 // Every openable straight to open (t = 1) or shut (0), outside Play too: --smoke-shots with TARTARUS_OPEN_ALL=1 shows
 // them all open, to check each hinge.
 void SetAll(World& world, float t);
+
+// Every openable's transform and state as they are now, to put back exactly with Restore (--bake-gi poses the doors for
+// its captures, then leaves the scene in memory as it was loaded).
+struct Saved {
+    entt::entity Entity = entt::null;
+    glm::vec3 Position{0.0f};
+    glm::quat Rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    bool Started = false;
+    float Progress = 0.0f, Target = 0.0f;
+    bool Deactivated = false; // its DeactivatedTag (HideDoorLeaves adds one; Restore puts it back exactly as saved)
+};
+std::vector<Saved> Save(World& world);
+void Restore(World& world, const std::vector<Saved>& saved);
+
+// Every openable posed as Play starts it, outside Play: Start Open (and Start Ajar) ones open that far, the rest shut.
+// Like Play, inactive openables and those whose model isn't loaded are skipped (left as they are).
+struct Posed {
+    std::vector<std::string> Open; // the names of the ones left open (or ajar), in entity order
+    int Shut = 0;                  // the ones posed shut
+};
+Posed PoseStart(World& world);
+
+// The door leaves hidden for --bake-gi-doors hidden: a probe in the doorway then sees the open doorway instead of the
+// back of a shut leaf (the dark strip on the threshold). A leaf is a hinged or sliding openable (Hinge Left/Right,
+// Slide Left/Right; never a lid, flap or drawer) with a loaded model whose world box is door-sized (kDoorMinHeight
+// high, kDoorMinWidth across), not inactive. `indoors(p)` says whether a world point is inside a baked room: a door with
+// either side (kDoorSideProbe in front of and behind the leaf's middle) outside every room is an exterior door and
+// keeps its leaf, so the sky light through it stays shut out. Hiding adds DeactivatedTag (its handles go with it);
+// the caller runs World::SyncActiveInHierarchy, and must Save first so Restore puts every tag back. Every other
+// openable is left as it is (shut as authored).
+constexpr float kDoorMinHeight = 1.80f;
+constexpr float kDoorMinWidth = 0.60f;
+constexpr float kDoorSideProbe = 0.5f;
+struct Hidden {
+    std::vector<std::string> Leaves;   // the names of the leaves hidden, in entity order
+    std::vector<std::string> Exterior; // door-sized leaves kept because a side is outdoors
+    int Other = 0;                     // every other openable, left shut as authored
+};
+Hidden HideDoorLeaves(World& world, const std::function<bool(const glm::vec3&)>& indoors);
+
+// --bake-gi has the scene's openables posed for its captures (GIBaker sets it from PoseDoors until RestoreDoors). The
+// editor checks it: no undo step, no recovery snapshot and no crash save is ever made of a posed scene.
+void SetBakePosed(bool posed);
+bool BakePosed();
 
 } // namespace Openable

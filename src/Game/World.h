@@ -1,5 +1,6 @@
 #pragma once
 #include "Log.h" // LogContext
+#include <cstdint>
 #include <string>
 #include <memory>
 #include <unordered_map>
@@ -33,6 +34,9 @@ public:
     World();
 
     entt::registry Registry;
+    // Bumped each time a whole scene replaces the registry (ApplySceneJson with clearFirst): per-entity caches kept
+    // outside the registry (LightGather's shadow slots) drop what they hold when it changes - entity ids are reused.
+    std::uint64_t SceneLoads = 0;
 
     // The scene's render/post settings (sky, exposure, AA, SSAO, bloom, grading, DoF, wetness, fog,
     // volumetrics, shadows): SceneRenderSettings.h.
@@ -302,7 +306,7 @@ private:
     std::vector<entt::entity> m_LodStack;
     std::vector<const Model*> m_LodModels; // ApplyLod: a LOD 0's models, for ImpostorLibrary::Match
     struct LodMemo { std::uint64_t Stamp = 0; glm::vec3 ViewPos{0.0f}; float YScale = 0.0f; bool Ortho = false;
-                     std::uint64_t Inactive = 0; int Evaluated = 0; };
+                     std::uint64_t Inactive = 0; int Evaluated = 0; bool Smooth = false; }; // Smooth: LodSmooth then
     LodMemo m_LodMemo; // the last ApplyLod's view, so the same view again within a frame is free
     std::vector<entt::entity> m_LodCulledOwner; // entity slot -> the entity tagged there (IsLodCulled)
     void SetLodCulled(entt::entity e, bool culled);

@@ -18,7 +18,7 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
-    "_Metallic": 1.0,
+    "_Metallic": 0.0,
     "_MetallicMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Mirror_MaskMap_Metallic.png",
     "_MetallicRoughnessMap": "",
     "_NormalMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Mirror_Normal.tga",

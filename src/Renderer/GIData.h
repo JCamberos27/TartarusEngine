@@ -55,6 +55,9 @@ struct Box {
     // 1 well inside, falling linearly to 0 over `fade` metres at the faces (LightBoxFade in the shader); fade <= 0 is a
     // hard edge.
     float Fade(const glm::vec3& p, float fade) const;
+    // The same with a fade per face: `lo` for the -x/-y/-z faces, `hi` for +x/+y/+z (box-local axes; the face a point
+    // is nearest on its side of the centre). Equal values everywhere = Fade(p, that value).
+    float FadeFaces(const glm::vec3& p, const glm::vec3& lo, const glm::vec3& hi) const;
 };
 
 // Probes along each axis for a box of half-extents `half` at `spacing`: one at each face and about `spacing` apart,
@@ -63,6 +66,21 @@ glm::ivec3 GridDims(const glm::vec3& half, float spacing);
 // Probe (i, j, k)'s position in box-local space.
 glm::vec3 ProbeLocal(const glm::ivec3& ijk, const glm::ivec3& dims, const glm::vec3& half);
 inline int ProbeIndex(const glm::ivec3& ijk, const glm::ivec3& dims) { return ijk.x + dims.x * (ijk.y + dims.y * ijk.z); }
+// The probes on a box face sit in the wall, floor or ceiling slab (the boxes stop a few cm inside them), so a capture there
+// sees mostly back faces. FaceProbeNudge() is the box-local offset the baker captures a FACE probe at instead: inward along
+// each axis it lies on a face of (an axis with one probe has no face), by `nudge` metres but at most 0.45 of that axis' cell,
+// so the capture is in open air just inside the surface (Jacob #5: the ceiling ring around a fixture). Interior probes: zero.
+glm::vec3 FaceProbeNudge(const glm::ivec3& ijk, const glm::ivec3& dims, const glm::vec3& half, float nudge);
+// A solid the nudge must not enter: the world box of a visible mesh (the baker collects them). A face probe is nudged only
+// when its segment to the nudged point enters no box that does not already hold the face point: a ceiling or wall slab
+// (the face point is inside it, the nudge leaves it) still nudges; a probe a few cm in front of a wardrobe stays put, as
+// before the nudge existed (the nudge would have put it behind the closet doors, where it sees their backs).
+struct SolidBox { glm::vec3 Min, Max; };
+bool NudgeBlocked(const glm::vec3& from, const glm::vec3& to, const std::vector<SolidBox>& solids);
+// Every probe's capture offset for one volume: FaceProbeNudge(.., nudge), or zero where NudgeBlocked says geometry is in
+// the way. `solids` may hold the whole scene's boxes (only those near the volume are tested). nudged / blocked: counts.
+std::vector<glm::vec3> PlanFaceNudges(const Box& bounds, const glm::ivec3& dims, float nudge, const std::vector<SolidBox>& solids,
+                                      int* nudged = nullptr, int* blocked = nullptr);
 
 // One baked layer of one volume.
 struct Layer {

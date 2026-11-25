@@ -16,6 +16,18 @@ public:
     // (World::MaxPointShadows) picks how many cubes are actually allocated and rendered.
     static constexpr int kMaxPoints = ShadowLimits::kMaxPoints;
 
+    // Point PCF (fix-3 S2): the filter radius in cube texels for a light's Shadow Softness, which is what the shader's
+    // uPointShadowSoftness[] carries. Softness <= 0 (or NaN) returns 0 = the old single hard compare. Otherwise
+    // kKernelPerSoftness x softness, clamped to [kKernelMinTexels, kKernelMaxTexels]: x3 puts a point light's edge at
+    // the same Softness about as wide in the world as a ceiling spot's (cube texels are ~3.5x smaller than an
+    // 80-degree spot's 2048 map: 0.49 vs 1.7 cm at 2.5 m), e.g. Softness 1.3 -> ~3.8 cm vs 4.0 cm. Capped at 2.5 texels
+    // (Softness ~0.83, ~1.2 cm radius at 2.5 m): the tent PCF's taps must stay <= 1 texel apart to overlap (each is a
+    // 1-texel bilinear ramp), and its 4x4 grid reaches 1.5 x spacing + 1 = 2.5 texels at that limit (Argus's review).
+    static constexpr float kKernelPerSoftness = 3.0f;
+    static constexpr float kKernelMinTexels = 0.5f;
+    static constexpr float kKernelMaxTexels = 2.5f;
+    static float KernelTexels(float softness);
+
     PointShadowMap() = default;
     PointShadowMap(const PointShadowMap&) = delete;
     PointShadowMap& operator=(const PointShadowMap&) = delete;

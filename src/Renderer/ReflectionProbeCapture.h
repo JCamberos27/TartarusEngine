@@ -46,6 +46,8 @@ public:
     // Only the capturing probes whose volume holds `p` (else the nearest one): a light switched in one room retakes
     // that room's reflections, not the whole house's.
     static void RequestRecaptureAt(const glm::vec3& p);
+    // Whether a whole-house recapture is waiting, and clears it (unit tests: LightSwitch start retakes every probe).
+    static bool TakeRecaptureRequest();
 
     void Release();
 

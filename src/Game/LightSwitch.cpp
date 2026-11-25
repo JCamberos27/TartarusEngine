@@ -1,5 +1,6 @@
 #include "LightSwitch.h"
 #include "Components.h"
+#include "Log.h"
 #include "MaterialAsset.h"
 #include "Model.h"
 #include "Openable.h"
@@ -92,8 +93,9 @@ void PoseRocker(World& world, LightSwitchComponent& s) {
     t->Rotation = s.RockerBase * glm::angleAxis(glm::radians(s.On ? -s.RockerAngle : s.RockerAngle), glm::vec3(0, 0, 1));
 }
 
-// Starts whatever hasn't started; a circuit's first-found switch decides the state it starts in.
-void StartAll(World& world) {
+// Starts whatever hasn't started; a circuit's first-found switch decides the state it starts in. True when it started
+// something (the circuits took their start state this call).
+bool StartAll(World& world) {
     {   // the usual frame: everything started - nothing to build
         bool pending = false;
         for (auto e : world.Registry.view<LightSwitchComponent>())
@@ -101,9 +103,11 @@ void StartAll(World& world) {
         if (!pending)
             for (auto e : world.Registry.view<LightCircuitComponent>())
                 if (!world.Registry.get<LightCircuitComponent>(e).Started) { pending = true; break; }
-        if (!pending) return;
+        if (!pending) return false;
     }
     std::unordered_map<std::string, bool> start;
+    std::unordered_map<std::string, entt::entity> decider; // each circuit's first-found switch
+    std::vector<std::string> disagree;
     bool any = false;
     {
         auto v = world.Registry.view<LightSwitchComponent>();
@@ -111,9 +115,23 @@ void StartAll(World& world) {
             auto& s = v.get<LightSwitchComponent>(e);
             if (s.Started) continue;
             StartSwitch(world, e, s);
-            start.emplace(s.Circuit, s.StartOn);
+            const auto [it, fresh] = start.emplace(s.Circuit, s.StartOn);
+            if (fresh) decider.emplace(s.Circuit, e);
+            else if (it->second != s.StartOn && std::find(disagree.begin(), disagree.end(), s.Circuit) == disagree.end())
+                disagree.push_back(s.Circuit);
             any = true;
         }
+    }
+    // Two switches on one circuit that disagree on Start On: only the first found counts, so the scene doesn't start
+    // the way one of them says. Say so once per Play start (multi-way switches must agree).
+    for (const std::string& circuit : disagree) {
+        const entt::entity first = decider.at(circuit);
+        const auto* n = world.Registry.try_get<NameComponent>(first);
+        const auto* order = world.Registry.try_get<OrderComponent>(first);
+        Log::Warn("Light Switch: the switches on circuit '" + circuit + "' disagree on Start On; it starts " +
+                      (start.at(circuit) ? "on" : "off") + ", as '" + (n ? n->Name : std::string("?")) +
+                      "' says. Give every switch on it the same Start On.",
+                  order ? LogContext::Entity(order->Value) : LogContext{});
     }
     {
         auto v = world.Registry.view<LightCircuitComponent>();
@@ -131,7 +149,7 @@ void StartAll(World& world) {
             any = true;
         }
     }
-    if (!any) return;
+    if (!any) return false;
     for (const auto& [name, on] : start) Set(world, name, on);
     // Every switch takes its circuit's state (several switches on one circuit flip together).
     auto v = world.Registry.view<LightSwitchComponent>();
@@ -140,6 +158,7 @@ void StartAll(World& world) {
         s.On = IsOn(world, s.Circuit);
         PoseRocker(world, s);
     }
+    return true;
 }
 
 } // namespace
@@ -186,6 +205,20 @@ bool IsOn(World& world, const std::string& circuit) {
     return false;
 }
 
+std::vector<std::string> StartOnConflicts(World& world) {
+    std::unordered_map<std::string, bool> first;
+    std::vector<std::string> out;
+    auto sv = world.Registry.view<LightSwitchComponent>();
+    for (auto e : sv) {
+        const auto& s = sv.get<LightSwitchComponent>(e);
+        const auto [it, fresh] = first.emplace(s.Circuit, s.StartOn);
+        if (!fresh && it->second != s.StartOn && std::find(out.begin(), out.end(), s.Circuit) == out.end())
+            out.push_back(s.Circuit);
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
 entt::entity Pick(World& world, const glm::vec3& eye, const glm::vec3& forward, float* outDist) {
     auto view = world.Registry.view<LightSwitchComponent, RenderableComponent>(entt::exclude<InactiveTag>);
     const glm::vec3 dir = glm::normalize(forward);
@@ -207,7 +240,9 @@ entt::entity Pick(World& world, const glm::vec3& eye, const glm::vec3& forward, 
 }
 
 void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool interact) {
-    StartAll(world);
+    // The circuits just took their Start On state: every room capture so far saw the authored lighting (fittings unlit,
+    // the mirrors' cubes dark), so every probe is retaken now, not only the ones near a switch that gets flipped later.
+    if (StartAll(world)) ReflectionProbeCapture::RequestRecapture();
     if (!interact) return;
     const entt::entity e = Pick(world, eye, forward);
     if (e == entt::null) return;

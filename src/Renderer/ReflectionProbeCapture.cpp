@@ -55,6 +55,7 @@ void ReflectionProbeCapture::Release() {
 }
 
 void ReflectionProbeCapture::RequestRecapture() { s_RecaptureAll = true; }
+bool ReflectionProbeCapture::TakeRecaptureRequest() { return s_RecaptureAll.exchange(false); }
 void ReflectionProbeCapture::RequestRecaptureAt(const glm::vec3& p) {
     if (s_RecaptureAt.size() < 64) s_RecaptureAt.push_back(p);
 }

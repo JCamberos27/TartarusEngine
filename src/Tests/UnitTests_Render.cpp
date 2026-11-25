@@ -3,6 +3,7 @@
 #include "../Renderer/SceneRenderer.h"
 #include "../Renderer/Model.h"
 #include "../Renderer/InstanceBatch.h"
+#include "../Renderer/OpaqueBatchKey.h"
 #include "../Renderer/UploadStaging.h"
 #include "../Renderer/MeshArena.h"
 #include "../Renderer/HiZCuller.h"
@@ -13,6 +14,9 @@
 #include "../Renderer/AssetCost.h"
 #include "../Renderer/SceneViewPass.h"
 #include "../Renderer/SkyAtmosphere.h"
+#include "../Renderer/Material.h"
+#include "../Renderer/RenderFrameContext.h"
+#include "../Core/TimeService.h"
 #include "../Renderer/Camera.h"
 #include "../Game/SkySettings.h"
 #include "../Core/AtomicFile.h"
@@ -29,6 +33,7 @@
 #include "../Renderer/ReflectionProbeCapture.h"
 #include "../Renderer/GIData.h"
 #include "../Renderer/GIVolumes.h"
+#include "../Renderer/ShadowSlotScoring.h"
 #include "../Game/LightSwitch.h"
 #include "../Game/SceneSerializer.h"
 #include "../Game/TimeOfDay.h"
@@ -57,6 +62,26 @@ void SmallObjectCull() {
     CHECK(!TooSmallOnScreen(lo, hi, glm::vec3(0, 0, 0.05f), proj, 0.5f)); // the eye inside it: never culled
     // A narrower lens (larger proj[1][1]) magnifies: kept again at the same distance.
     CHECK(!TooSmallOnScreen(lo, hi, glm::vec3(0, 0, 30), 4.0f, 0.004f));
+}
+
+// LightBuffer::BoxWeight (CPU mirror of LightBuffer.glsl LightBoxFade): uniform fade = the old single-fade result;
+// a per-face fade only changes its own face (Bounds Fade - / Bounds Fade +).
+void LightBoundsFaceFade() {
+    const glm::vec3 half(2.0f, 1.0f, 3.0f), f(0.05f);
+    CHECK(LightBuffer::BoxWeight(glm::vec3(0.0f), half, f, f) == 1.0f);
+    CHECK(LightBuffer::BoxWeight(glm::vec3(2.0f, 0, 0), half, f, f) == 0.0f);             // on the +x face
+    CHECK(std::abs(LightBuffer::BoxWeight(glm::vec3(-1.975f, 0, 0), half, f, f) - 0.5f) < 1e-3f); // half way in
+    // +x face widened to 1 m: 0.5 m inside it is half lit; the -x face keeps its 5 cm fade.
+    const glm::vec3 fp(1.0f, 0.05f, 0.05f);
+    CHECK(std::abs(LightBuffer::BoxWeight(glm::vec3(1.5f, 0, 0), half, f, fp) - 0.5f) < 1e-3f);
+    CHECK(LightBuffer::BoxWeight(glm::vec3(-1.5f, 0, 0), half, f, fp) == 1.0f);
+    CHECK(LightBuffer::BoxWeight(glm::vec3(0, 0, 2.99f), half, f, fp) < 0.21f);            // z faces untouched
+    // BoundLast: < 0 = the light's Bounds Fade, else the face's own (>= 1 mm).
+    LightBuffer lb;
+    lb.AddPoint(glm::vec3(0.0f), glm::vec3(1.0f), 1.0f, 5.0f);
+    lb.BoundLast(glm::mat3(1.0f), glm::vec3(0.0f), half, 0.05f, glm::vec3(-1.0f, 0.3f, -1.0f), glm::vec3(0.0f, -1.0f, -1.0f));
+    CHECK(lb.FaceFadeOfLast(false) == glm::vec3(0.05f, 0.3f, 0.05f));
+    CHECK(lb.FaceFadeOfLast(true) == glm::vec3(1e-3f, 0.05f, 0.05f));
 }
 
 // LightBuffer::DistanceFade: full strength near and inside the range sphere, a smooth monotonic fall by projected
@@ -437,6 +462,17 @@ void InstanceImportId() {
 // The froxel jitter's blue noise: every one of the 1024 ranks exactly once, and an even scatter -
 // the first eighth of the ranks never has two points as neighbours (a white-noise pick of 128 out
 // of 1024 cells almost surely would).
+void VolumetricInscatterCap() {
+    CHECK(VolumetricFog::CapInscatter(0.3f, 2.0f) == 0.3f && VolumetricFog::CapInscatter(1.0f, 2.0f) == 1.0f); // below the knee: untouched
+    CHECK(VolumetricFog::CapInscatter(50.0f, 0.0f) == 50.0f);                                                   // 0 = off
+    float prev = 1.0f;
+    for (float l = 1.0f; l < 1000.0f; l *= 1.3f) {
+        const float c = VolumetricFog::CapInscatter(l, 2.0f);
+        CHECK(c >= prev - 1e-6f && c <= 2.0f && c <= l + 1e-6f); // monotone, bounded by the cap, never brighter than the input
+        prev = c;
+    }
+    CHECK(std::fabs(VolumetricFog::CapInscatter(1.0001f, 2.0f) - VolumetricFog::CapInscatter(0.9999f, 2.0f)) < 1e-3f); // continuous at the knee
+}
 void VolumetricBlueNoise() {
     unsigned short ranks[32 * 32];
     VolumetricFog::BuildBlueNoise(ranks);
@@ -889,7 +925,21 @@ void ShaderConstantsMatch() {
     for (const std::string* text : {&shading, &fog}) {
         CHECK(has(*text, "uniform mat4 uSpotShadowVP[" + n(SpotShadowMap::kMaxSpots) + "];"));
         CHECK(has(*text, "uniform float uPointShadowFar[" + n(PointShadowMap::kMaxPoints) + "];"));
+        CHECK(has(*text, "uniform float uPointShadowWeight[" + n(PointShadowMap::kMaxPoints) + "];"));
+        CHECK(has(*text, "uniform float uSpotShadowWeight[" + n(SpotShadowMap::kMaxSpots) + "];"));
     }
+    // S2 point PCF: the per-slot kernel array SceneRenderer uploads, and the hard path for Softness 0 kept.
+    CHECK(has(shading, "uniform float uPointShadowSoftness[" + n(PointShadowMap::kMaxPoints) + "];"));
+    CHECK(has(shading, "float soft = kernel > 0.0 ? smoothstep(0.03, 0.10, nlG) : 0.0;"));
+    CHECK(has(shading, "bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance)"));
+    CHECK(has(shading, "float ShadowPlanePCF(int kind, int slot, vec3 dir, float d, vec3 N, float texelW, float kernel, float biasW, float far) {"));
+    // Tent PCF: 4x4 grid, binomial weights, spacing <= 1 texel (continuous penumbra: no bands, no grain).
+    CHECK(has(shading, "float h = clamp((kernel - 1.0) / 1.5, 0.0, 1.0) * texelW;")); // taps <= 1 texel apart
+    CHECK(has(shading, "const float kTentW[4] = float[](1.0, 3.0, 3.0, 1.0);"));
+    // fix-3 spot PCF: SpotShadow takes the geometric normal and the shared PCF (kind 1).
+    CHECK(has(shading, "float SpotShadow(int slot, vec3 worldPos, vec3 N, vec3 geoN) {"));
+    CHECK(has(shading, "ShadowPlanePCF(1, slot, biasedPos - uSpotShadowPos[slot], d, geoN, texelW, kernel, biasW, far)"));
+    CHECK(!has(shading, "kPoisson16[k] * radiusW")); // the equal-weight Poisson disk is gone from the point/spot PCF
 }
 
 void GIVolumeLookup() {
@@ -904,6 +954,14 @@ void GIVolumeLookup() {
     CHECK(box.Fade({2, 1, -3 + 2.0f - 0.15f}, 0.3f) > 0.45f);   // half way through the fade (local x is world -z)
     CHECK(box.Fade({2, 1, -3 + 2.0f - 0.15f}, 0.3f) < 0.55f);
     CHECK(box.Fade({2, 1, -3 + 2.5f}, 0.3f) == 0.0f);          // outside
+    // A fade per face (local x is world -z, so the +x face is at world z -5 and the -x face at z -1).
+    const glm::vec3 half3(0.3f);
+    CHECK(box.FadeFaces({2, 1, -3 + 2.0f - 0.15f}, half3, half3) == box.Fade({2, 1, -3 + 2.0f - 0.15f}, 0.3f)); // equal faces = the scalar
+    CHECK(box.FadeFaces({2, 1, -3}, half3, half3) == 1.0f && box.FadeFaces({2, 1, -3 + 2.5f}, half3, half3) == 0.0f);
+    const glm::vec3 lo(0.3f), hi(1.0f, 0.3f, 0.3f); // a wide fade on the +x face only
+    CHECK(std::fabs(box.FadeFaces({2, 1, -3 - 1.85f}, lo, hi) - 0.15f) < 1e-4f); // 0.15 m inside the +x face: 0.15 / 1.0
+    CHECK(std::fabs(box.FadeFaces({2, 1, -3 + 1.85f}, lo, hi) - 0.50f) < 1e-4f); // the -x face keeps 0.3: 0.15 / 0.3
+    CHECK(box.FadeFaces({2, 1, -3 - 2.05f}, lo, glm::vec3(0.0f)) == 0.0f && box.FadeFaces({2, 1, -3 - 1.99f}, lo, glm::vec3(0.0f)) == 1.0f); // 0 = hard edge
     const glm::ivec3 dims = GI::GridDims(box.Half, 0.5f);
     CHECK(glm::length(GI::ProbeLocal({0, 0, 0}, dims, box.Half) + box.Half) < 1e-5f);
     CHECK(glm::length(GI::ProbeLocal(dims - 1, dims, box.Half) - box.Half) < 1e-5f);
@@ -965,6 +1023,88 @@ void GIVolumeLookup() {
         GI::FillInvalid(chain, {true, false, false, false}, glm::ivec3(4, 1, 1));
         CHECK(std::abs(chain[3].c[2].x - 4.0f) < 1e-6f); // spreads until every reachable probe is filled
     }
+
+    // Face probes (in the wall / ceiling slab) are captured nudged inward (Jacob #5: the ceiling ring around a fixture).
+    {
+        const glm::ivec3 d(5, 4, 6);
+        const glm::vec3 half(2.0f, 1.5f, 2.5f); // cell 1 m on every axis
+        const auto near3 = [](const glm::vec3& a, const glm::vec3& b) { return glm::length(a - b) < 1e-6f; };
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 1, 3), d, half, 0.15f), glm::vec3(0.0f)));            // interior: none
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 3, 3), d, half, 0.15f), glm::vec3(0.0f, -0.15f, 0.0f))); // ceiling row: down
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 0, 3), d, half, 0.15f), glm::vec3(0.0f, 0.15f, 0.0f)));  // floor row: up
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(0, 0, 0), d, half, 0.15f), glm::vec3(0.15f)));              // corner: 3 axes
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(4, 3, 5), d, half, 0.15f), glm::vec3(-0.15f)));
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(1, 0, 1), glm::ivec3(3, 1, 3), half, 0.15f), glm::vec3(0.0f))); // 1 probe on an axis: no face
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 3, 3), d, half, 0.0f), glm::vec3(0.0f)));                 // 0 = off
+        CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 3, 3), d, half, 1.0f), glm::vec3(0.0f, -0.45f, 0.0f)));  // clamped to 0.45 cell
+    }
+    // The nudge guard: a face probe is nudged only into open air (Jacob: child's bedroom 2, closet doors).
+    {
+        const auto S = [](float x0, float y0, float z0, float x1, float y1, float z1) { return GI::SolidBox{glm::vec3(x0, y0, z0), glm::vec3(x1, y1, z1)}; };
+        const glm::vec3 face(9.42f, 4.0f, 25.0f), nudged(9.27f, 4.0f, 25.0f);
+        CHECK(!GI::NudgeBlocked(face, nudged, {}));                                                  // open air
+        CHECK(GI::NudgeBlocked(face, nudged, {S(8.0f, 3.0f, 24.0f, 9.3f, 5.0f, 26.0f)}));             // a wardrobe whose front is 0.12 m behind the face
+        CHECK(!GI::NudgeBlocked(face, glm::vec3(9.35f, 4.0f, 25.0f), {S(8.0f, 3.0f, 24.0f, 9.3f, 5.0f, 26.0f)})); // the nudge stops short of it
+        CHECK(!GI::NudgeBlocked(face, nudged, {S(8.0f, 3.0f, 20.0f, 9.3f, 5.0f, 21.0f)}));            // a box beside the path
+        CHECK(!GI::NudgeBlocked(glm::vec3(9.0f, 4.0f, 25.0f), glm::vec3(8.85f, 4.0f, 25.0f), {S(8.0f, 3.0f, 24.0f, 9.3f, 5.0f, 26.0f)})); // the face point is already inside it (a slab)
+        CHECK(!GI::NudgeBlocked(glm::vec3(5.0f, 5.0f, 5.0f), glm::vec3(5.0f, 4.85f, 5.0f), {S(0.0f, 4.9f, 0.0f, 9.0f, 5.1f, 9.0f)})); // a ceiling slab: the nudge leaves it
+        CHECK(GI::NudgeBlocked(glm::vec3(5.0f, 5.0f, 5.0f), glm::vec3(5.0f, 4.85f, 5.0f), {S(0.0f, 4.0f, 4.0f, 9.0f, 4.9f, 6.0f)}));   // a fixture hanging 0.1 m below the face
+        // A volume's face sits 2-5 cm off the slab it is padded to: a slab within 6 cm of the face point holds it (the nudge leaves it);
+        // a box 7 cm or more away still blocks.
+        CHECK(!GI::NudgeBlocked(glm::vec3(5.0f, 0.0f, 5.0f), glm::vec3(5.0f, 0.15f, 5.0f), {S(0.0f, 0.03f, 0.0f, 9.0f, 0.20f, 9.0f)}));  // a floor slab 3 cm above the face
+        CHECK(!GI::NudgeBlocked(glm::vec3(5.0f, 0.0f, 5.0f), glm::vec3(5.0f, 0.15f, 5.0f), {S(0.0f, 0.05f, 0.0f, 9.0f, 0.20f, 9.0f)}));  // 5 cm
+        CHECK(GI::NudgeBlocked(glm::vec3(5.0f, 0.0f, 5.0f), glm::vec3(5.0f, 0.15f, 5.0f), {S(0.0f, 0.07f, 0.0f, 9.0f, 0.20f, 9.0f)}));   // 7 cm: still blocks
+        CHECK(!GI::NudgeBlocked(glm::vec3(9.0f, 4.0f, 25.0f), glm::vec3(8.85f, 4.0f, 25.0f), {S(9.04f, 3.0f, 24.0f, 9.5f, 5.0f, 26.0f)})); // a wall piece 4 cm behind the face
+        // Whole volume: 5 x 4 x 5 probes, x faces at +-2. Face probes without a wardrobe all nudge; with one against the +x face the ones behind it stay.
+        const GI::Box nbox = GI::Box::FromTransform(glm::mat4(1.0f), glm::vec3(4.0f, 3.0f, 4.0f));
+        const glm::ivec3 d = GI::GridDims(nbox.Half, 1.0f);
+        int ok0 = 0, blk0 = 0, ok1 = 0, blk1 = 0;
+        const auto free = GI::PlanFaceNudges(nbox, d, 0.15f, {}, &ok0, &blk0);
+        const auto shut = GI::PlanFaceNudges(nbox, d, 0.15f, {S(1.0f, -1.5f, -2.5f, 1.9f, 1.5f, 2.5f)}, &ok1, &blk1); // a wardrobe whose front is 0.1 m inside the +x face
+        CHECK(blk0 == 0 && ok0 > 0);
+        CHECK(blk1 > 0 && ok1 + blk1 == ok0);                 // every probe it blocked would have nudged
+        CHECK(free.size() == shut.size() && free.size() == (std::size_t)d.x * d.y * d.z);
+        CHECK(shut[GI::ProbeIndex(glm::ivec3(d.x - 1, 2, 2), d)] == glm::vec3(0.0f));       // a +x face probe in front of the wardrobe stays
+        CHECK(free[GI::ProbeIndex(glm::ivec3(d.x - 1, 2, 2), d)] != glm::vec3(0.0f));
+        CHECK(shut[GI::ProbeIndex(glm::ivec3(0, 2, 2), d)] != glm::vec3(0.0f));             // the -x face (open air) still nudges
+        CHECK(GI::PlanFaceNudges(nbox, d, 0.0f, {}, &ok0, &blk0)[0] == glm::vec3(0.0f) && ok0 == 0); // 0 = off
+    }
+    // FillInvalid on a face row: a whole invalid ceiling row is filled from the row below, blurred in-plane, so one strongly
+    // directional probe under it does not paint a hot spot; and a face probe with a valid in-plane neighbour takes those.
+    {
+        const glm::ivec3 big(5, 3, 5); // the top plane's inner 3x3 probes lie on ONE face (the ceiling) only
+        std::vector<GI::ProbeSH> pr(75);
+        std::vector<bool> valid(75, true);
+        for (int z = 0; z < 5; ++z)
+            for (int y = 0; y < 3; ++y)
+                for (int x = 0; x < 5; ++x) {
+                    const int i = GI::ProbeIndex(glm::ivec3(x, y, z), big);
+                    valid[i] = y < 2;
+                    pr[i].c[0].x = (y == 1 && x == 2 && z == 2) ? 9.0f : 1.0f; // one strongly directional probe under the ceiling
+                }
+        GI::FillInvalid(pr, valid, big);
+        float mean = 0.0f, mx = 0.0f;
+        for (int z = 1; z <= 3; ++z)
+            for (int x = 1; x <= 3; ++x) {
+                const float v = pr[GI::ProbeIndex(glm::ivec3(x, 2, z), big)].c[0].x;
+                mean += v / 9.0f;
+                mx = std::max(mx, v);
+            }
+        const float inplaneMean = (9.0f + 8.0f) / 9.0f; // the inner 3x3 of the row below
+        CHECK(std::abs(mean - inplaneMean) < 0.25f * inplaneMean);
+        CHECK(mx < 4.0f); // the old 6-neighbour average copied the 9 straight up
+        const glm::ivec3 d(3, 3, 3);
+        std::vector<GI::ProbeSH> q(27);
+        std::vector<bool> v2(27, true);
+        for (auto& p : q) p.c[0].x = 100.0f;                         // the inward row is hot
+        for (int z = 0; z < 3; ++z)
+            for (int x = 0; x < 3; ++x) q[GI::ProbeIndex(glm::ivec3(x, 2, z), d)].c[0].x = 5.0f; // the ceiling row is 5
+        const int top = GI::ProbeIndex(glm::ivec3(1, 2, 1), d);
+        v2[top] = false;
+        q[top].c[0].x = -7.0f;
+        GI::FillInvalid(q, v2, d);
+        CHECK(std::abs(q[top].c[0].x - 5.0f) < 1e-5f); // in-plane first, not the inward neighbour
+    }
     CHECK((GI::SplitCircuits(" Living ; Hall,,Living;") == std::vector<std::string>{"Living", "Hall"}));
 
     // Atlas packing: rows along x up to the width, then along z.
@@ -997,6 +1137,13 @@ void GIVolumeLookup() {
     gi.SetOverride(std::make_shared<GI::BakeFile>(synth));
     gi.Gather(world);
     CHECK(gi.Count() == 1 && gi.Volumes()[0].ReplacesSky);
+    CHECK(gi.Volumes()[0].FadeLo == glm::vec3(gc.Fade) && gi.Volumes()[0].FadeHi == glm::vec3(gc.Fade)); // no per-face fade: the volume's
+    gc.FadeMax = glm::vec3(0.0f, 0.0f, 0.4f);
+    gc.FadeMin = glm::vec3(0.25f, 0.0f, 0.0f);
+    gi.Gather(world);
+    CHECK(gi.Volumes()[0].FadeHi == glm::vec3(gc.Fade, gc.Fade, 0.4f) && gi.Volumes()[0].FadeLo == glm::vec3(0.25f, gc.Fade, gc.Fade));
+    gc.FadeMax = gc.FadeMin = glm::vec3(0.0f);
+    gi.Gather(world);
     CHECK(gi.Volumes()[0].Weights == (std::vector<float>{1.0f, 1.0f}));
     float fade = 0.0f;
     const glm::vec3 lit = gi.SampleCPU({1.5f, 0, 0}, {0, 1, 0}, &fade);
@@ -1079,6 +1226,39 @@ using json = nlohmann::json;
 using UnitTestSupport::TempDir;
 using UnitTestSupport::ReadAll;
 
+// GI Phase 1 (W3): GPU-driven batches merge only groups the per-draw hook binds alike. The GI volume mask and every bit
+// of the probe selection must split them; otherwise a group is shaded with its batch lead's GI volumes (launch-dependent).
+void TestOpaqueBatchKey() {
+    namespace K = OpaqueBatchKey;
+    K::ObjectState a;
+    a.LayerBit = 1u;
+    a.ProbeKey = (2u << 30) | (3u << 20) | (7u << 10) | 40u;
+    a.GIMask = 0x0000000000000003ull;
+    const std::uint64_t ka = K::Object(a);
+    CHECK(K::Object(a) == ka); // deterministic: equal state, equal key
+    K::ObjectState b = a;
+    b.GIMask = 0x0000000000000006ull; // another room's volumes
+    CHECK(K::Object(b) != ka);
+    b = a;
+    b.GIMask = a.GIMask | (1ull << 40); // a high volume bit (the second mask word)
+    CHECK(K::Object(b) != ka);
+    b = a;
+    b.ProbeKey = a.ProbeKey + (16u << 20); // primary probe 3 -> 19: only bits 24-31 differ (lost by the old << 40)
+    CHECK(K::Object(b) != ka);
+    b = a;
+    b.ProbeKey = (1u << 30) | (a.ProbeKey & 0x3FFFFFFFu); // one probe instead of two: bits 30-31 only
+    CHECK(K::Object(b) != ka);
+    for (int f = 0; f < 6; ++f) { // each flag still splits
+        b = a;
+        bool* flags[6] = {&b.ReceiveShadows, &b.StaticReceiver, &b.NoSsao, &b.DoubleSided, &b.Prepassed, &b.GIFlatL1};
+        *flags[f] = !*flags[f];
+        CHECK(K::Object(b) != ka);
+    }
+    b = a;
+    b.LayerBit = 2u;
+    CHECK(K::Object(b) != ka);
+}
+
 // A still spot / point light redraws its static depth only when a caster's signature changes. A colourway swaps one
 // material slot in place (same count, same first slot): that must change the signature too.
 void TestLocalCasterHashSlots() {
@@ -1097,6 +1277,187 @@ void TestLocalCasterHashSlots() {
     CHECK(LocalCasterHash(7, nullptr, before, xf, 0, true) != h0);
     CHECK(LocalCasterHash(8, nullptr, before, xf, 0, false) != h0);
     CHECK(LocalCasterHash(7, nullptr, before, glm::translate(xf, glm::vec3(0, 0.01f, 0)), 0, false) != h0);
+}
+
+// GI Phase 1 (W2): room-aware, stable shadow slots that fade instead of popping (ShadowSlotScoring).
+void TestShadowSlotScoring() {
+    namespace S = ShadowSlotScoring;
+    // Room names: the trailing number (and the space before it) goes; nothing else does.
+    CHECK(S::RoomKey("GI living room 1") == "GI living room");
+    CHECK(S::RoomKey("GI living room 12") == "GI living room");
+    CHECK(S::RoomKey("GI_hall_2") == "GI_hall");
+    CHECK(S::RoomKey("GI kitchen") == "GI kitchen");
+    CHECK(S::RoomKey("Bedroom2") == "Bedroom");
+    CHECK(S::RoomKey("42") == "42");
+
+    auto box = [](glm::vec3 c, glm::vec3 size, float yawDeg = 0.0f) {
+        const glm::mat4 m = glm::rotate(glm::translate(glm::mat4(1.0f), c), glm::radians(yawDeg), glm::vec3(0, 1, 0));
+        return GI::Box::FromTransform(m, size);
+    };
+    // Touching: within the gap (a 0.2 m wall), not past it; rotated boxes use the full separating-axis test.
+    CHECK(S::Touch(box({0, 0, 0}, {4, 3, 4}), box({4.2f, 0, 0}, {4, 3, 4}), S::kNeighbourGap));
+    CHECK(!S::Touch(box({0, 0, 0}, {4, 3, 4}), box({4.6f, 0, 0}, {4, 3, 4}), S::kNeighbourGap));
+    CHECK(S::Touch(box({0, 0, 0}, {4, 3, 4}), box({4.6f, 0, 0}, {4, 3, 4}, 45.0f), S::kNeighbourGap)); // its corner reaches
+    CHECK(!S::Touch(box({0, 0, 0}, {2, 3, 2}), box({2.0f, 0, 2.0f}, {1, 3, 1}, 45.0f), 0.0f));          // diagonal gap
+
+    // A house: the living room is two volumes; the hall is through a wall from it; the bedroom is across the hall.
+    //   living 1: x -2..2   living 2: x 2..5   hall: x 5.2..7.2   bedroom: x 7.4..11.4 (touches the hall only)
+    S::Rooms rooms;
+    rooms.Add("GI living room 1", box({0, 1.5f, 0}, {4, 3, 4}));
+    rooms.Add("GI living room 2", box({3.5f, 1.5f, 0}, {3, 3, 4}));
+    rooms.Add("GI hall", box({6.2f, 1.5f, 0}, {2, 3, 4}));
+    rooms.Add("GI bedroom 1", box({9.4f, 1.5f, 0}, {4, 3, 4}));
+    CHECK(rooms.Names.size() == 3 && rooms.Boxes.size() == 4);
+    const glm::vec3 view(-1.0f, 1.6f, 0.0f); // in living 1
+    rooms.Classify(view);
+    CHECK(rooms.ViewRoom >= 0 && rooms.Names[rooms.ViewRoom] == "GI living room");
+    CHECK(rooms.TierAt({0.5f, 2.0f, 1.0f}) == S::Tier::Room);       // living 1
+    CHECK(rooms.TierAt({4.5f, 2.0f, 1.0f}) == S::Tier::Room);       // living 2: the same room
+    CHECK(rooms.TierAt({4.5f, 3.1f, 1.0f}) == S::Tier::Room);       // a ceiling fitting just above the box (kLightPad)
+    CHECK(rooms.TierAt({6.2f, 2.0f, 0.0f}) == S::Tier::Neighbour);  // the hall
+    CHECK(rooms.TierAt({5.25f, 2.0f, 0.0f}) == S::Tier::Neighbour); // a hall wall lamp, 5 cm from the living room's box
+    CHECK(rooms.TierAt({10.0f, 2.0f, 0.0f}) == S::Tier::Other);     // the bedroom: two rooms away
+    CHECK(rooms.TierAt({0.0f, 2.0f, 9.0f}) == S::Tier::Other);      // outdoors
+    // Overlapping volumes: the smallest one holding the view is its room.
+    S::Rooms nested;
+    nested.Add("GI house", box({0, 1.5f, 0}, {20, 3, 20}));
+    nested.Add("GI closet", box({1, 1.5f, 1}, {1, 3, 1}));
+    nested.Classify({1.0f, 1.0f, 1.0f});
+    CHECK(nested.Names[nested.ViewRoom] == "GI closet");
+    // A doorway gap (in no volume, between living 2 and the hall): the view keeps its last room, so crossing a door is
+    // one re-ranking, not two (Talos's #1189 review).
+    rooms.Classify({5.1f, 1.6f, 0.0f});
+    CHECK(rooms.ViewRoom >= 0 && rooms.Names[rooms.ViewRoom] == "GI living room");
+    rooms.Classify({6.2f, 1.6f, 0.0f}); // into the hall: now the hall
+    CHECK(rooms.Names[rooms.ViewRoom] == "GI hall" && rooms.TierAt({0.5f, 2.0f, 1.0f}) == S::Tier::Neighbour);
+    rooms.Classify({5.1f, 1.6f, 0.0f}); // back in the gap: still the hall
+    CHECK(rooms.Names[rooms.ViewRoom] == "GI hall");
+    // Outside every volume, and past kStickyPad from the last room, nothing is boosted: the old #110 score.
+    rooms.Classify({0.0f, 1.6f, 20.0f});
+    CHECK(rooms.ViewRoom == -1 && rooms.StickyRoom.empty() && rooms.TierAt({0.5f, 2.0f, 1.0f}) == S::Tier::Other);
+    rooms.Classify(view);
+    // The room upstairs, through a 0.2 m floor slab, touches the living room's box but is not its neighbour.
+    {
+        S::Rooms storeys;
+        storeys.Add("GI living room 1", box({0, 1.5f, 0}, {4, 3, 4}));
+        storeys.Add("GI den", box({0, 4.7f, 0}, {4, 3, 4}));       // y 3.2..6.2
+        storeys.Add("GI stairwell", box({2.5f, 3.1f, 0}, {1, 6.2f, 2})); // both storeys
+        CHECK(S::Touch(storeys.Boxes[0].Box, storeys.Boxes[1].Box, S::kNeighbourGap));
+        storeys.Classify({-1.0f, 1.6f, 0.0f});
+        CHECK(storeys.TierAt({0.0f, 5.0f, 0.0f}) == S::Tier::Other);       // the den lamp upstairs
+        CHECK(storeys.TierAt({2.5f, 2.0f, 0.0f}) == S::Tier::Neighbour);   // the stairwell, beside the living room
+        storeys.Classify({0.0f, 4.5f, 0.0f});                              // upstairs in the den
+        CHECK(storeys.Names[storeys.ViewRoom] == "GI den" && storeys.TierAt({0.0f, 1.0f, 0.0f}) == S::Tier::Other);
+        CHECK(storeys.TierAt({2.5f, 5.8f, 0.5f}) == S::Tier::Neighbour);   // the stairwell spans both storeys
+    }
+
+    // Scores: the room first, then its neighbours, then the rest; held lights keep a 25% edge.
+    const float base = S::Score(10.0f, 6.0f, 2.0f, S::Tier::Other, false);
+    CHECK(base == 10.0f * 36.0f);                                         // inside its range: the full score
+    CHECK(S::Score(10.0f, 6.0f, 2.0f, S::Tier::Neighbour, false) == base * S::kNeighbourBoost);
+    CHECK(S::Score(10.0f, 6.0f, 2.0f, S::Tier::Room, false) == base * S::kRoomBoost);
+    CHECK(S::Score(10.0f, 6.0f, 2.0f, S::Tier::Other, true) == base * S::kHoldBonus);
+    CHECK(S::Score(10.0f, 6.0f, 9.0f, S::Tier::Other, false) == 10.0f * 36.0f / 10.0f); // 3 m past its range
+    // The case the orders are about: a bright hall lamp right by the view, and a dimmer lamp across the living room.
+    // Before (#110's distance score) the hall lamp won the one slot; now the lamp in the player's room does.
+    const glm::vec3 hallLamp(5.3f, 2.4f, 0.0f), roomLamp(4.5f, 2.4f, 1.5f);
+    const float hallOld = S::Score(20.0f, 8.0f, glm::length(hallLamp - view), S::Tier::Other, false);
+    const float roomOld = S::Score(8.0f, 8.0f, glm::length(roomLamp - view), S::Tier::Other, false);
+    CHECK(hallOld > roomOld);
+    const float hallNew = S::Score(20.0f, 8.0f, glm::length(hallLamp - view), rooms.TierAt(hallLamp), false);
+    const float roomNew = S::Score(8.0f, 8.0f, glm::length(roomLamp - view), rooms.TierAt(roomLamp), false);
+    CHECK(roomNew > hallNew);
+    // Hysteresis: a holder keeps its slot against a challenger up to 25% better, and loses it past that.
+    CHECK(S::Score(10.0f, 6.0f, 2.0f, S::Tier::Room, true) > S::Score(12.0f, 6.0f, 2.0f, S::Tier::Room, false));
+    CHECK(S::Score(10.0f, 6.0f, 2.0f, S::Tier::Room, true) < S::Score(13.0f, 6.0f, 2.0f, S::Tier::Room, false));
+
+    // Fades: one slot, light A holds it, then B is wanted instead. A fades out, B waits, then B fades in.
+    using Slots = S::FadingSlots<4>;
+    const std::uint32_t A = 1, B = 2, C = 3, T = 99;
+    Slots slots;
+    const float dt = 1.0f / 60.0f, step = dt / S::kFadeSeconds;
+    CHECK(slots.Step({A}, {A, B}, 1, 1, dt, true) == 1); // snap: in at full strength
+    CHECK(slots.Owner[0] == A && slots.Weight[0] == 1.0f);
+    float shownA = 1.0f, shownB = 0.0f; // what each light's shadow shows (0 when it holds no slot)
+    bool bIn = false;
+    int frames = 0;
+    for (std::uint64_t f = 2; f < 200 && !(bIn && shownB == 1.0f); ++f, ++frames) {
+        slots.Step({B}, {A, B}, 1, f, dt, false);
+        const float a = slots.Owner[0] == A ? slots.Weight[0] : 0.0f;
+        const float b = slots.Owner[0] == B ? slots.Weight[0] : 0.0f;
+        CHECK(std::abs(a - shownA) <= step + 1e-5f); // never a jump bigger than one frame of fade
+        CHECK(std::abs(b - shownB) <= step + 1e-5f);
+        CHECK(a == 0.0f || b == 0.0f);               // one slot: never both
+        bIn = bIn || b > 0.0f;
+        shownA = a; shownB = b;
+    }
+    CHECK(bIn && shownB == 1.0f && shownA == 0.0f);
+    CHECK(frames <= (int)std::ceil(2.0f / step) + 2); // out, then in: about two fade times
+    // B, holding the slot, is switched off (no candidate any more): freed at once, there is no light left to fade.
+    // A was lit all along (a candidate last frame), so it is a hand-over and A fades in.
+    CHECK(slots.Owner[0] == B);
+    slots.Step({A}, {A}, 1, 300, dt, false);
+    CHECK(slots.Owner[0] == A && std::abs(slots.Weight[0] - step) < 1e-5f);
+    // Switch-on (Talos's #1189 review): a lamp that was NOT a candidate last frame lights at once, so its shadow is
+    // full at once - with a free slot, or by taking a leaving holder's - never shining through walls while it fades.
+    {
+        Slots on;
+        on.Step({A}, {A}, 1, 1, dt, true);                  // A holds the one slot; C is off
+        on.Step({C}, {A, C}, 1, 2, dt, false);              // C switched on and outscores A
+        CHECK(on.Owner[0] == C && on.Weight[0] == 1.0f);    // full the same frame (A, a leaver, gave the slot up)
+        Slots free2;
+        free2.Step({A}, {A}, 2, 1, dt, true);
+        free2.Step({A, C}, {A, C}, 2, 2, dt, false);        // a free slot: C still comes in at full
+        int c = free2.Owner[0] == C ? 0 : 1;
+        CHECK(free2.Owner[c] == C && free2.Weight[c] == 1.0f);
+        // Switched off and on again (off for a frame): it arrives again, full again.
+        free2.Step({A}, {A}, 2, 3, dt, false);
+        CHECK(free2.Owner[0] != C && free2.Owner[1] != C);
+        free2.Step({A, C}, {A, C}, 2, 4, dt, false);
+        c = free2.Owner[0] == C ? 0 : 1;
+        CHECK(free2.Owner[c] == C && free2.Weight[c] == 1.0f);
+        // A lit lamp that was a candidate without a slot still waits and fades (the hand-over case above).
+        Slots lit;
+        lit.Step({A}, {A, C}, 1, 1, dt, true);
+        lit.Step({C}, {A, C}, 1, 2, dt, false);
+        CHECK(lit.Owner[0] == A && lit.Weight[0] < 1.0f);    // A fading out, C waiting
+        // Reset (a scene load): every holder gone, and everything after arrives.
+        lit.Reset();
+        CHECK(lit.Owner[0] == Slots::kNone && lit.PrevLit.empty());
+        lit.Step({C}, {C}, 1, 3, dt, false);
+        CHECK(lit.Owner[0] == C && lit.Weight[0] == 1.0f);
+        // Walking into range (Talos's re-check): C was lit but past its DistanceFade range (lit, not a candidate). Its
+        // light ramps up from 0, so its shadow is a hand-over: it waits for A to fade out, then fades in - no pop.
+        Slots walk;
+        walk.StepLit({A}, {A}, {A, C}, 1, 1, dt, true);
+        walk.StepLit({C}, {A, C}, {A, C}, 1, 2, dt, false);
+        CHECK(walk.Owner[0] == A && walk.Weight[0] < 1.0f); // A fading; C waits
+        for (std::uint64_t f = 3; f < 60 && walk.Owner[0] != C; ++f) walk.StepLit({C}, {A, C}, {A, C}, 1, f, dt, false);
+        CHECK(walk.Owner[0] == C && std::abs(walk.Weight[0] - step) < 1e-5f); // in, fading from dark
+        // ...while the same lamp switched on (not lit last frame) snaps in at once.
+        Slots sw;
+        sw.StepLit({A}, {A}, {A}, 1, 1, dt, true);
+        sw.StepLit({C}, {A, C}, {A, C}, 1, 2, dt, false);
+        CHECK(sw.Owner[0] == C && sw.Weight[0] == 1.0f);
+    }
+    // The urgent key (the flashlight) never waits: it takes the leaving holder's slot at full strength.
+    Slots torch;
+    torch.Step({A, B}, {A, B, C}, 2, 1, dt, true);           // C lit but slot-less
+    torch.Step({T, C}, {A, B, C, T}, 2, 2, dt, false, T);
+    int tSlot = -1;
+    for (int i = 0; i < 2; ++i) if (torch.Owner[i] == T) tSlot = i;
+    CHECK(tSlot >= 0 && torch.Weight[tSlot] == 1.0f);
+    CHECK(torch.Owner[1 - tSlot] == A || torch.Owner[1 - tSlot] == B); // the other leaver still fading; C waits
+    // Stable: a wanted holder keeps its slot index while others come and go.
+    Slots stable;
+    stable.Step({A, B, C}, {A, B, C}, 3, 1, dt, true);
+    int slotOfC = -1;
+    for (int i = 0; i < 3; ++i) if (stable.Owner[i] == C) slotOfC = i;
+    for (std::uint64_t f = 2; f < 60; ++f) stable.Step({C, A}, {A, B, C}, 3, f, dt, false);
+    CHECK(stable.Owner[slotOfC] == C && stable.Weight[slotOfC] == 1.0f);
+    // A smaller budget frees the slots past it at once.
+    CHECK(stable.Step({C}, {A, B, C}, 1, 61, dt, false) >= 1);
+    for (int i = 1; i < 4; ++i) CHECK(stable.Owner[i] == Slots::kNone);
 }
 
 void TestCameraRoll() {
@@ -1871,6 +2232,43 @@ void TestPhysicalSky() {
         CHECK(near(travelled, 0.08f, 0.004f));     // 8 m/s for 10 s
     }
 
+    // --bake-gi pins the clocks a GI capture sees (SkyAtmosphere::SetBakeClock, Material::PinWindTime,
+    // RenderFrameContext::GIBakePinClocks). All three are OFF by default, so Play, the editor and --gi-tour keep their
+    // drifting clouds, running clock and swaying leaves; ON, a second of frames moves nothing.
+    {
+        SkySettings w;
+        w.CloudWindSpeed = 4.0f;
+        w.TimeOfDayHours = 18.8f;
+        w.DayLengthMinutes = 1.0f; // 24 h a minute: 1 s moves the clock 0.4 h
+        w.AnimateInEditor = true;
+        auto run = [&](SkyAtmosphere& sky) {
+            for (int i = 0; i < 60; ++i) sky.Tick(w, 1.0f / 60.0f, false);
+            return sky.ResolveLighting(w, glm::vec3(0, -1, 0), glm::vec3(5.0f), 0.53f, glm::vec3(0.0f)).ClockHours;
+        };
+        SkyAtmosphere live;
+        CHECK(!live.BakeClock());
+        const glm::vec2 liveStart = live.Clouds().WeatherOffset();
+        const float liveHours = run(live);
+        CHECK(glm::length(live.Clouds().WeatherOffset() - liveStart) > 1e-3f); // 4 m/s for 1 s = 0.004 km
+        CHECK(near(liveHours, 19.2f, 1e-3f));
+        SkyAtmosphere baking;
+        baking.SetBakeClock(true);
+        const glm::vec2 bakeStart = baking.Clouds().WeatherOffset();
+        const float bakeHours = run(baking);
+        CHECK(baking.Clouds().WeatherOffset() == bakeStart);
+        CHECK(near(bakeHours, 18.8f, 1e-5f));
+
+        CHECK(!RenderFrameContext{}.GIBakePinClocks);
+        Material::NextHashFrame();
+        CHECK(Material::WindTime() == (float)Time::UnscaledTimeSinceStartup());
+        Material::PinWindTime(true);
+        Material::NextHashFrame();
+        CHECK(Material::WindTime() == 0.0f && Material::PrevWindTime() == 0.0f);
+        Material::PinWindTime(false);
+        Material::NextHashFrame();
+        CHECK(Material::WindTime() == (float)Time::UnscaledTimeSinceStartup());
+    }
+
     // Presets change the look but keep the location and quality; the timed ones land where named.
     SkySettings p;
     p.LatitudeDegrees = -33.0f;
@@ -2027,6 +2425,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Reflection probe captures + puddle SSR setting", ProbeCaptureAndPuddleSsr});
     tests.push_back({"Small-object cull: projected bounding-sphere height", SmallObjectCull});
     tests.push_back({"Light distance fade: by projected size, smooth, then dropped", LightDistanceFade});
+    tests.push_back({"Light bounds: per-face fade (Bounds Fade - / +), uniform = the old single fade", LightBoundsFaceFade});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
     tests.push_back({"GatherPatch", GatherPatch});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
@@ -2041,6 +2440,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Scene wind: settings round-trip, old-scene defaults, one bearing convention", SceneWindSettings});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});
+    tests.push_back({"Volumetric fog: the in-scatter soft cap is identity below the knee, monotone and bounded", VolumetricInscatterCap});
     tests.push_back({"Volumetric fog: settings and Volumetric Intensity round-trip; old scenes default off / 1", VolumetricSettingsRoundTrip});
     tests.push_back({"TAA mode + rain wetness round-trip; old scenes keep MSAA/FXAA and stay dry; jitter un-jitters", TaaAndWetnessRoundTrip});
     tests.push_back({"Fur: shell count follows the hair's size on screen", FurShellLod});
@@ -2060,5 +2460,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"TextureCacheHash", TestTextureCacheHash});
     tests.push_back({"CameraFrustumValidation", TestCameraFrustumValidation});
     tests.push_back({"CameraRoll", TestCameraRoll});
+    tests.push_back({"OpaqueBatchKey", TestOpaqueBatchKey});
     tests.push_back({"LocalCasterHashSlots", TestLocalCasterHashSlots});
+    tests.push_back({"ShadowSlotScoring", TestShadowSlotScoring});
 }

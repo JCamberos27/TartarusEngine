@@ -76,6 +76,7 @@ struct SceneDrawItem {
     bool Bounded = false;
     glm::mat3 Normal{1.0f}; // transpose(inverse(mat3(Xform))), from the candidate cache (opaque items)
     float LodFade = 0.0f;   // World::LodFadeOf: a LOD cross-fade under way (dithered, drawn on its own)
+    bool GIFlatL1 = false; // an OpenableComponent leaf: its GI lookup damps the directional term (GIVolumes::SetMask)
 };
 
 // An opaque multi-draw batch's sub-mesh. Prog/State/Mat/Object: how the batch binds, for drawing the pre-passed

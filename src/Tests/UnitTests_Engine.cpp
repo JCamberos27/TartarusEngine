@@ -27,6 +27,8 @@
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/ShaderVariant.h"
 #include "../Renderer/CascadedShadowMap.h"
+#include "../Renderer/PointShadowMap.h"
+#include "../Renderer/SpotShadowMap.h"
 #include "../Renderer/Texture.h"
 #include "../Core/PngWrite.h"
 #include "../Core/SamplingProfiler.h"
@@ -42,6 +44,8 @@
 #undef far
 #endif
 #include <chrono>
+#include <cmath>
+#include <limits>
 #include <cstdio>
 #include <filesystem>
 #include <json.hpp>
@@ -520,6 +524,38 @@ static void Test_BoneAnimChannel_FinalizeMatchesSearch() {
         worst = std::max({worst, glm::length(a.T - b.T), 1.0f - std::abs(glm::dot(a.R, b.R))});
     }
     CHECK(worst < 1e-5f);
+}
+
+// Point PCF (fix-3 S2): Softness 0 / negative / NaN keeps the old hard single compare (kernel 0); a positive Softness is
+// x3 cube texels, clamped to [0.5, 2.5] (the tent PCF's continuous reach); the house's 1.3 hits the cap. Monotonic.
+static void Test_PointShadowMap_KernelTexels() {
+    CHECK(PointShadowMap::KernelTexels(0.0f) == 0.0f);
+    CHECK(PointShadowMap::KernelTexels(-1.0f) == 0.0f);
+    CHECK(PointShadowMap::KernelTexels(std::numeric_limits<float>::quiet_NaN()) == 0.0f);
+    CHECK(PointShadowMap::KernelTexels(0.02f) == PointShadowMap::kKernelMinTexels);
+    CHECK(PointShadowMap::KernelTexels(1.3f) == PointShadowMap::kKernelMaxTexels);
+    CHECK(std::abs(PointShadowMap::KernelTexels(0.5f) - 1.5f) < 1e-6f);
+    CHECK(PointShadowMap::KernelTexels(2.0f) == PointShadowMap::kKernelMaxTexels);
+    CHECK(PointShadowMap::KernelTexels(4.0f) == PointShadowMap::kKernelMaxTexels); // the Inspector's max Softness
+    CHECK(PointShadowMap::KernelTexels(100.0f) == PointShadowMap::kKernelMaxTexels);
+    float prev = 0.0f;
+    for (float s = 0.02f; s <= 6.0f; s += 0.02f) {
+        const float k = PointShadowMap::KernelTexels(s);
+        CHECK(k >= prev);
+        prev = k;
+    }
+}
+
+// Spot PCF (fix-3): same contract as the points, x1 spot-map texels, clamped to [0.5, 2.5].
+static void Test_SpotShadowMap_KernelTexels() {
+    CHECK(SpotShadowMap::KernelTexels(0.0f) == 0.0f);
+    CHECK(SpotShadowMap::KernelTexels(-1.0f) == 0.0f);
+    CHECK(SpotShadowMap::KernelTexels(std::numeric_limits<float>::quiet_NaN()) == 0.0f);
+    CHECK(SpotShadowMap::KernelTexels(0.2f) == SpotShadowMap::kKernelMinTexels);
+    CHECK(std::abs(SpotShadowMap::KernelTexels(1.3f) - 1.3f) < 1e-6f); // kitchen spots
+    CHECK(SpotShadowMap::KernelTexels(2.5f) == 2.5f);                  // hall spots
+    CHECK(SpotShadowMap::KernelTexels(1.5f) == 1.5f);                  // the flashlight's slot
+    CHECK(SpotShadowMap::KernelTexels(100.0f) == SpotShadowMap::kKernelMaxTexels);
 }
 
 // Softness 0 is the hard sun edge (one 2x2 compare); every positive softness keeps the kernel it always had, so
@@ -1240,8 +1276,10 @@ void TestComponentRegistry() {
 
 } // namespace
 
-static constexpr size_t kSnapshotBytes = 28878;
-static constexpr std::uint64_t kSnapshotHash = 0x8f6b8763b0d778abull;
+// Re-pinned for Light "Bounds Fade -" / "Bounds Fade +" (per-face fade, two Vec3 per light: +396 bytes for the fixture's
+// 6 lights). Any other change to these numbers is a format change: say why.
+static constexpr size_t kSnapshotBytes = 29274;
+static constexpr std::uint64_t kSnapshotHash = 0x4fe4c65539bfdccbull;
 // The scene snapshot (SaveToString: every undo step and the scene open take one) must keep its
 // exact bytes when its builder changes: the undo history compares and diffs these strings, and
 // the files Save writes come from the same builder. A fixed scene - models sharing a few paths,
@@ -1408,6 +1446,8 @@ void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Texture::NormalMapBC5Renormalized", Test_Texture_NormalMapBC5Renormalized});
     tests.push_back({"CascadedShadowMap::SliceTestMatchesAllPairs", Test_CascadedShadowMap_SliceTestMatchesAllPairs});
     tests.push_back({"CascadedShadowMap::HardKernelAndSplit", Test_CascadedShadowMap_HardKernelAndSplit});
+    tests.push_back({"PointShadowMap::KernelTexels", Test_PointShadowMap_KernelTexels});
+    tests.push_back({"SpotShadowMap::KernelTexels", Test_SpotShadowMap_KernelTexels});
     tests.push_back({"PrefabInstance::HandWrittenComponentsDiffByJsonKey", Test_PrefabInstance_HandWrittenComponentsDiffByJsonKey});
     tests.push_back({"FirstPersonController::NewFieldsRoundTrip", Test_FirstPersonController_NewFieldsRoundTrip});
     tests.push_back({"FxHudSettings::RoundTrip", Test_FxHudSettings_RoundTrip});

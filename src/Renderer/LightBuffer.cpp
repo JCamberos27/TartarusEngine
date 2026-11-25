@@ -43,6 +43,8 @@ LightBuffer::GpuLight LightBuffer::Pack(const glm::vec4& positionType, const glm
     l.BoxY = glm::vec4(0, 1, 0, 0);
     l.BoxZ = glm::vec4(0, 0, 1, 0);
     l.BoxHalf = glm::vec4(0.0f, 0.0f, 0.0f, -1.0f);
+    l.BoxFadeNeg = glm::vec4(1.0f);
+    l.BoxFadePos = glm::vec4(1.0f);
     return l;
 }
 
@@ -78,7 +80,8 @@ void LightBuffer::AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, 
                             glm::vec4(d, cosOuter), cosInner, (float)shadowSlot, excludedLayers, volumetric));
 }
 
-void LightBuffer::BoundLast(const glm::mat3& axes, const glm::vec3& centre, const glm::vec3& half, float fade) {
+void LightBuffer::BoundLast(const glm::mat3& axes, const glm::vec3& centre, const glm::vec3& half, float fade,
+                            const glm::vec3& fadeNeg, const glm::vec3& fadePos) {
     if ((int)m_Lights.size() <= m_DirectionalCount) return;
     GpuLight& l = m_Lights.back();
     glm::vec4* rows[3] = {&l.BoxX, &l.BoxY, &l.BoxZ};
@@ -86,7 +89,22 @@ void LightBuffer::BoundLast(const glm::mat3& axes, const glm::vec3& centre, cons
         const glm::vec3 a = glm::length(axes[i]) > 1e-8f ? glm::normalize(axes[i]) : glm::vec3(i == 0, i == 1, i == 2);
         *rows[i] = glm::vec4(a, -glm::dot(a, centre));
     }
-    l.BoxHalf = glm::vec4(glm::max(half, glm::vec3(1e-3f)), fade > 1e-3f ? fade : 1e-3f);
+    const float f = fade > 1e-3f ? fade : 1e-3f;
+    l.BoxHalf = glm::vec4(glm::max(half, glm::vec3(1e-3f)), f);
+    for (int i = 0; i < 3; ++i) {
+        l.BoxFadeNeg[i] = fadeNeg[i] < 0.0f ? f : std::max(fadeNeg[i], 1e-3f);
+        l.BoxFadePos[i] = fadePos[i] < 0.0f ? f : std::max(fadePos[i], 1e-3f);
+    }
+}
+
+float LightBuffer::BoxWeight(const glm::vec3& q, const glm::vec3& half, const glm::vec3& fadeNeg, const glm::vec3& fadePos) {
+    float w = 1.0f;
+    for (int i = 0; i < 3; ++i) {
+        const float inside = half[i] - std::abs(q[i]);
+        const float f = std::max(q[i] < 0.0f ? fadeNeg[i] : fadePos[i], 1e-3f);
+        w = std::min(w, std::clamp(inside / f, 0.0f, 1.0f));
+    }
+    return w;
 }
 
 void LightBuffer::SortLocalNearestFirst(const glm::vec3& eye) {

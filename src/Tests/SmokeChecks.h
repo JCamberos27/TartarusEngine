@@ -35,5 +35,9 @@ void SceneLoaded(World& world, AssetLibrary& assets, const std::string& path,
 // smoke_play*: what a Play cycle left behind, printed at its end - the bodies, animations, the camera Play ran through,
 // the filtered physics queries (and a deactivated collider leaving the PhysX scene), animators and particles.
 void PlayProbe(World& world, const Camera& playCamera, bool playUsesPlayer);
+// smoke_ssao_off*: no linked program (every live one, plus ImpostorLit built here) has two sampler types on one texture
+// unit - that fails each draw through it with GL_INVALID_OPERATION. The scene renders with SSAO off, where uSSAOMap
+// once sat on unit 0 beside the impostor atlas; the harness's zero-GL-error rule covers the frames themselves.
+void SamplerUnits();
 
 } // namespace SmokeChecks

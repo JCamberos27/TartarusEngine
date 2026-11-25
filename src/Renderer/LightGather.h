@@ -10,6 +10,7 @@
 #include <glm/glm.hpp>
 
 #include "ShadowLimits.h"
+#include "ShadowSlotScoring.h"
 #include "SkyAtmosphere.h" // SkyLighting (FrameLights holds one)
 
 class World;
@@ -50,6 +51,9 @@ struct FrameLights {
     float SpotBias[ShadowLimits::kMaxSpots] = {};
     float SpotNormalBias[ShadowLimits::kMaxSpots] = {};
     float SpotSoftness[ShadowLimits::kMaxSpots] = {};
+    // How much of each slot's shadow shows, 0..1 (GI Phase 1): a shadow fades in when its light takes a slot and out
+    // before it gives the slot up (ShadowSlotScoring::FadingSlots), instead of popping.
+    float SpotWeight[ShadowLimits::kMaxSpots] = {};
 
     int PointCount = 0;
     bool PointLive[ShadowLimits::kMaxPoints] = {};
@@ -58,6 +62,11 @@ struct FrameLights {
     float PointNear[ShadowLimits::kMaxPoints] = {};
     float PointBias[ShadowLimits::kMaxPoints] = {};
     float PointNormalBias[ShadowLimits::kMaxPoints] = {};
+    float PointSoftness[ShadowLimits::kMaxPoints] = {}; // the light's Shadow Softness (S2: point PCF radius)
+    float PointWeight[ShadowLimits::kMaxPoints] = {};
+
+    int ShadowRoom = -1; // the room (GI Volume group) the slots were scored for, -1 outside them all (traces)
+    int SlotChanges = 0; // slots that changed hands this frame (traces)
 
     std::set<entt::entity> OverBudget; // shadow candidates that got no slot (the Inspector's warning)
 };
@@ -72,6 +81,8 @@ struct LightGatherInputs {
     bool physicalSky = false;
     bool prefabMode = false;               // a render-only preview sun when the prefab owns no directional
     std::uint64_t frame = 0;
+    float dt = 1.0f / 60.0f;               // seconds since the last Gather: the shadow fades run on it
+    bool snapShadowFades = false;          // no fades this frame: --bake-gi, a scene load, a camera cut
     const TorchLight* torch = nullptr;     // the lit flashlight, or null
     std::function<bool(entt::entity)> suppressed; // the Lights panel's solo/mute (editor only); empty in Play
 };
@@ -85,25 +96,37 @@ public:
     const std::unordered_map<entt::entity, int>& SpotSlotHolders() const { return m_SpotSlotOf; }
     const std::unordered_map<entt::entity, int>& PointSlotHolders() const { return m_PointSlotOf; }
 
-private:
-    // Each light keeps its shadow slot - its layer, and with it the cached static depth - for as long as it holds a
-    // shadow; a light taking a shadow gets the free slot unused longest.
-    struct StableSlots { // sized for the larger of the two maps (spots); the points' budget uses the first kMaxPoints
-        entt::entity Owner[ShadowLimits::kMaxSpots];
-        std::uint64_t Used[ShadowLimits::kMaxSpots] = {};
-        StableSlots();
-        void Assign(const std::vector<entt::entity>& want, int budget, std::uint64_t frame, std::unordered_map<entt::entity, int>& out);
-    };
-    void AssignShadowSlots(const LightGatherInputs& in, FrameLights& out);
+    // The rooms the last Gather scored against (the scene's GI Volumes), for traces.
+    const ShadowSlotScoring::Rooms& ShadowRooms() const { return m_Rooms; }
+    // The next Gather is a camera cut: its shadows snap instead of fading (--gi-tour asks on every waypoint jump, since
+    // it knows its cuts; short ones, a door's 0.6 m, are below what LightGather can tell from a step).
+    void RequestSnap() { m_SnapRequested = true; }
 
-    std::vector<entt::entity> m_PrevShadowed;   // last frame's shadow holders, sorted
-    std::vector<entt::entity> m_ShadowedScratch; // this frame's, built here and swapped in (keeps its storage)
+private:
+    void AssignShadowSlots(const LightGatherInputs& in, FrameLights& out);
+    void GatherRooms(World& world, const glm::vec3& viewPos);
+
+    std::vector<entt::entity> m_PrevShadowed;   // last frame's shadow holders (fading ones too), sorted
     // The shadow candidates' world transforms in registry order (what AssignShadowSlots composed), which Gather's pass
     // over the same view takes instead of composing them again.
     std::vector<std::pair<entt::entity, glm::mat4>> m_LightXforms;
     // AssignShadowSlots' per-frame scratch (kept for its storage).
-    std::vector<entt::entity> m_ChosenSpots, m_ChosenPoints;
+    std::vector<std::uint32_t> m_ChosenSpots, m_ChosenPoints, m_SpotKeys, m_PointKeys;
     std::vector<std::pair<float, entt::entity>> m_SpotCandidates, m_PointCandidates;
-    StableSlots m_SpotSlots, m_PointSlots;
+    // Each light keeps its shadow slot - its layer, and with it the cached static depth - for as long as it holds a
+    // shadow; a light taking a shadow gets the free slot unused longest, and fades in; one losing it fades out first.
+    ShadowSlotScoring::FadingSlots<ShadowLimits::kMaxSpots> m_SpotSlots;
+    ShadowSlotScoring::FadingSlots<ShadowLimits::kMaxPoints> m_PointSlots;
     std::unordered_map<entt::entity, int> m_SpotSlotOf, m_PointSlotOf;
+    ShadowSlotScoring::Rooms m_Rooms;
+    bool m_Gathered = false; // the first Gather snaps its fades
+    // Snaps: a new scene (World::SceneLoads; the slots are reset, entity ids are reused) or a camera cut (another
+    // view camera, or the view jumping kCutDistance in one Gather: a --gi-tour cut, a teleport).
+    std::uint64_t m_SceneLoads = 0;
+    const Camera* m_LastViewCam = nullptr;
+    glm::vec3 m_LastViewPos{0.0f};
+    bool m_SnapRequested = false;
+    std::vector<std::uint32_t> m_SpotLit, m_PointLit; // this frame's lit shadowed lights (before the distance cull)
+    static constexpr float kCutDistance = 1.0f; // metres in one Gather: below this a move is never a cut
+    static constexpr float kCutSpeed = 12.0f;   // m/s: past this the view jumped (a teleport), not moved
 };

@@ -952,6 +952,23 @@ int SectionOpen(const char* component) {
     ImGuiWindow* w = ImGui::FindWindowByName(h->Window.c_str());
     return w ? w->StateStorage.GetInt(h->Id, 0) : -1;
 }
+// Audio Source's Min Distance field: "" when its disabled state is `wantDisabled`, else what the
+// harness saw (registered or not, its flags, rect and clip, the section's open state), so a CI log says why.
+std::string MinDistanceState(bool wantDisabled) {
+    const UiItem* f = Find(ByTag("field:Audio Source/Min Distance"));
+    char buf[320];
+    if (!f) {
+        std::snprintf(buf, sizeof(buf), "field not registered (Audio Source section open=%d, Light open=%d)",
+                      SectionOpen("Audio Source"), SectionOpen("Light"));
+        return buf;
+    }
+    const bool disabled = (f->ItemFlags & ImGuiItemFlags_Disabled) != 0;
+    if (disabled == wantDisabled) return std::string();
+    std::snprintf(buf, sizeof(buf), "wanted %s but flags=0x%x rect y %.0f..%.0f clip y %.0f..%.0f (Audio Source section open=%d)",
+                  wantDisabled ? "disabled" : "enabled", (unsigned)f->ItemFlags, f->Rect.Min.y, f->Rect.Max.y,
+                  f->Clip.Min.y, f->Clip.Max.y, SectionOpen("Audio Source"));
+    return buf;
+}
 
 // Scrolls the Inspector (or whatever scrolls the item) until `q` is fully on screen. A tall section
 // (an open Light) pushes the ones below it out of a 1080p Inspector at 150% DPI.
@@ -1443,8 +1460,13 @@ void RegisterTests() {
         Key(ImGuiKey_E, ImGuiMod_Ctrl | ImGuiMod_Shift), WaitSeconds(0.3),
         ExpectTrue("all collapsed", [](Ctx&) { return SectionOpen("Light") == 0 && SectionOpen("Transform") == 0; }),
         Key(ImGuiKey_E, ImGuiMod_Ctrl | ImGuiMod_Shift), WaitSeconds(0.3),
+        // An expanded Light (now with the per-face Bounds Fade rows) is taller than a short Inspector, so
+        // its header and Audio Source's are never both on screen: a clipped header reports no label and
+        // SectionOpen() reads -1. Reveal and read each one on its own.
+        InspReveal(Header("Light")),
+        ExpectTrue("Light expanded", [](Ctx&) { return SectionOpen("Light") == 1; }),
         InspReveal(Header("Audio Source")), // below the expanded Light
-        ExpectTrue("all expanded", [](Ctx&) { return SectionOpen("Light") == 1 && SectionOpen("Audio Source") == 1; }),
+        ExpectTrue("Audio Source expanded", [](Ctx&) { return SectionOpen("Audio Source") == 1; }),
         Key(ImGuiKey_E, ImGuiMod_Ctrl | ImGuiMod_Shift), WaitSeconds(0.3), // collapse again so the header stays put
         MoveToItem(Header("Audio Source")), Wait(2),
         Key(ImGuiKey_X), WaitSeconds(0.4),
@@ -1516,16 +1538,16 @@ void RegisterTests() {
     Add("attributes: Audio Source distances grey out without 3D Sound; Reset to Default", {
         FreshScene(), Wait(2),
         SelectByName("Beta"), Wait(3),
-        InspReveal(Header("Audio Source")), Click(Header("Audio Source")), Wait(3),
-        ExpectTrue("enabled while 3D", [](Ctx&) {
-            const UiItem* f = Find(ByTag("field:Audio Source/Min Distance"));
-            return f && !(f->ItemFlags & ImGuiItemFlags_Disabled);
-        }),
+        // Open the section only if an earlier test left it open (a section's open state outlives
+        // FreshScene; "sections: hover keys ..." failing before its final collapse used to leave Audio
+        // Source open here, so this click closed it and the field vanished).
+        InspReveal(Header("Audio Source")),
+        ClickUnlessShown(Header("Audio Source"), ByTag("field:Audio Source/Min Distance")), Wait(3),
+        InspReveal(ByTag("field:Audio Source/Min Distance")),
+        Expect("enabled while 3D", [](Ctx&) { return MinDistanceState(false); }),
         Do("3D Sound off", [](Ctx& c) { c.W.Registry.get<AudioSourceComponent>(ByName(c.W, "Beta")).Spatial = false; }), Wait(3),
-        ExpectTrue("greyed out", [](Ctx&) {
-            const UiItem* f = Find(ByTag("field:Audio Source/Min Distance"));
-            return f && (f->ItemFlags & ImGuiItemFlags_Disabled);
-        }),
+        InspReveal(ByTag("field:Audio Source/Min Distance")),
+        Expect("greyed out", [](Ctx&) { return MinDistanceState(true); }),
         Do("change the volume", [](Ctx& c) {
             X::PushUndo(c.E, c.W, "Change Volume");
             c.W.Registry.get<AudioSourceComponent>(ByName(c.W, "Beta")).Volume = 0.77f;

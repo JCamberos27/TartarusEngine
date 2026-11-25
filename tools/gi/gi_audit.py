@@ -14,6 +14,10 @@ Checks (docs: the GI Volume component, src/Renderer/GIData.h, GIVolumes.h, GIBak
   * shadows   - per circuit, shadow-casting point and spot lamps against the scene's shadow budget, and which of them
                 the bake shadows from each volume's camera (cause #4)
   * changes   - lights, circuits, volumes and geometry inside volumes changed since a git revision (the last bake)
+  * margins   - (--check-margins) every place two volumes meet: across a wall, no weight leaks through it and the wall's
+                own surfaces are fully covered; in a doorway or a seam inside one room, wSum never dips below 1. Also
+                each volume's face probes that sit in open air no other volume shares (outdoors or an uncovered space).
+                The exit status is 1 when a margin check fails.
 
 The math mirrors the C++ (Box::FromTransform / Fade, GridDims, Deserialize, LightGather's slot score) so the numbers
 match what the engine does; the pure parts are unit tested in test_gi_audit.py.
@@ -145,6 +149,16 @@ class Box:
             return 1.0 if m >= 0.0 else 0.0
         return min(max(m / fade, 0.0), 1.0)
 
+    def fade_faces(self, p, lo, hi):
+        """GI::Box::FadeFaces: a fade per face, `lo` for the -x/-y/-z faces, `hi` for +x/+y/+z (box-local axes), 0 = hard."""
+        q = self.to_local(p)
+        f = 1.0
+        for i in range(3):
+            d = self.half[i] - abs(q[i])
+            fd = lo[i] if q[i] < 0.0 else hi[i]
+            f = min(f, (1.0 if d >= 0.0 else 0.0) if fd <= 0.0 else min(max(d / fd, 0.0), 1.0))
+        return f
+
     def contains(self, p, pad=0.0):
         return self.inside_margin(p) >= -pad
 
@@ -272,8 +286,38 @@ def split_circuits(s):
 NEIGHBOURS = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
 
 
+# Black floor: a probe whose every coefficient (all layers) is under this, with all its neighbours under it too, is
+# 'uniform', never 'filled'. In an unlit room (SH ~1e-5) any neighbour average lands within _close's absolute term of
+# the probe, so the subset test can't tell a real probe from a fill there (the storeroom and box room read 98-100%
+# "filled" on final-1 while the baker logged 2% / 0% inner invalid). Absolute, not relative to the house: 1e-4 is
+# ~1/100 of the darkest lit room's DC term and well under the 0.002 luma bar, so no lit probe is affected.
+BLACK_FLOOR = 1e-4
+
+
+def _is_black(probes, idx):
+    return all(abs(x) < BLACK_FLOOR for l in range(len(probes)) for x in probes[l][idx])
+
+
 def _close(a, b):
     return abs(a - b) <= abs(b) * 2.0 ** -9 + 1e-6
+
+
+BAKE_LOG_LINE = re.compile(r"\[GI bake\] (GI .+?): (\d+) probes, (\d+) inside geometry")
+
+
+def parse_bake_log(text):
+    """--bake-gi stdout -> {volume: (probes, invalid)} from the baker's '[GI bake] <volume>: N probes, M inside geometry
+    (filled)' lines. The baker knows exactly which probes it filled; the classifier only guesses from the .gi."""
+    return {m.group(1): (int(m.group(2)), int(m.group(3))) for m in BAKE_LOG_LINE.finditer(text)}
+
+
+def bake_inner_invalid(probes, invalid, dims):
+    """-> (shell, inner, inner_invalid) for one volume from the baker's counts (Atlas's method, house-polish atlas.md
+    gap 2). The grid's outer shell sits in the walls by design, so every shell probe is taken as invalid and the rest
+    of the count as inner: a lower bound on the inner probes the room's air samples."""
+    inner = max(0, dims[0] - 2) * max(0, dims[1] - 2) * max(0, dims[2] - 2)
+    shell = probes - inner
+    return shell, inner, max(0, invalid - shell)
 
 
 def classify_probes(layers, dims):
@@ -328,8 +372,10 @@ def classify_probes(layers, dims):
 def _classify_one(probes, idx, nbs):
     # An exact copy of a neighbour in every layer is a fill from one done neighbour (a face probe in a wall copies the
     # one inside it) unless the probe is all black, where copies are just as likely to be real.
-    dark = all(abs(x) < 1e-4 for l in range(len(probes)) for x in probes[l][idx])
-    same = [all(probes[l][j] == probes[l][idx] for l in range(len(probes))) for j in nbs]
+    dark = _is_black(probes, idx)
+    if dark and all(_is_black(probes, j) for j in nbs):
+        return "uniform"  # below the black floor: can't be told from a fill (see BLACK_FLOOR)
+    same =[all(probes[l][j] == probes[l][idx] for l in range(len(probes))) for j in nbs]
     # Quick scalar screen on the layer-0 red DC term, then the full check.
     target = probes[0][idx][0]
     found_uniform = False
@@ -427,6 +473,8 @@ class Scene:
             out.append({
                 "id": e["id"], "name": e.get("name", ""), "order": e.get("order", 0), "box": box,
                 "spacing": spacing, "fade": float(g.get("Fade", 0.05)), "intensity": float(g.get("Intensity", 1.0)),
+                "fade_lo": [float(x) if x > 0 else float(g.get("Fade", 0.05)) for x in g.get("Fade Min", (0, 0, 0))],
+                "fade_hi": [float(x) if x > 0 else float(g.get("Fade", 0.05)) for x in g.get("Fade Max", (0, 0, 0))],
                 "circuits": split_circuits(g.get("Circuits", "")), "outside": bool(g.get("Outside", False)),
                 "bake_file": g.get("Bake File", ""), "dims": grid_dims(box.half, spacing), "active": self.active(e),
             })
@@ -541,6 +589,13 @@ def sample_top_face(box, step):
     return pts
 
 
+def volume_fade(v, p):
+    """The shader's per-volume weight at p, with the volume's per-face fades (Fade Min / Fade Max) when it has them."""
+    if "fade_lo" in v:
+        return v["box"].fade_faces(p, v["fade_lo"], v["fade_hi"])
+    return v["box"].fade(p, v["fade"])
+
+
 def coverage_at(p, volumes, normal=None):
     """(sum of the volumes' fades at p, [(name, fade)] for the volumes that reach p): the shader's wSum. With a surface
     `normal`, each volume tests p pushed off the surface by its normal bias (0.25 x Spacing, GIVolumes.cpp), as the
@@ -548,7 +603,7 @@ def coverage_at(p, volumes, normal=None):
     hits = []
     for v in volumes:
         q = p if normal is None else v_add(p, v_scale(normal, 0.25 * v.get("spacing", 0.0)))
-        hits.append((v["name"], v["box"].fade(q, v["fade"])))
+        hits.append((v["name"], volume_fade(v, q)))
     hits = [h for h in hits if h[1] > 0.0]
     return sum(f for _, f in hits), hits
 
@@ -627,6 +682,195 @@ def blend_note(gap, fade_a, fade_b):
         return "touching (overlap %.3f m): GI dips through ~%.2f m of fade (wSum < 1)" % (ov, fade_a + fade_b - ov)
     return ("overlap %.2f m: step A->avg over %.2f m, avg plateau %.2f m, avg->B over %.2f m"
             % (ov, fade_b, max(ov - fade_a - fade_b, 0.0), fade_a))
+
+
+def _air_beyond(own, x, axis, p, walls, volumes, skip=None):
+    """Whose air the point p with p[axis] = x is in, seen from volume `own`: None (wall, but `skip`: a corner or a T;
+    or air only volumes of own's room cover, as past a wall stub or column inside one room: harmless), "room" (a
+    volume of another room covers it) or "open" (no other volume covers it: outdoors, a window, unvolumed air)."""
+    q = list(p)
+    q[axis] = x
+    if any(c is not skip and c.contains(q) for c in walls):
+        return None
+    room = room_of(own["name"])
+    others = [o for o in volumes if o is not own and o["box"].contains(q)]
+    if not others:
+        return "open"
+    return "room" if any(room_of(o["name"]) != room for o in others) else None
+
+
+def check_margins(volumes, walls, step=0.05, heights=(1.0, 1.7), deep=0.5):
+    """--check-margins: every side-by-side meeting of two volumes (adjacent_pairs), sampled along the shared face every
+    `step` m at `heights` above the higher of the two floors.
+
+    A sample is WALLED when a wall collider running along the meeting (thin across it) lies anywhere between the two
+    faces, not only at their midpoint: with uneven faces (one inside the wall, one past it) the midpoint can land in
+    room air. Each of that wall's two surfaces is tested as the shader tests a surface: pushed off it along its normal
+    by each volume's normal bias. The volume on the far side must weigh 0 there (`leak`: light through the wall), and
+    all volumes together must cover the surface (`cover`: no fallback on the wall itself). A face that reaches past
+    the wall's far surface into air (not into more wall: a corner) is `through-wall` even when the normal bias hides
+    it from the leak test: its face probes bake the next room's light. Meetings that overlap by more than `deep` m are
+    one space by design (a stairwell through a room): they get no wall test.
+    Any other sample is OPEN (a doorway, or a seam inside one room): wSum is walked across the meeting, skipping points
+    inside walls, and must never dip (`open_min`).
+    "Cover" and "never dip" are judged against ONE box spanning both volumes along the crossing axis (and their shared
+    span across it), faded the same way: the pair must do at least as well as a single merged volume would. That
+    leaves a volume's outer faces (an outside door, a window) alone and flags only what the meeting itself loses.
+    open_min and cover_min are reported as wSum minus that reference (>= 0 passes).
+    -> one row per pair: sample counts, open_min, leak_max, cover_min, through_max and a verdict (ok / seam / leak /
+    wall-gap / through-wall)."""
+    rows = []
+    for a, b, axis, gap in adjacent_pairs(volumes):
+        if axis == 1:
+            continue
+        t = 2 - axis
+        (amin, amax), (bmin, bmax) = a["box"].aabb(), b["box"].aabb()
+        if (amin[axis] + amax[axis]) > (bmin[axis] + bmax[axis]):
+            a, b = b, a
+            (amin, amax), (bmin, bmax) = (bmin, bmax), (amin, amax)
+        plane = 0.5 * (amax[axis] + bmin[axis])  # a is on the low side, b on the high side
+        lo_t, hi_t = max(amin[t], bmin[t]), min(amax[t], bmax[t])
+        floor, top = max(amin[1], bmin[1]), min(amax[1], bmax[1])
+        n_open = n_wall = 0
+        open_min, leak_max, cover_min, through_max = 2.0, 0.0, 2.0, 0.0
+        two_rooms = room_of(a["name"]) != room_of(b["name"])
+        fade = max(a["fade"], b["fade"])
+        u_lo, u_hi = [0.0] * 3, [0.0] * 3
+        u_lo[axis], u_hi[axis] = min(amin[axis], bmin[axis]), max(amax[axis], bmax[axis])
+        u_lo[t], u_hi[t] = lo_t, hi_t
+        u_lo[1], u_hi[1] = floor, top
+        merged = Box([(u_lo[i] + u_hi[i]) * 0.5 for i in range(3)], [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+                     [(u_hi[i] - u_lo[i]) * 0.5 for i in range(3)])
+        lo_a, hi_a = sorted((amax[axis], bmin[axis]))
+        band = (max(lo_a - 2 * fade, u_lo[axis]), min(hi_a + 2 * fade, u_hi[axis]))
+        k = max(int((hi_t - lo_t) / step), 1)
+        for i in range(k):
+            tt = lo_t + (i + 0.5) * (hi_t - lo_t) / k
+            for h in heights:
+                y = floor + h
+                if y >= top:
+                    continue
+                p = [0.0, y, 0.0]
+                p[axis], p[t] = plane, tt
+                w = None
+                if -gap <= deep:
+                    for c in walls:
+                        lo, hi = c.aabb()
+                        if not (hi[axis] - lo[axis] <= 0.45 and hi[axis] - lo[axis] < hi[t] - lo[t]):
+                            continue
+                        # the wall's stretch between the two faces; inside one room (a stub, a column) only at the
+                        # midpoint, as light can't leak between two volumes of the same room
+                        if two_rooms:
+                            s0, s1 = max(lo[axis], lo_a), min(hi[axis], hi_a)
+                        else:
+                            s0 = s1 = plane
+                        if s1 < s0:
+                            continue
+                        q = list(p)
+                        q[axis] = 0.5 * (s0 + s1)
+                        if c.contains(q):
+                            w = c
+                            break
+                if w is None:
+                    if any(c.contains(p) for c in walls):
+                        continue  # a wall end or corner across the meeting: neither open nor a wall along it
+                    n_open += 1
+                    nstep = max(int(round((band[1] - band[0]) / 0.005)), 1)
+                    for j in range(nstep + 1):
+                        q = list(p)
+                        q[axis] = band[0] + (band[1] - band[0]) * j / nstep
+                        if any(c.contains(q) for c in walls):
+                            continue
+                        open_min = min(open_min, min(coverage_at(q, volumes)[0], 1.0) - merged.fade(q, fade))
+                    continue
+                n_wall += 1
+                wlo, whi = w.aabb()[0][axis], w.aabb()[1][axis]
+                # a's +axis face past the high surface, b's -axis face past the low one: probes in the far room's air
+                for past, surf, sign, own in ((amax[axis] - whi, whi, 1.0, a), (wlo - bmin[axis], wlo, -1.0, b)):
+                    if past > 1e-4 and _air_beyond(own, surf + sign * min(0.01, past * 0.5), axis, p, walls,
+                                                   volumes, skip=w):
+                        through_max = max(through_max, past)
+                for surf, sign, far in ((wlo, -1.0, b), (whi, 1.0, a)):
+                    q = list(p)
+                    q[axis] = surf
+                    nrm = [0.0, 0.0, 0.0]
+                    nrm[axis] = sign
+                    if any(c is not w and c.contains(v_add(q, v_scale(nrm, 0.01))) for c in walls):
+                        continue  # a corner: this bit of surface is buried in the wall across it, never seen
+                    qb = v_add(q, v_scale(nrm, 0.25 * min(a.get("spacing", 0.0), b.get("spacing", 0.0))))
+                    cover_min = min(cover_min, min(coverage_at(q, volumes, nrm)[0], 1.0) - merged.fade(qb, fade))
+                    qf = v_add(q, v_scale(nrm, 0.25 * far.get("spacing", 0.0)))
+                    leak_max = max(leak_max, volume_fade(far, qf))
+        verdict = []
+        if n_open and open_min < -1e-6:
+            verdict.append("seam")
+        if n_wall and leak_max > 1e-6:
+            verdict.append("leak")
+        if n_wall and cover_min < -1e-6:
+            verdict.append("wall-gap")
+        if n_wall and through_max > 1e-4:
+            verdict.append("through-wall")
+        rows.append({"a": a["name"], "b": b["name"], "axis": "xyz"[axis], "plane": round(plane, 3),
+                     "span": "%.2f..%.2f" % (lo_t, hi_t), "open_samples": n_open,
+                     "open_min_wsum": round(open_min, 4) if n_open else "",
+                     "walled_samples": n_wall, "wall_leak_max": round(leak_max, 4) if n_wall else "",
+                     "wall_cover_min": round(cover_min, 4) if n_wall else "",
+                     "through_wall_max_m": round(through_max, 4) if n_wall else "",
+                     "verdict": "+".join(verdict) or "ok"})
+    return rows
+
+
+def face_probe_exposure(volumes, walls, step=0.25, heights=(1.0, 1.7)):
+    """Where each volume's side-face probes sit, sampled every `step` m at `heights` above its floor: in a wall collider
+    (the bake marks them invalid and fills them from inside: no leak), in air another volume also covers (a doorway or
+    a seam: shared light), THROUGH-WALL (in another room's air, with a wall running along the face starting within
+    `reach` m inside it: the probe bakes the light of the room beyond that wall, a leak; fails the check),
+    THROUGH-WALL-OPEN (the same, but in air no other volume covers: a face just past a window's glass or frame, or an
+    outside door's jambs; reported, not failed), or EXPOSED (air no other volume covers: outdoors or an uncovered
+    space, so the room's wall-side samples blend some of that light in). -> one row per volume."""
+    reach = 0.25  # the normal bias of a 1 m grid: a wall starting farther in is the room's own (a stub, a jamb end)
+    rows = []
+    for v in volumes:
+        mn, mx = v["box"].aabb()
+        cnt = collections.Counter()
+        for axis in (0, 2):
+            t = 2 - axis
+            thin = []  # walls running along this axis's faces (thin across them), as AABBs
+            for w in walls:
+                lo, hi = w.aabb()
+                if hi[axis] - lo[axis] <= 0.45 and hi[axis] - lo[axis] < hi[t] - lo[t]:
+                    thin.append((lo, hi))
+            k = max(int((mx[t] - mn[t]) / step), 1)
+            for c, inward in ((mn[axis], 1.0), (mx[axis], -1.0)):
+                walk = min(reach, mx[axis] - mn[axis])
+                s0, s1 = sorted((c, c + inward * walk))
+                for i in range(k + 1):
+                    for h in heights:
+                        y = mn[1] + h
+                        if y >= mx[1]:
+                            continue
+                        p = [0.0, y, 0.0]
+                        p[axis], p[t] = c, mn[t] + (mx[t] - mn[t]) * i / k
+                        if any(w.contains(p) for w in walls):
+                            cnt["wall"] += 1
+                            continue
+                        crossed = any(lo[t] <= p[t] <= hi[t] and lo[1] <= y <= hi[1]
+                                      and lo[axis] < s1 and hi[axis] > s0 for lo, hi in thin)
+                        beyond = _air_beyond(v, c, axis, p, walls, volumes) if crossed else None
+                        if beyond == "room":
+                            cnt["through_wall"] += 1
+                        elif beyond == "open":
+                            cnt["through_wall_open"] += 1
+                        elif any(o is not v and o["box"].contains(p) for o in volumes):
+                            cnt["shared"] += 1
+                        else:
+                            cnt["exposed"] += 1
+        n = sum(cnt.values())
+        rows.append({"volume": v["name"], "samples": n, "in_wall": cnt["wall"], "shared": cnt["shared"],
+                     "through_wall": cnt["through_wall"], "through_wall_open": cnt["through_wall_open"],
+                     "exposed": cnt["exposed"],
+                     "exposed_share": round(cnt["exposed"] / n, 3) if n else 0.0})
+    return rows
 
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -763,6 +1007,10 @@ def run(args):
                 bakes[bf] = {g["name"]: g for g in parse_gi(f.read())}
         except (OSError, ValueError) as ex:
             bake_err[bf] = str(ex)
+    bake_log = {}
+    if getattr(args, "bake_log", ""):
+        with open(args.bake_log, "r", encoding="utf-8", errors="replace") as f:
+            bake_log = parse_bake_log(f.read())
 
     # ---- per volume: match + invalid share
     vol_rows = []
@@ -808,9 +1056,21 @@ def run(args):
             row["invalid_share"] = round(nf / len(cls), 4)
             # Face probes sit in the walls by design (GIBaker's own check counts inner probes only), so the flag is on
             # the inner probes: those are the ones the room's air actually samples.
-            row["inner_invalid_share"] = round(inner.count("filled") / len(inner), 4) if inner else None
-            if inner and inner.count("filled") / len(inner) > INVALID_FLAG_SHARE:
-                issues.append("inner invalid share %.0f%% > 20%%" % (100 * inner.count("filled") / len(inner)))
+            row["classifier_inner_invalid_share"] = round(inner.count("filled") / len(inner), 4) if inner else None
+            row["inner_invalid_share"] = row["classifier_inner_invalid_share"]
+            row["inner_invalid_source"] = "classifier"
+            # The baker's own count wins when its log is given: it knows which probes it filled.
+            if v["name"] in bake_log:
+                probes_n, invalid_n = bake_log[v["name"]]
+                shell, n_inner, ii = bake_inner_invalid(probes_n, invalid_n, d)
+                row["bake_invalid"] = invalid_n
+                row["bake_shell"] = shell
+                row["bake_inner_invalid"] = ii
+                row["inner_invalid_share"] = round(ii / n_inner, 4) if n_inner else None
+                row["inner_invalid_source"] = "bake log"
+            if (row["inner_invalid_share"] or 0) > INVALID_FLAG_SHARE:
+                issues.append("inner invalid share %.0f%% > 20%% (%s)" % (100 * row["inner_invalid_share"],
+                                                                          row["inner_invalid_source"]))
         if len(([""] if v["outside"] else []) + v["circuits"]) > MAX_LAYERS:
             issues.append("wants more than %d layers" % MAX_LAYERS)
         row["issues"] = " | ".join(issues)
@@ -895,6 +1155,13 @@ def run(args):
                           "same_room": room_of(a["name"]) == room_of(b["name"]), "door_entity_near": near_door,
                           "fade_a": a["fade"], "fade_b": b["fade"], "at": fmt3(mid),
                           "blend": blend_note(gap, a["fade"], b["fade"])})
+
+    # ---- margins (--check-margins)
+    margin_rows = face_rows = None
+    if getattr(args, "check_margins", False):
+        margin_rows = check_margins(vols, walls)
+        face_rows = face_probe_exposure(vols, walls)
+    args.margin_rows, args.face_rows = margin_rows, face_rows
 
     # ---- circuits and the shadow budget
     by_circ = collections.defaultdict(list)
@@ -1081,11 +1348,17 @@ def run(args):
     write_csv(os.path.join(args.out, "gi_audit_bake_shadows.csv"), sim_rows)
     if tour_rows:
         write_csv(os.path.join(args.out, "gi_audit_tour.csv"), tour_rows)
+    if margin_rows is not None:
+        write_csv(os.path.join(args.out, "gi_audit_margins.csv"), margin_rows)
+        write_csv(os.path.join(args.out, "gi_audit_face_probes.csv"), face_rows)
     args.skipped_slabs = skipped_slabs
     report = render_report(args, repo, scene, vols, vol_rows, orphan_bakes, samples, counts, gap_rows, floors,
                            mesh_floors, door_rows, circ_rows, change, tour_rows, eye)
     with open(os.path.join(args.out, "REPORT.md"), "w", encoding="utf-8", newline="\n") as f:
         f.write(report)
+    if margin_rows is not None and (any(r["verdict"] != "ok" for r in margin_rows)
+                                    or any(r["through_wall"] for r in face_rows)):
+        return 1
     return 0
 
 
@@ -1245,8 +1518,12 @@ def render_report(args, repo, scene, vols, vol_rows, orphan_bakes, samples, coun
              "6-neighbours averages to it in every coefficient of every layer within half-float rounding (what "
              "GI::FillInvalid leaves). A probe with one done neighbour is filled as a bit-exact copy of it: a group of "
              "identical neighbours counts all-but-one as filled (all of them when one member is an averaged fill). "
-             "All-black probes are ambiguous and counted apart (`dark_ambiguous`). The bake's own log line "
-             "`[GI bake] <volume>: N probes, X inside geometry (filled)` is the exact number: Kronos's bake gives it.")
+             "All-black probes are ambiguous and counted apart (`dark_ambiguous`), and so is a probe that is black "
+             "(every coefficient under %g) with all its neighbours black too: in an unlit room any neighbour average "
+             "matches it within rounding, so it can't be told from a fill. The bake's own log line "
+             "`[GI bake] <volume>: N probes, X inside geometry (filled)` is the exact number: pass the bake's stdout "
+             "with `--bake-log` and `inner_invalid_share` comes from it (shell = N - (x-2)(y-2)(z-2) taken as all "
+             "invalid, a lower bound; `inner_invalid_source` says which count was used)." % BLACK_FLOOR)
     L.append("- **Walkable floor** = the top faces of the box floor colliders under %s (%d slabs), less points inside a "
              "wall collider 0.3 m up. %d floor piece(s) have mesh colliders and are NOT sampled (%s): the stair runs, "
              "for one. Talos's tour waypoints cover those (see the cross-check). Furniture is not subtracted. "
@@ -1267,7 +1544,8 @@ def render_report(args, repo, scene, vols, vol_rows, orphan_bakes, samples, coun
 
     L.append("## 1. Volumes and the bake\n")
     L.append(md_table(vol_rows, ["volume", "size", "dims", "baked_dims", "spacing", "fade", "circuits", "outside",
-                                 "invalid_share", "inner_invalid_share", "issues"]))
+                                 "invalid_share", "classifier_inner_invalid_share", "bake_inner_invalid",
+                                 "inner_invalid_share", "inner_invalid_source", "issues"]))
     L.append("Full table: `gi_audit_volumes.csv`.\n")
 
     L.append("## 2. Coverage gaps (eye height first)\n")
@@ -1338,6 +1616,46 @@ def render_report(args, repo, scene, vols, vol_rows, orphan_bakes, samples, coun
         L.append("Every waypoint: `gi_audit_tour.csv`.\n")
     else:
         L.append("Pending: Talos's `tools/gi/forest_house_tour.json` isn't in yet. Re-run with `--tour <file>`.\n")
+    if getattr(args, "margin_rows", None) is not None:
+        mr, fr = args.margin_rows, args.face_rows
+        bad = [r for r in mr if r["verdict"] != "ok"]
+        n_open = sum(1 for r in mr if r["open_samples"])
+        n_wall = sum(1 for r in mr if r["walled_samples"])
+        L.append("## 7. Margin check (--check-margins)\n")
+        L.append("%d side-by-side meetings: %d with an open band (a doorway, or a seam inside one room), %d across a "
+                 "wall (a meeting can be both). **%d fail.** seam = wSum dips crossing an open band; leak = a volume "
+                 "weighs > 0 on the far surface of a wall; wall-gap = a wall surface isn't fully covered; "
+                 "through-wall = a face reaches past the wall's far surface into air. Both dips are "
+                 "measured against one merged box over the pair (open_min_wsum / wall_cover_min = wSum minus that; "
+                 ">= 0 passes).\n"
+                 % (len(mr), n_open, n_wall, len(bad)))
+        if bad:
+            L.append(md_table(bad, ["a", "b", "axis", "plane", "span", "open_min_wsum", "wall_leak_max",
+                                    "wall_cover_min", "through_wall_max_m", "verdict"]))
+        thr = [r for r in fr if r["through_wall"]]
+        L.append("**Face probes through a wall into another room's air** (they bake the next room's light; each one "
+                 "fails the check): %d of %d volumes.\n" % (len(thr), len(fr)))
+        if thr:
+            L.append(md_table(sorted(thr, key=lambda r: -r["through_wall"]),
+                              ["volume", "samples", "in_wall", "through_wall", "shared", "exposed"]))
+        tho = [r for r in fr if r["through_wall_open"]]
+        L.append("**Face probes just past a wall, window or door frame into air no volume covers** (outdoors, or a "
+                 "window plane; reported, not failed): %d of %d volumes.\n" % (len(tho), len(fr)))
+        if tho:
+            L.append(md_table(sorted(tho, key=lambda r: -r["through_wall_open"]),
+                              ["volume", "samples", "in_wall", "through_wall_open", "exposed"]))
+        opens = [r for r in mr if r["open_samples"]]
+        if opens:
+            L.append("Open bands, lowest wSum crossing each:\n")
+            L.append(md_table(sorted(opens, key=lambda r: r["open_min_wsum"]),
+                              ["a", "b", "axis", "plane", "span", "open_samples", "open_min_wsum", "verdict"]))
+        exp = [r for r in fr if r["exposed"]]
+        L.append("**Face probes in open air no other volume shares** (outdoors, or a space no volume covers; the room's "
+                 "wall-side samples blend some of that light in): %d of %d volumes.\n" % (len(exp), len(fr)))
+        if exp:
+            L.append(md_table(sorted(exp, key=lambda r: -r["exposed_share"]),
+                              ["volume", "samples", "in_wall", "shared", "exposed", "exposed_share"]))
+        L.append("Every pair: `gi_audit_margins.csv`; every volume: `gi_audit_face_probes.csv`.\n")
     return "\n".join(L) + "\n"
 
 
@@ -1352,6 +1670,12 @@ def main(argv=None):
     ap.add_argument("--step", type=float, default=0.25, help="floor sampling step, metres")
     ap.add_argument("--bake-fov", type=float, default=90.0, help="bake camera vertical FOV for DistanceFade")
     ap.add_argument("--notes", default="", help="optional markdown file inserted after the summary (hand-written findings)")
+    ap.add_argument("--bake-log", default="",
+                    help="the --bake-gi stdout of this bake: the baker's 'N probes, M inside geometry' lines give the "
+                         "inner-invalid share instead of the classifier's guess")
+    ap.add_argument("--check-margins", action="store_true",
+                    help="check every place two volumes meet: no leak through walls, no wSum dip across doorways and "
+                         "seams; exit status 1 on a failure")
     return run(ap.parse_args(argv))
 
 
