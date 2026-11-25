@@ -11,6 +11,7 @@
 #include "Core/Env.h"
 #include "GpuScene.h"
 #include "GpuCull.h"
+#include "CascadedShadowMap.h"
 #include "Core/FrameLoads.h"
 #include "Core/Paths.h"
 #include "Core/Profiler.h"
@@ -402,6 +403,31 @@ void SmokeHarness::BeginFrame() {
         else
             Log::Error("[SmokeTest] GPU culling: " + std::to_string(views) + " views, " + std::to_string(missing) +
                        " missing, " + std::to_string(order) + " out of order");
+    }
+
+    // smoke_min: the sun's GPU caster cull (G4-a) against the CPU's cascade runs: asked for on frame 15, run by the next
+    // sun pass, checked on frame 20. Every (caster, cascade) the CPU draws must come back (extras are allowed).
+    if (m_SceneActive && path.find("smoke_min") != std::string::npos && GpuScene::Enabled() &&
+        CascadedShadowMap::LayeredSupported()) {
+        if (m_FramesRendered == 15) {
+            const GpuCull::SunVerifyTotals& t = GpuCull::SunTotals();
+            m_SunVerifyBefore[0] = t.Frames;
+            m_SunVerifyBefore[1] = t.Expected;
+            m_SunVerifyBefore[2] = t.Missing;
+            m_SunVerifyBefore[3] = t.Extra;
+            GpuCull::RequestSunVerify();
+        } else if (m_FramesRendered == 20) {
+            const GpuCull::SunVerifyTotals& after = GpuCull::SunTotals();
+            const std::uint64_t passes = after.Frames - m_SunVerifyBefore[0];
+            const std::uint64_t expected = after.Expected - m_SunVerifyBefore[1];
+            const std::uint64_t missing = after.Missing - m_SunVerifyBefore[2];
+            if (passes > 0 && expected > 0 && missing == 0)
+                std::cout << "[SmokeTest]   GPU sun caster cull matches the CPU cascades (" << expected << " kept, "
+                          << (after.Extra - m_SunVerifyBefore[3]) << " extra)" << std::endl;
+            else
+                Log::Error("[SmokeTest] GPU sun caster cull: " + std::to_string(passes) + " passes, " +
+                           std::to_string(expected) + " expected, " + std::to_string(missing) + " missing");
+        }
     }
 
     // A smoke_ssao_off* scene: rendered with SSAO off; no program may put two sampler types on one unit.

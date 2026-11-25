@@ -163,6 +163,7 @@ private:
     // Across scenes, as the function-local statics they came from were.
     std::string m_SetupError;     // a harness setup failure (a bad camera path), charged to the first scene
     bool m_Cinematic = false;     // TARTARUS_CINEMATIC: this run records the camera path (Tests/Cinematic.h)
+    std::uint64_t m_SunVerifyBefore[4] = {}; // smoke_min: GpuCull::SunTotals() when the G4-a check asked (passes, expected, missing, extra)
     int m_ShotHold = 0;           // frames the current capture has waited for decal textures to stream in
     bool m_Sampling = false;      // --npc-test --perf-sample's profile is running
     int m_CombatPlayFrame = 0;    // the combat bench's maximized Play frames so far
