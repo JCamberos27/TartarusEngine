@@ -65,6 +65,11 @@ struct VisibleRenderable {
     // draw-list build needn't look them up again per view. Only set on what GatherVisible returns.
     std::uint16_t CandFlags = 0;
     int Layer = 0;
+    // Its slot in the GPU scene (SceneSlot below: the candidate list's index), where GpuScene holds Xform and Normal.
+    // Only set on what GatherVisible returns. Valid until another world's GatherVisible or GpuScene Sync (a world switch
+    // rebuilds the list, possibly in another order): a world's gather and the draws that read its slots stay together
+    // (one RenderScene; one ShadowFrame render).
+    std::uint32_t Slot = ~0u;
 };
 // Clears `out` and fills it with what passes `q`.
 void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRenderable>& out);
