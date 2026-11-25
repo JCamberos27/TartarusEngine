@@ -43,6 +43,9 @@ uniform int uInstanced;
 uniform int uInstanceBase;
 uniform int uInstanceLayers;
 layout(std430, binding = 27) readonly buffer InstanceBlock { mat4 uInstances[]; };
+// uInstanced 2: the multi-draw reading the persistent GPU scene (GpuScene.h) - binding 27 holds the scene's transforms
+// and caster i of a command is the one at slot uInstanceSlot[baseInstance + i].
+layout(std430, binding = 28) readonly buffer InstanceSlotBlock { int uInstanceSlot[]; };
 out vec2 vUV;
 out vec3 vWorldPos; // used by the local-light (spot/point) depth FS; the sun FS ignores it
 void main() {
@@ -57,9 +60,10 @@ void main() {
     vUV = aUV;
     mat4 model = uModel;
     int layerOffset = gl_InstanceID;
-    if (uInstanced == 1) {
+    if (uInstanced != 0) {
         int layers = max(uInstanceLayers, 1);
-        model = uInstances[(uInstanceBase + gl_BaseInstance + gl_InstanceID / layers) * 2]; // gl_BaseInstance: the multi-draw command's caster
+        int at = uInstanceBase + gl_BaseInstance + gl_InstanceID / layers; // gl_BaseInstance: the multi-draw command's caster
+        model = uInstances[(uInstanced == 2 ? uInstanceSlot[at] : at) * 2];
         layerOffset = gl_InstanceID % layers;
     }
     precise vec4 worldPos = model * localPos;

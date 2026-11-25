@@ -1,7 +1,10 @@
 #include "GpuScene.h"
 #include "SceneRenderer.h"
 #include "GpuMemTrack.h"
+#include "InstanceBatch.h"
 #include "gl.h"
+#include "World.h"
+#include "Components.h"
 #include "Core/Env.h"
 #include <algorithm>
 #include <cstring>
@@ -52,6 +55,11 @@ void GpuScene::WriteSlot(std::uint32_t slot, const SceneSlot& s) {
 void GpuScene::Sync(World& world, bool upload) {
     m_Last = {};
     if (!Enabled()) return;
+    // Every Sync keys SyncOnce, so a Sync for another world in between (a bake, a preview) makes the next SyncOnce
+    // for this one sync again instead of reading the other world's transforms.
+    m_OnceWorld = &world;
+    m_OnceStamp = world.TransformCacheStamp();
+    m_OnceRenderables = world.Registry.storage<RenderableComponent>().size();
     static SceneSlotChanges changes;
     TakeSceneSlotChanges(world, changes);
     m_Count = changes.Count;
@@ -89,6 +97,19 @@ void GpuScene::Sync(World& world, bool upload) {
     }
     m_GpuStale = false;
     UploadRuns(m_Runs);
+}
+
+bool GpuScene::SyncOnce(World& world) {
+    if (!Enabled()) return false;
+    if (Ready() && UpToDateFor(world)) return true;
+    Sync(world);
+    return Ready();
+}
+
+bool GpuScene::UpToDateFor(World& world) const {
+    const std::uint64_t stamp = world.TransformCacheStamp();
+    return stamp != 0 && m_OnceWorld == &world && m_OnceStamp == stamp &&
+           m_OnceRenderables == world.Registry.storage<RenderableComponent>().size();
 }
 
 bool GpuScene::EnsureCapacity(std::uint32_t count) {
@@ -139,12 +160,25 @@ void GpuScene::UploadRuns(const std::vector<Run>& runs) {
     }
 }
 
+void GpuScene::BindSlotList(unsigned binding, const std::vector<std::uint32_t>& slots) {
+    const std::uint32_t none = 0;
+    const void* data = slots.empty() ? (const void*)&none : (const void*)slots.data();
+    const std::size_t bytes = std::max<std::size_t>(slots.size(), 1) * sizeof(std::uint32_t);
+    if (InstanceBuffer::UploadRange(binding, data, bytes)) return;
+    if (!m_SlotFallback) glCreateBuffers(1, &m_SlotFallback);
+    // A new data store each time: the draws already issued against the old one still read their own slots.
+    glNamedBufferData(m_SlotFallback, (GLsizeiptr)bytes, data, GL_STREAM_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, m_SlotFallback);
+}
+
 void GpuScene::Release() {
     if (m_Xforms || m_Bounds) {
         const unsigned old[2] = {m_Xforms, m_Bounds};
         glDeleteBuffers(2, old);
         GpuMemTrack::Set("GpuScene xforms + bounds", 0);
     }
+    if (m_SlotFallback) glDeleteBuffers(1, &m_SlotFallback);
+    m_SlotFallback = 0;
     m_Xforms = m_Bounds = 0;
     m_Capacity = 0;
     m_GpuStale = true;

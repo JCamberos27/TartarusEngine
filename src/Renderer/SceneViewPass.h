@@ -1,6 +1,6 @@
 #pragma once
 // SceneRenderer::RenderScene's stages (SceneViewPass.cpp). Internal to the renderer: SceneRenderer.cpp and
-// SceneViewPass.cpp include it, nothing else.
+// SceneViewPass.cpp include it (and GpuCull.cpp, for the candidate flag bits), nothing else.
 #include "SceneRenderer.h"
 #include "Frustum.h"
 #include "InstanceBatch.h"
@@ -77,6 +77,7 @@ struct SceneDrawItem {
     glm::mat3 Normal{1.0f}; // transpose(inverse(mat3(Xform))), from the candidate cache (opaque items)
     float LodFade = 0.0f;   // World::LodFadeOf: a LOD cross-fade under way (dithered, drawn on its own)
     bool GIFlatL1 = false; // an OpenableComponent leaf: its GI lookup damps the directional term (GIVolumes::SetMask)
+    std::uint32_t Slot = ~0u; // VisibleRenderable::Slot (opaque items): where GpuScene holds Xform and Normal
 };
 
 // An opaque multi-draw batch's sub-mesh. Prog/State/Mat/Object: how the batch binds, for drawing the pre-passed
@@ -120,6 +121,7 @@ struct SceneViewScratch {
     std::vector<HiZCuller::Group> HizGroups;
     std::vector<std::uint32_t> HizCmdList, HizSlotGroup;
     std::vector<std::uint32_t> PrepassedBatches;
+    std::vector<std::uint32_t> SlotStaging; // the multi-draw copies' GPU scene slots, in instance order (BuildBatches)
 };
 
 // One RenderScene call: this view's state, and its stages in the order Run() calls them.
@@ -204,5 +206,10 @@ private:
     unsigned m_HizDepth = 0; // the view's depth after the pre-pass, single sample: HiZCuller's occluders
     bool m_Instancing = false;
     bool m_HizCulled = false;
+    // The multi-draw batches read their transforms from the GPU scene (GpuScene.h): binding 27 holds its Xforms while
+    // they draw and 28 each copy's slot (HiZCuller's remap, or SlotStaging as it is); the instance ring otherwise.
+    bool m_SceneSlots = false;
+    bool m_XformsOnScene = false; // binding 27 holds the GPU scene now, not this view's instance ring span
+    void BindInstanceXforms(bool scene);
     bool m_VelocityOut = false;
 };

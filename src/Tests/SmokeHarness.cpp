@@ -10,6 +10,7 @@
 #include "Components.h"
 #include "Core/Env.h"
 #include "GpuScene.h"
+#include "GpuCull.h"
 #include "Core/FrameLoads.h"
 #include "Core/Paths.h"
 #include "Core/Profiler.h"
@@ -31,6 +32,7 @@
 #include "LightSwitch.h"
 #include "SamplingProfiler.h"
 #include "SceneRenderer.h"
+#include "Frustum.h"
 #include "SceneSerializer.h"
 #include "ShadowFrame.h"
 #include "ShadowLimits.h"
@@ -164,7 +166,8 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
         }
     }
     m_ShotCameraStart = Env::IsSet(Env::Var::ShotStart) ? std::max(1, Env::Int(Env::Var::ShotStart, 0)) : 40;
-    m_FrameBudget = opt.npcTestMode ? 60 * 60 * 6 : opt.perfBenchMode ? 3 * PerfBench::kPhaseFrames
+    m_PerfPlays = std::clamp(Env::Int(Env::Var::PerfPlays, 1), 1, 8);
+    m_FrameBudget = opt.npcTestMode ? 60 * 60 * 6 : opt.perfBenchMode ? (2 + m_PerfPlays) * PerfBench::kPhaseFrames
                   : m_Cinematic ? Cinematic::Warmup() + (int)(Cinematic::Duration() * 60.0f) + 2
                   : !m_ShotCameras.empty() ? m_ShotCameraStart + kShotCameraSettle * (int)m_ShotCameras.size() + 1 : 100;
     m_MemReportDir = Env::Str(Env::Var::MemReport);
@@ -320,12 +323,17 @@ void SmokeHarness::LoadScene() {
                     ps.CapBytes / MB, ps.Evicted, ps.EvictedBytes / MB, missing,
                     (missing == 0 && inFlight == 0) ? "" : "  FAIL");
         std::fflush(stdout);
+        if (missing != 0 || inFlight != 0)
+            Log::Error("[SmokeTest] texture cache pin check: " + std::to_string(missing) + " of this scene's entries evicted, " +
+                       std::to_string(inFlight) + " decodes still in flight");
     }
     if (m_SceneLoadOk) {
         SmokeChecks::SceneLoaded(world, m_Ctx.assets, path, [this](const std::string& label) { MemSnapshot(label); });
         FirstPersonPresentation::PrefetchPlayAssets(world, m_Ctx.assets); // as the editor's scene open
     }
     m_FramesRendered = 0;
+    m_PerfPlay = 1;
+    m_PerfReplay = false;
     m_SceneStartSeconds = glfwGetTime();
     m_WallFrames = 0;
     m_UnfocusedFrames = 0;
@@ -368,6 +376,33 @@ void SmokeHarness::BeginFrame() {
         std::string why;
         if (GpuScene::Get().SelfTest(world, why)) std::cout << "[SmokeTest]   GPU scene matches the candidate list" << std::endl;
         else Log::Error("[SmokeTest] GPU scene: " + why);
+    }
+
+    // smoke_min: GPU culling's stage A + ordered compaction (G-2) against GatherVisible: a camera query and one inside
+    // half the scene's box. Every slot the CPU keeps must come back, in its order (extras are allowed).
+    if (m_SceneActive && m_FramesRendered == 15 &&
+        path.find("smoke_min") != std::string::npos && GpuScene::Enabled()) {
+        const GpuCull::VerifyTotals before = GpuCull::Totals();
+        VisibilityQuery cam;
+        GpuCull::VerifyView(world, cam);
+        glm::vec3 lo, hi;
+        if (RenderableBounds(world, lo, hi)) {
+            const glm::vec3 mid = (lo + hi) * 0.5f;
+            const AABB half{lo, mid};
+            VisibilityQuery inside;
+            inside.ShadowCasters = true;
+            inside.Within = &half;
+            GpuCull::VerifyView(world, inside);
+        }
+        const GpuCull::VerifyTotals& after = GpuCull::Totals();
+        const std::uint64_t views = after.Views - before.Views, missing = after.Missing - before.Missing;
+        const std::uint64_t order = after.OrderBad - before.OrderBad;
+        if (views > 0 && missing == 0 && order == 0)
+            std::cout << "[SmokeTest]   GPU culling matches the CPU gather (" << (after.Expected - before.Expected)
+                      << " kept, " << (after.Extra - before.Extra) << " extra)" << std::endl;
+        else
+            Log::Error("[SmokeTest] GPU culling: " + std::to_string(views) + " views, " + std::to_string(missing) +
+                       " missing, " + std::to_string(order) + " out of order");
     }
 
     // A smoke_ssao_off* scene: rendered with SSAO off; no program may put two sampler types on one unit.
@@ -848,17 +883,24 @@ void SmokeHarness::PerfFrame() {
                           << " impostors=" << (ImpostorLibrary::Wanted() && !ImpostorLibrary::Enabled()) << "]" << std::endl;
             m_PerfHold = 0;
         }
+        if (m_PerfReplay) { // the next Play (its Enter Play frame is this phase's first)
+            m_PerfReplay = false;
+            ++m_PerfPlay;
+            m_Ctx.togglePlay();
+            m_Ctx.setMaximized(true);
+        }
         const int phaseFrame = (m_FramesRendered - 1) % PerfBench::kPhaseFrames + 1;
         if (opt.perfSample && phaseFrame == std::max(m_Perf.Warmup(), 1)) SamplingProfiler::Start(); // warmup 0: from frame 1
         if (phaseFrame > m_Perf.Warmup()) m_Perf.Sample(frameMs, phaseFrame);
         if (phaseFrame == PerfBench::kPhaseFrames) {
-            m_Perf.ReportPhase(std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string(),
-                               !playing ? "edit" : playMaximized ? "play-max" : "play",
+            const std::string phase = !playing ? "edit" : !playMaximized ? "play" : m_PerfPlay > 1 ? "play-max-" + std::to_string(m_PerfPlay) : "play-max";
+            m_Perf.ReportPhase(std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string(), phase.c_str(),
                                m_Ctx.editor.GetRenderStats().DrawCalls, m_Ctx.editor.GetRenderStats().Triangles,
                                m_Ctx.window.GetWidth(), m_Ctx.window.GetHeight(), opt.perfSample);
             if (m_FramesRendered < m_FrameBudget) {
                 if (!playing) m_Ctx.togglePlay();
                 else if (!playMaximized) m_Ctx.setMaximized(true);
+                else if (m_PerfPlay < m_PerfPlays) { m_Ctx.togglePlay(); m_PerfReplay = true; } // Stop; Play again next frame
             }
         }
     }

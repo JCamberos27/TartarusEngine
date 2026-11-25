@@ -9,13 +9,15 @@
 #include "../Renderer/UploadStaging.h"
 #include "../Renderer/MeshArena.h"
 #include "../Renderer/HiZCuller.h"
+#include "../Renderer/GpuCull.h"
+#include "../Physics/Frustum.h"
 #include "../Renderer/GpuScene.h"
+#include "../Renderer/SceneViewPass.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/TextureCache.h"
 #include "../Renderer/Texture.h"
 #include "../Renderer/ImpostorLibrary.h"
 #include "../Renderer/AssetCost.h"
-#include "../Renderer/SceneViewPass.h"
 #include "../Renderer/SkyAtmosphere.h"
 #include "../Renderer/ProgramBinaryCache.h"
 #include "../Renderer/Material.h"
@@ -328,9 +330,28 @@ void GpuSceneMirror() {
         }
         return true;
     };
+    // G1-b: what GatherVisible hands out points at its slot - the matrices the batched draws read from the scene are
+    // the ones the item itself carries.
+    std::vector<VisibleRenderable> vis;
+    std::uint64_t slotChecks = 0;
+    auto slotsPoint = [&](int frame) {
+        GatherVisible(w, VisibilityQuery{}, vis);
+        for (const VisibleRenderable& v : vis) {
+            const bool ok = v.Slot < scene.Count() &&
+                            std::memcmp(&scene.XformMirror()[(size_t)v.Slot * 2], &v.Xform, sizeof(glm::mat4)) == 0 &&
+                            scene.XformMirror()[(size_t)v.Slot * 2 + 1] == glm::mat4(v.Normal);
+            if (!ok) {
+                std::printf("[GpuSceneMirror] frame %d: gathered slot %u of %u doesn't hold its item\n", frame, v.Slot, scene.Count());
+                return false;
+            }
+            ++slotChecks;
+        }
+        return true;
+    };
     scene.Sync(w, false);
     CHECK(scene.LastSync().Full && scene.Count() == 300);
     CHECK(matches(-1));
+    CHECK(slotsPoint(-1));
     // A full sync uploads every slot in one span (it once planned just the first and the last).
     CHECK(scene.LastRuns().size() == 1 && scene.LastRuns()[0] == GpuScene::Run(0u, 299u));
     // Nothing changed: nothing written.
@@ -369,14 +390,55 @@ void GpuSceneMirror() {
             written += scene.LastSync().Slots;
             total += scene.Count();
         }
-        const bool same = matches(frame);
+        const bool same = matches(frame) && slotsPoint(frame);
         CHECK(same);
         if (!same) break;
     }
+    CHECK(slotChecks > 0);
     std::printf("[GpuSceneMirror] %d of %d frames incremental, %llu of %llu slots written on them\n", incremental, frames,
                 (unsigned long long)written, (unsigned long long)total);
     CHECK(incremental * 2 > frames);
     CHECK(written * 10 < total); // a few changes a frame: a few slots, not the list
+}
+
+// Every Sync keys SyncOnce: SyncOnce(A), a Sync for another world (a bake, a preview), then SyncOnce(A) must sync A
+// again, or A's depth casters read B's transforms until something in A moves.
+void GpuSceneSyncOnceKey() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World a, b;
+    entt::entity first = entt::null;
+    for (int i = 0; i < 3; ++i) {
+        const entt::entity e = a.CreateModelEntity(model, glm::vec3((float)i, 0.0f, 0.0f), glm::vec3(0), glm::vec3(1), "A");
+        if (i == 0) first = e;
+    }
+    for (int i = 0; i < 5; ++i) b.CreateModelEntity(model, glm::vec3(0.0f, 0.0f, (float)i), glm::vec3(0), glm::vec3(1), "B");
+    a.RebuildWorldTransformCache();
+    b.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    scene.Sync(a, false);
+    const std::uint32_t countA = scene.Count();
+    CHECK(scene.UpToDateFor(a) && !scene.UpToDateFor(b));
+    scene.Sync(b, false); // another world in between
+    CHECK(scene.Count() != countA);
+    CHECK(!scene.UpToDateFor(a) && scene.UpToDateFor(b));
+    scene.Sync(a, false); // what SyncOnce(A) now does
+    CHECK(scene.LastSync().Full && scene.Count() == countA && scene.UpToDateFor(a));
+    a.Registry.get<TransformComponent>(first).Position.y = 2.0f; // A itself moves
+    a.RebuildWorldTransformCache();
+    CHECK(!scene.UpToDateFor(a));
+    ForgetGatherCandidates(); // no cache left pointing at these worlds
 }
 
 // GpuScene's upload plan and packing, without GL.
@@ -509,6 +571,68 @@ void MeshArenaFreeList() {
     f.Give(c, 30); // and everything joins up again
     CHECK(f.Runs() == 1 && f.FreeUnits() == 100);
     CHECK(f.Take(100) == 0 && f.Take(1) == ~0u);
+}
+
+// GpuCull (G-2): stage A's CPU reference gives GatherVisible's answer for every slot - the same flag tests, Frustum::
+// Intersects, the Within box and TooSmallOnScreen - over random boxes, flags, layers and queries (camera, owner view,
+// editor view with a layer mask, shadow casters with a Within box). Slots are packed by GpuScene::Pack, so the GPU
+// scene's layout is what is tested. The compute is held to this reference.
+void GpuCullStageAMatchesCpu() {
+    std::mt19937 rng(1225);
+    std::uniform_real_distribution<float> pos(-60.0f, 60.0f), size(0.001f, 6.0f), unit(0.0f, 1.0f);
+    const glm::mat4 proj = glm::perspective(glm::radians(70.0f), 16.0f / 9.0f, 0.1f, 200.0f);
+    const glm::vec3 eye(1.0f, 1.7f, 2.0f);
+    const glm::mat4 view = glm::lookAt(eye, eye + glm::vec3(0.3f, -0.1f, -1.0f), glm::vec3(0, 1, 0));
+    const Frustum frustum = Frustum::FromViewProj(proj * view);
+    const AABB within{glm::vec3(-20.0f, -5.0f, -20.0f), glm::vec3(20.0f, 10.0f, 20.0f)};
+    constexpr std::uint16_t kSettingBits[] = {kSlotFlagCastOff, kSlotFlagShadowsOnly, kSlotFlagTransparent};
+    int mismatches = 0, kept = 0, total = 0;
+    for (int qi = 0; qi < 4; ++qi) {
+        VisibilityQuery q;
+        q.Cull = &frustum;
+        if (qi == 0) { q.OwnerView = true; q.SizeCullEye = &eye; q.SizeCullProjScale = proj[1][1]; q.MinScreenHeight = 0.01f; }
+        if (qi == 1) { q.SkipViewModels = true; q.SkipPlayerBody = true; q.SkipTransparent = true; }
+        if (qi == 2) { q.EditorView = true; q.LayerVisibleMask = 0x0000FF0Fu; }
+        if (qi == 3) { q.ShadowCasters = true; q.Within = &within; q.Cull = nullptr; }
+        const GpuCull::ViewQuery gq = GpuCull::MakeQuery(q);
+        for (int i = 0; i < 6000; ++i) {
+            SceneSlot s;
+            const glm::vec3 c(pos(rng), pos(rng) * 0.2f, pos(rng)), h(size(rng), size(rng), size(rng));
+            s.WorldMin = c - h * 0.5f;
+            s.WorldMax = c + h * 0.5f;
+            s.Bounded = unit(rng) < 0.9f;
+            s.Alive = unit(rng) < 0.95f;
+            for (std::uint32_t bit = 0; bit < 8; ++bit)
+                if (unit(rng) < 0.06f) s.Flags |= (std::uint16_t)(1u << bit);
+            for (std::uint16_t bit : kSettingBits)
+                if (unit(rng) < 0.06f) s.Flags |= bit;
+            s.Layer = (int)(unit(rng) * 34.0f) - 1; // -1..32: out-of-range layers are never hidden
+            const bool lod = unit(rng) < 0.05f;
+            glm::mat4 xf[2];
+            glm::vec4 bounds[2];
+            GpuScene::Pack(s, xf, bounds);
+            // GatherVisible's consider(), restated on the slot.
+            bool cpu = s.Alive && !(s.Flags & (GpuCull::kSlotInactive | GpuCull::kSlotPoseSource)) && !lod;
+            if (cpu && (s.Flags & ((q.ShadowCasters || !q.OwnerView) ? GpuCull::kSlotOwnerViewOnly : GpuCull::kSlotHiddenFromOwner))) cpu = false;
+            if (cpu && q.SkipViewModels && (s.Flags & GpuCull::kSlotViewModel)) cpu = false;
+            if (cpu && q.SkipPlayerBody && (s.Flags & GpuCull::kSlotPlayerBody)) cpu = false;
+            if (cpu && q.EditorView && ((s.Flags & GpuCull::kSlotHiddenInScene) ||
+                                        (s.Layer >= 0 && s.Layer < 32 && !((q.LayerVisibleMask >> s.Layer) & 1u)))) cpu = false;
+            if (cpu && (s.Flags & (q.ShadowCasters ? kSlotFlagCastOff : kSlotFlagShadowsOnly))) cpu = false;
+            if (cpu && q.SkipTransparent && (s.Flags & kSlotFlagTransparent)) cpu = false;
+            if (cpu && s.Bounded) {
+                if (q.Cull && !q.Cull->Intersects(AABB{s.WorldMin, s.WorldMax})) cpu = false;
+                if (cpu && q.Within && !q.Within->Intersects(AABB{s.WorldMin, s.WorldMax})) cpu = false;
+                if (cpu && q.SizeCullEye && TooSmallOnScreen(s.WorldMin, s.WorldMax, *q.SizeCullEye, q.SizeCullProjScale, q.MinScreenHeight)) cpu = false;
+            }
+            const bool gpu = GpuCull::PassesStageA(bounds, gq, lod);
+            mismatches += cpu != gpu;
+            kept += gpu;
+            ++total;
+        }
+    }
+    CHECK(mismatches == 0);
+    CHECK(kept > total / 20 && kept < total); // the cases are mixed: some kept, some not
 }
 
 // HiZCuller: the occlusion boxes are padded past the object, and swaying foliage pads them further.
@@ -2460,9 +2584,8 @@ void TestPhysicalSky() {
     CHECK(clamped.Render.Sky.CloudsEnabled); // a non-boolean is ignored, keeping the default
 }
 
-// --- TextureCache: one texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's)
-// keeps both entries - they used to share one and evict each other every session, re-decoding (and re-compressing) both.
-// P-53: the size cap never evicts this session's working set, grows with it, and keeps 20 GB of disk free.
+// --- TextureCache. P-53: the size cap never evicts this session's working set (loaded, stored or requested), grows with
+// it, and keeps 20 GB of disk free.
 void TestTextureCachePinEvict() {
     constexpr uint64_t GiB = 1024ull * 1024 * 1024;
     constexpr uint64_t unknownFree = std::numeric_limits<uint64_t>::max();
@@ -2485,8 +2608,20 @@ void TestTextureCachePinEvict() {
     for (size_t i : v) CHECK(!e[i].Pinned);
     // Under the cap with plenty of disk: nothing.
     CHECK(TextureCache::ChooseEvictions({{"a", GiB, 0, false}}, 500 * GiB).empty());
+    // Pinned at request time (the async loader, before its decode): Prune keeps it, and the pin check doesn't expect it
+    // on disk yet.
+    const std::string queued = (std::filesystem::temp_directory_path() / "tt_cache_pin_request_test.png").string();
+    TextureImportSettings s;
+    s.MaxTextureSize = 333; // a variant nothing else uses
+    const int missingBefore = TextureCache::SessionEntriesMissing();
+    CHECK(!TextureCache::Pinned(queued, s));
+    TextureCache::Pin(queued, s);
+    CHECK(TextureCache::Pinned(queued, s));
+    CHECK(TextureCache::SessionEntriesMissing() == missingBefore);
 }
 
+// One texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's) keeps both
+// entries - they used to share one and evict each other every session, re-decoding (and re-compressing) both.
 void TestTextureCacheVariants() {
     const std::string src = (std::filesystem::temp_directory_path() / "tt_cache_variant_test.png").string();
     {
@@ -2657,6 +2792,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Light bounds: per-face fade (Bounds Fade - / +), uniform = the old single fade", LightBoundsFaceFade});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
     tests.push_back({"GpuScene: the mirror matches the candidate list slot by slot, frame after frame", GpuSceneMirror});
+    tests.push_back({"GpuScene: SyncOnce's key follows every Sync (another world in between syncs again)", GpuSceneSyncOnceKey});
     tests.push_back({"GpuScene: upload runs (merge, cap, whole list) and layer packing", GpuSceneRuns});
     tests.push_back({"GatherPatch", GatherPatch});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
@@ -2668,6 +2804,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GPU-driven draws: indirect batches by key, in first-appearance order", IndirectBuilder});
     tests.push_back({"GPU-driven draws: mesh arena free list is first-fit and coalesces", MeshArenaFreeList});
     tests.push_back({"GPU occlusion culling: box padding", HiZPieces});
+    tests.push_back({"GPU culling: stage A matches the CPU gather", GpuCullStageAMatchesCpu});
     tests.push_back({"Scene wind: settings round-trip, old-scene defaults, one bearing convention", SceneWindSettings});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});

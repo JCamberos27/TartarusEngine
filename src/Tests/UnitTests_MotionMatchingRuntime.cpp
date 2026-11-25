@@ -1011,7 +1011,35 @@ void TestSharedDatabaseInvalidate() {
     SharedMotionDatabase::Invalidate(base + "_other");
     CHECK(SharedMotionDatabase::Get(base) == second);
     first.reset();
+
+    // Kept after its last holder lets go (a later Play reuses it) ...
+    std::weak_ptr<const SharedMotionDatabase> keptWeak = second;
     second.reset();
+    CHECK(!keptWeak.expired());
+    CHECK(SharedMotionDatabase::Get(base) == keptWeak.lock());
+    // ... until its files are rewritten (no Invalidate: a bake outside the editor's watcher) ...
+    const std::uint32_t twoFewer = keptWeak.lock()->Db.FrameCount();
+    takes.pop_back();
+    CHECK(save(takes));
+    std::filesystem::last_write_time(base + ".mmdb", std::filesystem::file_time_type::clock::now() + std::chrono::seconds(5), ec);
+    auto rewritten = SharedMotionDatabase::Get(base);
+    CHECK(rewritten && rewritten->Db.FrameCount() < twoFewer);
+    CHECK(keptWeak.expired()); // the stale load was let go
+    // ... or released (ReleaseKept) or invalidated.
+    std::weak_ptr<const SharedMotionDatabase> rewrittenWeak = rewritten;
+    rewritten.reset();
+    CHECK(!rewrittenWeak.expired());
+    SharedMotionDatabase::ReleaseKept();
+    CHECK(rewrittenWeak.expired());
+    auto fresh = SharedMotionDatabase::Get(base);
+    rewrittenWeak = fresh;
+    fresh.reset();
+    SharedMotionDatabase::Invalidate(base);
+    CHECK(rewrittenWeak.expired());
+    // A kept load also watches the rig's model file and its .meta (import settings change the measured frames).
+    CHECK(SharedMotionDatabase::WatchedFiles("a/Manny", "") == std::vector<std::string>({"a/Manny.mmanim", "a/Manny.mmdb"}));
+    CHECK(SharedMotionDatabase::WatchedFiles("a/Manny", "b/Rig.fbx") ==
+          std::vector<std::string>({"a/Manny.mmanim", "a/Manny.mmdb", "b/Rig.fbx", "b/Rig.fbx.meta"}));
     std::filesystem::remove_all(dir, ec);
 
     // What the editor's watcher hands the rebake.

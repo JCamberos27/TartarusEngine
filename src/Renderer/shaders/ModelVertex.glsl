@@ -18,8 +18,9 @@ uniform mat4 uNormalMatrix; // mat3 inverse-transpose of uModel in a mat4 (loade
 uniform int uInstanced;
 uniform int uInstanceBase;
 layout(std430, binding = 27) readonly buffer InstanceBlock { mat4 uInstances[]; };
-// uInstanced 2 (HiZCuller.h): the opaque multi-draw after occlusion culling - instance i of a command is the copy at
-// slot uInstanceRemap[baseInstance + i], the visible copies of its group packed at the group's own range.
+// uInstanced 2: instance i of a command is the copy at slot uInstanceRemap[baseInstance + i] - the opaque multi-draw
+// after occlusion culling (HiZCuller.h: the visible copies of its group packed at the group's own range), and/or reading
+// the persistent GPU scene (GpuScene.h: binding 27 then holds the scene's transforms, and the remap their slots).
 layout(std430, binding = 28) readonly buffer InstanceRemapBlock { int uInstanceRemap[]; };
 uniform mat4 uView;
 uniform mat4 uProj;

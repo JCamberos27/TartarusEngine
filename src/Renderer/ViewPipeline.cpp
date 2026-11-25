@@ -173,9 +173,9 @@ void ViewPipeline::SsaoDepthPrepass(const ViewPipelineInputs& in, Ssao& target, 
     for (const VisibleRenderable& v : m_PrepassVisible) {
         auto& rc = *v.Renderable;
         const auto* hide = world.Registry.try_get<OutfitHideTag>(v.Entity);
-        m_PrepassDraws.push_back({rc.ModelRef.get(), &rc.Materials, hide ? hide->Visible.get() : nullptr, &v.Xform});
+        m_PrepassDraws.push_back({rc.ModelRef.get(), &rc.Materials, hide ? hide->Visible.get() : nullptr, &v.Xform, false, 0, 1, v.Slot});
     }
-    DrawDepthCasters(shadowShader, m_PrepassDraws);
+    DrawDepthCasters(shadowShader, m_PrepassDraws, -1, &world);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     GLStateCache::Invalidate();
 

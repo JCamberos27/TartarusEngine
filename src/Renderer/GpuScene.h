@@ -37,9 +37,21 @@ public:
 
     // Brings the mirror and (with `upload`) the GPU buffers up to the world's renderables. Unit tests pass false: no GL.
     void Sync(World& world, bool upload = true);
+    // Sync, unless nothing the candidate list is built from changed since the last one for this world (its transform
+    // cache stamp and renderable count: the list's own fast path). For passes that draw from the scene many times a
+    // frame (every shadow map). Returns Ready().
+    bool SyncOnce(World& world);
+    // SyncOnce's fast path: the last Sync (any caller's) was for this world, and its transform cache stamp and
+    // renderable count haven't moved since. No GL: the unit tests check it directly.
+    bool UpToDateFor(World& world) const;
     void Release(); // GL buffers freed (the mirror kept); the next Sync re-creates and fills them
 
     std::uint32_t Count() const { return m_Count; }
+    // The GL buffers hold the mirror (the last Sync uploaded): the passes may read them.
+    bool Ready() const { return m_Xforms && !m_GpuStale; }
+    // A pass's slot list (one uint per drawn copy) bound as SSBO `binding`: a span of the instance ring, or this
+    // scene's own buffer when the ring can't take it. GL.
+    void BindSlotList(unsigned binding, const std::vector<std::uint32_t>& slots);
     unsigned XformBuffer() const { return m_Xforms; }
     unsigned BoundsBuffer() const { return m_Bounds; }
     const std::vector<glm::mat4>& XformMirror() const { return m_XformCpu; } // 2 per slot
@@ -71,10 +83,14 @@ private:
     std::uint32_t m_Count = 0;
     std::uint32_t m_Capacity = 0; // slots the GL buffers hold
     unsigned m_Xforms = 0, m_Bounds = 0;
+    unsigned m_SlotFallback = 0; // BindSlotList's store when the instance ring is full
     bool m_GpuStale = true;       // the GL buffers don't hold the mirror (new, grown or released): upload it all
     std::vector<glm::mat4> m_XformCpu;
     std::vector<glm::vec4> m_BoundsCpu;
     std::vector<std::uint32_t> m_Sorted;
     std::vector<Run> m_Runs;
     SyncStats m_Last;
+    const World* m_OnceWorld = nullptr; // the last Sync's world and what it saw (UpToDateFor)
+    std::uint64_t m_OnceStamp = 0;
+    std::size_t m_OnceRenderables = 0;
 };

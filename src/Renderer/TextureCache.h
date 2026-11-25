@@ -78,9 +78,17 @@ struct PruneStats {
 PruneStats Prune(const std::function<std::optional<uint64_t>(const std::string& sourcePath)>& currentSettingsHash = nullptr,
                  uint64_t minCapBytes = 0);
 
-// How many entries this process loaded or stored (the pinned set) are no longer on disk: 0 after any Prune, or
-// the pinning failed. The smoke harness's pin check.
+// How many entries this process loaded or stored are no longer on disk: 0 after any Prune, or the pinning failed.
+// The smoke harness's pin check. (Entries only requested so far, Pin below, aren't counted: a decode that never
+// stores one, a failed or uncacheable source, isn't a pin failure.)
 int SessionEntriesMissing();
+
+// Pins this source + settings pair's entry at request time, before its decode runs: the async loader queues a
+// texture and the startup Prune can run before the worker gets to it (the entry is pinned by its Load or Store
+// otherwise). Main thread or loader threads.
+void Pin(const std::string& sourcePath, const TextureImportSettings& settings);
+// Whether Prune keeps this pair's entry whatever the cap (loaded, stored or requested by this process).
+bool Pinned(const std::string& sourcePath, const TextureImportSettings& settings);
 
 // P-53 - the size cap Prune enforces: at least 8 GB, and 1.25x the bytes this session loaded or stored
 // (its working set) when that's larger. Those entries are pinned: never evicted, whatever the cap.
