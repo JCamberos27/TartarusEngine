@@ -2341,6 +2341,9 @@ private:
     bool m_ExpandAllComponents = false; // SetExpandAllComponents
     bool m_InPlayMode = false; // set by OnEnter/OnExitPlayMode — lets edit-mode-only shortcuts (F2 rename) yield to Play-mode ones
     std::string m_PlayModeSnapshot;
+    // P-55: the pre-Play scene as the undo baseline takes it (SaveToString(world, assets)) and its library keys alone,
+    // from the same walk as m_PlayModeSnapshot. Stop makes it the baseline again instead of saving the restored scene.
+    std::string m_PrePlayUndoScene, m_PrePlayLibrary;
     // #91 - set while a Play session runs: Stop drops the staged undo and refreshes the dirty
     // state from the history. (It used to copy the whole undo/redo stacks at Play, never read back.)
     bool m_PrePlayHistoryValid = false;

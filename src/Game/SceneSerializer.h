@@ -63,6 +63,22 @@ namespace SceneSerializer {
     // asset created or deleted after this snapshot was taken is correctly gone/restored on
     // load, not left merged with whatever's currently in the library.
     std::string SaveToString(const World& world, const AssetLibrary& assets);
+    // Where SaveToStrings' time went (ms), for the Play-entry timing line.
+    struct SnapshotTimes {
+        double BuildMs = 0.0;       // walking the World into JSON (once for both strings)
+        double DumpMs = 0.0;        // the entity-only text
+        double LibraryMs = 0.0;     // the AssetLibrary keys
+        double LibraryDumpMs = 0.0; // the with-library text + the library-only text
+    };
+    // Play entry (P-55): SaveToString(world) into `entityOnly` and, when `assets` and `withLibrary` are given,
+    // SaveToString(world, *assets) into `withLibrary`, from ONE walk of the World (byte-identical to calling both).
+    // `libraryOnly` (optional, with the library): LibraryStateString(*assets), built from the same keys.
+    void SaveToStrings(const World& world, std::string& entityOnly, const AssetLibrary* assets = nullptr,
+                       std::string* withLibrary = nullptr, std::string* libraryOnly = nullptr,
+                       SnapshotTimes* times = nullptr);
+    // Just the AssetLibrary keys SaveToString(world, assets) adds, as text: two equal ones mean the library state in
+    // two such snapshots is the same.
+    std::string LibraryStateString(const AssetLibrary& assets);
     // #15 - two of those snapshots hold the same scene (entities and scene settings), whatever
     // their AssetLibrary state, which the Asset Browser re-lists on its own between undo steps.
     bool SameSceneContent(const std::string& a, const std::string& b);

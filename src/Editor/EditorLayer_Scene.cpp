@@ -3,6 +3,7 @@
 // EditorLayer.cpp for build time (#179).
 
 #include <chrono>
+#include <cstdio>
 #include <future>
 #include <iterator>
 #include "EditorSound.h"
@@ -1345,10 +1346,33 @@ void EditorLayer::JumpToRedoEntry(World& world, AssetLibrary& assets, size_t red
 
 void EditorLayer::OnEnterPlayMode(const World& world) {
     FinishGlobalUndo(world,true);
-    JournalUnrecordedChange(world); // #15 - Stop drops the baseline; keep that change a step
+    // P-55: one walk of the scene gives the Play snapshot (entities only), the with-library snapshot the #15 check
+    // below compares with the undo baseline, and that snapshot again as Stop's baseline. They used to be two full
+    // saves here plus a third on the frame after Stop (EnsureUndoScene).
+    const auto playT0 = std::chrono::steady_clock::now();
+    const bool journal = !m_CurrentUndoScene.empty() && m_AssetsPtr; // as JournalUnrecordedChange(world) checked
+    SceneSerializer::SnapshotTimes snapTimes;
+    {
+        PROFILE_SCOPE("Play Snapshot");
+        m_PrePlayUndoScene.clear();
+        m_PrePlayLibrary.clear();
+        SceneSerializer::SaveToStrings(world, m_PlayModeSnapshot, m_AssetsPtr, m_AssetsPtr ? &m_PrePlayUndoScene : nullptr,
+                                       &m_PrePlayLibrary, &snapTimes);
+    }
+    const auto journalT0 = std::chrono::steady_clock::now();
+    if (journal) JournalUnrecordedChange(world, m_PrePlayUndoScene); // #15 - Stop drops the baseline; keep that change a step
+    const double journalMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - journalT0).count();
+    const double snapshotMs = std::chrono::duration<double, std::milli>(journalT0 - playT0).count();
+    auto FormatMs = [](double ms) {
+        char text[32];
+        std::snprintf(text, sizeof text, "%.1f ms", ms);
+        return std::string(text);
+    };
+    Log::Info("Play snapshot: " + FormatMs(snapshotMs) + " (scene build " + FormatMs(snapTimes.BuildMs) + ", text " +
+              FormatMs(snapTimes.DumpMs) + ", library " + FormatMs(snapTimes.LibraryMs) + ", library text " +
+              FormatMs(snapTimes.LibraryDumpMs) + "); unrecorded-change check " + FormatMs(journalMs) + ".");
     CancelEyedropper(); // #93
     m_InPlayMode = true;
-    m_PlayModeSnapshot = SceneSerializer::SaveToString(world);
     m_PrePlayHistoryValid = true; // #91
     // Remember what's selected by OrderComponent value, not entt id: Stop rebuilds the whole
     // registry and entt recycles ids, so a retained handle can pass valid() yet denote a
@@ -1470,8 +1494,19 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
         // The world still holds Play's state. Keep the pre-Play scene where it can be recovered and
         // say so: a Save now would write Play's state over the scene file.
         KeepUnrestoredSnapshot(m_PlayModeSnapshot, "Stop");
+    } else if (!m_PrePlayUndoScene.empty() && m_AssetsPtr == &assets && !Openable::BakePosed()) {
+        // P-55: the world is the pre-Play scene again, so the baseline EnsureUndoScene would save next frame is the
+        // one Play entry already took - as long as the library came back the same (a load that landed during Play
+        // stays listed). Otherwise EnsureUndoScene takes a fresh one, as before.
+        PROFILE_SCOPE("Stop Baseline Check");
+        if (SceneSerializer::LibraryStateString(assets) == m_PrePlayLibrary) {
+            m_CurrentUndoScene = std::move(m_PrePlayUndoScene);
+            m_ChangesOutsideUndo = 0; // as EnsureUndoScene: the baseline is the World again
+        }
     }
     m_PlayModeSnapshot.clear();
+    m_PrePlayUndoScene.clear();
+    m_PrePlayLibrary.clear();
 
     // Global transactions record only authored file/selection changes while Playing.
     // Those edits persist on disk, so retain their history after Stop as well.
