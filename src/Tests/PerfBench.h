@@ -5,6 +5,7 @@
 #include "Tests/MachineLoad.h"
 #include "Tests/PerfG0.h"
 #include "Renderer/CascadedShadowMap.h"
+#include "Renderer/InstanceBatch.h"
 
 #include <chrono>
 #include <cstdint>
@@ -112,6 +113,7 @@ private:
     MachineLoad::Snapshot m_LoadStart;      // at the phase's first measured frame
     std::uint64_t m_QuietLive0 = 0, m_Quiet0 = 0; // ShadowFrame::LocalQuietTotals there (G4-c share per phase)
     CascadedShadowMap::FarTotals m_Far0;          // CascadedShadowMap::FarCascadeTotals there (G4-d, per phase)
+    DepthCasterCache::Totals m_SunCache0;         // DepthCasterCache::AllTotals there (sun caster cache, per phase)
     std::vector<std::pair<std::string, std::vector<double>>> m_Halves; // AddHalf's samples, per key, in first-seen order
     std::vector<std::string> m_UnmappedCpu;
     PerfG0 m_G0; // G-0: the GPU half, the P-48 render rows and which half bound each frame (into m_Halves)  // top-level CPU scopes CpuBucket put in "other" this phase

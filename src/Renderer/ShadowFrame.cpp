@@ -319,7 +319,10 @@ void ShadowFrame::DrawSunCasters(SunPass& p) {
         }
         stage.reset();
         stage.emplace("Sun: Draw Casters");
-        DrawDepthCasters(shadowShader, m_Draws, firstLoc, m_SceneWorld);
+        // TARTARUS_NO_SUN_CASTER_CACHE=1: group and build them every frame (A/B).
+        static const bool noCache = Env::Flag(Env::Var::NoSunCasterCache);
+        DepthCasterCache* cache = noCache ? nullptr : &m_SunCasterCache[renderMask & ((1u << CascadedShadowMap::kMaxCascades) - 1u)];
+        DrawDepthCasters(shadowShader, m_Draws, firstLoc, m_SceneWorld, cache);
         if (sliceScissor) {
             shadowShader.SetInt(cascadeViewportLoc, 0);
             CascadedShadowMap::EndLayeredScissor();
