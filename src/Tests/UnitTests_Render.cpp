@@ -3,6 +3,7 @@
 #include <random>
 #include <cstring>
 #include "../Renderer/SceneRenderer.h"
+#include "../Renderer/RenderSettingsEpoch.h"
 #include "../Renderer/Model.h"
 #include "../Renderer/InstanceBatch.h"
 #include "../Renderer/OpaqueBatchKey.h"
@@ -410,6 +411,57 @@ void GpuSceneMirror() {
                 (unsigned long long)written, (unsigned long long)total);
     CHECK(incremental * 2 > frames);
     CHECK(written * 10 < total); // a few changes a frame: a few slots, not the list
+}
+
+// G2-DIRTY at scale: past one sweep slice, an in-place write that reports itself (NoteRenderSettingsChanged) reaches
+// the next sync; one that doesn't is still caught by the sweep within a lap (slots / 1024 syncs), and a quiet frame
+// sends nothing.
+void GpuSceneLiveEpoch() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    constexpr int kCount = 5000; // 5 sweep slices of 1024
+    std::vector<entt::entity> all;
+    for (int i = 0; i < kCount; ++i)
+        all.push_back(w.CreateModelEntity(model, glm::vec3((float)(i % 100), 0.0f, (float)(i / 100)), glm::vec3(0), glm::vec3(1), "R"));
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    scene.Sync(w, false);
+    CHECK(scene.LastSync().Full);
+    for (int i = 0; i < 6; ++i) { // a full lap of the sweep with nothing changed
+        scene.Sync(w, false);
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 0);
+    }
+    auto syncsUntilSeen = [&](int limit) {
+        for (int n = 1; n <= limit; ++n) {
+            scene.Sync(w, false);
+            if (scene.LastSync().Slots > 0) {
+                CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+                return n;
+            }
+        }
+        return limit + 1;
+    };
+    // Reported: the next sync.
+    w.Registry.get<RenderableComponent>(all[2500]).CastShadows = RenderableComponent::ShadowCasting::Off;
+    NoteRenderSettingsChanged();
+    CHECK(syncsUntilSeen(1) == 1);
+    // Not reported: within one lap, wherever the sweep stands.
+    for (int k : {10, 2600, 4999}) {
+        w.Registry.get<RenderableComponent>(all[k]).CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
+        CHECK(syncsUntilSeen(5) <= 5);
+    }
 }
 
 // GpuScene's upload plan and packing, without GL.
@@ -2752,6 +2804,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Light bounds: per-face fade (Bounds Fade - / +), uniform = the old single fade", LightBoundsFaceFade});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
     tests.push_back({"GpuScene: the mirror matches the candidate list slot by slot, frame after frame", GpuSceneMirror});
+    tests.push_back({"GpuScene: in-place render settings reach the slots (reported: next sync; unreported: within a sweep lap)", GpuSceneLiveEpoch});
     tests.push_back({"GpuScene: upload runs (merge, cap, whole list) and layer packing", GpuSceneRuns});
     tests.push_back({"GatherPatch", GatherPatch});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});

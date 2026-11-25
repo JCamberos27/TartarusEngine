@@ -29,6 +29,7 @@
 #include <tuple>
 #include <cstdio>
 #include <sstream>
+#include "RenderSettingsEpoch.h"
 
 using namespace FirstPersonBodyDetail;
 
@@ -442,7 +443,7 @@ void FirstPersonBody::CopyLook(World& world, size_t k) {
     if (!reg.valid(twin) || !reg.valid(piece)) return;
     const auto& src = reg.get<RenderableComponent>(piece);
     auto& dst = reg.get<RenderableComponent>(twin);
-    if (dst.Materials != src.Materials) dst.Materials = src.Materials;
+    if (dst.Materials != src.Materials) { dst.Materials = src.Materials; NoteRenderSettingsChanged(); }
     // Copied by value: adding a component can move its storage (and any reference into it).
     const auto* hide = reg.try_get<OutfitHideTag>(piece);
     const auto* twinHide = reg.try_get<OutfitHideTag>(twin);

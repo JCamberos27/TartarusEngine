@@ -29,6 +29,7 @@
 #include "Ssao.h"
 #include "SkinHideBuffer.h"
 #include "Model.h"
+#include "RenderSettingsEpoch.h"
 #include "InstanceBatch.h"
 #include "MaterialAsset.h"
 #include "ShaderVariant.h"
@@ -167,14 +168,17 @@ struct CandidateCache {
     std::vector<std::uint32_t> DirtySlots;
     std::vector<std::uint8_t> DirtyMark;
     // What each slot's renderable held when the slots were last handed out, for the fields ReadSceneSlot reads live
-    // and nobody reports a write to (Cast Shadows, the first material's queue, the model): plain field writes from the
-    // Inspector, outfits, first-person views and loads. TakeSceneSlotChanges compares them all each call.
+    // (Cast Shadows, the first material's queue, the model): plain field writes from the Inspector, outfits,
+    // first-person views and loads. TakeSceneSlotChanges compares them all when RenderSettingsEpoch moved, else a
+    // slice per call (SweepAt) for writers that didn't report.
     struct LiveKey {
         const Model* Mesh = nullptr;
         std::uint16_t Bits = 0; // the kSlotFlag* bits
         bool operator!=(const LiveKey& o) const { return Mesh != o.Mesh || Bits != o.Bits; }
     };
     std::vector<LiveKey> Live; // by List index; empty until a full hand-out fills it
+    std::uint32_t SeenEpoch = 0;
+    size_t SweepAt = 0;
     void MarkSlot(std::uint32_t i) {
         if (!TrackSlots || SlotsRebuilt) return;
         if (DirtyMark.size() <= i) DirtyMark.resize((size_t)i + 1, 0);
@@ -558,15 +562,13 @@ CandidateCache::LiveKey LiveKeyOf(const Candidate& c) {
     if (!c.Renderable) return {};
     return {c.Renderable->ModelRef.get(), LiveSlotBits(*c.Renderable)};
 }
-// Re-reads every slot's LiveKey and marks the ones that changed. With `full` it only refills them (every slot goes out
-// anyway). Across the cores: a forest's 150k candidates are one pointer read each, plus the shared material's queue.
-void ScanLiveKeys(CandidateCache& cache, bool full) {
-    PROFILE_SCOPE("GPU Scene Live Scan");
-    // Only a full build moves slots; a patch appends (its new slots compare unequal and are marked, as they already are).
-    const size_t n = cache.List.size();
-    cache.Live.resize(n);
+// Re-reads the LiveKeys of slots [begin, end) and marks the ones that changed. With `full` it only refills them (every
+// slot goes out anyway). Across the cores when the range is big: a forest's 150k candidates are one pointer read
+// each, plus the shared material's queue.
+void ScanLiveKeys(CandidateCache& cache, size_t begin, size_t end, bool full) {
+    if (begin >= end) return;
     constexpr size_t kChunk = 8192;
-    const size_t chunks = (n + kChunk - 1) / kChunk;
+    const size_t chunks = (end - begin + kChunk - 1) / kChunk;
     static std::vector<size_t> chunkIds;
     static std::vector<std::vector<std::uint32_t>> changed; // per chunk, in order
     chunkIds.resize(chunks);
@@ -575,7 +577,7 @@ void ScanLiveKeys(CandidateCache& cache, bool full) {
     const auto scan = [&](size_t c) {
         std::vector<std::uint32_t>& out = changed[c];
         out.clear();
-        for (size_t i = c * kChunk, end = std::min(n, i + kChunk); i < end; ++i) {
+        for (size_t i = begin + c * kChunk, e = std::min(end, i + kChunk); i < e; ++i) {
             const CandidateCache::LiveKey k = LiveKeyOf(cache.List[i]);
             if (k != cache.Live[i]) {
                 cache.Live[i] = k;
@@ -584,10 +586,32 @@ void ScanLiveKeys(CandidateCache& cache, bool full) {
         }
     };
     if (chunks > 1) std::for_each(std::execution::par, chunkIds.begin(), chunkIds.end(), scan);
-    else if (chunks == 1) scan(0);
+    else scan(0);
     if (full) return;
     for (size_t c = 0; c < chunks; ++c)
         for (std::uint32_t i : changed[c]) cache.MarkSlot(i);
+}
+// The slots whose live settings may have changed since the last call: all of them after a rebuild or a reported
+// write (RenderSettingsEpoch moved), else the ones appended since and one sweep slice (1/64, at least 1024).
+void UpdateLiveKeys(CandidateCache& cache, bool rebuilt) {
+    PROFILE_SCOPE("GPU Scene Live Scan");
+    const size_t n = cache.List.size();
+    const size_t had = rebuilt ? 0 : std::min(cache.Live.size(), n);
+    cache.Live.resize(n);
+    const std::uint32_t epoch = RenderSettingsEpoch();
+    if (rebuilt || epoch != cache.SeenEpoch) {
+        cache.SeenEpoch = epoch;
+        ScanLiveKeys(cache, 0, n, rebuilt);
+        return;
+    }
+    ScanLiveKeys(cache, had, n, false); // appended (already marked; this fills their keys)
+    if (had == 0) return;
+    const size_t slice = std::min(had, std::max<size_t>(1024, had / 64));
+    if (cache.SweepAt >= had) cache.SweepAt = 0;
+    const size_t end = std::min(had, cache.SweepAt + slice);
+    ScanLiveKeys(cache, cache.SweepAt, end, false);
+    if (end - cache.SweepAt < slice) ScanLiveKeys(cache, 0, slice - (end - cache.SweepAt), false); // wrap
+    cache.SweepAt = end - cache.SweepAt < slice ? slice - (end - cache.SweepAt) : end;
 }
 } // namespace
 
@@ -598,9 +622,9 @@ void TakeSceneSlotChanges(World& world, SceneSlotChanges& out) {
     const CandidateCache& now = Candidates(world);
     out.Count = (std::uint32_t)now.List.size();
     out.Slots.clear();
-    // Fields written without a report (Cast Shadows, material queue, model): their slots join the changed ones.
+    // Fields written in place (Cast Shadows, material queue, model): their slots join the changed ones.
     const bool rebuilt = first || cache.SlotsRebuilt;
-    ScanLiveKeys(cache, rebuilt);
+    UpdateLiveKeys(cache, rebuilt);
     // Rebuilt, first asked, or patched past half the list (cheaper to send it all): every slot.
     out.Full = rebuilt || cache.DirtySlots.size() * 2 > now.List.size();
     if (!out.Full) {

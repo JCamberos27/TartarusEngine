@@ -30,6 +30,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <thread>
+#include "RenderSettingsEpoch.h"
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -207,6 +208,7 @@ void DressPiece(AssetLibrary& assets, const Wardrobe::Wardrobe& w, const Wardrob
     }
     assets.ApplyMaterialRemap(*rc.ModelRef, slots); // anything left empty
     rc.Materials = std::move(slots);
+    NoteRenderSettingsChanged();
 }
 
 } // namespace detail
@@ -454,6 +456,7 @@ Result Apply(World& world, AssetLibrary& assets, entt::entity root, const Wardro
         rc.ModelRef = model;
         rc.Materials.clear();
         DressPiece(assets, cat->W, race, rc, previous);
+        NoteRenderSettingsChanged();
         ++r.Changed;
     }
 
@@ -649,6 +652,7 @@ bool SetColourway(World& world, AssetLibrary& assets, entt::entity piece, const 
     bool any = false;
     for (size_t i = 0; i < sources.size(); ++i)
         if (!sources[i].empty() && Same(sources[i], source)) { rc->Materials[i] = mat; any = true; }
+        NoteRenderSettingsChanged();
     // What caches the outfit's look (the first-person body's twins) notices by the look version: the pieces are the same
     // (no Version bump, which would rebuild the body).
     if (any)

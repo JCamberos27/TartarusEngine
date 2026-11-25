@@ -1,4 +1,5 @@
 #include "SceneSerializerInternal.h"
+#include "RenderSettingsEpoch.h"
 
 namespace SceneDetail {
 
@@ -184,6 +185,7 @@ void ReadRendererFlags(const json& obj, RenderableComponent& rc) {
     rc.CastShadows = (it != obj.end() && it->is_number_integer())
         ? (RenderableComponent::ShadowCasting)std::clamp(it->get<int>(), 0, 3)
         : RenderableComponent::ShadowCasting::On;
+        NoteRenderSettingsChanged();
     rc.ReceiveShadows = obj.value("receiveShadows", true);
 }
 

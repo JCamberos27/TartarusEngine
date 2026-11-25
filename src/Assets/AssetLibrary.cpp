@@ -20,6 +20,7 @@
 #include <json.hpp>
 #include <charconv>
 #include <cstdlib>
+#include "RenderSettingsEpoch.h"
 
 using json = nlohmann::json;
 
@@ -1137,6 +1138,7 @@ AssetLibrary::MaterialExtraction AssetLibrary::ExtractModelMaterials(const std::
             ma->Name = src.Name.empty() ? matPath.stem().string() : src.Name;
             ma->Mat = src;
             if (src.AlphaClip) ma->RenderQueue = MaterialAsset::Queue::AlphaTest;
+            NoteRenderSettingsChanged();
             ma->SyncTexturePathsFromMat();
             if (!ma->Save()) {
                 Log::Error("Extract Materials: couldn't write '" + matPath.string() + "'.");
@@ -1181,6 +1183,7 @@ void AssetLibrary::SetMaterialRemap(const std::string& modelPath, const std::str
 }
 
 int AssetLibrary::ApplyMaterialRemap(const Model& model, std::vector<std::shared_ptr<MaterialAsset>>& slots) {
+    NoteRenderSettingsChanged(); // it may fill a live renderable's slots
     const auto& remap = MaterialRemap(model.Path()); // no copy: called per placed model (22k on Forest)
     if (remap.empty()) return 0;
     int filled = 0;
