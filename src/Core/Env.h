@@ -21,6 +21,7 @@
     X(SeeThrough, "TARTARUS_SEE_THROUGH", Flag, "force the see-through (transparent) editor window")                  \
     X(PerfWarmup, "TARTARUS_PERF_WARMUP", Int, "--perf-bench warm-up frames before each phase")                       \
     X(PerfCsv, "TARTARUS_PERF_CSV", Str, "--perf-bench: append each phase's hitch report to this CSV file")           \
+    X(PerfMachine, "TARTARUS_PERF_MACHINE", Str, "--perf-bench: the machine label printed with every phase")          \
     X(AssetCost, "TARTARUS_ASSET_COST", Str, "--perf-bench: append each phase's per-asset cost table to this CSV")    \
     X(PerfTurn, "TARTARUS_PERF_TURN", Float, "--perf-bench: the player view turns this many degrees a second in Play") \
     X(MemReport, "TARTARUS_MEM_REPORT", Str, "smoke harness: write per-scene model memory snapshots to this folder")  \
@@ -28,7 +29,7 @@
     X(LightsOn, "TARTARUS_LIGHTS_ON", Flag, "smoke shots: 1 = every light circuit on, 0 = as the switches start")     \
     X(LightsOnly, "TARTARUS_LIGHTS_ONLY", Str, "smoke shots: only these ';'-separated light circuits on (leak checks)") \
     X(TourMaxPoints, "TARTARUS_TOUR_MAX_POINTS", Int, "--gi-tour: the scene's Max point shadows for this run (perf sweeps)") \
-    X(VolInscatterCap, "TARTARUS_VOL_INSCATTER_CAP", Float, "volumetric fog: soft cap on the integrated in-scatter luminance (A/B; 0 = off)") \
+    X(ExpPointPcfOff, "TARTARUS_EXP_POINT_PCF_OFF", Flag, "A/B: point-light shadows take the single hard compare (tent PCF off)")     X(ExpGiFadeAOff, "TARTARUS_EXP_GI_FADE_A_OFF", Flag, "A/B: GI volumes ignore their per-face Fade Min / Max (Fade A off)")     X(VolInscatterCap, "TARTARUS_VOL_INSCATTER_CAP", Float, "volumetric fog: soft cap on the integrated in-scatter luminance (A/B; 0 = off)") \
     X(ShotCameras, "TARTARUS_SHOT_CAMERAS", List, "--smoke-shots: 'name:x,y,z,yaw,pitch;...' poses to capture")  \
     X(ShotStart, "TARTARUS_SHOT_START", Int, "--smoke-shots: frame of the first shot-camera capture (default 40)")    \
     X(ShotFov, "TARTARUS_SHOT_FOV", Float, "--smoke-shots: Scene-view FOV for shot cameras")                          \
@@ -91,6 +92,7 @@
     X(NoGpuScene, "TARTARUS_NO_GPU_SCENE", Flag, "disable the persistent GPU scene buffers")                          \
     X(NoMeshArena, "TARTARUS_NO_MESH_ARENA", Flag, "disable the static mesh arena")                                   \
     X(NoModelCache, "TARTARUS_NO_MODEL_CACHE", Flag, "import models from their files (skip Library/Models)")          \
+    X(NoProgramCache, "TARTARUS_NO_PROGRAM_CACHE", Flag, "compile every shader program (skip Library/ShaderCache)")    \
     X(NoSkinArena, "TARTARUS_NO_SKIN_ARENA", Flag, "disable the skinned mesh arena")                                  \
     X(NoPreskin, "TARTARUS_NO_PRESKIN", Flag, "disable compute pre-skinning")                                         \
     X(NoAsyncUpload, "TARTARUS_NO_ASYNC_UPLOAD", Flag, "disable async texture/mesh uploads")                          \
