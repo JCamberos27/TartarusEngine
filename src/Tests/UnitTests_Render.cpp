@@ -338,6 +338,30 @@ void GpuSceneMirror() {
     w.RebuildWorldTransformCache();
     scene.Sync(w, false);
     CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 0);
+    // Fields written in place with nothing told (G2-DIRTY): Cast Shadows and the first material's queue. A frame that
+    // changes only one of them, with nothing moved, must still bring that slot up to date.
+    auto glass = std::make_shared<MaterialAsset>();
+    glass->RenderQueue = MaterialAsset::Queue::Transparent;
+    auto castNext = [](RenderableComponent& r) {
+        r.CastShadows = (RenderableComponent::ShadowCasting)(((int)r.CastShadows + 1) % 4);
+    };
+    {
+        auto& r = w.Registry.get<RenderableComponent>(live[0]);
+        castNext(r);
+        scene.Sync(w, false); // transforms untouched: no rebuild, no patch
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+        CHECK(matches(-2));
+        if (r.Materials.empty()) r.Materials.resize(1);
+        r.Materials[0] = glass;
+        scene.Sync(w, false);
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+        CHECK(matches(-3));
+        glass->RenderQueue = MaterialAsset::Queue::Opaque; // the asset edited (Inspector): its users change too
+        scene.Sync(w, false);
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+        CHECK(matches(-4));
+        glass->RenderQueue = MaterialAsset::Queue::Transparent;
+    }
     int incremental = 0, frames = 0;
     std::uint64_t written = 0, total = 0;
     for (int frame = 0; frame < 300; ++frame) {
@@ -347,7 +371,7 @@ void GpuSceneMirror() {
             live.erase(std::remove_if(live.begin(), live.end(), [&](entt::entity e) { return !w.Registry.valid(e); }), live.end());
             if (live.empty()) break;
             const entt::entity e = live[pick(live.size())];
-            switch (pick(11)) {
+            switch (pick(13)) {
             case 0: case 1: spawn(); break;
             case 2: w.DestroyEntityAndChildren(e); break;
             case 3: w.Registry.destroy(e); break;
@@ -357,6 +381,13 @@ void GpuSceneMirror() {
             case 7: if (w.Registry.all_of<HiddenInSceneTag>(e)) w.Registry.remove<HiddenInSceneTag>(e); else w.Registry.emplace<HiddenInSceneTag>(e); break;
             case 8: w.Registry.emplace_or_replace<LayerComponent>(e).Layer = (int)pick(7) - 2; break; // negatives too
             case 9: { auto& r = w.Registry.get<RenderableComponent>(e); r.ModelRef = r.ModelRef ? nullptr : modelA; break; }
+            case 10: castNext(w.Registry.get<RenderableComponent>(e)); break;
+            case 11: {
+                auto& r = w.Registry.get<RenderableComponent>(e);
+                if (r.Materials.empty()) r.Materials.resize(1);
+                r.Materials[0] = r.Materials[0] ? nullptr : glass;
+                break;
+            }
             default: w.Registry.get<TransformComponent>(e).Position = at(); break;
             }
         }

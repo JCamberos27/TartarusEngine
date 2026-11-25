@@ -166,6 +166,15 @@ struct CandidateCache {
     bool SlotsRebuilt = true;
     std::vector<std::uint32_t> DirtySlots;
     std::vector<std::uint8_t> DirtyMark;
+    // What each slot's renderable held when the slots were last handed out, for the fields ReadSceneSlot reads live
+    // and nobody reports a write to (Cast Shadows, the first material's queue, the model): plain field writes from the
+    // Inspector, outfits, first-person views and loads. TakeSceneSlotChanges compares them all each call.
+    struct LiveKey {
+        const Model* Mesh = nullptr;
+        std::uint16_t Bits = 0; // the kSlotFlag* bits
+        bool operator!=(const LiveKey& o) const { return Mesh != o.Mesh || Bits != o.Bits; }
+    };
+    std::vector<LiveKey> Live; // by List index; empty until a full hand-out fills it
     void MarkSlot(std::uint32_t i) {
         if (!TrackSlots || SlotsRebuilt) return;
         if (DirtyMark.size() <= i) DirtyMark.resize((size_t)i + 1, 0);
@@ -535,6 +544,52 @@ const CandidateCache& Candidates(World& world) {
 
 void ForgetGatherCandidates() { CandidateStore().Forget = true; }
 
+namespace {
+// A renderable's settings GatherVisible reads live, as SceneSlot flag bits.
+std::uint16_t LiveSlotBits(const RenderableComponent& r) {
+    std::uint16_t bits = 0;
+    if (r.CastShadows == RenderableComponent::ShadowCasting::Off) bits |= kSlotFlagCastOff;
+    if (r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) bits |= kSlotFlagShadowsOnly;
+    if (!r.Materials.empty() && r.Materials[0] && r.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent)
+        bits |= kSlotFlagTransparent;
+    return bits;
+}
+CandidateCache::LiveKey LiveKeyOf(const Candidate& c) {
+    if (!c.Renderable) return {};
+    return {c.Renderable->ModelRef.get(), LiveSlotBits(*c.Renderable)};
+}
+// Re-reads every slot's LiveKey and marks the ones that changed. With `full` it only refills them (every slot goes out
+// anyway). Across the cores: a forest's 150k candidates are one pointer read each, plus the shared material's queue.
+void ScanLiveKeys(CandidateCache& cache, bool full) {
+    // Only a full build moves slots; a patch appends (its new slots compare unequal and are marked, as they already are).
+    const size_t n = cache.List.size();
+    cache.Live.resize(n);
+    constexpr size_t kChunk = 8192;
+    const size_t chunks = (n + kChunk - 1) / kChunk;
+    static std::vector<size_t> chunkIds;
+    static std::vector<std::vector<std::uint32_t>> changed; // per chunk, in order
+    chunkIds.resize(chunks);
+    if (changed.size() < chunks) changed.resize(chunks);
+    for (size_t c = 0; c < chunks; ++c) chunkIds[c] = c;
+    const auto scan = [&](size_t c) {
+        std::vector<std::uint32_t>& out = changed[c];
+        out.clear();
+        for (size_t i = c * kChunk, end = std::min(n, i + kChunk); i < end; ++i) {
+            const CandidateCache::LiveKey k = LiveKeyOf(cache.List[i]);
+            if (k != cache.Live[i]) {
+                cache.Live[i] = k;
+                if (!full) out.push_back((std::uint32_t)i);
+            }
+        }
+    };
+    if (chunks > 1) std::for_each(std::execution::par, chunkIds.begin(), chunkIds.end(), scan);
+    else if (chunks == 1) scan(0);
+    if (full) return;
+    for (size_t c = 0; c < chunks; ++c)
+        for (std::uint32_t i : changed[c]) cache.MarkSlot(i);
+}
+} // namespace
+
 void TakeSceneSlotChanges(World& world, SceneSlotChanges& out) {
     CandidateCache& cache = CandidateStore();
     const bool first = !cache.TrackSlots;
@@ -542,8 +597,11 @@ void TakeSceneSlotChanges(World& world, SceneSlotChanges& out) {
     const CandidateCache& now = Candidates(world);
     out.Count = (std::uint32_t)now.List.size();
     out.Slots.clear();
+    // Fields written without a report (Cast Shadows, material queue, model): their slots join the changed ones.
+    const bool rebuilt = first || cache.SlotsRebuilt;
+    ScanLiveKeys(cache, rebuilt);
     // Rebuilt, first asked, or patched past half the list (cheaper to send it all): every slot.
-    out.Full = first || cache.SlotsRebuilt || cache.DirtySlots.size() * 2 > now.List.size();
+    out.Full = rebuilt || cache.DirtySlots.size() * 2 > now.List.size();
     if (!out.Full) {
         out.Slots = cache.DirtySlots;
         // Posed models read their bounds live (GatherVisible): sent every call. They're the Always cells' few.
@@ -567,13 +625,7 @@ bool ReadSceneSlot(std::uint32_t slot, SceneSlot& out) {
     out.Layer = c.Layer;
     out.Entity = c.Renderable ? c.Entity : entt::null;
     out.Renderable = c.Renderable;
-    if (c.Renderable) { // read live, as GatherVisible's consider() does
-        const RenderableComponent& r = *c.Renderable;
-        if (r.CastShadows == RenderableComponent::ShadowCasting::Off) out.Flags |= kSlotFlagCastOff;
-        if (r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) out.Flags |= kSlotFlagShadowsOnly;
-        if (!r.Materials.empty() && r.Materials[0] && r.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent)
-            out.Flags |= kSlotFlagTransparent;
-    }
+    if (c.Renderable) out.Flags |= LiveSlotBits(*c.Renderable); // read live, as GatherVisible's consider() does
     VisibleRenderable v = c.V;
     if (c.Renderable && c.Renderable->ModelRef && ((c.Flags & kCandPosed) || c.Renderable->ModelRef.get() != c.ModelAtBuild))
         FillBounds(v, *c.Renderable); // as GatherVisible reads it
