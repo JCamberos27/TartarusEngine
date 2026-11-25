@@ -51,6 +51,11 @@ public:
     // seconds with its textures uncooked).
     static void WarmSlotAssets(AssetLibrary& assets, const std::string& animationSet);
     void PreloadClips(AssetLibrary& assets); // every slot's clip files, imported clip-only in parallel (Play start)
+    // Scene open: what Start will load for each First Person Controller in the scene - every slot's arms and weapon
+    // models, material overrides, spent cases and clip files - asked for on the asset workers, so Play's start finds
+    // them in the caches (they were ~1.5 s of Hallway's Enter Play, the .38's FBX up to 7 s cold). Loads asked for
+    // before Play, they outlive Stop. Returns how many loads it asked for.
+    static int PrefetchPlayAssets(World& world, AssetLibrary& assets);
     void Stop(World& world);
 
     // Keeps the presentation in camera space, and takes in what the animator reported last

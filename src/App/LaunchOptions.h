@@ -19,14 +19,16 @@ enum class LaunchMode {
     UnitTests,    // --unit-tests [filter]
     ModelReport,  // --model-report <folder or model>...
     ModelNodes,   // --model-nodes <folder or fbx>...
+    ModelCacheCheck, // --model-cache-check <scene.json|folder|model>...
     SceneBounds,  // --scene-bounds <scene.json|prefab dir>... --out <dir>
     BakeImpostors, // --bake-impostors <scene.json>... --out <dir> [--match <text>]
     AudioTest,    // --audio-test [scene] [--report <file>]
-    BakeGI,       // --bake-gi <scene.json> [--gi-only <name>]
+    BakeGI,       // --bake-gi <scene.json> [--gi-only <name>] [--bake-gi-doors start|open|shut|hidden]
     BakeMotion,   // --bake-motion <file.mmconfig> [--match <text>] [--out <prefix>]
     ImportBlood,  // --import-blood <VolumetricBloodFX package dir>
     ImportKnife,  // --import-knife <folder holding the extracted Knife packs>
     CrashTest,    // --crash-test <kind> [--crash-dialog]
+    GiTour,       // --gi-tour <tour.json> --out <dir> [--perf-res WxH]   (the smoke harness: GI Phase 0's camera tour)
     Help,         // --help
 };
 
@@ -43,6 +45,9 @@ struct LaunchOptions {
     bool perfBenchMode = false;
     // --npc-test [watch|fight|die|...]: the enemy squad against a scripted player (NpcTest) on a fixed 60 Hz step.
     bool npcTestMode = false;
+    // --gi-tour <tour.json>: the scene the tour names, walked through the Scene view (Tests/GiTour.h): PNGs at each
+    // waypoint (full lighting, GI only), the shadow-slot owners and lamp fades in the log, and a luminance CSV.
+    bool giTourMode = false;
     // --editor-tests [filter]: end-to-end editor UI tests (Tests/EditorUiTests.cpp) in a hidden 1920x1080 window with
     // a fresh scratch user folder (%LOCALAPPDATA%\TartarusEngine-Test).
     bool editorTestsMode = false;
@@ -58,6 +63,11 @@ struct LaunchOptions {
     std::string unitTestsFilter;    // --unit-tests [filter]
     std::string audioTestScene;     // --audio-test [scene]
     std::string bakeGiScene;        // --bake-gi <scene.json>: bake its GI Volumes (GIBaker), write their .gi, exit
+    std::string giTourFile;         // --gi-tour <tour.json>
+    // --gi-tour-view full|gi|nogi (gi-tour): what the walk / still rows measure. full: the game's lighting (and the
+    // waypoint PNGs). gi: the baked GI alone (debugView 8). nogi: the GI Volumes off (uGIEnabled 0), so every pixel takes
+    // the reflection-probe / sky fallback. gi and nogi write tour_luminance_<view>.csv only, on the same frame timeline.
+    std::string giTourView = "full";
     std::string bakeMotionConfig;   // --bake-motion <file.mmconfig>: the motion matching bake (MotionBake), exit
     std::string crashTestKind;      // --crash-test <av|overflow|abort|purecall|invalidparam|terminate>
     std::string importDir;          // --import-blood / --import-knife <dir>: the vendor pack to convert
@@ -80,10 +90,11 @@ struct LaunchOptions {
     std::string crashTestInEditor;
     // --crash-dialog (crash-test, editor with --crash-test-in-editor): show the crash dialog anyway.
     bool crashDialog = false;
-    std::string sceneBoundsOut;   // --out <dir> (scene-bounds, bake-impostors); --out <prefix> (bake-motion): the output files
+    std::string sceneBoundsOut;   // --out <dir> (scene-bounds, bake-impostors, gi-tour); --out <prefix> (bake-motion): the output files
     std::string bakeMatch;        // --match <text> (bake-impostors): the model path the LOD 0s must draw; (bake-motion) the takes
     std::string audioTestReport;  // --report <file> (audio-test)
     std::string bakeGiOnly;       // --gi-only <name> (bake-gi): only the volumes whose name contains it
+    std::string bakeGiDoors = "start"; // --bake-gi-doors start|open|shut|hidden (bake-gi): the doors in the captures
     // --project <dir> (any mode): open that project folder instead of the one next to the exe. Applied by the parse.
     std::string projectDir;
     // --restore-state <file> (editor): Rebuild & Restart's state file (RestartState.h), applied after the scene
@@ -104,7 +115,7 @@ bool ParseLaunchOptions(int argc, char** argv, LaunchOptions& out, std::string& 
 std::string LaunchHelpText();
 
 // True for a run that opens a window nobody drives: every window mode but the plain editor (smoke, perf-bench,
-// npc-test, editor-tests, editor-shot, bake-gi), unless TARTARUS_SHOW=1 (or TARTARUS_EDITOR_TEST_SHOW=1). Its window
+// npc-test, editor-tests, editor-shot, bake-gi, gi-tour), unless TARTARUS_SHOW=1 (or TARTARUS_EDITOR_TEST_SHOW=1). Its window
 // never shows or takes the focus, VSync is off, and everything still renders to its framebuffers. The editor (Weapon
 // Lab included) and the built game always show.
 bool KeepsWindowHidden(const LaunchOptions& o);

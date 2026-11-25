@@ -22,7 +22,7 @@ enum class Arity {
 constexpr unsigned Bit(LaunchMode m) { return 1u << (unsigned)m; }
 constexpr unsigned kGuiModes = Bit(LaunchMode::Editor) | Bit(LaunchMode::SmokeTest) | Bit(LaunchMode::PerfBench) |
                                Bit(LaunchMode::NpcTest) | Bit(LaunchMode::EditorTests) | Bit(LaunchMode::EditorShot) |
-                               Bit(LaunchMode::BakeGI);
+                               Bit(LaunchMode::BakeGI) | Bit(LaunchMode::GiTour);
 constexpr unsigned kAnyMode = ~0u;
 
 using Apply = void (*)(LaunchOptions&, const std::string&);
@@ -67,6 +67,9 @@ const FlagDef kFlags[] = {
     {"--model-report", Arity::Many, "folder|model", true, LaunchMode::ModelReport, 0,
      [](LaunchOptions& o, const std::string& v) { o.inputs.push_back(v); },
      "print each model's size, bounds and mesh count"},
+    {"--model-cache-check", Arity::Many, "scene.json|folder|model", true, LaunchMode::ModelCacheCheck, 0,
+     [](LaunchOptions& o, const std::string& v) { o.inputs.push_back(v); },
+     "import each model fresh and from the model cache; exit 1 unless they match"},
     {"--model-nodes", Arity::Many, "folder|fbx", true, LaunchMode::ModelNodes, 0,
      [](LaunchOptions& o, const std::string& v) { o.inputs.push_back(v); },
      "print each FBX's node tree"},
@@ -94,6 +97,9 @@ const FlagDef kFlags[] = {
     {"--crash-test", Arity::Required, "kind", true, LaunchMode::CrashTest, 0,
      [](LaunchOptions& o, const std::string& v) { o.crashTestKind = v; },
      "crash on purpose (av|overflow|abort|purecall|invalidparam|terminate) to check the crash handler"},
+    {"--gi-tour", Arity::Required, "tour.json", true, LaunchMode::GiTour, 0,
+     [](LaunchOptions& o, const std::string& v) { o.giTourFile = v; },
+     "walk the tour's waypoints and routes through its scene (hidden): PNGs, shadow slots, a luminance CSV (needs --out)"},
     {"--help", Arity::None, "", true, LaunchMode::Help, 0,
      [](LaunchOptions&, const std::string&) {},
      "this list"},
@@ -105,14 +111,21 @@ const FlagDef kFlags[] = {
     {"--gi-only", Arity::Required, "name", false, kNoMode, Bit(LaunchMode::BakeGI),
      [](LaunchOptions& o, const std::string& v) { o.bakeGiOnly = v; },
      "bake only the GI Volumes whose name contains this"},
+    {"--bake-gi-doors", Arity::Required, "start|open|shut|hidden", false, kNoMode, Bit(LaunchMode::BakeGI),
+     [](LaunchOptions& o, const std::string& v) { o.bakeGiDoors = v; },
+     "the doors in the GI captures: as Play starts them (default), all open, all shut as authored, or the interior "
+     "door leaves hidden (the rest shut)"},
     {"--weapon-lab", Arity::None, "", false, kNoMode, kGuiModes,
      [](LaunchOptions& o, const std::string&) { o.weaponLabMode = true; },
      "the WeaponLab scene with the Weapon Lab panel"},
     {"--perf-sample", Arity::None, "", false, kNoMode, Bit(LaunchMode::PerfBench) | Bit(LaunchMode::NpcTest),
      [](LaunchOptions& o, const std::string&) { o.perfSample = true; },
      "add a sampling CPU profile of each phase (--npc-test: of the scripted run, from its 900th frame)"},
+    {"--gi-tour-view", Arity::Required, "full|gi|nogi", false, kNoMode, Bit(LaunchMode::GiTour),
+     [](LaunchOptions& o, const std::string& v) { o.giTourView = v; },
+     "what the tour's luminance rows measure: the game's lighting, the baked GI alone, or the GI Volumes off"},
     {"--perf-res", Arity::Required, "WxH", false, kNoMode,
-     Bit(LaunchMode::PerfBench) | Bit(LaunchMode::EditorShot) | Bit(LaunchMode::EditorTests),
+     Bit(LaunchMode::PerfBench) | Bit(LaunchMode::EditorShot) | Bit(LaunchMode::EditorTests) | Bit(LaunchMode::GiTour),
      [](LaunchOptions& o, const std::string& v) {
 #pragma warning(suppress : 4996)
          if (std::sscanf(v.c_str(), "%dx%d", &o.perfResW, &o.perfResH) != 2 || o.perfResW <= 0 || o.perfResH <= 0)
@@ -133,7 +146,7 @@ const FlagDef kFlags[] = {
      [](LaunchOptions& o, const std::string&) { o.editorShotIDE = true; },
      "one Script IDE capture"},
     {"--out", Arity::Required, "dir", false, kNoMode,
-     Bit(LaunchMode::SceneBounds) | Bit(LaunchMode::BakeImpostors) | Bit(LaunchMode::BakeMotion),
+     Bit(LaunchMode::SceneBounds) | Bit(LaunchMode::BakeImpostors) | Bit(LaunchMode::BakeMotion) | Bit(LaunchMode::GiTour),
      [](LaunchOptions& o, const std::string& v) { o.sceneBoundsOut = v; },
      "output folder (bake-motion: the output files' path, without extension)"},
     {"--match", Arity::Required, "text", false, kNoMode, Bit(LaunchMode::BakeImpostors) | Bit(LaunchMode::BakeMotion),
@@ -279,9 +292,24 @@ bool ParseLaunchOptions(int argc, char** argv, LaunchOptions& out, std::string& 
     // run-weapon-lab.cmd starts the exe without arguments; only the windowed modes take it, as they do --weapon-lab.
     if (Env::Flag(Env::Var::WeaponLab) && (kGuiModes & Bit(o.mode))) o.weaponLabMode = true;
 
-    o.smokeTestMode = o.mode == LaunchMode::SmokeTest || o.mode == LaunchMode::PerfBench || o.mode == LaunchMode::NpcTest;
+    if (o.bakeGiDoors != "start" && o.bakeGiDoors != "open" && o.bakeGiDoors != "shut" &&
+        o.bakeGiDoors != "hidden") {
+        error = "'--bake-gi-doors' takes start, open, shut or hidden";
+        return false;
+    }
+    if (o.giTourView != "full" && o.giTourView != "gi" && o.giTourView != "nogi") {
+        error = "'--gi-tour-view' takes full, gi or nogi";
+        return false;
+    }
+    if (o.mode == LaunchMode::GiTour && o.sceneBoundsOut.empty()) {
+        error = "'--gi-tour' needs '--out <dir>'";
+        return false;
+    }
+    o.smokeTestMode = o.mode == LaunchMode::SmokeTest || o.mode == LaunchMode::PerfBench || o.mode == LaunchMode::NpcTest ||
+                      o.mode == LaunchMode::GiTour;
     o.perfBenchMode = o.mode == LaunchMode::PerfBench;
     o.npcTestMode = o.mode == LaunchMode::NpcTest;
+    o.giTourMode = o.mode == LaunchMode::GiTour;
     o.editorTestsMode = o.mode == LaunchMode::EditorTests;
     o.buildMode = o.mode == LaunchMode::Build;
 

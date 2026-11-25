@@ -108,7 +108,7 @@ void ViewPipeline::DrawScene(const ViewPipelineInputs& in, const RenderFrameCont
     // TAA: LOD picks and the sun's cascade fit see the unjittered projection, or the cascades would
     // re-fit (and shimmer) with every sub-pixel step.
     const glm::mat4 steadyProj = ctx.TaaVelocity ? TemporalAA::JitterProjection(ctx.Proj, -ctx.TaaJitterNdc) : ctx.Proj;
-    { PROFILE_SCOPE("LOD Select"); world.LodSmooth = true; world.ApplyLod(ctx.ViewPos, steadyProj); } // #163 - this view's LOD levels (sun shadows too)
+    { PROFILE_SCOPE("LOD Select"); world.LodSmooth = !(ctx.GIBake && ctx.GIBakePinClocks); world.ApplyLod(ctx.ViewPos, steadyProj); } // #163 - this view's LOD levels (sun shadows too)
     in.sceneInputs->sunShadowsReady = in.shadowFrame->RenderSun(*in.shadowIn, ctx.View, steadyProj); // #109
     in.sceneRenderer->RenderScene(world, ctx, *in.sceneInputs, outStats);
 }
@@ -296,6 +296,7 @@ void ViewPipeline::RenderSceneView(const ViewPipelineInputs& in) {
         return !s.empty() && sscanf_s(s.c_str(), "%dx%d", &w, &h) == 2 && w > 0 && h > 0 ? glm::ivec2(w, h) : glm::ivec2(0);
     }();
     if (shotSize.x > 0) { scW = shotSize.x; scH = shotSize.y; }
+    if (in.harnessSceneSize.x > 0) { scW = in.harnessSceneSize.x; scH = in.harnessSceneSize.y; }
 
     sceneFramebuffer.Resize(scW, scH);
     float sceneAspect = (float)scW / (float)scH;

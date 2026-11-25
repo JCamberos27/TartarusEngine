@@ -129,6 +129,7 @@
 #include "GLDebug.h"
 #include "Log.h"
 #include "TextureCache.h"
+#include "ModelCache.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -159,6 +160,24 @@ static float RollFromWorld(const glm::mat4& m, const Camera& unrolled) {
     const glm::vec3 up = glm::vec3(m[1]);
     const float x = -glm::dot(up, unrolled.Right()), y = glm::dot(up, unrolled.Up());
     return (x * x + y * y) > 1e-12f ? glm::degrees(std::atan2(x, y)) : 0.0f;
+}
+
+// --bake-gi TARTARUS_GI_BAKE_TRACE: the last light gather's shadow-slot holders as one stable line, names sorted
+// ("spots[2]: A, B | points[1]: C"), so the baker can tell when a pass's shadowed set changes between probe batches.
+static std::string DescribeShadowHolders(const World& world, const LightGather& gather) {
+    auto names = [&](const std::unordered_map<entt::entity, int>& slots) {
+        std::vector<std::string> v;
+        for (const auto& [e, slot] : slots) {
+            if (!world.Registry.valid(e)) { v.push_back("<flashlight>"); continue; } // the torch's key, not an entity
+            const auto* nc = world.Registry.try_get<NameComponent>(e);
+            v.push_back(nc && !nc->Name.empty() ? nc->Name : "#" + std::to_string((std::uint32_t)e));
+        }
+        std::sort(v.begin(), v.end());
+        std::string s = "[" + std::to_string(v.size()) + "]:";
+        for (std::size_t i = 0; i < v.size(); ++i) s += (i ? ", " : " ") + v[i];
+        return s;
+    };
+    return "spots" + names(gather.SpotSlotHolders()) + " | points" + names(gather.PointSlotHolders());
 }
 
 // Renderables that never animate, skipped by the animation tick and the pre-skin gather (Renderer/StillModelCache.h).
@@ -229,11 +248,12 @@ int Application::Run() {
     // #146: a persistent log for bug reports (Unity's Editor.log). Headless runs get their own
     // file so a smoke test on a dev machine doesn't rotate away the last real editor session's.
     const char* logName = headless ? "Headless.log" : playerMode ? "Player.log" : "Editor.log";
-    Log::OpenFile(logName);
+    const std::string logPath = Log::OpenFile(logName); // "" when no file could be opened
     if (!oldEditorExited)
         Log::Warn("Rebuild & Restart: the old editor (pid " + std::to_string(opt.waitPid) + ") hasn't exited after " +
                   std::to_string(EditorRestart::kWaitOldEditorMs / 1000) + " s; going on.");
-    CrashHandler::SetReportLocation(UserPaths::Root(), logName); // a built game's dumps go to its own user folder
+    // A built game's dumps go to its own user folder; each keeps a copy of this run's log beside it.
+    CrashHandler::SetReportLocation(UserPaths::Root(), logPath.empty() ? std::string(logName) : logPath);
     WireGameShell(); // gameplay's keys, sounds, F-row pill and look prefs come from the editor
     return RunSession();
 }
@@ -260,7 +280,11 @@ public:
     bool Frame();
     int Finish();
     // The frame loop hit an exception: Play reverted and a recovery snapshot written while the editor and world exist.
-    void EmergencyRecoverySave() { if (!headless) editor.EmergencyRecoverySave(world, assets); }
+    void EmergencyRecoverySave() {
+        // A --bake-gi mid-bake: the lights, sky, switches and doors as loaded (the posed doors never reach the file).
+        if (giBaker && giBaker->DoorsPosed()) giBaker->Abort(world, "exception");
+        if (!headless) editor.EmergencyRecoverySave(world, assets);
+    }
 
 private:
     // Runs a statement at its place in the member order.
@@ -268,6 +292,7 @@ private:
         template <typename F> explicit Step(F&& f) { f(); }
     };
     void ShutdownEditor() {
+        if (giBaker) giBaker->RestoreDoors(world); // a bake closed before Finish leaves no posed door behind
         editor.Shutdown();
         editorModule.Shutdown();
         AppAudioMuter::Shutdown();
@@ -414,6 +439,13 @@ private:
     DebugLineGather debugLineGather;
     Sky sky;
     SkyAtmosphere skyAtmosphere; // the physical sky (World::SkySource::Atmosphere)
+    // --bake-gi: pin every clock a capture can see, so two bakes of one scene match (GIBaker::Options::PinClocks).
+    const bool giPinClocks = giBakeMode && !Env::Flag(Env::Var::GiBakeLiveClocks);
+    Step stepPinBakeClocks{[&] {
+        skyAtmosphere.SetBakeClock(giPinClocks);
+        Material::PinWindTime(giPinClocks);
+        if (giBakeMode) std::cout << "--bake-gi: clocks " << (giPinClocks ? "pinned" : "live (TARTARUS_GI_BAKE_LIVE_CLOCKS)") << std::endl;
+    }};
     IblProbe iblProbe; // #196: sky-baked irradiance / prefiltered specular / BRDF LUT
     // PR13: HDRI state — non-null when an HDRI is loaded, path tracks the loaded file
     std::shared_ptr<Cubemap> hdriCube;
@@ -448,6 +480,8 @@ private:
     // --bake-gi: made once the scene has settled (the sky's IBL baked, the probes captured), stepped every frame.
     std::unique_ptr<GIBaker> giBaker;
     int giBakeWait = 0, giBakeExit = 0;
+    int giBakeSettled = 0;          // pinned bakes: consecutive frames with no async load in flight before the start
+    int giBakeLateLoadFrames = 0;   // pinned bakes: frames during the bake with a load still in flight (not repeatable)
     bool giBakeDone = false;
     // PR15: SSAO — depth pre-pass FBO + compute + blur shaders (all scene-view only)
     Ssao ssao;
@@ -825,6 +859,8 @@ private:
     Step step51{[&] {
         if (sceneLoaded) {
             std::cout << "Loaded scene from " << scenePath << std::endl;
+            // As the editor's scene open: Play's guns and clips load while the first frames run.
+            if (!headless && !giBakeMode) FirstPersonPresentation::PrefetchPlayAssets(world, assets);
         }
     }};
 
@@ -843,6 +879,12 @@ private:
                 return TextureCache::HashSettings(it->second);
             });
         }
+        // The cooked model cache: entries unused for a month, crash leftovers, the size cap (Library/Models).
+        ModelCache::Prune();
+        const ModelCache::Stats models = ModelCache::GetStats();
+        if (models.Hits + models.Cooked > 0)
+            Log::Info("Model cache: " + std::to_string(models.Hits) + " models read (" + std::to_string((int)models.HitMs) +
+                      " ms), " + std::to_string(models.Cooked) + " imported and cooked (" + std::to_string((int)models.CookMs) + " ms).");
     }};
 
     EditorLayer editor;
@@ -1166,7 +1208,7 @@ private:
     SmokeContext smokeContext{world, assets, editor, editorCamera, sceneFramebuffer, clusterGrid, decalSystem, window,
                               npcTest.get(), playing, playMaximized, playUsesPlayer, player.Cam, playSceneCam,
                               [&]() { togglePlay(); }, [&](bool maximize) { setMaximized(maximize); },
-                              [&]() { warmRenderResources(); }};
+                              [&]() { warmRenderResources(); }, &lightGather, &sceneHdr, &giVolumes, &shadowFrame};
     SmokeHarness smoke{opt, smokeContext};
 
     // #89 — see the matching catch after the loop. (Loop body deliberately not re-indented.)
@@ -1244,7 +1286,7 @@ bool AppSession::Frame() {
     // every run (a before/after pixel diff of a GPU change). The timings of such a run aren't the measurement.
     // --npc-test: 1/60 s, its game step (gameDt below), so what reads Time's clocks - the recoil's unscaled shot
     // timing among them - repeats run to run too, instead of following how long each frame really took.
-    Time::SetFixedStep(opt.perfBenchMode && !opt.smokeShotsDir.empty() ? 1.0 / 120.0 : opt.npcTestMode ? 1.0 / 60.0 : 0.0);
+    Time::SetFixedStep(opt.perfBenchMode && !opt.smokeShotsDir.empty() ? 1.0 / 120.0 : opt.npcTestMode || opt.giTourMode ? 1.0 / 60.0 : 0.0);
     Time::BeginFrame();
     const auto frameWorkStart = std::chrono::steady_clock::now(); // to SwapBuffers: this frame's own work
     const float dt = Time::UnscaledDeltaTime();
@@ -1725,6 +1767,7 @@ bool AppSession::Frame() {
     { PROFILE_SCOPE("Asset Pump"); assets.PumpAsync(AssetLibrary::PumpBudgetMs(playing, OutfitSystem::AnyPending(), lastFrameWorkMs)); }
     { PROFILE_SCOPE("Outfit Pending");
       // #15 - an edit made without an undo step stays its own step, not part of the baseline the landing makes.
+      // (Not while --bake-gi has the doors posed: the editor checks Openable::BakePosed itself.)
       if (!playerMode && OutfitSystem::LandingDue(world)) editor.JournalBeforeOutfitLanding(world);
       OutfitSystem::UpdatePending(world, assets); }
     { PROFILE_SCOPE("Outfit Hiding"); OutfitSystem::UpdateHiding(world); } // outfit skin under clothing (only when an outfit's pieces changed)
@@ -1791,6 +1834,9 @@ bool AppSession::Frame() {
         lightIn.physicalSky = physicalSky;
         lightIn.prefabMode = editor.InPrefabMode();
         lightIn.frame = frameIndex;
+        lightIn.dt = dt; // real time: the shadow fades run while paused too, like the editor camera
+        // The bake's probes see every shadow at full strength. (Scene loads and camera cuts LightGather sees itself.)
+        lightIn.snapShadowFades = giBakeMode;
         lightIn.torch = torchLit ? &torch : nullptr;
         // Lights panel solo/mute is an editing aid only - Play renders every light (#140).
         if (!playing) lightIn.suppressed = [&](entt::entity e) { return editor.IsLightSuppressed(world, e); };
@@ -1982,10 +2028,13 @@ bool AppSession::Frame() {
     sceneInputs.spotShadowBias       = frameLights.SpotBias;
     sceneInputs.spotShadowNormalBias = frameLights.SpotNormalBias;
     sceneInputs.spotShadowSoftness   = frameLights.SpotSoftness;
+    sceneInputs.spotShadowWeight     = frameLights.SpotWeight;
     sceneInputs.pointShadowCount      = frameLights.PointCount;
     sceneInputs.pointShadowFar        = frameLights.PointFar;
     sceneInputs.pointShadowBias       = frameLights.PointBias;
     sceneInputs.pointShadowNormalBias = frameLights.PointNormalBias;
+    sceneInputs.pointShadowSoftness   = frameLights.PointSoftness;
+    sceneInputs.pointShadowWeight     = frameLights.PointWeight;
     sceneInputs.shadowsEnabled   = world.Render.ShadowsEnabled;
     sceneInputs.ssaoEnabled      = world.Render.SsaoEnabled;
     sceneInputs.postFxOff        = FKeyRow::PostFxOff(); // F8
@@ -2020,11 +2069,13 @@ bool AppSession::Frame() {
                                                  std::vector<float>& out) { gather->Gather(w, shapes, only, out); };
     viewIn.scene = {&sceneHdr, &sceneTaa, &sceneOpaqueColor, &ssao, &bloom};
     viewIn.sceneLdr = &sceneFramebuffer;
+    // --gi-tour: the Scene view at the tour's fixed size (--perf-res, default 1920x1080), whatever the hidden window's layout.
+    if (opt.giTourMode) viewIn.harnessSceneSize = opt.perfResW > 0 ? glm::ivec2(opt.perfResW, opt.perfResH) : glm::ivec2(1920, 1080);
     viewIn.tintOverlay = &tintOverlay;
     viewIn.grid = &grid;
     viewIn.selectionOutline = &selectionOutline;
     // --smoke-shots with TARTARUS_SHOT_CAMERAS: review pictures, so no grid through them either.
-    viewIn.harnessCleanViews = (npcTest && npcTest->WantsCleanViews()) ||
+    viewIn.harnessCleanViews = (npcTest && npcTest->WantsCleanViews()) || opt.giTourMode ||
                                (opt.smokeTestMode && !opt.smokeShotsDir.empty() && Env::IsSet(Env::Var::ShotCameras));
     viewIn.game = {&gameHdr, &gameTaa, &gameOpaqueColor, &gameSsao, &gameBloom};
     viewIn.gameLdr = &gameLdr;
@@ -2049,12 +2100,27 @@ bool AppSession::Frame() {
     if (giBakeMode && !giBakeDone) {
         PROFILE_SCOPE("GI Bake");
         if (!giBaker) {
-            if (++giBakeWait >= 30 && iblProbe.IsValid() && !probeCapture.Busy()) {
+            // Pinned (repeatable) bakes also wait for every async load and GPU upload to land, so no capture draws a
+            // surface with its maps still missing (bindSlot falls back to the base colour alone).
+            // 30 frames in a row with nothing in flight (a load chain can leave a one-frame gap), then a fixed frame
+            // phase, so frame-counted schedules (shadow refresh turns, slot settling) line up with the passes alike.
+            giBakeSettled = assets.AsyncInFlight() == 0 ? giBakeSettled + 1 : 0;
+            const bool loadsSettled = !giPinClocks || (giBakeSettled >= 30 && Time::FrameCount() % 64 == 0);
+            if (++giBakeWait >= 30 && iblProbe.IsValid() && !probeCapture.Busy() && loadsSettled) {
+                std::cout << "--bake-gi: starting after " << giBakeWait << " frames" << std::endl;
                 giBaker = std::make_unique<GIBaker>();
                 GIBaker::Options bo;
                 bo.Only = opt.bakeGiOnly;
+                bo.PinClocks = giPinClocks;
+                bo.DoorPose = opt.bakeGiDoors == "open"   ? GIBaker::Options::Doors::Open
+                            : opt.bakeGiDoors == "shut"   ? GIBaker::Options::Doors::Shut
+                            : opt.bakeGiDoors == "hidden" ? GIBaker::Options::Doors::Hidden
+                                                          : GIBaker::Options::Doors::Start;
                 bo.Emissive = Env::Float(Env::Var::GiBakeEmissive, bo.Emissive); // (a malformed value keeps the default)
                 bo.Bounces = Env::Int(Env::Var::GiBakeBounces, bo.Bounces);
+                bo.FaceNudge = std::max(Env::Float(Env::Var::GiBakeFaceNudge, bo.FaceNudge), 0.0f); // 0 = captured on the face, as before f8c288f1
+                if (Env::Flag(Env::Var::GiBakeTrace))
+                    bo.TraceShadowSet = [&] { return DescribeShadowHolders(world, lightGather); };
                 if (!giBaker->Begin(world, bo)) {
                     std::cerr << "--bake-gi: " << giBaker->Error() << std::endl;
                     giBakeExit = 1;
@@ -2065,9 +2131,13 @@ bool AppSession::Frame() {
                 giBakeExit = 1;
                 giBakeDone = true;
             }
-        } else if (giBaker->Step(world, giVolumes, [&](const RenderFrameContext& c) { viewPipeline.DrawScene(viewIn, c, nullptr); },
+        } else if ((giPinClocks && assets.AsyncInFlight() > 0 ? ++giBakeLateLoadFrames : 0),
+                   giBaker->Step(world, giVolumes, [&](const RenderFrameContext& c) { viewPipeline.DrawScene(viewIn, c, nullptr); },
                                  [&](const glm::vec3& p) { editorCamera.Position = p; })) {
             if (giBaker->Failed()) std::cerr << "--bake-gi: " << giBaker->Error() << std::endl;
+            if (giBakeLateLoadFrames > 0)
+                std::cerr << "--bake-gi: WARNING, " << giBakeLateLoadFrames
+                          << " frames of the bake had an asset load in flight: this bake may not be repeatable" << std::endl;
             giBakeExit = giBaker->Failed() ? 1 : 0;
             giBakeDone = true;
         }

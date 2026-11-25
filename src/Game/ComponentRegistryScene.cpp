@@ -196,6 +196,10 @@ void RegisterSceneComponents() {
               "The box's full size along the parent's axes." },
             { "Bounds Fade", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, BoundsFade), 0.01f,
               "Metres inside each face over which the light fades to nothing.", 0.0f, 2.0f },
+            { "Bounds Fade -", T::Vec3, TARTARUS_REFLECT_FIELD(LightComponent, BoundsFadeNeg), 0.01f,
+              "Per-face fade (metres) for the box's -X / -Y / -Z faces.\n< 0 = use Bounds Fade. Widen it where a face ends in open air." },
+            { "Bounds Fade +", T::Vec3, TARTARUS_REFLECT_FIELD(LightComponent, BoundsFadePos), 0.01f,
+              "Per-face fade (metres) for the box's +X / +Y / +Z faces.\n< 0 = use Bounds Fade. Widen it where a face ends in open air." },
             // #203 - drawn as a layer checklist by DrawReflectedComponentExtra("Light").
             { "Culling Mask", T::Int, TARTARUS_REFLECT_FIELD(LightComponent, CullingMask), 0.0f,
               "Which layers this light illuminates." },
@@ -228,7 +232,7 @@ void RegisterSceneComponents() {
         F("Shadow Near Plane").VisibleIfField = "Type"; F("Shadow Near Plane").VisibleIfValue = 2;
         F("Shadow Near Plane").VisibleIfNot = true;
         F("Culling Mask").EditorHidden = true;
-        for (const char* b : { "Bounds", "Bounds Center", "Bounds Size", "Bounds Fade" }) {
+        for (const char* b : { "Bounds", "Bounds Center", "Bounds Size", "Bounds Fade", "Bounds Fade -", "Bounds Fade +" }) {
             F(b).VisibleIfField = "Type"; F(b).VisibleIfValue = 2; F(b).VisibleIfNot = true;
         }
         Register<LightComponent>(std::move(m));
@@ -533,6 +537,10 @@ void RegisterSceneComponents() {
             { "Size", T::Vec3, TARTARUS_REFLECT_FIELD(G, Size), 0.05f, "Full extents of the box, metres (x the scale).", 0.0f, 0.0f },
             { "Spacing", T::Float, TARTARUS_REFLECT_FIELD(G, Spacing), 0.05f, "Metres between probes. Re-bake after changing it.", 0.1f, 4.0f },
             { "Fade", T::Float, TARTARUS_REFLECT_FIELD(G, Fade), 0.01f, "Metres over which the light fades out at the box faces.", 0.0f, 4.0f },
+            { "Fade Min", T::Vec3, TARTARUS_REFLECT_FIELD(G, FadeMin), 0.01f,
+              "Per face, in the box's own axes: the fade of the -x, -y and -z faces. 0 = use Fade. A wider one blends two volumes\n"
+              "that share an open space (a wall between them leaks the neighbour's light through it: keep those at Fade).", 0.0f, 4.0f },
+            { "Fade Max", T::Vec3, TARTARUS_REFLECT_FIELD(G, FadeMax), 0.01f, "Per face: the fade of the +x, +y and +z faces. 0 = use Fade.", 0.0f, 4.0f },
             { "Intensity", T::Float, TARTARUS_REFLECT_FIELD(G, Intensity), 0.01f, "Scales the baked light.", 0.0f, 16.0f },
             { "Circuits", T::String, TARTARUS_REFLECT_FIELD(G, Circuits), 0.0f,
               "Light circuits to bake a layer each for, ';'-separated. Each layer shows while its circuit is on." },

@@ -30,54 +30,68 @@ void BoundLight(LightBuffer& buffer, World& world, entt::entity e, const LightCo
         axes[i] = s > 1e-8f ? col / s : glm::vec3(i == 0, i == 1, i == 2);
         half[i] = 0.5f * std::abs(lc.BoundsSize[i]) * (s > 1e-8f ? s : 1.0f);
     }
-    buffer.BoundLast(axes, glm::vec3(parent * glm::vec4(lc.BoundsCenter, 1.0f)), half, lc.BoundsFade);
+    buffer.BoundLast(axes, glm::vec3(parent * glm::vec4(lc.BoundsCenter, 1.0f)), half, lc.BoundsFade, lc.BoundsFadeNeg,
+                     lc.BoundsFadePos);
 }
 }
 
-LightGather::StableSlots::StableSlots() { for (auto& o : Owner) o = entt::null; }
-
-void LightGather::StableSlots::Assign(const std::vector<entt::entity>& want, int budget, std::uint64_t frame,
-                                      std::unordered_map<entt::entity, int>& out) {
-    out.clear();
-    budget = std::clamp(budget, 0, SpotShadowMap::kMaxSpots);
-    for (int i = budget; i < SpotShadowMap::kMaxSpots; ++i) Owner[i] = entt::null;
-    bool taken[SpotShadowMap::kMaxSpots] = {};
-    for (entt::entity e : want)
-        for (int i = 0; i < budget; ++i)
-            if (Owner[i] == e && !taken[i]) { taken[i] = true; Used[i] = frame; out[e] = i; break; }
-    for (entt::entity e : want) {
-        if (out.count(e)) continue;
-        int pick = -1;
-        for (int i = 0; i < budget; ++i)
-            if (!taken[i] && (pick < 0 || Used[i] < Used[pick])) pick = i;
-        if (pick < 0) break;
-        taken[pick] = true; Owner[pick] = e; Used[pick] = frame; out[e] = pick;
+// The scene's GI Volumes as rooms (ShadowSlotScoring::Rooms), ranked against the view's position.
+void LightGather::GatherRooms(World& world, const glm::vec3& viewPos) {
+    m_Rooms.Clear();
+    for (auto [e, tc, gv] : world.Registry.view<const TransformComponent, const GIVolumeComponent>().each()) {
+        if (world.Registry.any_of<InactiveTag, DeactivatedTag>(e)) continue;
+        const auto* name = world.Registry.try_get<NameComponent>(e);
+        m_Rooms.Add(name ? name->Name : std::string(), GI::Box::FromTransform(world.GetCachedWorldTransform(e), gv.Size));
     }
+    m_Rooms.Classify(viewPos);
 }
 
 // #110 - shadow slots go to the most important shadowed spot / point lights, not the first ones in registry order
 // (which let a far light keep its shadow while one right next to the camera lost it, and reshuffled slots whenever any
 // entity was created). Score ~ brightness reaching the viewer: intensity * range^2 over the squared distance from the
 // camera to the light's sphere of influence (inside it = full score). Last frame's holders get a 25% bonus, so
-// near-ties don't flicker. Slots are then kept per light (StableSlots): handing them out in registry order every frame
-// shifted every later light to another layer whenever one light gained or lost its shadow, and redrew all their caches.
+// near-ties don't flicker. Slots are then kept per light: handing them out in registry order every frame shifted
+// every later light to another layer whenever one light gained or lost its shadow, and redrew all their caches.
+// GI Phase 1 - room-aware: lamps in the view's room (a GI Volume group) and the rooms touching it score first
+// (ShadowSlotScoring), and a slot changing hands fades the old shadow out and the new one in (FadingSlots).
 void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& out) {
+    namespace S = ShadowSlotScoring;
     World& world = *in.world;
-    std::vector<entt::entity>& frameShadowed = m_ShadowedScratch;
-    frameShadowed.clear();
     m_LightXforms.clear();
-    std::vector<entt::entity>& chosenSpots = m_ChosenSpots;
-    std::vector<entt::entity>& chosenPoints = m_ChosenPoints;
+    std::vector<std::uint32_t>& chosenSpots = m_ChosenSpots;
+    std::vector<std::uint32_t>& chosenPoints = m_ChosenPoints;
     chosenSpots.clear();
     chosenPoints.clear();
     // The player's flashlight takes the first spot shadow; the scene's spots share the rest.
     const int sceneSpotShadowBudget = std::max(out.SpotBudget - (in.torch ? 1 : 0), 0);
     const glm::vec3 viewPos = in.viewCam->Position;
     const float tanHalfFov = std::tan(glm::radians(in.viewCam->Fov) * 0.5f);
+    // A new scene: its entity ids are not the old scene's lights - drop every holder, and the hysteresis set with them.
+    const bool sceneLoaded = world.SceneLoads != m_SceneLoads;
+    if (sceneLoaded) {
+        m_SceneLoads = world.SceneLoads;
+        m_SpotSlots.Reset();
+        m_PointSlots.Reset();
+        m_PrevShadowed.clear();
+    }
+    // A cut: nothing on screen continues from last frame, so there is nothing to fade from. Asked for (RequestSnap: the
+    // --gi-tour's waypoint jumps), another view camera (Play start / stop), or a move faster than anyone walks or flies
+    // (a teleport; a hitch at walking speed moves the view far but slowly, and isn't one).
+    const float moved = glm::length(viewPos - m_LastViewPos);
+    const bool cut = m_SnapRequested || in.viewCam != m_LastViewCam ||
+                     moved > std::max(kCutDistance, kCutSpeed * std::max(in.dt, 0.0f));
+    m_SnapRequested = false;
+    m_LastViewCam = in.viewCam;
+    m_LastViewPos = viewPos;
+    if (sceneLoaded || cut) m_Rooms.Reset(); // no sticky room across a cut
+    GatherRooms(world, viewPos);
+    out.ShadowRoom = m_Rooms.ViewRoom;
     std::vector<std::pair<float, entt::entity>>& spots = m_SpotCandidates;
     std::vector<std::pair<float, entt::entity>>& points = m_PointCandidates;
     spots.clear();
     points.clear();
+    m_SpotLit.clear();
+    m_PointLit.clear();
     for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
         const auto& lc = world.Registry.get<LightComponent>(e);
         // (Scored on the intensity now: holding a flickering light's shadow through its bright peaks - a TV
@@ -85,28 +99,70 @@ void LightGather::AssignShadowSlots(const LightGatherInputs& in, FrameLights& ou
         if (!lc.Shadow.Enabled || !world.Render.ShadowsEnabled || lc.Kind == LightComponent::Type::Directional ||
             lc.Intensity <= 0.0f || glm::dot(lc.Color, lc.Color) <= 0.0f || world.Registry.all_of<InactiveTag>(e) || (in.suppressed && in.suppressed(e)))
             continue;
+        // Lit (before the distance cull): what FadingSlots tells an arriving light by.
+        (lc.Kind == LightComponent::Type::Spot ? m_SpotLit : m_PointLit).push_back(entt::to_integral(e));
         const glm::mat4 lightXform = world.ComposeWorldTransform(e);
         m_LightXforms.emplace_back(e, lightXform);
         const glm::vec3 lpos = glm::vec3(lightXform[3]);
-        const float range = std::max(lc.Range, 0.2f);
         const float lightDist = glm::length(lpos - viewPos);
         if (LightBuffer::DistanceFade(lc.Range, lightDist, tanHalfFov) <= 0.0f) continue;
-        const float gap = std::max(lightDist - range, 0.0f);
-        float score = lc.Intensity * range * range / (gap * gap + 1.0f);
-        if (std::binary_search(m_PrevShadowed.begin(), m_PrevShadowed.end(), e)) score *= 1.25f;
+        const bool held = std::binary_search(m_PrevShadowed.begin(), m_PrevShadowed.end(), e);
+        const float score = S::Score(lc.Intensity, lc.Range, lightDist, m_Rooms.TierAt(lpos), held);
         (lc.Kind == LightComponent::Type::Spot ? spots : points).emplace_back(score, e);
     }
-    auto take = [&](std::vector<std::pair<float, entt::entity>>& v, size_t n, std::vector<entt::entity>& chosen) {
-        std::stable_sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
-        for (size_t i = 0; i < v.size() && i < n; ++i) { frameShadowed.push_back(v[i].second); chosen.push_back(v[i].second); }
+    auto take = [&](std::vector<std::pair<float, entt::entity>>& v, size_t n, std::vector<std::uint32_t>& chosen,
+                    std::vector<std::uint32_t>& keys) {
+        // Ties (equal scores) fall back to the entity id, so the order never depends on the registry's.
+        std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) {
+            return a.first != b.first ? a.first > b.first : a.second < b.second;
+        });
+        keys.clear();
+        for (size_t i = 0; i < v.size(); ++i) {
+            const std::uint32_t k = entt::to_integral(v[i].second);
+            keys.push_back(k);
+            if (i < n) chosen.push_back(k);
+        }
+        std::sort(keys.begin(), keys.end());
     };
-    take(spots, (size_t)sceneSpotShadowBudget, chosenSpots);
-    take(points, (size_t)out.PointBudget, chosenPoints);
-    std::sort(frameShadowed.begin(), frameShadowed.end());
-    m_PrevShadowed.swap(frameShadowed); // now this frame's holders (frameShadowed keeps last frame's storage)
-    if (in.torch && world.Render.ShadowsEnabled && out.SpotBudget > 0) chosenSpots.insert(chosenSpots.begin(), kTorchSlotKey);
-    m_SpotSlots.Assign(chosenSpots, out.SpotBudget, in.frame + 1, m_SpotSlotOf);
-    m_PointSlots.Assign(chosenPoints, out.PointBudget, in.frame + 1, m_PointSlotOf);
+    take(spots, (size_t)sceneSpotShadowBudget, chosenSpots, m_SpotKeys);
+    take(points, (size_t)out.PointBudget, chosenPoints, m_PointKeys);
+    const bool torchWants = in.torch && world.Render.ShadowsEnabled && out.SpotBudget > 0;
+    const std::uint32_t torchKey = entt::to_integral(kTorchSlotKey);
+    if (torchWants) {
+        chosenSpots.insert(chosenSpots.begin(), torchKey);
+        m_SpotKeys.insert(std::lower_bound(m_SpotKeys.begin(), m_SpotKeys.end(), torchKey), torchKey);
+        m_SpotLit.push_back(torchKey);
+    }
+    std::sort(m_SpotLit.begin(), m_SpotLit.end());
+    std::sort(m_PointLit.begin(), m_PointLit.end());
+    const bool snap = in.snapShadowFades || !m_Gathered || sceneLoaded || cut;
+    m_Gathered = true;
+    const float dt = std::clamp(in.dt, 0.0f, 0.1f); // a hitch doesn't skip a whole fade
+    out.SlotChanges = m_SpotSlots.StepLit(chosenSpots, m_SpotKeys, m_SpotLit, out.SpotBudget, in.frame + 1, dt, snap,
+                                       torchWants ? torchKey : S::FadingSlots<1>::kNone);
+    out.SlotChanges += m_PointSlots.StepLit(chosenPoints, m_PointKeys, m_PointLit, out.PointBudget, in.frame + 1, dt, snap);
+
+    // This frame's holders - fading ones too - are next frame's hysteresis set and the slot maps Gather reads.
+    m_SpotSlotOf.clear();
+    m_PointSlotOf.clear();
+    m_PrevShadowed.clear();
+    for (int i = 0; i < ShadowLimits::kMaxSpots; ++i) {
+        out.SpotWeight[i] = 0.0f;
+        if (m_SpotSlots.Owner[i] == S::FadingSlots<1>::kNone) continue;
+        const entt::entity e = static_cast<entt::entity>(m_SpotSlots.Owner[i]);
+        m_SpotSlotOf[e] = i;
+        out.SpotWeight[i] = m_SpotSlots.Weight[i];
+        if (e != kTorchSlotKey) m_PrevShadowed.push_back(e);
+    }
+    for (int i = 0; i < ShadowLimits::kMaxPoints; ++i) {
+        out.PointWeight[i] = 0.0f;
+        if (m_PointSlots.Owner[i] == S::FadingSlots<1>::kNone) continue;
+        const entt::entity e = static_cast<entt::entity>(m_PointSlots.Owner[i]);
+        m_PointSlotOf[e] = i;
+        out.PointWeight[i] = m_PointSlots.Weight[i];
+        m_PrevShadowed.push_back(e);
+    }
+    std::sort(m_PrevShadowed.begin(), m_PrevShadowed.end());
     // Candidates that didn't get a slot, for the Inspector's over-budget warning.
     out.OverBudget.clear();
     for (const auto* v : {&spots, &points})
@@ -240,6 +296,7 @@ void LightGather::Gather(const LightGatherInputs& in, FrameLights& out) {
                 out.PointNear[slot] = std::max(lc.Shadow.NearPlane, 1e-3f);
                 out.PointBias[slot] = lc.Shadow.Bias;
                 out.PointNormalBias[slot] = lc.Shadow.NormalBias;
+                out.PointSoftness[slot] = lc.Shadow.Softness;
             }
             lightBuffer.AddPoint(pos, lc.Color, localIntensity, lc.Range, slot, ~(std::uint32_t)lc.CullingMask,
                                  lc.VolumetricIntensity); // #203

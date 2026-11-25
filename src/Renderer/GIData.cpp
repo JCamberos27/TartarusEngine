@@ -132,6 +132,17 @@ float Box::Fade(const glm::vec3& p, float fade) const {
     return std::clamp(m / fade, 0.0f, 1.0f);
 }
 
+float Box::FadeFaces(const glm::vec3& p, const glm::vec3& lo, const glm::vec3& hi) const {
+    const glm::vec3 q = ToLocal(p);
+    const glm::vec3 in3 = Half - glm::abs(q);
+    float f = 1.0f;
+    for (int i = 0; i < 3; ++i) {
+        const float fade = q[i] < 0.0f ? lo[i] : hi[i];
+        f = std::min(f, fade <= 0.0f ? (in3[i] >= 0.0f ? 1.0f : 0.0f) : std::clamp(in3[i] / fade, 0.0f, 1.0f));
+    }
+    return f;
+}
+
 glm::ivec3 GridDims(const glm::vec3& half, float spacing) {
     const float s = std::max(spacing, 0.05f);
     glm::ivec3 d;
@@ -143,6 +154,80 @@ glm::vec3 ProbeLocal(const glm::ivec3& ijk, const glm::ivec3& dims, const glm::v
     glm::vec3 q;
     for (int i = 0; i < 3; ++i) q[i] = -half[i] + 2.0f * half[i] * (float)ijk[i] / (float)std::max(dims[i] - 1, 1);
     return q;
+}
+
+glm::vec3 FaceProbeNudge(const glm::ivec3& ijk, const glm::ivec3& dims, const glm::vec3& half, float nudge) {
+    glm::vec3 o(0.0f);
+    for (int a = 0; a < 3; ++a) {
+        if (dims[a] <= 1) continue;
+        const float cell = 2.0f * half[a] / (float)(dims[a] - 1);
+        const float d = std::min(nudge, 0.45f * cell);
+        if (ijk[a] == 0) o[a] = d;
+        else if (ijk[a] == dims[a] - 1) o[a] = -d;
+    }
+    return o;
+}
+
+bool NudgeBlocked(const glm::vec3& from, const glm::vec3& to, const std::vector<SolidBox>& solids) {
+    // A box within kHold of the face point counts as holding it: a volume's face sits a few cm off the floor, ceiling or wall slab it is
+    // padded to (2-5 cm either side), and that slab (or the neighbouring piece of it) is what the nudge is meant to leave, not a blocker.
+    // Furniture and doors stand further off (>= ~0.1 m: a wardrobe or closet front) and still block.
+    constexpr float kEps = 1e-4f + 0.06f;
+    const glm::vec3 d = to - from;
+    for (const SolidBox& b : solids) {
+        if (glm::all(glm::greaterThanEqual(from, b.Min - kEps)) && glm::all(glm::lessThanEqual(from, b.Max + kEps))) continue;
+        float t0 = 0.0f, t1 = 1.0f; // slab test along the segment
+        bool hit = true;
+        for (int a = 0; a < 3 && hit; ++a) {
+            if (std::abs(d[a]) < 1e-9f) {
+                if (from[a] < b.Min[a] || from[a] > b.Max[a]) hit = false;
+            } else {
+                float ta = (b.Min[a] - from[a]) / d[a], tb = (b.Max[a] - from[a]) / d[a];
+                if (ta > tb) std::swap(ta, tb);
+                t0 = std::max(t0, ta);
+                t1 = std::min(t1, tb);
+                if (t0 > t1) hit = false;
+            }
+        }
+        if (hit) return true;
+    }
+    return false;
+}
+
+std::vector<glm::vec3> PlanFaceNudges(const Box& bounds, const glm::ivec3& dims, float nudge, const std::vector<SolidBox>& solids,
+                                      int* nudged, int* blocked) {
+    std::vector<glm::vec3> out((std::size_t)dims.x * dims.y * dims.z, glm::vec3(0.0f));
+    int nOk = 0, nBlocked = 0;
+    if (nudge > 0.0f) {
+        glm::vec3 wmin(1e30f), wmax(-1e30f); // the volume's world box, a little wider than the nudge
+        for (int c = 0; c < 8; ++c) {
+            const glm::vec3 q((c & 1) ? bounds.Half.x : -bounds.Half.x, (c & 2) ? bounds.Half.y : -bounds.Half.y,
+                              (c & 4) ? bounds.Half.z : -bounds.Half.z);
+            wmin = glm::min(wmin, bounds.ToWorld(q));
+            wmax = glm::max(wmax, bounds.ToWorld(q));
+        }
+        wmin -= glm::vec3(nudge + 0.05f);
+        wmax += glm::vec3(nudge + 0.05f);
+        std::vector<SolidBox> near;
+        for (const SolidBox& b : solids)
+            if (b.Min.x <= wmax.x && b.Max.x >= wmin.x && b.Min.y <= wmax.y && b.Max.y >= wmin.y && b.Min.z <= wmax.z && b.Max.z >= wmin.z)
+                near.push_back(b);
+        for (int pr = 0; pr < (int)out.size(); ++pr) {
+            const glm::ivec3 ijk(pr % dims.x, (pr / dims.x) % dims.y, pr / (dims.x * dims.y));
+            const glm::vec3 off = FaceProbeNudge(ijk, dims, bounds.Half, nudge);
+            if (off == glm::vec3(0.0f)) continue;
+            const glm::vec3 local = ProbeLocal(ijk, dims, bounds.Half);
+            if (NudgeBlocked(bounds.ToWorld(local), bounds.ToWorld(local + off), near)) {
+                ++nBlocked;
+                continue;
+            }
+            out[pr] = off;
+            ++nOk;
+        }
+    }
+    if (nudged) *nudged = nOk;
+    if (blocked) *blocked = nBlocked;
+    return out;
 }
 
 glm::vec3 VolumeBake::Sample(int layer, const glm::vec3& q, const glm::vec3& n) const {
@@ -338,17 +423,44 @@ void FillInvalid(std::vector<ProbeSH>& probes, const std::vector<bool>& valid, c
                     const int i = ProbeIndex(p, dims);
                     if (done[i]) continue;
                     ProbeSH sum;
-                    int cnt = 0;
-                    for (const auto& o : nb) {
-                        const glm::ivec3 q = p + o;
-                        if (glm::any(glm::lessThan(q, glm::ivec3(0))) || glm::any(glm::greaterThanEqual(q, dims))) continue;
+                    float wsum = 0.0f;
+                    const auto add = [&](const glm::ivec3& q, float w) {
+                        if (glm::any(glm::lessThan(q, glm::ivec3(0))) || glm::any(glm::greaterThanEqual(q, dims))) return;
                         const int j = ProbeIndex(q, dims);
-                        if (!done[j]) continue;
-                        for (int c = 0; c < 3; ++c) sum.c[c] += probes[j].c[c];
-                        ++cnt;
+                        if (!done[j]) return;
+                        for (int c = 0; c < 3; ++c) sum.c[c] += w * probes[j].c[c];
+                        wsum += w;
+                    };
+                    // The axes this probe lies on a box face of (inward = +1 / -1 along them); an axis with one probe has no face.
+                    glm::ivec3 inward(0);
+                    for (int a = 0; a < 3; ++a) {
+                        if (dims[a] <= 1) continue;
+                        if (p[a] == 0) inward[a] = 1;
+                        else if (p[a] == dims[a] - 1) inward[a] = -1;
                     }
-                    if (!cnt) continue;
-                    for (int c = 0; c < 3; ++c) sum.c[c] /= (float)cnt;
+                    if (inward != glm::ivec3(0)) {
+                        // 1. In-plane neighbours first (the 6-neighbours along the axes it is not on a face of).
+                        for (const auto& o : nb)
+                            if ((o.x != 0 && inward.x != 0) || (o.y != 0 && inward.y != 0) || (o.z != 0 && inward.z != 0)) continue;
+                            else add(p + o, 1.0f);
+                        // 2. None done (a whole slab row is invalid): the inward neighbour, blurred in-plane (4 / 2 / 1).
+                        if (wsum <= 0.0f) {
+                            const glm::ivec3 q = p + inward;
+                            for (int dz = -1; dz <= 1; ++dz)
+                                for (int dy = -1; dy <= 1; ++dy)
+                                    for (int dx = -1; dx <= 1; ++dx) {
+                                        const glm::ivec3 d(dx, dy, dz);
+                                        if ((d.x != 0 && inward.x != 0) || (d.y != 0 && inward.y != 0) || (d.z != 0 && inward.z != 0)) continue;
+                                        const int k = (dx != 0) + (dy != 0) + (dz != 0);
+                                        add(q + d, 4.0f / (float)(1 << k));
+                                    }
+                        }
+                    }
+                    // 3. Interior probes (and a face probe with nothing above): the average of every done 6-neighbour.
+                    if (wsum <= 0.0f)
+                        for (const auto& o : nb) add(p + o, 1.0f);
+                    if (wsum <= 0.0f) continue;
+                    for (int c = 0; c < 3; ++c) sum.c[c] /= wsum;
                     ring.push_back(i);
                     vals.push_back(sum);
                 }

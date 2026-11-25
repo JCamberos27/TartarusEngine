@@ -83,6 +83,10 @@ jobs:
           python -m pip install --quiet --disable-pip-version-check pillow==11.3.0
           python -m unittest discover -s tools/quantum/casual_bundle -t tools/quantum -p 'test_*.py'
 
+      # The offline GI audit's pure parts (.gi parsing, GridDims, box fade, filled-probe detection, shadow-slot score).
+      - name: GI audit tool tests
+        run: python -m unittest discover -s tools/gi -p 'test_*.py'
+
       # Structural guard for #302 / #184: every ECS component must be registered with
       # ComponentRegistry (auto-generates its serialization + Inspector + Add Component) or
       # explicitly allow-listed with a reason. Pure static check, no build needed - run it
@@ -440,8 +444,9 @@ jobs:
       # directory is still checked because ResolveDumpDir() falls back to it when LOCALAPPDATA is
       # unset - both paths, so neither can go quiet again.
       #
-      # Only .dmp: the handler writes a minidump and a line to stderr, never a .txt. The old
-      # version cat'd crash_*.txt, which never existed either.
+      # Only .dmp counts: the handler writes a minidump, a line to stderr and a copy of the run's log
+      # (crash_*.log, uploaded with its dump), never a .txt. The old version cat'd crash_*.txt, which
+      # never existed either.
       - name: Assert smoke test left no crash dump
         if: always()
         shell: pwsh
@@ -453,7 +458,12 @@ jobs:
             foreach ($d in $dumps) { Write-Host "  $($d.FullName)  ($($d.Length) bytes)" }
             Write-Host "::error::smoke test left $($dumps.Count) crash dump(s) - see the crash-dumps artifact"
             New-Item -ItemType Directory -Force -Path crash-dumps | Out-Null
-            $dumps | ForEach-Object { Copy-Item $_.FullName crash-dumps -Force }
+            $dumps | ForEach-Object {
+              Copy-Item $_.FullName crash-dumps -Force
+              # the run's log as it was at the crash (the handler copies it beside the dump)
+              $log = [IO.Path]::ChangeExtension($_.FullName, ".log")
+              if (Test-Path $log) { Copy-Item $log crash-dumps -Force }
+            }
             exit 1
           }
           Write-Host "no crash dump - ok"
@@ -569,7 +579,12 @@ jobs:
             foreach ($d in $dumps) { Write-Host "  $($d.FullName)  ($($d.Length) bytes)" }
             Write-Host "::error::editor tests left $($dumps.Count) crash dump(s) - see the crash-dumps artifact"
             New-Item -ItemType Directory -Force -Path crash-dumps | Out-Null
-            $dumps | ForEach-Object { Copy-Item $_.FullName crash-dumps -Force }
+            $dumps | ForEach-Object {
+              Copy-Item $_.FullName crash-dumps -Force
+              # the run's log as it was at the crash (the handler copies it beside the dump)
+              $log = [IO.Path]::ChangeExtension($_.FullName, ".log")
+              if (Test-Path $log) { Copy-Item $log crash-dumps -Force }
+            }
             exit 1
           }
           Write-Host "no crash dump - ok"

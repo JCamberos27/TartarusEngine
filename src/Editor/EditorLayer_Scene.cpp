@@ -18,6 +18,7 @@
 #include "FileDialog.h"
 #include "AssetLibrary.h"
 #include "World.h"
+#include "Openable.h" // BakePosed: --bake-gi's posed doors are never journaled or written to a recovery file
 #include "PrefabMemberRef.h"
 #include "Camera.h"
 #include "Model.h"
@@ -25,6 +26,7 @@
 #include "Material.h"
 #include "AudioEngine.h"
 #include "SceneSerializer.h"
+#include "FirstPersonPresentation.h"
 #include "SceneSnapshotJson.h" // undo / redo load the snapshot UndoDelta::Pop already parsed
 #include "OutfitSystem.h"
 #include "AABB.h"
@@ -116,7 +118,8 @@ std::string BaselineAfterHistoryStep(bool loaded, const nlohmann::json& parsed, 
 } // namespace
 
 void EditorLayer::EnsureUndoScene(const World& world) {
-    if (!m_CurrentUndoScene.empty() || m_InPlayMode || !m_AssetsPtr) return;
+    // Not a baseline of --bake-gi's posed doors: after they're put back, it would read as an edit.
+    if (!m_CurrentUndoScene.empty() || m_InPlayMode || !m_AssetsPtr || Openable::BakePosed()) return;
     PROFILE_SCOPE("Undo Scene Snapshot");
     m_CurrentUndoScene=SceneSerializer::SaveToString(world,*m_AssetsPtr);
     m_ChangesOutsideUndo=0; // the baseline is the World again
@@ -245,6 +248,9 @@ void EditorLayer::RebaseAfterOutfitChanges() {
 }
 
 bool EditorLayer::JournalUnrecordedChange(const World& world, const std::string& currentJson) {
+    // --bake-gi has the doors posed for its captures: that is no edit, and no baseline either (nothing taken in, so
+    // once RestoreDoors puts them back the scene matches the baseline again). Every caller passes through here.
+    if (Openable::BakePosed()) return false;
     // An outfit change landed since the baseline: it is the baseline's to take, not a step (see
     // BeginGlobalUndoFrame). Checked here too, for one that landed after this frame's check.
     if (OutfitSystem::LandedGeneration() != m_OutfitLandedSeen) {
@@ -266,6 +272,7 @@ bool EditorLayer::JournalUnrecordedChange(const World& world, const std::string&
 
 bool EditorLayer::PushUnrecordedChange(const World& world, const std::string& currentJson) {
     // The step takes back the scene change, not the library's own re-listing since.
+    if (Openable::BakePosed()) return false; // never an undo step of --bake-gi's posed doors
     std::string before = SceneSerializer::WithLibraryState(m_CurrentUndoScene, currentJson);
     if (before.empty()) return false;
     Log::Warn("The scene changed without an undo step; it is undone as its own step, \"Unrecorded Change\".");
@@ -286,7 +293,8 @@ bool EditorLayer::PushUnrecordedChange(const World& world, const std::string& cu
 
 void EditorLayer::JournalBeforeOutfitLanding(const World& world) {
     // An open edit takes the landing into its own step when it commits (FinishGlobalUndo).
-    if (m_InPlayMode || m_GlobalUndoActive || m_GlobalUndoApplying || m_CurrentUndoScene.empty() || !m_AssetsPtr) return;
+    if (m_InPlayMode || m_GlobalUndoActive || m_GlobalUndoApplying || m_CurrentUndoScene.empty() || !m_AssetsPtr ||
+        Openable::BakePosed()) return;
     PROFILE_SCOPE("Undo Pre-Landing Check");
     std::string current = SceneSerializer::SaveToString(world, *m_AssetsPtr);
     if (SceneSerializer::SameSceneContentApartFromOutfits(current, m_CurrentUndoScene)) return;
@@ -409,6 +417,7 @@ static void PlaySceneLoadedSound(const World& world, int warnsBefore) {
 
 bool EditorLayer::WriteRecoverySnapshot(const World& world, const AssetLibrary& assets, bool background) {
     if (m_CurrentScenePath.empty()) return false; // untitled scene (New Scene) has no sidecar location
+    if (Openable::BakePosed()) return false; // the auto-save timer / an emergency: never a snapshot of posed doors
     WaitRecoveryWrite(); // one write at a time, in order
     const std::string path = RecoveryPathFor(m_CurrentScenePath);
     if (InPrefabMode()) { // #176 - the world holds the prefab; the scene is the snapshot
@@ -534,6 +543,9 @@ void EditorLayer::EmergencyRecoverySave(World& world, AssetLibrary& assets) noex
 }
 
 bool EditorLayer::CrashRecoverySave(const World& world, const AssetLibrary& assets) noexcept {
+    // A crash mid --bake-gi: the World holds the posed doors and is const here, so it can't put them back. Write
+    // nothing (a bake has no user edit to recover), so a restore + Save can never put open doors into the scene.
+    if (Openable::BakePosed()) return false;
     try {
         if (InPrefabMode()) { // #176 - the scene is the snapshot taken on entering Prefab Mode
             return m_PrefabModeSceneDirty && !m_CurrentScenePath.empty() &&
@@ -1587,6 +1599,7 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     m_AutoSaveTimer = 0.0f;
     PlaySceneLoadedSound(world, warnsBefore); // SceneOpen, or MissingRefs
     Log::Info("Opened scene '" + path + "'.");
+    FirstPersonPresentation::PrefetchPlayAssets(world, assets); // Play's guns and clips load while editing
     EnsureUndoScene(world);
 }
 

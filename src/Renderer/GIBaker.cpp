@@ -1,6 +1,7 @@
 #include "GIBaker.h"
 
 #include "GIVolumes.h"
+#include "Model.h"
 #include "HdrTarget.h"
 #include "ReflectionProbeCapture.h"
 #include "RenderFrameContext.h"
@@ -53,6 +54,7 @@ GI::ProbeSH GIBaker::ProjectFaces(const float* rgba, int n, float* backfaceShare
 }
 
 bool GIBaker::Begin(World& world, const Options& opt) {
+    RestoreDoors(world); // a Begin while posed would save the posed doors as "as loaded"
     m_Opt = opt;
     m_Volumes.clear();
     m_Passes.clear();
@@ -62,6 +64,9 @@ bool GIBaker::Begin(World& world, const Options& opt) {
     m_Pass = -1;
     m_Vol = m_Probe = m_Settle = 0;
     m_Done = m_Total = 0;
+    m_PassFrames = 0;
+    m_CamKnown = false;
+    m_Trace = {};
 
     auto view = world.Registry.view<const TransformComponent, const GIVolumeComponent>();
     for (auto [e, tc, gv] : view.each()) {
@@ -126,6 +131,9 @@ bool GIBaker::Begin(World& world, const Options& opt) {
             m_ClipMin = glm::min(m_ClipMin, v.Bounds.ToWorld(q));
             m_ClipMax = glm::max(m_ClipMax, v.Bounds.ToWorld(q));
         }
+    PoseDoors(world, opt.DoorPose);
+    PlanNudges(world, opt);
+
     m_ClipMin -= glm::vec3(opt.ClipMargin);
     m_ClipMax += glm::vec3(opt.ClipMargin);
     m_Target = std::make_unique<HdrTarget>();
@@ -177,14 +185,118 @@ void GIBaker::RestoreLighting(World& world) {
     LightSwitch::Stop(world); // the switches and circuits as authored again (Play starts them from Start On)
     if (m_LightingSaved) world.Render.SkyAmbientIntensity = m_SkyAmbient;
     m_LightingSaved = false;
+    RestoreDoors(world); // the openables as loaded: the posed doors never reach an undo step or a save
     world.SyncActiveInHierarchy();
+}
+
+void GIBaker::PoseDoors(World& world, Options::Doors pose) {
+    RestoreDoors(world); // posed twice: the second save must still be the scene as loaded
+    // Saved first (every openable, active or not), so every exit puts the scene back as loaded.
+    m_DoorsSaved = Openable::Save(world);
+    m_DoorsPosed = true;
+    Openable::SetBakePosed(true); // the editor: no undo step, recovery file or crash save of this pose
+    std::string line;
+    if (pose == Options::Doors::Shut) {
+        line = "all shut as authored (--bake-gi-doors shut)";
+    } else if (pose == Options::Doors::Hidden) {
+        // Indoors = inside any active GI Volume in the scene (not only the ones this run bakes: a room is a room).
+        world.RebuildWorldTransformCache();
+        std::vector<GI::Box> rooms;
+        for (auto [e, tc, gv] : world.Registry.view<const TransformComponent, const GIVolumeComponent>().each())
+            if (!world.Registry.any_of<InactiveTag, DeactivatedTag>(e))
+                rooms.push_back(GI::Box::FromTransform(world.GetCachedWorldTransform(e), gv.Size));
+        const Openable::Hidden hidden = Openable::HideDoorLeaves(world, [&rooms](const glm::vec3& p) {
+            for (const auto& b : rooms) {
+                const glm::vec3 l = glm::abs(b.ToLocal(p));
+                if (l.x <= b.Half.x && l.y <= b.Half.y && l.z <= b.Half.z) return true;
+            }
+            return false;
+        });
+        world.SyncActiveInHierarchy(); // the leaves' handles and knobs go with them
+        auto list = [](const std::vector<std::string>& v) {
+            std::string s;
+            for (const auto& n : v) s += (s.empty() ? "" : ", ") + n;
+            return s.empty() ? s : " (" + s + ")";
+        };
+        line = std::to_string(hidden.Leaves.size()) + " door leaves hidden" + list(hidden.Leaves) + ", " +
+               std::to_string(hidden.Exterior.size()) + " exterior doors kept" + list(hidden.Exterior) + ", " +
+               std::to_string(hidden.Other) + " other openables shut (--bake-gi-doors hidden)";
+    } else if (pose == Options::Doors::Open) {
+        Openable::SetAll(world, 1.0f);
+        int n = 0; // what SetAll posed: the openables with a loaded model
+        for (auto e : world.Registry.view<OpenableComponent, RenderableComponent>())
+            n += world.Registry.get<RenderableComponent>(e).ModelRef ? 1 : 0;
+        line = "all " + std::to_string(n) + " openables open (--bake-gi-doors open)";
+    } else {
+        const Openable::Posed posed = Openable::PoseStart(world);
+        std::string names;
+        for (const auto& n : posed.Open) names += (names.empty() ? "" : ", ") + n;
+        line = std::to_string(posed.Open.size()) + " posed at their Play start" +
+               (names.empty() ? std::string() : " (" + names + ")") + ", " + std::to_string(posed.Shut) + " shut";
+    }
+    Log::Info("[GI bake] doors: " + line);
+    if (m_Opt.TraceShadowSet) Log::Info("[GI trace] doors: " + line);
+    world.RebuildWorldTransformCache();
+}
+
+void GIBaker::PlanNudges(World& world, const Options& opt) {
+    world.RebuildWorldTransformCache();
+    std::vector<GI::SolidBox> all; // every visible mesh's world box
+    for (auto [e, tc, r] : world.Registry.view<const TransformComponent, const RenderableComponent>().each()) {
+        if (!r.ModelRef || r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
+        if (world.Registry.any_of<InactiveTag, DeactivatedTag>(e)) continue;
+        const glm::vec3 lo = r.ModelRef->BoundsMin(), hi = r.ModelRef->BoundsMax();
+        if (lo.x > hi.x || lo.y > hi.y || lo.z > hi.z) continue;
+        const glm::mat4 x = world.GetCachedWorldTransform(e);
+        GI::SolidBox b{glm::vec3(1e30f), glm::vec3(-1e30f)};
+        for (int c = 0; c < 8; ++c) {
+            const glm::vec3 w = glm::vec3(x * glm::vec4((c & 1) ? hi.x : lo.x, (c & 2) ? hi.y : lo.y, (c & 4) ? hi.z : lo.z, 1.0f));
+            b.Min = glm::min(b.Min, w);
+            b.Max = glm::max(b.Max, w);
+        }
+        all.push_back(b);
+    }
+    m_Nudged = m_NudgeBlocked = 0;
+    std::vector<std::pair<int, std::string>> blockedBy; // (face probes kept on the face, volume) for the top-10 list
+    for (VolumeJob& v : m_Volumes) {
+        int ok = 0, blocked = 0;
+        v.Nudge = GI::PlanFaceNudges(v.Bounds, v.Dims, opt.FaceNudge, all, &ok, &blocked);
+        m_Nudged += ok;
+        m_NudgeBlocked += blocked;
+        if (blocked > 0) {
+            Log::Info("[GI bake] nudge blocked by geometry in '" + v.Name + "': " + std::to_string(blocked) + " face probes stay on the face");
+            blockedBy.emplace_back(blocked, v.Name);
+        }
+    }
+    std::stable_sort(blockedBy.begin(), blockedBy.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    for (std::size_t i = 0; i < blockedBy.size() && i < 10; ++i)
+        Log::Info("[GI bake] nudge kept on the face, top " + std::to_string(i + 1) + ": '" + blockedBy[i].second + "' " +
+                  std::to_string(blockedBy[i].first));
+    Log::Info("[GI bake] face probes nudged: " + std::to_string(m_Nudged) + ", kept on the face (blocked): " + std::to_string(m_NudgeBlocked) +
+              Fmt(" (%.2f m inward)", opt.FaceNudge));
+}
+
+void GIBaker::RestoreDoors(World& world) {
+    if (!m_DoorsPosed) return;
+    Openable::Restore(world, m_DoorsSaved);
+    m_DoorsSaved.clear();
+    m_DoorsPosed = false;
+    Openable::SetBakePosed(false);
+    world.SyncActiveInHierarchy(); // hidden leaves (and their handles) shown again before anything can save the scene
+    world.RebuildWorldTransformCache();
+}
+
+void GIBaker::Abort(World& world, const std::string& why) {
+    if (m_Error.empty()) m_Error = why.empty() ? std::string("aborted") : why;
+    RestoreLighting(world); // lights, sky ambient, switches and the doors as loaded
+    m_Finished = true;
 }
 
 bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const RenderFrameContext&)>& draw,
                    const std::function<void(const glm::vec3&)>& moveCamera) {
     if (m_Finished) return true;
     if (!m_Error.empty()) { // as Finish puts things back, without writing a half bake
-        RestoreLighting(world);
+        Abort(world, m_Error);
         gi.SetOverride(nullptr);
         gi.SetSolo(nullptr);
         gi.SetEnabled(true);
@@ -196,6 +308,10 @@ bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const R
         return std::find(v.Layers.begin(), v.Layers.end(), c) != v.Layers.end();
     };
     auto startPass = [&](int i) {
+        if (m_Pass >= 0) EndPass();
+        m_PassStart = Now();
+        m_PassFrames = 0;
+        m_Trace = {};
         m_Pass = i;
         m_Vol = 0;
         m_Probe = 0;
@@ -214,8 +330,16 @@ bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const R
                   (p.Circuit.empty() ? std::string("Outside") : p.Circuit) + ", bounce " + std::to_string(p.Bounce + 1));
     };
     if (m_Pass < 0) startPass(0);
+    ++m_PassFrames;
 
-    if (m_Vol < (int)m_Volumes.size()) moveCamera(m_Volumes[m_Vol].Bounds.Center);
+    // This frame's light gather (and so its shadow slots) already ran, from where the last Step put the camera.
+    const glm::vec3 gatherCam = m_CamSet;
+    const bool gatherCamKnown = m_CamKnown;
+    if (m_Vol < (int)m_Volumes.size()) {
+        m_CamSet = m_Volumes[m_Vol].Bounds.Center;
+        m_CamKnown = true;
+        moveCamera(m_CamSet);
+    }
     if (m_Settle > 0) { --m_Settle; return false; }
 
     const Pass& pass = m_Passes[m_Pass];
@@ -251,7 +375,8 @@ bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const R
         const VolumeJob& v = m_Volumes[jobs[k].Vol];
         const int pr = jobs[k].Probe;
         const glm::ivec3 ijk(pr % v.Dims.x, (pr / v.Dims.x) % v.Dims.y, pr / (v.Dims.x * v.Dims.y));
-        const glm::vec3 pos = v.Bounds.ToWorld(GI::ProbeLocal(ijk, v.Dims, v.Bounds.Half));
+        const glm::vec3 nudge = pr < (int)v.Nudge.size() ? v.Nudge[pr] : glm::vec3(0.0f);
+        const glm::vec3 pos = v.Bounds.ToWorld(GI::ProbeLocal(ijk, v.Dims, v.Bounds.Half) + nudge);
         for (int f = 0; f < 6; ++f) {
             m_Target->BindForRender();
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -268,6 +393,7 @@ bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const R
             ctx.ProbeCapture = true;
             ctx.GIBake = pass.Circuit.empty() ? 2 : 1;
             ctx.GIBakeEmissive = m_Opt.Emissive;
+            ctx.GIBakePinClocks = m_Opt.PinClocks;
             ctx.GIBakeClipMin = m_ClipMin;
             ctx.GIBakeClipMax = m_ClipMax;
             draw(ctx);
@@ -283,6 +409,27 @@ bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const R
     if (atlasH > 0)
         glGetTextureSubImage(m_Atlas, 0, 0, 0, 0, atlasW, atlasH, 1, GL_RGBA, GL_FLOAT,
                              (GLsizei)(m_AtlasPixels.size() * sizeof(float)), m_AtlasPixels.data());
+
+    if (m_Opt.TraceShadowSet && !jobs.empty()) {
+        const std::string set = m_Opt.TraceShadowSet();
+        const VolumeJob& tv = m_Volumes[jobs.front().Vol];
+        // A batch whose gather ran from another spot (the previous volume's centre, on a volume's first batch) had its
+        // shadow slots scored from there.
+        const bool staleCam = !gatherCamKnown || glm::distance(gatherCam, tv.Bounds.Center) > 1e-3f;
+        const bool changed = m_Trace.Batches > 0 && set != m_Trace.Last;
+        ++m_Trace.Batches;
+        if (changed) ++m_Trace.Changes;
+        if (staleCam) ++m_Trace.StaleCamBatches;
+        if (std::find(m_Trace.Sets.begin(), m_Trace.Sets.end(), set) == m_Trace.Sets.end()) m_Trace.Sets.push_back(set);
+        m_Trace.Last = set;
+        char cam[96];
+        std::snprintf(cam, sizeof(cam), "(%.2f, %.2f, %.2f)", gatherCam.x, gatherCam.y, gatherCam.z);
+        Log::Info("[GI trace] pass " + std::to_string(m_Pass + 1) + "/" + std::to_string(m_Passes.size()) + " '" +
+                  (pass.Circuit.empty() ? std::string("Outside") : pass.Circuit) + "' b" + std::to_string(pass.Bounce + 1) +
+                  " | vol '" + tv.Name + "' probes " + std::to_string(jobs.front().Probe) + "-" +
+                  std::to_string(jobs.back().Probe) + " | gather cam " + (gatherCamKnown ? cam : "(none)") +
+                  (staleCam ? " STALE" : "") + " | " + set + (changed ? "  <- CHANGED" : ""));
+    }
 
     for (std::size_t k = 0; k < jobs.size(); ++k) {
         VolumeJob& v = m_Volumes[m_Vol];
@@ -320,8 +467,25 @@ bool GIBaker::Step(World& world, GIVolumes& gi, const std::function<void(const R
         startPass(m_Pass + 1);
         return false;
     }
+    EndPass();
     m_Finished = true;
     return Finish(world, gi), true;
+}
+
+void GIBaker::EndPass() {
+    if (m_Pass < 0 || m_Pass >= (int)m_Passes.size()) return;
+    const Pass& p = m_Passes[m_Pass];
+    const std::string head = "pass " + std::to_string(m_Pass + 1) + "/" + std::to_string(m_Passes.size()) + " '" +
+                             (p.Circuit.empty() ? std::string("Outside") : p.Circuit) + "' b" + std::to_string(p.Bounce + 1);
+    Log::Info("[GI bake] " + head + " done: " + Fmt("%.1f s", Now() - m_PassStart) + ", " + std::to_string(m_PassFrames) +
+              " frames");
+    if (!m_Opt.TraceShadowSet) return;
+    Log::Info("[GI trace] " + head + " summary: " + std::to_string(m_Trace.Batches) + " batches, " +
+              std::to_string(m_Trace.Sets.size()) + " distinct shadow sets, " + std::to_string(m_Trace.Changes) +
+              " changes, " + std::to_string(m_Trace.StaleCamBatches) + " batches gathered from another camera");
+    if (m_Trace.Sets.size() > 1)
+        for (std::size_t i = 0; i < m_Trace.Sets.size(); ++i)
+            Log::Info("[GI trace] " + head + " set " + std::to_string(i + 1) + ": " + m_Trace.Sets[i]);
 }
 
 bool GIBaker::Finish(World& world, GIVolumes& gi) {

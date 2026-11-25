@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GIData.h"
+#include "../Game/Openable.h"
 #include <entt/entt.hpp>
 #include <functional>
 #include <memory>
@@ -31,12 +32,29 @@ public:
         std::string Only;           // bake only volumes whose name contains this ("" = all)
         int FaceSize = 32;          // cube face texels
         int Bounces = 2;
+        // Probes on a box face (the boxes stop inside the wall / ceiling slab) are captured this many metres inside it, so they
+        // see open air, not back faces (GI::FaceProbeNudge; Jacob #5 ceiling ring). 0 = captured on the face as before.
+        float FaceNudge = 0.15f;
         float InvalidBackfaces = 0.2f; // a probe seeing more than this share of back faces (by solid angle) is invalid
         float Emissive = 0.0f;      // emission kept in the captures (the light itself already lights the room)
         int ProbesPerFrame = 24;    // the frame's own views and shadows cost the same however many probes it does
         float ClipMargin = 8.0f;    // metres round the volumes that the captures still draw (the yard through the windows)
         int SettleFrames = 8;       // frames after a lighting change before capturing
+        // Repeatable bakes: captures take hard LOD switches (RenderFrameContext::GIBakePinClocks). The app pins the
+        // other clocks a capture sees (clouds, stars, sky dither, foliage wind) for the whole --bake-gi run.
+        // TARTARUS_GI_BAKE_LIVE_CLOCKS=1 turns all of it off, for an A/B against the old behaviour.
+        bool PinClocks = true;
         std::string SkipLightPrefix = "Bounce "; // hand-placed fakes of the bounce (house_lights.py FILL_I): never baked
+        // The doors, drawers and lids (OpenableComponent) in the captures: as Play starts them (Start Open / Start Ajar
+        // open that far, the rest shut), all open, or all shut as authored (before GI Phase 2 every bake saw them shut).
+        // Hidden: the interior door leaves not drawn at all (Openable::HideDoorLeaves), the rest shut as authored, so
+        // the probes in a doorway see through it instead of baking the back of a shut leaf.
+        enum class Doors { Start, Open, Shut, Hidden };
+        Doors DoorPose = Doors::Start;
+        // TARTARUS_GI_BAKE_TRACE: when set, called once per probe batch for this frame's shadow-slot holders (a stable
+        // text, e.g. "spots[2]: A, B | points[1]: C"). Each batch is logged with it, and each pass ends with how many
+        // different sets it saw (a pass whose set changes between batches bakes its probes under different shadows).
+        std::function<std::string()> TraceShadowSet;
     };
 
     GIBaker();
@@ -50,6 +68,22 @@ public:
               const std::function<void(const glm::vec3&)>& moveCamera);
     bool Failed() const { return !m_Error.empty(); }
     const std::string& Error() const { return m_Error; }
+    // True from Begin until the doors are put back (Finish, an error): the scene in memory then holds posed doors that
+    // must never reach an undo step, a save or a recovery file.
+    bool DoorsPosed() const { return m_DoorsPosed; }
+    // The openables as loaded again (a no-op once done). RestoreLighting calls it; the app also calls it before an
+    // emergency recovery save and at shutdown, for a bake that ends without Finish.
+    void RestoreDoors(World& world);
+    // Begin's door step, public for the tests: saves every openable, poses them (start / open / shut / hidden), sets
+    // Openable::BakePosed and logs the "[GI bake] doors:" line (and a "[GI trace]" one under TARTARUS_GI_BAKE_TRACE).
+    void PoseDoors(World& world, Options::Doors pose);
+    // Begin's nudge step: plans every volume's per-probe capture offset (Options::FaceNudge on the box-face probes, except
+    // where the segment to the nudged point would enter a visible mesh's world box that doesn't hold the face point:
+    // GI::PlanFaceNudges) and logs "[GI bake] face probes nudged: N, kept on the face (blocked): M".
+    void PlanNudges(World& world, const Options& opt);
+    // The error path of Step without the GIVolumes reset: sets the error (if none yet), puts the lighting and the doors
+    // back, and finishes. Public for the tests.
+    void Abort(World& world, const std::string& why);
     // Progress 0..1 and a line for the log.
     float Progress() const;
 
@@ -64,6 +98,7 @@ private:
         glm::ivec3 Dims{0};
         std::vector<std::string> Layers; // circuit names, "" = Outside
         std::vector<bool> Valid;         // per probe, from the first pass
+        std::vector<glm::vec3> Nudge;    // per probe: the box-local offset it is captured at (GI::FaceProbeNudge, or 0 where geometry blocks it)
         bool ValidKnown = false;
     };
     struct Pass {
@@ -80,6 +115,7 @@ private:
     // Per bounce, the volumes' bakes as they fill (the last bounce is what's written).
     std::vector<std::shared_ptr<GI::BakeFile>> m_Bakes;
     int m_Pass = -1, m_Vol = 0, m_Probe = 0, m_Settle = 0;
+    int m_Nudged = 0, m_NudgeBlocked = 0; // face probes captured nudged inward / kept on the face because geometry blocks the nudge
     long long m_Done = 0, m_Total = 0;
     std::unique_ptr<HdrTarget> m_Target;
     std::vector<float> m_Faces;
@@ -92,6 +128,22 @@ private:
     std::vector<entt::entity> m_Parked;   // lights the bake deactivated
     float m_SkyAmbient = 0.0f;
     bool m_LightingSaved = false;
+    // The openables as loaded, put back by RestoreLighting (Begin poses them for the captures).
+    std::vector<Openable::Saved> m_DoorsSaved;
+    bool m_DoorsPosed = false;
     double m_StartTime = 0.0;
     glm::vec3 m_ClipMin{0.0f}, m_ClipMax{0.0f};
+    // Per pass: when it started and its frames (settling included), for the pass-done line.
+    double m_PassStart = 0.0;
+    long long m_PassFrames = 0;
+    // The camera moveCamera last put (the next frame's light gather scores the shadow slots from it).
+    glm::vec3 m_CamSet{0.0f};
+    bool m_CamKnown = false;
+    // Trace (Options::TraceShadowSet): this pass's batches, distinct sets and changes.
+    struct PassTrace {
+        int Batches = 0, Changes = 0, StaleCamBatches = 0;
+        std::vector<std::string> Sets; // distinct, in first-seen order
+        std::string Last;
+    } m_Trace;
+    void EndPass();
 };

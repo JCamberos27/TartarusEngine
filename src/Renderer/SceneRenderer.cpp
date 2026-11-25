@@ -68,6 +68,15 @@
 // program the sequence is byte-identical to pass 2 apart from the cluster-cull dispatch now
 // running just before the uniform set instead of in the middle of it.
 
+const float* ShadowWeightsOrFull(const float* weights) {
+    static const auto kFull = [] {
+        std::array<float, std::max(SpotShadowMap::kMaxSpots, PointShadowMap::kMaxPoints)> a{};
+        a.fill(1.0f);
+        return a;
+    }();
+    return weights ? weights : kFull.data();
+}
+
 FrameState SceneRenderer::GatherFrameState(World& world, const RenderFrameContext& ctx,
                                            const SceneRenderInputs& in) const {
     FrameState fs;
@@ -692,7 +701,12 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         program.SetFloatArray("uSpotShadowHalfTan[0]",    fs.spotCountForView, in.spotShadowHalfTan);
         program.SetFloatArray("uSpotShadowBias[0]",       fs.spotCountForView, in.spotShadowBias);
         program.SetFloatArray("uSpotShadowNormalBias[0]", fs.spotCountForView, in.spotShadowNormalBias);
-        program.SetFloatArray("uSpotShadowSoftness[0]",   fs.spotCountForView, in.spotShadowSoftness);
+        // fix-3 spot PCF: the radius in spot-map texels per slot (SpotShadowMap::KernelTexels), 0 = one hard compare.
+        std::array<float, SpotShadowMap::kMaxSpots> spotKernel{};
+        for (int i = 0; i < fs.spotCountForView && i < SpotShadowMap::kMaxSpots; ++i)
+            spotKernel[i] = in.spotShadowSoftness ? SpotShadowMap::KernelTexels(in.spotShadowSoftness[i]) : 0.0f;
+        program.SetFloatArray("uSpotShadowSoftness[0]",   fs.spotCountForView, spotKernel.data());
+        program.SetFloatArray("uSpotShadowWeight[0]",     fs.spotCountForView, ShadowWeightsOrFull(in.spotShadowWeight));
     }
     program.SetInt("uSpotShadowMap", 9);
     program.SetFloat("uSpotShadowMapResolution", (float)spotShadowMap.Resolution()); // #190
@@ -703,6 +717,12 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         program.SetFloatArray("uPointShadowFar[0]",        fs.pointCountForView, in.pointShadowFar);
         program.SetFloatArray("uPointShadowBias[0]",       fs.pointCountForView, in.pointShadowBias);
         program.SetFloatArray("uPointShadowNormalBias[0]", fs.pointCountForView, in.pointShadowNormalBias);
+        // S2: the PCF radius in cube texels per slot (PointShadowMap::KernelTexels), 0 = the hard single compare.
+        std::array<float, PointShadowMap::kMaxPoints> kernel{};
+        for (int i = 0; i < fs.pointCountForView && i < PointShadowMap::kMaxPoints; ++i)
+            kernel[i] = in.pointShadowSoftness ? PointShadowMap::KernelTexels(in.pointShadowSoftness[i]) : 0.0f;
+        program.SetFloatArray("uPointShadowSoftness[0]",   fs.pointCountForView, kernel.data());
+        program.SetFloatArray("uPointShadowWeight[0]",     fs.pointCountForView, ShadowWeightsOrFull(in.pointShadowWeight));
     }
     program.SetInt("uPointShadowMap", 10);
     program.SetFloat("uPointShadowMapResolution", (float)pointShadowMap.Resolution()); // #190
@@ -797,8 +817,9 @@ void SceneRenderer::BindFrameResources(const FrameState& fs) const {
         glBindTextureUnit(12, in.iblProbe->SpecularMap());
         glBindTextureUnit(13, in.iblProbe->BrdfLut());
     }
-    // PR15: SSAO occlusion map (unit 15), pre-computed before this pass.
-    if (fs.ssaoOn) glBindTextureUnit(15, ctx.SsaoSrc->OcclusionTexture());
+    // PR15: SSAO occlusion map (unit 15), pre-computed before this pass. With SSAO off, white (no occlusion), so the
+    // sampler is never backed by texture 0 either.
+    glBindTextureUnit(15, fs.ssaoOn ? ctx.SsaoSrc->OcclusionTexture() : DefaultTextures::White());
 
     // Captured room probes (ReflectionProbeCapture) on unit 26, the puddle SSR (PuddleSsr) on unit 29: units 1-7 and
     // 16-20 are material maps (ShaderAsset::BuildBindings) - a 2D map and the cube array sharing a unit made draws

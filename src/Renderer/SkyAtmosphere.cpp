@@ -223,13 +223,13 @@ glm::vec3 SkyAtmosphere::Transmittance(const SkySettings& s, float altitudeKm, c
 void SkyAtmosphere::Tick(const SkySettings& s, float dt, bool playing) {
     dt = std::clamp(dt, 0.0f, 0.25f);
     m_RealSeconds += dt;
-    const bool clockRuns = s.TimeOfDayEnabled && s.DayLengthMinutes > 0.0f && (playing || s.AnimateInEditor);
+    const bool clockRuns = !m_BakeClock && s.TimeOfDayEnabled && s.DayLengthMinutes > 0.0f && (playing || s.AnimateInEditor);
     if (clockRuns)
         m_ClockOffsetHours = WrapHours(m_ClockOffsetHours + dt / (s.DayLengthMinutes * 60.0f) * 24.0f);
     // Stop -> back to the authored time, like every other Play-mode change.
     if ((m_WasPlaying && !playing) || (!playing && !s.AnimateInEditor)) m_ClockOffsetHours = 0.0f;
     m_WasPlaying = playing;
-    m_Clouds.Tick(s, dt);
+    if (!m_BakeClock) m_Clouds.Tick(s, dt); // baking: the clouds stay where they started (m_RealSeconds still runs, for capture scheduling)
 }
 
 SkyLighting SkyAtmosphere::ResolveLighting(const SkySettings& s, const glm::vec3& authoredAim,
@@ -310,7 +310,7 @@ void SkyAtmosphere::UpdateAtmosphereUniforms(const SkySettings& s, const SkyLigh
     u.SunIllum = glm::vec4(lit.SunIlluminance, std::max(s.SunDiscBrightness, 0.0f));
     u.MoonDir = glm::vec4(lit.MoonDir, lit.MoonAngularRadius);
     u.MoonIllum = glm::vec4(lit.MoonIlluminance, lit.MoonLitFraction);
-    u.Camera = glm::vec4(ToAtmosphere(s, cameraWorld), m_RealSeconds);
+    u.Camera = glm::vec4(ToAtmosphere(s, cameraWorld), m_BakeClock ? 0.0f : m_RealSeconds); // .w: star twinkle
     u.Params = glm::vec4(std::max(s.AerialPerspectiveScale, 0.0f), std::max(s.StarsBrightness, 0.0f),
                          std::max(s.NightGlow, 0.0f), kKmPerWorldUnit);
     u.Params2 = glm::vec4(kAerialRangeKm, s.SeaLevel, s.AltitudeOffsetMeters * 0.001f, s.MoonEnabled ? 1.0f : 0.0f);
@@ -428,7 +428,7 @@ void SkyAtmosphere::PrepareFrame(const SkySettings& s, const SkyLighting& lit, c
                              AngleBetween(lit.MoonDir, m_CapturedMoonDir) > glm::radians(1.0f) ||
                              glm::length(lit.SunIlluminance - m_CapturedLightIllum) >
                                  0.02f * std::max(glm::length(m_CapturedLightIllum), 1e-3f);
-    const bool cloudsDrift = s.CloudsEnabled && s.CloudWindSpeed > 0.0f && since > 4.0f;
+    const bool cloudsDrift = !m_BakeClock && s.CloudsEnabled && s.CloudWindSpeed > 0.0f && since > 4.0f;
     if (m_ForceCapture || ((lookChanged || bodiesMoved) && since > 0.1f) || cloudsDrift) {
         CaptureEnvironment(s, fv);
         m_EnvUrgent = m_EnvUrgent || m_ForceCapture;
@@ -513,8 +513,9 @@ void SkyAtmosphere::RenderCloudsFor(ViewResources& vr, const glm::mat4& view, co
     PROFILE_GPU_SCOPE("Volumetric Clouds");
     BindLuts(vr);
     m_Clouds.UpdateUniforms(s, m_Lighting);
+    if (m_BakeClock) vr.Clouds.HasHistory = false; // baking: march every texel, never blend in another view's clouds
     vr.CloudTexture = m_Clouds.RenderView(vr.Clouds, s, view, proj, cameraWorld, vp[2], vp[3],
-                                          (float)(m_Frame % 1024), 1.0f / kKmPerWorldUnit, sceneDepth);
+                                          m_BakeClock ? 0.0f : (float)(m_Frame % 1024), 1.0f / kKmPerWorldUnit, sceneDepth);
     vr.CloudsValid = vr.CloudTexture != 0;
 }
 
@@ -553,7 +554,7 @@ void SkyAtmosphere::DrawSky(const void* viewKey) {
     m_CompositeShader->SetMat4("uInvViewProj", vr.InvViewProj);
     m_CompositeShader->SetInt("uCloudsOn", vr.CloudsValid ? 1 : 0);
     m_CompositeShader->SetVec4("uViewportRect", glm::vec4((float)vp[0], (float)vp[1], (float)vp[2], (float)vp[3]));
-    m_CompositeShader->SetFloat("uFrame", (float)(m_Frame % 64));
+    m_CompositeShader->SetFloat("uFrame", m_BakeClock ? 0.0f : (float)(m_Frame % 64));
     glBindVertexArray(m_Vao);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     }

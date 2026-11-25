@@ -153,6 +153,11 @@ struct LightComponent {
     glm::vec3 BoundsCenter{0.0f};
     glm::vec3 BoundsSize{4.0f, 3.0f, 4.0f}; // full extents along the parent's axes
     float BoundsFade = 0.15f;
+    // Per-face overrides of BoundsFade (metres) for the -x/-y/-z faces (Neg) and the +x/+y/+z faces (Pos), along the
+    // parent's axes; < 0 = use BoundsFade. A face that ends in open-plan air takes a wide fade (no hard edge) while the
+    // faces on walls keep a short one (the wall surface stays fully lit).
+    glm::vec3 BoundsFadeNeg{-1.0f};
+    glm::vec3 BoundsFadePos{-1.0f};
 
     // Per-light shadow tuning. Always present (not a separate ECS component) so every light can be
     // authored with shadow settings recorded even when it isn't currently casting. `Enabled`
@@ -337,6 +342,8 @@ struct GIVolumeComponent {
     glm::vec3 Size{4.0f, 3.0f, 4.0f};
     float Spacing = 0.5f;    // metres between probes
     float Fade = 0.05f;      // metres over which it fades at the faces (like a light's Bounds Fade: the walls sit just inside)
+    glm::vec3 FadeMin{0.0f}; // per face, box-local axes: the fade of the -x / -y / -z face (0 = use Fade)
+    glm::vec3 FadeMax{0.0f}; // ... and of the +x / +y / +z face: a wide one where two volumes share one open space, Fade where a wall is
     float Intensity = 1.0f;  // scales the baked light
     std::string Circuits;    // ';'-separated light circuits to bake a layer each for
     bool Outside = false;    // also bake the moon, sun and sky through the windows (always on)
