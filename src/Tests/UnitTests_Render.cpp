@@ -796,6 +796,10 @@ void SunCasterListDelta() {
         }
         if (frame % 131 == 29) // one arrives
             props.push_back(w.CreateModelEntity(prop, glm::vec3(step(rng), 0.0f, step(rng)), glm::vec3(0), glm::vec3(1), "N"));
+        if (frame % 53 == 41) { // a renderable on an unrelated entity: the pool may grow and move every Renderable*
+            const entt::entity e = w.Registry.create();
+            w.Registry.emplace<RenderableComponent>(e);
+        }
 
         // The frame: transforms, the GPU scene's sync and (most frames) its change log, then the gather.
         w.RebuildWorldTransformCache();
@@ -830,6 +834,20 @@ void SunCasterListDelta() {
         if (!taken) {
             CHECK(!withDelta.LastSunListWasDelta()); // no change log this frame: the full loop
             ++untakenFrames;
+        }
+        // Two views in one frame now and then (Scene + Game): a second list from another set, against the full loop.
+        if (frame % 7 == 3) {
+            std::vector<VisibleRenderable> second = withDelta.CastingForTest();
+            if (second.size() > 4) second.erase(second.begin() + 2); // the other view gathers a different set
+            withDelta.CastingForTest() = second;
+            fullOnly.CastingForTest() = second;
+            in.allowDelta = true;
+            const unsigned f2Delta = withDelta.FillSunCasters(in);
+            in.allowDelta = false;
+            const unsigned f2Full = fullOnly.FillSunCasters(in);
+            CHECK(f2Delta == f2Full);
+            CHECK(withDelta.SameSunListAs(fullOnly));
+            CHECK(!withDelta.LastSunListWasDelta()); // a second list the same frame is never a delta
         }
         if (frame == 160 && withDelta.LastSunListWasDelta()) ++movedOnceChecked;
         if (frame == 161 && withDelta.LastSunListWasDelta()) ++movedOnceChecked; // still, and kept as moved
