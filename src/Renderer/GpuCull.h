@@ -119,12 +119,18 @@ struct VerifyTotals {
     // G2-b's draw path: members of the groups a view skipped on the CPU (frustum or size, by group box), each held to
     // the per-object test; one the CPU path would draw is "missing" too.
     std::uint64_t GroupSkipChecked = 0, GroupSkipMissing = 0;
+    // Drawn table batches (opaque + depth) and, of those, the ones every sent member of which this view leaves out,
+    // by why: all LOD-rejected / all too small / all outside the frustum / a mix or another reason (flags, moved).
+    enum EmptyCause { kEmptyLod, kEmptySize, kEmptyFrustum, kEmptyOther, kEmptyCauses };
+    std::uint64_t BatchesDrawn = 0;
+    std::uint64_t BatchesEmpty[kEmptyCauses] = {};
     std::uint64_t KindViews[kKinds] = {};
     std::uint64_t KindExpected[kKinds] = {};
     std::uint64_t KindExtra[kKinds] = {};
 };
 const VerifyTotals& Totals();
 void NoteGroupSkips(std::uint64_t checked, std::uint64_t missing);
+void NoteBatches(std::uint64_t drawn, const std::uint64_t (&empty)[VerifyTotals::kEmptyCauses]);
 
 // Runs stage A + the compaction on the GPU for `q` over the draw table, reads the result back (waits on the GPU) and
 // compares it group by group with GatherVisible(q). Like HiZCuller::Cull it leaves storage bindings 22-25, 28 and 29

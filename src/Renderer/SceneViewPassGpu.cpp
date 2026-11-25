@@ -492,6 +492,55 @@ void SceneRenderer::ViewPass::CullGpuView(const VisibilityQuery& framed) {
     };
     batchesOn(t.OpaqueBatchGroups, t.OpaqueBatchAt, t.OpaqueBatchOn);
     batchesOn(t.DepthBatchGroups, t.DepthBatchAt, t.DepthBatchOn);
+    // Verify mode: of the batches drawn, the ones nothing in will be kept, and why (each sent member's CPU verdict).
+    if (GpuCull::VerifyEnabled()) {
+        enum : std::uint8_t { kVis = 1, kLod = 2, kSmall = 4, kOut = 8, kOther = 16 };
+        static std::vector<std::uint8_t> why; // per sent group: the verdicts its members got
+        why.assign(groups, 0);
+        SceneSlot s;
+        const GpuCull::ViewQuery vq = GpuCull::MakeQuery(framed);
+        for (std::size_t g = 0; g < groups; ++g) {
+            if (!t.GroupSeen[g]) continue;
+            const GpuCull::Group& grp = t.StageGroups[g];
+            for (std::uint32_t k = 0; k < grp.Count && !(why[g] & kVis); ++k) {
+                const std::uint32_t slot = t.RunSlotsCpu[grp.Base + k];
+                const bool lod = m_World.IsLodCulled(entt::entity{t.MemberEntity[slot]});
+                if (!ReadSceneSlot(slot, s) || !s.Alive) { why[g] |= kOther; continue; }
+                if (TestBit(t.Reject, slot)) { why[g] |= lod ? kLod : kOther; continue; }
+                if ((s.Flags & vq.RejectFlags) ||
+                    ((vq.Bits & GpuCull::kQCheckLayer) && s.Layer >= 0 && s.Layer < 32 && !((vq.LayerMask >> s.Layer) & 1u))) {
+                    why[g] |= kOther;
+                    continue;
+                }
+                if (s.Bounded && framed.Cull && !framed.Cull->Intersects(AABB{s.WorldMin, s.WorldMax})) { why[g] |= kOut; continue; }
+                if (s.Bounded && sizeCull && TooSmallOnScreen(s.WorldMin, s.WorldMax, *framed.SizeCullEye,
+                                                              framed.SizeCullProjScale, framed.MinScreenHeight)) {
+                    why[g] |= kSmall;
+                    continue;
+                }
+                why[g] |= kVis;
+            }
+        }
+        std::uint64_t drawn = 0, empty[GpuCull::VerifyTotals::kEmptyCauses] = {};
+        const auto tally = [&](const std::vector<std::uint32_t>& list, const std::vector<std::uint32_t>& at,
+                               const std::vector<std::uint8_t>& on) {
+            for (std::size_t b = 0; b + 1 < at.size(); ++b) {
+                if (!on[b]) continue;
+                ++drawn;
+                std::uint8_t all = 0;
+                for (std::uint32_t k = at[b]; k < at[b + 1]; ++k)
+                    if (t.GroupSeen[list[k]]) all |= why[list[k]];
+                if (all & kVis) continue;
+                if (all == kLod) ++empty[GpuCull::VerifyTotals::kEmptyLod];
+                else if (all == kSmall) ++empty[GpuCull::VerifyTotals::kEmptySize];
+                else if (all == kOut) ++empty[GpuCull::VerifyTotals::kEmptyFrustum];
+                else ++empty[GpuCull::VerifyTotals::kEmptyOther];
+            }
+        };
+        tally(t.OpaqueBatchGroups, t.OpaqueBatchAt, t.OpaqueBatchOn);
+        tally(t.DepthBatchGroups, t.DepthBatchAt, t.DepthBatchOn);
+        GpuCull::NoteBatches(drawn, empty);
+    }
     if (t.ViewStage.empty()) return; // nothing of the table in view
     // This view's counts go into its own copy of the commands (views draw in turn from one table); the groups it
     // doesn't send keep 0.

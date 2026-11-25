@@ -355,6 +355,11 @@ bool CullView(const DrawBuffers& b, const std::vector<Group>& groups, const View
 
 const VerifyTotals& Totals() { return g_Totals; }
 
+void NoteBatches(std::uint64_t drawn, const std::uint64_t (&empty)[VerifyTotals::kEmptyCauses]) {
+    g_Totals.BatchesDrawn += drawn;
+    for (int i = 0; i < VerifyTotals::kEmptyCauses; ++i) g_Totals.BatchesEmpty[i] += empty[i];
+}
+
 void NoteGroupSkips(std::uint64_t checked, std::uint64_t missing) {
     g_Totals.GroupSkipChecked += checked;
     g_Totals.GroupSkipMissing += missing;
@@ -485,6 +490,10 @@ void VerifyView(World& world, const VisibilityQuery& q) {
                     (unsigned long long)g_Totals.OrderBad, (unsigned long long)g_Totals.Skipped);
         std::printf("[GpuCull] verify   group skips: %llu members checked, %llu missing\n",
                     (unsigned long long)g_Totals.GroupSkipChecked, (unsigned long long)g_Totals.GroupSkipMissing);
+        std::printf("[GpuCull] verify   table batches drawn: %llu, empty: %llu LOD, %llu size, %llu frustum, %llu other\n",
+                    (unsigned long long)g_Totals.BatchesDrawn, (unsigned long long)g_Totals.BatchesEmpty[0],
+                    (unsigned long long)g_Totals.BatchesEmpty[1], (unsigned long long)g_Totals.BatchesEmpty[2],
+                    (unsigned long long)g_Totals.BatchesEmpty[3]);
         static const char* const kKindNames[VerifyTotals::kKinds] = {"framed", "cell-only", "unculled"};
         for (int k = 0; k < VerifyTotals::kKinds; ++k)
             if (g_Totals.KindViews[k])
