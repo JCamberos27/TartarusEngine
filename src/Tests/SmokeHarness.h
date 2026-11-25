@@ -101,6 +101,10 @@ private:
     int m_ShotCameraStart = 40;
     static constexpr int kShotCameraSettle = 30;
     int m_FrameBudget = 100;
+    // --perf-bench with TARTARUS_PERF_PLAYS=N: after the maximized Play phase, Stop and Play again (N Plays in all), each
+    // measured as its own phase: a later Play in the same session (what it reuses) against the first.
+    int m_PerfPlays = 1, m_PerfPlay = 1;
+    bool m_PerfReplay = false; // stopped: Play again next frame
     // TARTARUS_MEM_REPORT=<dir>: a memory snapshot (MemReport) before the first scene and after each one.
     std::string m_MemReportDir;
     // TARTARUS_OPEN_ALL=1: every door, drawer and lid shown open, to check each one's hinge.

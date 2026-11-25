@@ -295,6 +295,7 @@ private:
     void ShutdownEditor() {
         if (giBaker) giBaker->RestoreDoors(world); // a bake closed before Finish leaves no posed door behind
         editor.Shutdown();
+        SharedMotionDatabase::ReleaseKept(); // the motion database kept between Plays (and scenes) until now
         editorModule.Shutdown();
         AppAudioMuter::Shutdown();
         EditorSound::Shutdown();

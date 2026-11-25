@@ -98,6 +98,27 @@ std::mutex s_SharedLock;
 std::map<std::string, std::weak_ptr<const SharedMotionDatabase>> s_SharedLoaded; // CacheKey -> load
 std::atomic<std::uint64_t> s_SharedGeneration{0};
 
+// The last loads stay alive after their bodies stop, so a later Play in the same session reuses them (the database is
+// ~2 s to load and measure). They are kept across scene switches until shutdown (ReleaseKept): every scene's body uses
+// the same database. Each remembers its files' write times: a rewritten database, rig file or rig .meta loads afresh.
+struct KeptLoad {
+    std::shared_ptr<const SharedMotionDatabase> Db;
+    std::vector<std::filesystem::file_time_type> Stamps;
+    std::uint64_t LastUse = 0;
+};
+std::map<std::string, KeptLoad> s_SharedKept; // CacheKey -> load
+std::uint64_t s_SharedKeptClock = 0;
+
+std::vector<std::filesystem::file_time_type> FileStamps(const std::string& base, const std::string& rigPath) {
+    std::vector<std::filesystem::file_time_type> out;
+    for (const std::string& f : SharedMotionDatabase::WatchedFiles(base, rigPath)) {
+        std::error_code ec;
+        out.push_back(std::filesystem::last_write_time(std::filesystem::u8path(f), ec));
+        if (ec) out.back() = std::filesystem::file_time_type{};
+    }
+    return out;
+}
+
 // One spelling per file for comparing bases: absolute, normalized, forward slashes, lower case (Windows paths).
 std::string BaseSpelling(const std::string& base) {
     std::error_code ec;
@@ -115,6 +136,11 @@ void SharedMotionDatabase::Invalidate(const std::string& base) {
         if (BaseSpelling(it->first.substr(0, bar)) == want) it = s_SharedLoaded.erase(it);
         else ++it;
     }
+    for (auto it = s_SharedKept.begin(); it != s_SharedKept.end();) {
+        const size_t bar = it->first.rfind('|');
+        if (BaseSpelling(it->first.substr(0, bar)) == want) it = s_SharedKept.erase(it);
+        else ++it;
+    }
     ++s_SharedGeneration;
 }
 
@@ -124,7 +150,34 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
     std::lock_guard<std::mutex> lock(s_SharedLock);
     auto& s_Loaded = s_SharedLoaded;
     const std::string key = CacheKey(base, rig != nullptr, rig ? rig->Path() : std::string());
-    if (auto live = s_Loaded[key].lock()) return live;
+    const std::vector<std::filesystem::file_time_type> stamps = FileStamps(base, rig ? ProjectPaths::Resolve(rig->Path()) : std::string());
+    const auto keep = [&](const std::shared_ptr<const SharedMotionDatabase>& db) {
+        s_SharedKept[key] = KeptLoad{db, stamps, ++s_SharedKeptClock};
+        while (s_SharedKept.size() > kKeptLoads) { // the least recently used goes
+            auto oldest = s_SharedKept.begin();
+            for (auto it = s_SharedKept.begin(); it != s_SharedKept.end(); ++it)
+                if (it->second.LastUse < oldest->second.LastUse) oldest = it;
+            s_SharedKept.erase(oldest);
+        }
+    };
+    const auto kept = s_SharedKept.find(key);
+    if (auto live = s_Loaded[key].lock()) {
+        // Held by a body (beyond `live` here and the kept copy): that load until Invalidate, as before.
+        const bool isKept = kept != s_SharedKept.end() && kept->second.Db == live;
+        if (live.use_count() > (isKept ? 2 : 1)) {
+            if (isKept) kept->second.LastUse = ++s_SharedKeptClock;
+            return live;
+        }
+    }
+    // Nothing holds it: the kept load, unless its files were rewritten since it was read.
+    if (kept != s_SharedKept.end()) {
+        if (kept->second.Stamps == stamps) {
+            kept->second.LastUse = ++s_SharedKeptClock;
+            s_Loaded[key] = kept->second.Db;
+            return kept->second.Db;
+        }
+        s_SharedKept.erase(kept);
+    }
     auto shared = std::make_shared<SharedMotionDatabase>();
     if (!shared->Db.Load(base, error)) return nullptr;
     std::vector<float> tilt;
@@ -277,7 +330,22 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
         break;
     }
     s_Loaded[key] = shared;
+    keep(shared);
     return shared;
+}
+
+std::vector<std::string> SharedMotionDatabase::WatchedFiles(const std::string& base, const std::string& rigPath) {
+    std::vector<std::string> out{base + ".mmanim", base + ".mmdb"};
+    if (!rigPath.empty()) {
+        out.push_back(rigPath);
+        out.push_back(rigPath + ".meta"); // its import settings (scale, axes) change the measured frames, not the model file
+    }
+    return out;
+}
+
+void SharedMotionDatabase::ReleaseKept() {
+    std::lock_guard<std::mutex> lock(s_SharedLock);
+    s_SharedKept.clear();
 }
 
 // --- the body's motion -----------------------------------------------------------------------------------------------

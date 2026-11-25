@@ -67,10 +67,12 @@ std::string CacheDir() {
     return dir;
 }
 
-// Entries this process loaded or stored (file names): its working set, which Prune never evicts.
+// Entries this process loaded or stored (file names): its working set, which Prune never evicts. Plus the ones
+// requested and not loaded yet (Pin): pinned too, but not expected on disk (SessionEntriesMissing).
 // Store runs on the texture loader threads too, so it's locked.
 std::mutex s_SessionMutex;
 std::unordered_set<std::string> s_SessionEntries;
+std::unordered_set<std::string> s_RequestedEntries;
 
 void MarkUsedThisSession(const std::string& entryPath) {
     const std::string name = std::filesystem::path(entryPath).filename().string();
@@ -81,7 +83,7 @@ void MarkUsedThisSession(const std::string& entryPath) {
 bool UsedThisSession(const std::filesystem::path& entryPath) {
     const std::string name = entryPath.filename().string();
     std::lock_guard<std::mutex> lock(s_SessionMutex);
-    return s_SessionEntries.count(name) != 0;
+    return s_SessionEntries.count(name) != 0 || s_RequestedEntries.count(name) != 0;
 }
 
 } // namespace
@@ -397,6 +399,16 @@ PruneStats Prune(const std::function<std::optional<uint64_t>(const std::string& 
         stats.EvictedBytes += survivors[i].Bytes;
     }
     return stats;
+}
+
+void Pin(const std::string& sourcePath, const TextureImportSettings& settings) {
+    const std::string name = std::filesystem::path(EntryPath(sourcePath, settings)).filename().string();
+    std::lock_guard<std::mutex> lock(s_SessionMutex);
+    s_RequestedEntries.insert(name);
+}
+
+bool Pinned(const std::string& sourcePath, const TextureImportSettings& settings) {
+    return UsedThisSession(EntryPath(sourcePath, settings));
 }
 
 int SessionEntriesMissing() {
