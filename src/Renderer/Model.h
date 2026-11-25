@@ -284,6 +284,11 @@ public:
     // out, or whose pose changes after it, skins in the vertex shader as before. Models without bones
     // are skipped. TARTARUS_NO_PRESKIN=1 turns it off (for A/B benches).
     static void PreSkin(const std::vector<Model*>& models);
+    // PreSkin's skip test: a model last drawn in render frame `drawn` (0 = never) isn't pre-skinned in `renderFrame`
+    // unless a pass drew it last frame or already this one. `skinUnseen` (TARTARUS_NO_SKIN_CULL) skins it anyway.
+    static bool PreSkinSkipsUnseen(std::uint64_t drawn, std::uint64_t renderFrame, bool skinUnseen) {
+        return !skinUnseen && drawn + 1 < renderFrame;
+    }
     // --smoke-test: skins random vertices (none to eight influences) with PreSkin's shader and compares them with the
     // CPU's blend. False, with the reason, when they differ or the shader doesn't build.
     static bool PreSkinSelfTest(std::string& why);
@@ -294,6 +299,7 @@ public:
         int Dispatched = 0;                    // ...skinned on the GPU this frame (their pose changed)
         int Idle = 0;                          // ...whose vertices were still in place (pose unchanged): no dispatch
         int Fallback = 0;                      // ...left to the vertex shader (buffer cap, not uploaded, no program)
+        int Unseen = 0;                        // ...not skinned: no pass drew them last frame (skin per pass if one does now)
         std::uint64_t DispatchedVertices = 0;
         int OffscreenModels = 0;               // dispatched by the previous PreSkin and drawn by no pass after it
         std::uint64_t OffscreenVertices = 0;
@@ -608,6 +614,7 @@ private:
         int Count = 0;
         int Base = 0;
         std::uint64_t Layout = 0; // the skinned buffer's layout its vertices were last written in (Model::PreSkin)
+        std::uint64_t Drawn = 0;  // the render frame a pass last drew it (UploadBoneMatrices); PreSkin skips the unseen
     };
     mutable PreSkinRange m_PreSkin;
     // The palette this pose skins with (null when there is none to upload) and its bone count.
