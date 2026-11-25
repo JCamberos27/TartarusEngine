@@ -158,6 +158,9 @@ private:
         glm::vec3 CameraWorld{0.0f};
         int Viewport[4] = {0, 0, 1, 1};
         bool Rendered = false;
+        // P-49: what SkyViewSun / SkyViewMoon / SkyAmbient were last written from (SkyViewKey); a match skips them.
+        glm::vec4 SkyViewKey[18]{};
+        bool SkyViewKeyValid = false;
         void Release();
         ~ViewResources() { Release(); }
     };
@@ -196,6 +199,10 @@ private:
     // What the LUTs were last built from (they only depend on the medium, not the sun).
     bool m_LutsValid = false;
     SkySettings m_LutSettings;
+    std::uint32_t m_LutGeneration = 0; // bumped by RenderLuts: the sky-view LUTs read the transmittance + multi-scatter ones
+    // The sky-view LUTs' inputs (P-49): m_UboContents as they read it - the star clock and star rotation left out, the
+    // camera reduced to its altitude (1 m steps) - plus m_LutGeneration.
+    void SkyViewKey(glm::vec4 (&key)[18]) const;
 
     // Frame state carried from PrepareFrame into the views.
     SkySettings m_Settings;

@@ -7,6 +7,8 @@
 #include "Components.h"
 #include "Model.h"
 #include "Core/Env.h"
+#include "Core/Log.h"
+#include "ShaderLibrary.h"
 #include <algorithm>
 #include <cstring>
 #include <glm/gtc/type_ptr.hpp>
@@ -14,6 +16,7 @@
 namespace {
 constexpr std::size_t kXformBytes = 2 * sizeof(glm::mat4);  // per slot
 constexpr std::size_t kBoundsBytes = 2 * sizeof(glm::vec4); // per slot
+static_assert(sizeof(GpuScene::ObjectState) == 80, "ModelFragment.glsl SlotState is 80 bytes (std430)");
 
 std::uint32_t AsUint(float f) {
     std::uint32_t u;
@@ -35,6 +38,39 @@ std::uint64_t PoseOf(const SceneSlot& s) {
 bool GpuScene::Enabled() {
     static const bool off = Env::Flag(Env::Var::NoGpuScene);
     return !off;
+}
+
+namespace {
+int s_MaxFragmentBlocks = 0;
+bool s_SlotStateSupported = true;
+} // namespace
+
+void GpuScene::InitSlotStateSupport() {
+    GLint limit = 0;
+    glGetIntegerv(GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS, &limit);
+    s_MaxFragmentBlocks = std::min((int)limit, Env::Int(Env::Var::FragmentSsboLimit, (int)limit)); // a lower test limit only
+    s_SlotStateSupported = SlotStateFits(s_MaxFragmentBlocks);
+    if (!s_SlotStateSupported) {
+        ShaderLibrary::SetGlobalDefines(ShaderLibrary::GlobalDefines() + "#define _NO_SLOT_STATE 1\n");
+        Log::Warn("GpuScene: GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS = " + std::to_string(s_MaxFragmentBlocks) + " < " +
+                  std::to_string(kSlotStateFragmentBlocks) + ": slot state off (probes + GI mask bound per batch)");
+    }
+}
+
+bool GpuScene::SlotStateSupported() { return s_SlotStateSupported; }
+int GpuScene::MaxFragmentBlocks() { return s_MaxFragmentBlocks; }
+
+int GpuScene::FragmentBlocks(unsigned program) {
+    GLint count = 0;
+    glGetProgramInterfaceiv(program, GL_SHADER_STORAGE_BLOCK, GL_ACTIVE_RESOURCES, &count);
+    int fragment = 0;
+    const GLenum prop = GL_REFERENCED_BY_FRAGMENT_SHADER;
+    for (GLint i = 0; i < count; ++i) {
+        GLint used = 0;
+        glGetProgramResourceiv(program, GL_SHADER_STORAGE_BLOCK, (GLuint)i, 1, &prop, 1, nullptr, &used);
+        fragment += used ? 1 : 0;
+    }
+    return fragment;
 }
 
 GpuScene& GpuScene::Get() {
@@ -74,6 +110,7 @@ void GpuScene::Sync(World& world, bool upload) {
     m_Count = changes.Count;
     m_XformCpu.resize((std::size_t)m_Count * 2);
     m_BoundsCpu.resize((std::size_t)m_Count * 2);
+    m_StateCpu.resize(m_Count); // a view writes the state of every slot it draws before drawing it
     if (m_LogOn) m_Pose.resize(m_Count, 0);
     SceneSlot s;
     m_Sorted.clear();
@@ -237,7 +274,68 @@ void GpuScene::BindSlotList(unsigned binding, const std::vector<std::uint32_t>& 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, m_SlotFallback);
 }
 
+GpuScene::ObjectState GpuScene::MakeObjectState(std::uint64_t giMask, const ReflectionProbeArray::Selection& probes) {
+    ObjectState s;
+    s.Head[0] = (std::uint32_t)giMask;
+    s.Head[1] = (std::uint32_t)(giMask >> 32);
+    s.Head[2] = (std::uint32_t)probes.Count;
+    for (int j = 0; j < probes.Count && j < ReflectionProbeArray::kMaxDraw; ++j) {
+        s.Probe[2 * j] = glm::vec4(probes.Center[j], (float)probes.Layer[j]);
+        s.Probe[2 * j + 1] = glm::vec4(probes.HalfSize[j], probes.Blend[j]);
+    }
+    return s;
+}
+
+void GpuScene::SetObjectState(std::uint32_t slot, const ObjectState& s) {
+    if (slot >= m_StateCpu.size()) return;
+    ObjectState& at = m_StateCpu[slot];
+    if (std::memcmp(&at, &s, sizeof s) == 0) return;
+    at = s;
+    m_StateDirty.push_back(slot);
+}
+
+bool GpuScene::UploadObjectState() {
+    const std::uint32_t count = (std::uint32_t)m_StateCpu.size();
+    bool whole = false;
+    if (!m_StateBuffer || count > m_StateCapacity) {
+        std::uint32_t cap = std::max<std::uint32_t>(m_StateCapacity, 1024);
+        while (cap < count) cap *= 2;
+        unsigned buffer = 0;
+        glCreateBuffers(1, &buffer);
+        if (!buffer) return false;
+        glNamedBufferStorage(buffer, (GLsizeiptr)(cap * sizeof(ObjectState)), nullptr, GL_DYNAMIC_STORAGE_BIT);
+        if (m_StateBuffer) glDeleteBuffers(1, &m_StateBuffer);
+        m_StateBuffer = buffer;
+        m_StateCapacity = cap;
+        whole = true; // a new store: everything goes up
+        GpuMemTrack::Set("GpuScene object state", (std::size_t)cap * sizeof(ObjectState));
+    }
+    m_StateRuns.clear();
+    if (whole) {
+        if (count) m_StateRuns.push_back({0, count - 1});
+    } else if (!m_StateDirty.empty()) {
+        std::sort(m_StateDirty.begin(), m_StateDirty.end());
+        BuildRuns(m_StateDirty, m_StateRuns);
+    }
+    m_StateDirty.clear();
+    for (const auto& [first, last] : m_StateRuns) {
+        if (first >= count) continue; // the list shrank since (a Sync between the write and this upload)
+        const std::size_t n = (std::size_t)(std::min(last, count - 1) - first) + 1;
+        glNamedBufferSubData(m_StateBuffer, (GLintptr)(first * sizeof(ObjectState)), (GLsizeiptr)(n * sizeof(ObjectState)),
+                             &m_StateCpu[first]);
+    }
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kObjectStateBinding, m_StateBuffer);
+    return true;
+}
+
 void GpuScene::Release() {
+    if (m_StateBuffer) {
+        glDeleteBuffers(1, &m_StateBuffer);
+        GpuMemTrack::Set("GpuScene object state", 0);
+    }
+    m_StateBuffer = 0;
+    m_StateCapacity = 0;
+    m_StateDirty.clear();
     if (m_Xforms || m_Bounds) {
         const unsigned old[2] = {m_Xforms, m_Bounds};
         glDeleteBuffers(2, old);

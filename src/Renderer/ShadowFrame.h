@@ -207,6 +207,10 @@ private:
     int m_LookWhy = 0; // the last look's reasons to draw: 1 static changed, 2 animated now, 4 animated last frame
     std::vector<LocalCaster> m_LocalCasters;
     std::unordered_map<std::uint32_t, CasterMotion> m_CasterMotion;
+    // G4-d: each sun caster as last gathered, by GPU-scene slot (stable while the world is): a caster that moved or
+    // re-posed since redraws the held far cascades its shadow reaches, where it was and where it is.
+    struct SunMotion { std::uint32_t id = ~0u; std::uint64_t pose = 0; glm::mat4 xform{1.0f}; glm::vec3 lo{0.0f}, hi{0.0f}; bool bounded = false; };
+    std::vector<SunMotion> m_SunMotion;
     std::vector<const LocalCaster*> m_Visible;
     std::vector<std::uint8_t> m_VisibleDynamic; // per m_Visible entry: DynamicFor for the light being rendered
     std::uint64_t m_SpotShadowSig[SpotShadowMap::kMaxSpots] = {}; // the static casters'

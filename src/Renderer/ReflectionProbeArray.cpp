@@ -77,6 +77,22 @@ std::uint32_t ReflectionProbeArray::SelectionKey(const glm::vec3& centre) const 
     return key;
 }
 
+ReflectionProbeArray::Selection ReflectionProbeArray::Resolve(const glm::vec3& centre) const {
+    Selection sel;
+    if (m_Probes.empty()) return sel;
+    Scored best[kMaxDraw];
+    float total = 1.0f;
+    sel.Count = Select(centre, best, total);
+    for (int j = 0; j < sel.Count; ++j) { // as Bind
+        const ProbeData& p = m_Probes[best[j].idx];
+        sel.Center[j] = p.Center;
+        sel.HalfSize[j] = p.HalfSize;
+        sel.Blend[j] = best[j].score / total;
+        sel.Layer[j] = m_Capturing || m_CubeArray == 0 ? -1 : p.Layer;
+    }
+    return sel;
+}
+
 void ReflectionProbeArray::Bind(Shader& shader, const glm::vec3& viewCenter) const {
     if (m_Probes.empty()) {
         shader.SetInt("uProbeCount", 0);

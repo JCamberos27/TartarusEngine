@@ -142,9 +142,9 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
     // Sub-scopes for the pass's CPU stages (fit + gather, sort + cascade masks, caster draws, grass).
     std::optional<Profiler::ScopeTimer> stage;
     SunPass p{world, fl, shadowMap, shadowShader, stage};
-    GatherSunCasters(p, fitView, fitProj);
     p.cascadeCount = shadowMap.Count();
     p.kernelTexels = CascadedShadowMap::SunKernelTexels(fl.SunAngularDeg, fl.SunShadowSoftness);
+    GatherSunCasters(p, fitView, fitProj);
     DrawSunCasters(p);
     DrawSunImpostors(p);
     shadowMap.MarkRendered(p.renderMask, p.frame);
@@ -175,7 +175,7 @@ void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const g
     shadowMap.SetSplitLambda(world.Render.ShadowCascadeSplit);
     shadowMap.Update(fitView, fitProj, fl.SunDir, world.Render.ShadowDistance, &casterMin, &casterMax);
     p.frame = Time::FrameCount();
-    p.renderMask = shadowMap.PlanRender(p.frame); // the far cascades on alternate frames
+    p.renderMask = shadowMap.PlanRender(p.frame); // the far cascades every FarRefresh() frames, staggered
     Frustum (&casterCells)[CascadedShadowMap::kMaxCascades] = p.cells;
     for (int c = 0; c < shadowMap.Count(); ++c) casterCells[c] = Frustum::FromViewProj(shadowMap.LightViewProj(c));
     VisibilityQuery casts; // #163 - Cast Shadows: Off skips
@@ -184,6 +184,17 @@ void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const g
     casts.CellCullCount = shadowMap.Count();
     GatherVisible(world, casts, m_Casting);
     m_SceneWorld = &world;
+    // G4-d: the held far layers a caster that moved or re-posed since its last gather reaches (CasterReachesSlice,
+    // what receivers read now - not the hold margin), where it was or is now: its old shadow must go as its new one
+    // lands. One new to its slot (first seen, a world switch) counts as moved. Unbounded movers reach every cascade.
+    const unsigned held = p.renderMask ^ ((1u << shadowMap.Count()) - 1u);
+    unsigned force = 0;
+    const float kernel = p.kernelTexels, bias = fl.SunShadowNormalBias;
+    auto reach = [&](bool bounded, const glm::vec3& lo, const glm::vec3& hi) {
+        for (int c = 2; c < shadowMap.Count(); ++c)
+            if ((held & ~force & (1u << c)) && (!bounded || shadowMap.CasterReachesSlice(c, lo, hi, kernel, bias, false)))
+                force |= 1u << c;
+    };
     for (const VisibleRenderable& v : m_Casting) {
         const auto& r = *v.Renderable;
         SunCaster& sc = m_SunCasters.emplace_back();
@@ -198,7 +209,19 @@ void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const g
         // As posed (Model::PosedBounds), the bounds the main pass culls with.
         sc.bounded = v.Bounded;
         sc.bounds = AABB{v.WorldMin, v.WorldMax};
+        if (v.Slot >= m_SunMotion.size()) m_SunMotion.resize((size_t)v.Slot + 1);
+        SunMotion& m = m_SunMotion[v.Slot];
+        const std::uint32_t id = static_cast<std::uint32_t>(v.Entity);
+        const std::uint64_t pose = sc.model->HasBones() ? sc.model->PoseVersion() : 0;
+        if (m.id != id || m.pose != pose || m.xform != sc.xform) {
+            if (held & ~force) {
+                reach(sc.bounded, v.WorldMin, v.WorldMax);
+                if (m.id == id) reach(m.bounded, m.lo, m.hi);
+            }
+            m = SunMotion{id, pose, sc.xform, v.WorldMin, v.WorldMax, sc.bounded};
+        }
     }
+    p.renderMask = shadowMap.ForceRender(p.renderMask, force);
     // Consecutive draws of the same model share its VAO and (usually) its material, which the state cache then skips.
     // The multi-draw path doesn't need it: GroupCasters groups by hash in any order, its batches bind by page and state,
     // and a depth-only pass lays down the same depth whatever the order (sorting the casters cost ~0.3 ms in the Forest).

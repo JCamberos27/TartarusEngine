@@ -19,6 +19,12 @@ namespace ShaderLibrary {
     // reporting a misleading "must write to gl_Position" link error (audit #355 / BUG-102).
     std::string ReadFileRequired(const std::string& filename);
 
+    // Lines (e.g. a "#define _NO_SLOT_STATE 1" line) every top-level source read from now on carries right after its
+    // #version line: a GPU capability the whole run compiles for (GpuScene::InitSlotStateSupport). Set before the programs that
+    // need it compile; hot reload reads through here too, so a reloaded program keeps them.
+    void SetGlobalDefines(const std::string& defines);
+    const std::string& GlobalDefines();
+
     // The directory Init() resolved to (absolute once main() passes an EnginePaths result).
     std::string Dir();
 

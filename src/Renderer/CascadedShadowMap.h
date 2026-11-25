@@ -72,20 +72,32 @@ public:
     int Resolution() const { return m_Resolution; }
     int Count() const { return m_Count; }
     const glm::mat4& LightViewProj(int i) const { return m_LightViewProj[i]; }
-    // Far cascades on alternate frames: cascade 2 renders on even frames, 3 on odd ones, and each is held (sampled
-    // as rendered, with its own matrix) on the frame between. The near two render every frame. A held layer is
-    // only reused when it was rendered the frame before, with the same light direction and texel size, and its
-    // rendered area - the slice then, grown by kHoldTexels - still covers this frame's slice; otherwise it renders
-    // now. Call after Update(); returns the cascades to render this frame (bit c = cascade c). Every cascade when
-    // called twice in one frame (two views sharing the map), with fewer than 4 cascades, or with
-    // TARTARUS_NO_CASCADE_ALTERNATE set. Shadows past cascade 1 (wind, things moving) update at half rate.
+    // Far cascades every FarRefresh() frames (G4-d): cascade 2 renders when frame % n == 0, cascade 3 half a period
+    // later, so at most one far layer renders per frame; each is held (sampled as rendered, with its own matrix) on the
+    // frames between. The near two render every frame. A held layer is only reused while it is younger than n frames,
+    // with the same light direction and texel size, and its rendered area - the slice then, grown by kHoldTexels per
+    // held frame - still covers this frame's slice; otherwise it renders now (the sun turned, the camera moved or
+    // turned past the margin). ForceRender adds the layers a moving caster reaches. Call after Update(); returns the
+    // cascades to render this frame (bit c = cascade c). Every cascade when called twice in one frame (two views
+    // sharing the map), with fewer than 4 cascades, or with TARTARUS_NO_CASCADE_ALTERNATE set. Wind sway past
+    // cascade 1 updates at 1/n rate.
     unsigned PlanRender(std::uint64_t frame);
+    // After PlanRender: also render `force`'s layers this frame (they sample this frame's fit again). Returns the mask.
+    unsigned ForceRender(unsigned mask, unsigned force);
+    // The far refresh period: kFarRefresh, or TARTARUS_SUN_FAR_REFRESH (2..8; 2 = the old alternate frames).
+    static constexpr int kFarRefresh = 4;
+    static int FarRefresh();
+    // What the far cascades did, summed over every planned frame (--perf-bench reports it per phase): layer-frames
+    // held, rendered on their turn, re-rendered off turn because the held one no longer fit (refit: light, texel size,
+    // age, camera past the margin), and re-rendered for a moving caster (mover).
+    struct FarTotals { std::uint64_t Frames = 0, Held = 0, Turn = 0, Refit = 0, Mover = 0; };
+    static const FarTotals& FarCascadeTotals();
     // After the casters went into `mask`'s layers: they now hold this frame's fit.
     void MarkRendered(unsigned mask, std::uint64_t frame);
     // What a receiver samples cascade i with: this frame's fit, or a held layer's own.
     const glm::mat4& SampleViewProj(int i) const { return m_SampleViewProj[i]; }
     glm::vec4 SampleTexelWorldSizesVec4() const;
-    // The extra reach (texels) a cascade renders with when it will be held a frame: room for a frame of camera turn.
+    // The extra reach (texels) a cascade renders with per frame it will be held: room for a frame of camera turn.
     static constexpr float kHoldTexels = 64.0f;
     // Cascade split far-distances in *view space* (positive), one per cascade; [i] is the far
     // edge of cascade i. Packed into a vec4 for the shader (unused lanes hold the last split).
@@ -116,8 +128,10 @@ public:
     // overlaps the slice's. Cascade 0 tests against ReadRect (the near slice's bounding box and the
     // eye's surroundings, where the view model draws at its own FOV): what misses it would be
     // scissored away anyway.
+    // `withHold` false: what receivers read this frame only, without the hold margin a held layer is rendered with
+    // (G4-d's mover test: is its shadow, old or new, read now).
     bool CasterReachesSlice(int c, const glm::vec3& boundsMin, const glm::vec3& boundsMax,
-                            float kernelTexels, float normalBias) const;
+                            float kernelTexels, float normalBias, bool withHold = true) const;
     // Cascade c's receiver slice corners in its light clip space (x, y), from Update().
     const std::array<glm::vec2, 8>& SliceCorners(int c) const { return m_SliceCorners[c]; }
 

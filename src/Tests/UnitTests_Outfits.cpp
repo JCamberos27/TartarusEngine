@@ -1,6 +1,7 @@
 // Unit tests: Outfits: the wardrobe (styles, pairs, coverage), and the Quantum pack checks (posed bounds, edge bands, rigid pieces under a hood, material textures) that skip without the pack.
 // (Moved out of UnitTests.cpp; registered by RunUnitTests through RegisterOutfitsTests.)
 #include "TimeService.h"
+#include "App/OutfitWaitGate.h"
 #include "UnitTestSupport.h"
 #include "../Game/FirstPersonMovementInput.h"
 #include "AnimatorController.h"
@@ -936,7 +937,23 @@ void TestQuantumMaterialTextures() {
 
 } // namespace
 
+// The harness outfit wait: loads still in flight keep it waiting, up to the cap, which it reports; no loads end it.
+void TestOutfitWaitGate() {
+    OutfitWaitGate g;
+    CHECK(g.Step(true, 0.0) == OutfitWaitGate::State::Waiting);
+    CHECK(g.Step(true, 5.0) == OutfitWaitGate::State::Waiting);   // no piece done for 5 s: still waiting (the old stall rule gave up here)
+    CHECK(g.Step(true, 59.0) == OutfitWaitGate::State::Waiting);
+    CHECK(g.Step(true, 61.0) == OutfitWaitGate::State::CapHit);
+    OutfitWaitGate h;
+    CHECK(h.Step(true, 100.0) == OutfitWaitGate::State::Waiting); // the clock starts at the first waiting step
+    CHECK(h.Step(false, 101.0) == OutfitWaitGate::State::Done);
+    CHECK(h.Step(true, 150.0) == OutfitWaitGate::State::Waiting);
+    OutfitWaitGate idle;
+    CHECK(idle.Step(false, 500.0) == OutfitWaitGate::State::Done);
+}
+
 void RegisterOutfitsTests(UnitTestSupport::TestList& tests) {
+    tests.emplace_back("Outfit wait gate: loads in flight keep waiting up to the cap", TestOutfitWaitGate);
     tests.insert(tests.end(), {
         {"Wardrobe", TestWardrobe},
         {"OutfitCoverage", TestOutfitCoverage},

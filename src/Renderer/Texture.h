@@ -103,6 +103,8 @@ public:
     // thread) turns it into a real GL texture. Null if the decode failed.
     static std::shared_ptr<Texture> CreatePending(TextureCpuData&& data);
     bool IsPendingUpload() const { return m_Pending != nullptr; }
+    // A pending texture's staged copy (UploadStep) goes back to the ring; the next UploadStep stages it again.
+    void ReleaseStage();
     // One step of a pending upload through UploadStaging (`stage` false: straight from memory, as FinishUpload).
     UploadStaging::Step UploadStep(bool stage);
     void FinishUpload();
