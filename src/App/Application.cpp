@@ -2750,8 +2750,9 @@ bool AppSession::Frame() {
     // #143: in the background and not playing, hold to the (lower) Background FPS too.
     // TARTARUS_UNLOCKED_FPS: no cap at all, the background one included.
     static const bool uncapped = Env::Flag(Env::Var::UnlockedFps);
-    // TARTARUS_PERF_PACED=<fps>: a --perf-bench measures under that cap (PerfBench::Paced); otherwise it runs uncapped.
-    int fpsCap = uncapped ? 0 : opt.perfBenchMode ? PerfBench::Paced().Fps : EditorSettings::Get().FpsLimit;
+    // TARTARUS_PERF_PACED=<fps>: a visible --perf-bench measures under that cap (PerfBench::Paced); a hidden one, like
+    // any other bench, runs uncapped (as it ignores VSync).
+    int fpsCap = uncapped ? 0 : opt.perfBenchMode ? (hiddenRun ? 0 : PerfBench::Paced().Fps) : EditorSettings::Get().FpsLimit;
     const int bgCap = uncapped ? 0 : EditorSettings::Get().UnfocusedFpsLimit;
     if (bgCap > 0 && !playing && !headless && !glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED))
         fpsCap = fpsCap > 0 ? std::min(fpsCap, bgCap) : bgCap;
