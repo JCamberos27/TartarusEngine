@@ -38,6 +38,7 @@
 #include "Tests/SmokeChecks.h"
 #include "Window.h"
 #include "World.h"
+#include "Renderer/ImpostorLibrary.h"
 #include "Renderer/MemReport.h"
 
 #include <atomic>
@@ -798,6 +799,22 @@ void SmokeHarness::PerfFrame() {
         }
     } else if (opt.perfBenchMode) {
         const double frameMs = m_Perf.TakeFrameMs();
+        // The edit phase starts once the scene has streamed in. On a cold open the impostor atlases were still
+        // decoding, so the far trees drew as full meshes (Forest: 767 draws / 2.1M tris vs 631 / 1.4M warm).
+        if (m_FramesRendered == 1 && !playing) {
+            constexpr int kPerfStreamHold = 3000;
+            const bool streaming = m_Ctx.decalSystem.Streaming() || m_Ctx.assets.AsyncInFlight() > 0 ||
+                                   (ImpostorLibrary::Wanted() && !ImpostorLibrary::Enabled());
+            if (streaming && m_PerfHold < kPerfStreamHold) {
+                ++m_PerfHold;
+                --m_FramesRendered; // this frame again next time round
+                return;
+            }
+            if (m_PerfHold > 0 || streaming)
+                std::cout << "[PerfBench] waited " << m_PerfHold << " frame(s) for streaming"
+                          << (streaming ? " - still streaming, measuring anyway" : "") << std::endl;
+            m_PerfHold = 0;
+        }
         const int phaseFrame = (m_FramesRendered - 1) % PerfBench::kPhaseFrames + 1;
         if (opt.perfSample && phaseFrame == std::max(m_Perf.Warmup(), 1)) SamplingProfiler::Start(); // warmup 0: from frame 1
         if (phaseFrame > m_Perf.Warmup()) m_Perf.Sample(frameMs, phaseFrame);
