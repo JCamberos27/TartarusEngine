@@ -1349,7 +1349,7 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
     // P-55: one walk of the scene gives both the Play snapshot (entities only) and the with-library snapshot the #15
     // check below compares with the undo baseline. They used to be two full saves.
     const auto playT0 = std::chrono::steady_clock::now();
-    const bool journal = !m_CurrentUndoScene.empty() && m_AssetsPtr; // as JournalUnrecordedChange(world) checked
+    const bool journal = !m_InPlayMode && !m_CurrentUndoScene.empty() && m_AssetsPtr; // as JournalUnrecordedChange(world) checked
     SceneSerializer::SnapshotTimes snapTimes;
     std::string withLibrary;
     {
