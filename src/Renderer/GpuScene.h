@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 class World;
@@ -24,6 +25,12 @@ struct SceneSlot; // SceneRenderer.h
 class GpuScene {
 public:
     static constexpr std::uint32_t kDead = 1u << 15; // in Bounds' max.w: the slot holds no renderable now
+    // The uploads for some changed slots (ascending): runs [first, last], joined across gaps of up to kMergeGap
+    // unchanged slots (one call costs more than a few hundred bytes), and one span over all of them past kMaxRuns.
+    using Run = std::pair<std::uint32_t, std::uint32_t>;
+    static constexpr std::uint32_t kMergeGap = 16;
+    static constexpr std::size_t kMaxRuns = 256;
+    static void BuildRuns(const std::vector<std::uint32_t>& sortedSlots, std::vector<Run>& runs);
 
     static bool Enabled();
     static GpuScene& Get();
@@ -54,6 +61,8 @@ public:
         std::uint64_t Bytes = 0;     // bytes uploaded
     };
     const SyncStats& LastSync() const { return m_Last; }
+    // The last Sync's uploads as planned (made even with upload false): slot runs [first, last].
+    const std::vector<Run>& LastRuns() const { return m_Runs; }
 
     // GL: reads both buffers back and compares them slot by slot with the candidate list (SceneRenderer.h ReadSceneSlot).
     // False with the first mismatch in `why`. For the smoke run; it stalls the pipeline.
@@ -62,10 +71,11 @@ public:
     // One slot's packing (both buffers), for the unit tests.
     static void Pack(const SceneSlot& s, glm::mat4 xf[2], glm::vec4 bounds[2]);
 
+
 private:
     void WriteSlot(std::uint32_t slot, const SceneSlot& s);
     bool EnsureCapacity(std::uint32_t count); // GL; false: the buffers could not be made
-    void UploadRuns(const std::vector<std::uint32_t>& sortedSlots);
+    void UploadRuns(const std::vector<Run>& runs);
 
     std::uint32_t m_Count = 0;
     std::uint32_t m_Capacity = 0; // slots the GL buffers hold
@@ -75,6 +85,7 @@ private:
     std::vector<glm::mat4> m_XformCpu;
     std::vector<glm::vec4> m_BoundsCpu;
     std::vector<std::uint32_t> m_Sorted;
+    std::vector<Run> m_Runs;
     SyncStats m_Last;
     const World* m_OnceWorld = nullptr; // SyncOnce's last key
     std::uint64_t m_OnceStamp = 0;
