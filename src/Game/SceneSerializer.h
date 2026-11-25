@@ -83,6 +83,10 @@ namespace SceneSerializer {
     // `scene`'s scene with `library`'s AssetLibrary state (both SaveToString snapshots). Empty
     // when either won't parse.
     std::string WithLibraryState(const std::string& scene, const std::string& library);
+    // P-55c: what SaveToString(world, assets) returns for the scene `snapshot` (a SaveToString text of it) holds, with
+    // the live AssetLibrary half: the snapshot's own scene text, its library members swapped for the live library's,
+    // without parsing the snapshot. Empty when the text isn't one object it can split.
+    std::string WithLiveLibrary(const std::string& snapshot, const AssetLibrary& assets);
     bool LoadFromString(World& world, AssetLibrary& assets, const std::string& data);
 
     // #148 — writes an entity-only snapshot (the play-mode one from SaveToString(world)) plus the

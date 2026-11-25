@@ -1364,7 +1364,11 @@ private:
     // an outfit landing isn't in the baseline yet, the auto-save reads the World itself; otherwise
     // it writes the baseline (the same bytes, without walking every entity on the UI thread).
     unsigned m_ChangesOutsideUndo = 0;
-    void NoteChangeOutsideUndo() { ++m_ChangesOutsideUndo; }
+    void NoteChangeOutsideUndo() { ++m_ChangesOutsideUndo; m_BaselineFromStop = false; }
+    // P-55c: Stop just made the baseline from the Play snapshot it loaded back, and no editor frame has run since
+    // (cleared by the next BeginGlobalUndoFrame, any undo push, NoteChangeOutsideUndo, Play, a history clear). Until
+    // then the World is that baseline, so an outfit landing due before that frame needs no pre-landing save.
+    bool m_BaselineFromStop = false;
     bool UndoBaselineIsCurrent() const;
     void WaitRecoveryWrite();
     void PollRecoveryWrite(); // once a frame: logs the finished write
@@ -1669,6 +1673,9 @@ private:
     // Last committed authored state. Navigation must never serialize the scene; controls
     // that report a change after updating their value still need this pre-edit state.
     std::string m_CurrentUndoScene;
+    // P-55c: SaveToString's text of the scene as Play started. Stop loads that scene back, so with the live
+    // AssetLibrary half swapped in it is the baseline again: no full save of the scene the frame after Stop.
+    std::string m_PrePlayBaseline;
     unsigned m_OutfitLandedSeen = 0; // OutfitSystem::LandedGeneration() as of the last baseline (#15)
     unsigned m_ExternalSyncs = 0;    // SyncProjectChanges passes that applied outside-the-editor changes
     int m_UiStylesHook = 0;          // AssetChangeHooks id: editor_ui_styles.json edited outside the editor reloads

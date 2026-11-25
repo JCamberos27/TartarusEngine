@@ -55,6 +55,8 @@ struct EditorHistoryTestAccess {
     static void EnterPlay(EditorLayer& e,World& w) {e.OnEnterPlayMode(w);}
     static void ExitPlay(EditorLayer& e,World& w,AssetLibrary& a) {e.OnExitPlayMode(w,a);}
     static const std::string& Current(const EditorLayer& e) {return e.m_CurrentUndoScene;}
+    static bool FromStop(const EditorLayer& e) {return e.m_BaselineFromStop;}
+    static void NoteOutside(EditorLayer& e) {e.NoteChangeOutsideUndo();}
     static void Clear(EditorLayer& e) {e.ClearUndoHistory();}
     static std::string TopLabel(const EditorLayer& e) {return e.m_UndoStack.empty()?std::string():e.m_UndoStack.back().Label;}
     static void Undo(EditorLayer& e,World& w,AssetLibrary& a) {e.Undo(w,a);}
@@ -1326,9 +1328,31 @@ static void TestPlaySnapshotsOneWalk() {
         world.Render.ExposureEV=3.0f; // Play's own change, reverted by Stop
         EditorHistoryTestAccess::ExitPlay(editor,world,assets);
         CHECK(SceneSerializer::SaveToString(world,assets)==before);
+        CHECK(EditorHistoryTestAccess::Current(editor)==before); // P-55c: Stop takes the pre-Play save back, byte for byte
+        // P-55c: until the next editor frame, a landing needs no pre-landing save (nothing ran since the reload).
+        CHECK(EditorHistoryTestAccess::FromStop(editor));
+        editor.JournalBeforeOutfitLanding(world);
+        CHECK(EditorHistoryTestAccess::Count(editor)==0 && EditorHistoryTestAccess::FromStop(editor));
         nextFrame();
+        CHECK(!EditorHistoryTestAccess::FromStop(editor)); // the editor frame ends it
         CHECK(EditorHistoryTestAccess::Current(editor)==before);
         CHECK(EditorHistoryTestAccess::Count(editor)==0);
+        // After that frame the pre-landing check is back: an unrecorded change becomes its own step before a landing.
+        world.Render.ExposureEV=0.75f;
+        editor.JournalBeforeOutfitLanding(world);
+        CHECK(EditorHistoryTestAccess::Count(editor)==1 && EditorHistoryTestAccess::TopLabel(editor)=="Unrecorded Change");
+        world.Render.ExposureEV=0.5f;
+        EditorHistoryTestAccess::Clear(editor);
+        nextFrame();
+        CHECK(EditorHistoryTestAccess::Current(editor)==before);
+        // A change noted outside undo right after Stop ends it too.
+        EditorHistoryTestAccess::EnterPlay(editor,world);
+        EditorHistoryTestAccess::ExitPlay(editor,world,assets);
+        CHECK(EditorHistoryTestAccess::FromStop(editor));
+        EditorHistoryTestAccess::NoteOutside(editor);
+        CHECK(!EditorHistoryTestAccess::FromStop(editor));
+        nextFrame();
+        CHECK(EditorHistoryTestAccess::Current(editor)==before && EditorHistoryTestAccess::Count(editor)==0);
         // A change made without an undo step before Play is journaled at Play, as before.
         world.Render.ExposureEV=1.5f;
         const std::string edited=SceneSerializer::SaveToString(world,assets);
@@ -1337,9 +1361,26 @@ static void TestPlaySnapshotsOneWalk() {
         CHECK(EditorHistoryTestAccess::TopLabel(editor)=="Unrecorded Change");
         EditorHistoryTestAccess::ExitPlay(editor,world,assets);
         CHECK(SceneSerializer::SaveToString(world,assets)==edited);
+        CHECK(EditorHistoryTestAccess::Current(editor)==edited); // P-55c: the baseline Play journaled to, not the older one
         nextFrame();
         CHECK(EditorHistoryTestAccess::Current(editor)==edited);
         CHECK(EditorHistoryTestAccess::Count(editor)==1); // Play and Stop added nothing after it
+        // P-55c: the library changed during Play (a sound registered): Stop's baseline is the pre-Play scene with
+        // the live library half, the same bytes as a fresh save.
+        EditorHistoryTestAccess::EnterPlay(editor,world);
+        assets.RegisterSound("assets/Audio/p55c_during_play.wav");
+        EditorHistoryTestAccess::ExitPlay(editor,world,assets);
+        const std::string afterStop=SceneSerializer::SaveToString(world,assets);
+        CHECK(afterStop!=edited);
+        CHECK(EditorHistoryTestAccess::Current(editor)==afterStop);
+        nextFrame();
+        CHECK(EditorHistoryTestAccess::Current(editor)==afterStop);
+        CHECK(EditorHistoryTestAccess::Count(editor)==1);
+        // WithLiveLibrary on its own: an older save of the scene + the library now == a save now; not an object -> empty.
+        assets.RegisterSound("assets/Audio/p55c_later.wav");
+        CHECK(SceneSerializer::WithLiveLibrary(afterStop,assets)==SceneSerializer::SaveToString(world,assets));
+        CHECK(SceneSerializer::WithLiveLibrary(SceneSerializer::SaveToString(world),assets)==SceneSerializer::SaveToString(world,assets));
+        CHECK(SceneSerializer::WithLiveLibrary("[1]",assets).empty());
         EditorHistoryTestAccess::Clear(editor);
     }
     ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);

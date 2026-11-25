@@ -448,6 +448,43 @@ double MsSince(std::chrono::steady_clock::time_point t0) {
 }
 } // namespace
 
+std::string SceneSerializer::WithLiveLibrary(const std::string& snapshot, const AssetLibrary& assets) {
+    std::vector<std::pair<std::string_view, std::string_view>> members;
+    if (!TopLevelMembers(snapshot, members)) return {};
+    const json lib = LibraryStateJson(assets);
+    auto isLibrary = [&](std::string_view key) {
+        for (const char* k : kLibraryKeys)
+            if (key == k) return true;
+        return lib.contains(std::string(key));
+    };
+    // dump() writes an object's members in key order (std::map, byte order) with no spaces: the scene's members are
+    // kept as written, the library's written now, and the two merged back in that order.
+    std::vector<std::pair<std::string, std::string>> live;
+    live.reserve(lib.size());
+    for (auto it = lib.begin(); it != lib.end(); ++it) live.emplace_back(it.key(), it->dump());
+    std::string out;
+    out.reserve(snapshot.size() + 1024);
+    out += '{';
+    bool first = true;
+    auto put = [&](std::string_view key, std::string_view value) {
+        if (!first) out += ',';
+        first = false;
+        out += '"';
+        out += key; // the scene's keys as written; the library's are plain names
+        out += "\":";
+        out += value;
+    };
+    size_t l = 0;
+    for (const auto& [key, value] : members) {
+        if (isLibrary(key)) continue;
+        for (; l < live.size() && std::string_view(live[l].first) < key; ++l) put(live[l].first, live[l].second);
+        put(key, value);
+    }
+    for (; l < live.size(); ++l) put(live[l].first, live[l].second);
+    out += '}';
+    return out;
+}
+
 void SceneSerializer::SaveToStrings(const World& world, std::string& entityOnly, const AssetLibrary* assets,
                                     std::string* withLibrary, SnapshotTimes* times) {
     SnapshotTimes local;
