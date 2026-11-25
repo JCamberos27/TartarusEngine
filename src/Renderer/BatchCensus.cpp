@@ -40,7 +40,7 @@ struct Acc {
     std::uint64_t Max = 0;
     void Add(std::uint64_t v) { Sum += (double)v; Max = std::max(Max, v); }
 };
-struct State {
+struct Totals {
     std::uint64_t Views = 0, Mismatch = 0;
     Acc Items, Built;
     Acc Distinct[kParts];
@@ -52,7 +52,18 @@ std::uint64_t Mix(std::uint64_t key, std::uint64_t v) { return key ^ (v + 0x9E37
 } // namespace
 
 bool Enabled() {
-    static const bool on = [] { const char* v = std::getenv("TARTARUS_BATCH_CENSUS"); return v && *v && *v != '0'; }();
+    static const bool on = [] {
+#ifdef _MSC_VER
+        char* v = nullptr;
+        std::size_t len = 0;
+        const bool set = _dupenv_s(&v, &len, "TARTARUS_BATCH_CENSUS") == 0 && v && *v && *v != '0';
+        std::free(v);
+        return set;
+#else
+        const char* v = std::getenv("TARTARUS_BATCH_CENSUS");
+        return v && *v && *v != '0';
+#endif
+    }();
     return on;
 }
 
@@ -98,7 +109,7 @@ void Report(const std::string& scene, const char* phase) {
         std::cout << line << '\n';
     }
     std::cout.flush();
-    g = State{};
+    g = Totals{};
 }
 
 } // namespace BatchCensus
