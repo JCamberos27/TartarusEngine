@@ -1,4 +1,5 @@
 #include "SceneSerializerInternal.h"
+#include <algorithm>
 
 namespace SceneDetail {
 

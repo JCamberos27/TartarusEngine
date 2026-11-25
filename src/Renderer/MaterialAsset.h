@@ -1,25 +1,27 @@
 #pragma once
 #include "Material.h"
-#include "ShaderAsset.h" // ShaderPropType — the typed store for non-builtin shader properties
+#include "ShaderAsset.h" // ShaderPropType â€” the typed store for non-builtin shader properties
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 class AssetLibrary;
 
 // A named, file-backed material (.mat JSON, version 1). Wraps a Material struct with a path so
 // it can be browsed in the Asset Browser, drag-dropped onto renderers, and referenced from scene
-// files as a first-class asset. PR 4 introduces the asset layer only — the scene draw loop
+// files as a first-class asset. PR 4 introduces the asset layer only â€” the scene draw loop
 // does not route through MaterialAsset yet (that wiring comes in PR 5).
 struct MaterialAsset {
     std::string Path;  // absolute path to the .mat file on disk
     std::string Name;  // display name, defaults to the filename stem
 
-    // #6 Defect #50 — set when Load() was given a non-empty path that couldn't be opened or
+    // #6 Defect #50 â€” set when Load() was given a non-empty path that couldn't be opened or
     // parsed (deleted/corrupt .mat file), mirroring PrefabInstanceComponent::Missing. Path and
     // Name are still populated so the caller (a mesh's material slot) can show which reference is
     // broken instead of silently rendering as if no override were ever set. Every other field
-    // stays at its default-constructed value — never meaningful to read when Missing is true.
+    // stays at its default-constructed value â€” never meaningful to read when Missing is true.
     bool Missing = false;
 
     // Optional shader asset link. When set, the inspector and BindMaterial use the data-driven
@@ -27,7 +29,7 @@ struct MaterialAsset {
     std::string ShaderPath;
     std::shared_ptr<ShaderAsset> Shader;
 
-    // Render queue — controls when this material is drawn relative to others.
+    // Render queue â€” controls when this material is drawn relative to others.
     // Opaque: depth-tested, drawn front-to-back by material key (default).
     // AlphaTest: like Opaque but uses clip() for cutout foliage / fences.
     // Transparent: no depth write, back-to-front sorted, blended via uOpacity.
@@ -54,7 +56,7 @@ struct MaterialAsset {
     // ShaderAsset gives them no binding (no texture unit, no per-draw uniform).
     static bool IsFurProp(const std::string& name) { return name.rfind("_Fur", 0) == 0 && IsBuiltinProp(name); }
 
-    // #102 — metallic / roughness maps used to REPLACE their factors; now factor * map. A
+    // #102 â€” metallic / roughness maps used to REPLACE their factors; now factor * map. A
     // material saved before that (no "factorsScaleMaps" marker) gets factor 1 on every slot that
     // has a map, so it renders exactly as it did. No-op when `savedWithScaling` is true.
     static void UpgradeLegacyMapFactors(Material& m, bool savedWithScaling);
@@ -105,7 +107,7 @@ struct MaterialAsset {
     static glm::vec3 GetColor(const Material& m, const std::string& name);
     static float     GetFloat(const Material& m, const std::string& name);
     static bool      GetBool (const Material& m, const std::string& name);
-    // #104 — Int / Vec2-4 / Color-with-alpha values, for custom properties (ExtraProps).
+    // #104 â€” Int / Vec2-4 / Color-with-alpha values, for custom properties (ExtraProps).
     static int       GetInt  (const Material& m, const std::string& name);
     static glm::vec4 GetVec  (const Material& m, const std::string& name);
     // The built-in field that GetTexture (Texture2D) / GetColor (Color, Vec3) / GetVec (Vec2) /
