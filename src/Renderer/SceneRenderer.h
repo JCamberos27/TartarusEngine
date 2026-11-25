@@ -85,7 +85,8 @@ struct SceneSlot {
     // reads live (the kSlot* bits below).
     std::uint16_t Flags = 0;
     int Layer = 0;
-    entt::entity Entity{};                            // who holds the slot (entt::null when nobody does now)
+    entt::entity Entity{}; // who holds the slot; ReadSceneSlot sets it (entt::null when nobody does now). Not entt::null
+                           // here: this header only forward-declares entt::entity.
     const RenderableComponent* Renderable = nullptr;  // its renderable (null: it left)
 };
 enum SceneSlotFlag : std::uint16_t {
