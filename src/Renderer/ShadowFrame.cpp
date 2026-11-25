@@ -230,6 +230,14 @@ bool ShadowFrame::CascadesInside(const glm::mat4* base, const glm::mat4* now, in
 
 ShadowFrame::SunGatherTotals ShadowFrame::SunGatherTotalsSoFar() { return g_SunGatherTotals; }
 
+namespace {
+// TARTARUS_NO_SUN_GATHER_REUSE=1: the A/B's control, the single gather every frame as before the reuse.
+bool SunGatherReuseOff() {
+    static const bool off = Env::Flag(Env::Var::NoSunGatherReuse);
+    return off;
+}
+} // namespace
+
 // The static cells: kept from an earlier frame while its padded cascades still hold this frame's (SunGatherHolds),
 // else gathered against this frame's cascades padded by kSunGatherPadTexels. Then the Always cells, every frame.
 bool ShadowFrame::GatherSunCasting(World& world, const glm::mat4* vp, int count, int resolution, const glm::vec3& sunDir,
@@ -238,6 +246,13 @@ bool ShadowFrame::GatherSunCasting(World& world, const glm::mat4* vp, int count,
     casts.ShadowCasters = true;
     casts.CellCullCount = count;
     SunGatherBase& g = m_SunGather;
+    if (SunGatherReuseOff()) { // one gather of every cell against this frame's cascades, nothing kept or drained
+        g.valid = false;
+        casts.CellCull = cells;
+        GatherVisible(world, casts, m_Casting);
+        ++g_SunGatherTotals.Gathered;
+        return false;
+    }
     const bool reused = SunGatherHolds(world, vp, count, sunDir, frame);
     if (reused) {
         m_Casting.resize(g.staticCount);
@@ -277,9 +292,8 @@ bool ShadowFrame::SunGatherHolds(World& world, const glm::mat4* now, int n, cons
     bool movesAll = false, lodAll = false;
     TakeStaticCandidateMoves(m_SunMoves, movesAll);
     world.TakeLodToggles(m_SunLodToggles, lodAll, 1);
-    static const bool off = Env::Flag(Env::Var::NoSunGatherReuse);
     const SunGatherBase& g = m_SunGather;
-    if (off || !g.valid || g.world != &world || g.count != n || movesAll || lodAll || g.edits != GatherCandidateEdits() ||
+    if (!g.valid || g.world != &world || g.count != n || movesAll || lodAll || g.edits != GatherCandidateEdits() ||
         g.epoch != RenderSettingsEpoch() || g.sunDir != sunDir || frame - g.frame >= kSunGatherFullEvery)
         return false;
     // A texel of the pad kept back: float slack for the plane tests (sub-millimetre against a texel's centimetres).
