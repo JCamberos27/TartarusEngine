@@ -380,12 +380,37 @@ void ShadowFrame::SetCacheVerify(bool on) { g_CacheVerify = on; }
 bool ShadowFrame::CacheVerify() { return g_CacheVerify; }
 const ShadowFrame::VerifyTotals& ShadowFrame::CacheVerifyTotals() { return g_VerifyTotals; }
 
-void ShadowFrame::VerifyQuiet(bool drawn, const char* kind, int light, std::uint64_t frame) {
-    ++g_VerifyTotals.Checked;
-    if (!drawn) return;
-    if (++g_VerifyTotals.Missed <= 20) // the first few: a stuck light would fill the log every frame
+void ShadowFrame::VerifyQuiet(bool wasQuiet, bool drawn, const char* kind, int light, std::uint64_t frame,
+                              std::vector<VerifyCaster>& last) {
+    if (wasQuiet) ++g_VerifyTotals.Checked;
+    if (wasQuiet && drawn && ++g_VerifyTotals.Missed <= 20) { // the first few: a stuck light would fill the log every frame
+        // What differs from the light's last look: a caster added, removed, or one of its signature's fields.
+        std::string why;
+        int listed = 0;
+        auto note = [&](const std::string& s) { if (listed++ < 4) why += " " + s + ";"; };
+        auto name = [](const VerifyCaster& c) {
+            return "entity " + std::to_string(c.Id) + " (" + (c.Mesh ? c.Mesh->Path() : std::string("?")) + ")";
+        };
+        for (const VerifyCaster& n : m_VerifyNow) {
+            const auto it = std::find_if(last.begin(), last.end(), [&](const VerifyCaster& o) { return o.Id == n.Id; });
+            if (it == last.end()) { note("added " + name(n)); continue; }
+            std::string f;
+            if (it->Mesh != n.Mesh) f += " model";
+            if (it->Materials != n.Materials) f += " materials";
+            if (it->Xform != n.Xform) f += " transform";
+            if (it->Visible != n.Visible) f += " hidden-triangles";
+            if (it->TwoSided != n.TwoSided) f += " two-sided";
+            if (!f.empty()) note(name(n) + ":" + f);
+        }
+        for (const VerifyCaster& o : last)
+            if (std::none_of(m_VerifyNow.begin(), m_VerifyNow.end(), [&](const VerifyCaster& n) { return n.Id == o.Id; }))
+                note("removed " + name(o));
+        if (listed > 4) why += " +" + std::to_string(listed - 4) + " more;";
         Log::Error(std::string("[ShadowCache] ") + kind + " light " + std::to_string(light) + " was quiet but its map changed on frame " +
-                   std::to_string(frame) + " (a write that neither moved its slot nor reported itself)");
+                   std::to_string(frame) + " (why bits " + std::to_string(m_LookWhy) + ", " + std::to_string(last.size()) + " -> " +
+                   std::to_string(m_VerifyNow.size()) + " static casters):" + (why.empty() ? std::string(" no static caster changed") : why));
+    }
+    last = m_VerifyNow;
 }
 
 void LocalShadowQuiet::Reset() {
@@ -581,6 +606,7 @@ bool ShadowFrame::CollectLocalCasters(const Frustum* frustum, const AABB* range,
     m_VisibleDynamic.clear();
     bool anyDynamic = false;
     busy = false;
+    m_VerifyNow.clear();
     for (const LocalCaster& c : m_LocalCasters) {
         if (c.bounded && (frustum ? !frustum->Intersects(c.bounds) : !range->Intersects(c.bounds))) continue;
         if (c.player && skipPlayer) continue;
@@ -590,6 +616,11 @@ bool ShadowFrame::CollectLocalCasters(const Frustum* frustum, const AABB* range,
         anyDynamic = anyDynamic || dynamic;
         busy = busy || c.moving || c.animated || c.settling;
         if (!dynamic) sig = HashCaster(sig, c.hash);
+        if (!dynamic && g_CacheVerify) {
+            std::uint64_t mats = kFnvOffset;
+            for (const auto& m : *c.materials) mats = HashWord(mats, (std::uint64_t)(std::uintptr_t)m.get());
+            m_VerifyNow.push_back({c.id, c.model, mats, c.xform, c.visible ? c.visible->Id() : 0u, c.twoSided});
+        }
     }
     return anyDynamic;
 }
@@ -660,6 +691,7 @@ bool ShadowFrame::RenderSpot(const ShadowFrameInputs& in, const LocalPassLocs& l
     // turn: that layer is still right. Its cache is built on its turn, not all at once the frame after a batch of
     // lights is reassigned.
     const bool spotTurn = frame % kSettleFrames == (std::uint64_t)s % kSettleFrames;
+    m_LookWhy = (staticChanged ? 1 : 0) | (animated ? 2 : 0) | (m_SpotHadAnimated[s] ? 4 : 0);
     if (!lightMoved && m_SpotShadowSig[s] == 0 && sig == m_SpotLiveSig[s] && !animated && !m_SpotHadAnimated[s] && !spotTurn)
         return false;
     // Unchanged, and no animated caster in it now or last frame: keep the layer.
@@ -739,7 +771,7 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
         const bool drawn = RenderSpot(in, locs, s, lightMoved, busy);
         // Quiet from here: a still light with its cache built, its live layer that cache, and nothing in it in motion.
         m_Quiet.Spots[s].Quiet = m_SlotDirty && !lightMoved && !busy && m_SpotShadowSig[s] != 0 && !m_SpotHadAnimated[s];
-        if (wasQuiet) VerifyQuiet(drawn, "spot", s, in.frame);
+        if (CacheVerify()) VerifyQuiet(wasQuiet, drawn, "spot", s, in.frame, m_VerifySpot[s]);
     }
     EndLocalPass();
 }
@@ -813,7 +845,10 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
         }
         // Quiet from here: no face holds a moving caster (a kept face had none last frame either) and none is in reach.
         m_Quiet.Points[s].Quiet = m_SlotDirty && !busy && !anyFaceDynamic;
-        if (wasQuiet) VerifyQuiet(drawn, "point", s, frame);
+        if (CacheVerify()) {
+            m_LookWhy = staticChanged ? 1 : 0;
+            VerifyQuiet(wasQuiet, drawn, "point", s, frame, m_VerifyPoint[s]);
+        }
     }
     EndLocalPass();
 }

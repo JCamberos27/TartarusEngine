@@ -143,7 +143,9 @@ private:
     bool CollectLocalCasters(const Frustum* frustum, const AABB* range, bool skipPlayer, int turnSlot, std::uint64_t frame,
                              std::uint64_t& sig, bool& busy);
     // A quiet light's verify check: it redrew something (`drawn`) though G4-c would have kept it.
-    static void VerifyQuiet(bool drawn, const char* kind, int light, std::uint64_t frame);
+    // Verify mode also names what changed: the static casters of this look against the light's last look.
+    struct VerifyCaster;
+    void VerifyQuiet(bool wasQuiet, bool drawn, const char* kind, int light, std::uint64_t frame, std::vector<VerifyCaster>& last);
     // The spot and point passes' shared steps. Begin: depth on, back faces culled (the light-facing surface), the local
     // depth program bound; returns its light uniforms. Draw: m_Visible's animated (or static) casters, those outside
     // `clip` (a point light's face) skipped. End: the state both leave behind.
@@ -174,6 +176,18 @@ private:
     bool m_SlotDirty = false; // G4-c on this frame
     LocalShadowQuiet m_Quiet;
     GpuScene::ChangeLog m_ChangeLog;
+    // Verify mode: each look's static casters (CollectLocalCasters), and each light's from its last look.
+    struct VerifyCaster {
+        std::uint32_t Id = 0;
+        const Model* Mesh = nullptr;
+        std::uint64_t Materials = 0;
+        glm::mat4 Xform{1.0f};
+        unsigned Visible = 0;
+        bool TwoSided = false;
+    };
+    std::vector<VerifyCaster> m_VerifyNow;
+    std::vector<VerifyCaster> m_VerifySpot[SpotShadowMap::kMaxSpots], m_VerifyPoint[PointShadowMap::kMaxPoints];
+    int m_LookWhy = 0; // the last look's reasons to draw: 1 static changed, 2 animated now, 4 animated last frame
     std::vector<LocalCaster> m_LocalCasters;
     std::unordered_map<std::uint32_t, CasterMotion> m_CasterMotion;
     std::vector<const LocalCaster*> m_Visible;
