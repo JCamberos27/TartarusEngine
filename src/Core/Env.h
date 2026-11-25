@@ -96,6 +96,9 @@
     X(GpuCullVerify, "TARTARUS_GPU_CULL_VERIFY", Flag, "debug: compare GPU culling with the CPU's every frame (slow)") \
     X(NoMdi, "TARTARUS_NO_MDI", Flag, "disable multi-draw indirect")                                                  \
     X(NoGpuScene, "TARTARUS_NO_GPU_SCENE", Flag, "disable the persistent GPU scene buffers")                          \
+    X(NoSlotState, "TARTARUS_NO_SLOT_STATE", Flag, "multi-draw batches bind probes + GI mask per batch (no per-slot state)") \
+    X(SlotStateLead, "TARTARUS_SLOT_STATE_LEAD", Flag, "A/B: every copy of an instance group takes its lead's slot state") \
+    X(FragmentSsboLimit, "TARTARUS_FRAGMENT_SSBO_LIMIT", Int, "test: treat GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS as this (8 = the GL 4.3 minimum)") \
     X(NoShadowSlotDirty, "TARTARUS_NO_SHADOW_SLOT_DIRTY", Flag, "still local lights re-check every caster every frame (no slot-change skip)") \
     X(ShadowCacheVerify, "TARTARUS_SHADOW_CACHE_VERIFY", Flag, "debug: check every local-shadow skip against the full signature")     \
     X(NoMeshArena, "TARTARUS_NO_MESH_ARENA", Flag, "disable the static mesh arena")                                   \

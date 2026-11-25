@@ -20,6 +20,12 @@ layout(binding = 28) uniform sampler3D uGIAtlas;
 uniform int uGIEnabled;
 uniform int uGIMaskLo;      // the volumes this draw can touch (bit i = volume i), bits 0-31 ...
 uniform int uGIMaskHi;      // ... and 32-63; set per draw
+// What SampleGI reads the mask through: the uniforms, unless the includer reads it from elsewhere (ModelFragment.glsl's
+// per-copy slot state).
+#ifndef GI_MASK_LO
+#define GI_MASK_LO uGIMaskLo
+#define GI_MASK_HI uGIMaskHi
+#endif
 uniform int uGIFlatL1;      // 1 = scale the directional (L1) term by GI_FLAT_L1_SCALE: a door leaf in a doorway samples one room's
                             // probes but faces the other, so its far face would read the clamped negative lobe = black
 const float GI_FLAT_L1_SCALE = 0.3;
@@ -38,9 +44,11 @@ vec3 SampleGI(vec3 p, vec3 n, out float fade, out float replaceSky) {
     float wSum = 0.0, skySum = 0.0;
     fade = 0.0;
     replaceSky = 0.0;
-    if (uGIEnabled != 1 || (uGIMaskLo == 0 && uGIMaskHi == 0)) return sum;
+    if (uGIEnabled != 1) return sum;
+    int maskLo = GI_MASK_LO, maskHi = GI_MASK_HI;
+    if (maskLo == 0 && maskHi == 0) return sum;
     if (any(lessThan(p, uGIBoundsMin)) || any(greaterThan(p, uGIBoundsMax))) return sum;
-    uint lo = uint(uGIMaskLo), hi = uint(uGIMaskHi);
+    uint lo = uint(maskLo), hi = uint(maskHi);
     while (lo != 0u || hi != 0u) {
         int v;
         if (lo != 0u) { v = findLSB(lo); lo &= lo - 1u; }

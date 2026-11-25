@@ -46,6 +46,7 @@
 #include "TimeOfDay.h"
 #include "Material.h"
 #include "ShaderLibrary.h"
+#include "GpuScene.h"
 #include "TintOverlayRenderer.h"
 #include "HdrTarget.h"
 #include "OpaqueColorCopy.h"
@@ -402,6 +403,7 @@ private:
 
     Step step16{[&] {
         ShaderLibrary::Init(EnginePaths::Resolve("assets/shaders"));
+        GpuScene::InitSlotStateSupport(); // before any model program compiles: may add _NO_SLOT_STATE
     }};
 
     // ReadFileRequired (not ReadFile) for the core programs: a missing shader directory
@@ -414,6 +416,13 @@ private:
                        ShaderLibrary::ReadFileRequired("ModelFragment.glsl"), "modelShader"};
     Step step17{[&] {
         modelShader.SetInstancing(true); // per-instance transforms (InstanceBatch.h); its fragment stage never reads uModel
+        // G-MB: the full model fragment's SSBO blocks against the GPU's limit (GpuScene::kSlotStateFragmentBlocks).
+        const int blocks = GpuScene::FragmentBlocks(modelShader.Program());
+        const std::string line = "modelShader: " + std::to_string(blocks) + " fragment SSBO blocks, limit " +
+                                 std::to_string(GpuScene::MaxFragmentBlocks()) + ", slot state " +
+                                 (GpuScene::SlotStateSupported() ? "on" : "off");
+        if (blocks > GpuScene::MaxFragmentBlocks()) Log::Error(line + " (over the limit)");
+        else Log::Info(line);
     }};
     Shader outlineModelShader{ShaderLibrary::ReadFileRequired("OutlineModel.vert.glsl"),
                               ShaderLibrary::ReadFileRequired("Outline.frag.glsl"), "outlineModelShader"};
