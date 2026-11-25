@@ -447,6 +447,45 @@ void LocalShadowQuiet::Wake(const GpuScene::ChangeLog& log, std::uint32_t epoch,
     }
 }
 
+void LodToggleWake::Append(World& world, GpuScene::ChangeLog& log) {
+    bool all = false;
+    world.TakeLodToggles(Toggled, all);
+    if (For != &world) { all = true; For = &world; } // another world's entities, or the first look
+    if (all) { // re-read the whole set; every light wakes anyway
+        std::fill(Seen.begin(), Seen.end(), entt::null);
+        for (entt::entity e : world.Registry.view<LodCulledTag>()) {
+            const size_t s = (size_t)entt::to_entity(e);
+            if (s >= Seen.size()) Seen.resize(s + 1, entt::null);
+            Seen[s] = e;
+        }
+        log.All = true;
+        log.Changes.clear();
+        return;
+    }
+    for (entt::entity e : Toggled) {
+        const size_t s = (size_t)entt::to_entity(e);
+        if (s >= Seen.size()) Seen.resize(s + 1, entt::null);
+        const bool now = world.IsLodCulled(e), was = Seen[s] == e;
+        if (now == was) continue; // flipped back since the last look
+        Seen[s] = now ? e : entt::null;
+        if (log.All) continue;
+        const auto* r = world.Registry.valid(e) ? world.Registry.try_get<RenderableComponent>(e) : nullptr;
+        if (!r || !r->ModelRef || r->CastShadows == RenderableComponent::ShadowCasting::Off) continue; // casts nothing
+        GpuScene::SlotChange c;
+        c.Slot = ~0u; // no slot moved: the renderer itself
+        glm::vec3 lo, hi;
+        r->ModelRef->PosedBounds(lo, hi);
+        c.Bounded = lo.x <= hi.x && lo.y <= hi.y && lo.z <= hi.z;
+        if (c.Bounded) {
+            const AABB wb = AABB{lo, hi}.Transformed(world.GetCachedWorldTransform(e));
+            c.Min = wb.Min;
+            c.Max = wb.Max;
+        }
+        if (log.Changes.size() >= GpuScene::kMaxLoggedChanges) { log.All = true; log.Changes.clear(); continue; }
+        log.Changes.push_back(c);
+    }
+}
+
 void ShadowFrame::RenderLocal(const ShadowFrameInputs& in) {
     World& world = *in.world;
     const FrameLights& fl = *in.lights;
@@ -492,6 +531,7 @@ void ShadowFrame::RenderLocal(const ShadowFrameInputs& in) {
         GpuScene& scene = GpuScene::Get();
         scene.Sync(world); // this frame's changes, posed slots included (SyncOnce skips a frame whose transforms held)
         scene.TakeChangeLog(world, m_ChangeLog);
+        m_LodWake.Append(world, m_ChangeLog); // ApplyLod ran for this frame's local shadows (Application)
         LocalShadowQuiet::Lights lights;
         lights.SpotCount = fl.SpotCount;
         lights.SpotLive = fl.SpotLive;

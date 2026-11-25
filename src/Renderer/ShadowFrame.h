@@ -38,6 +38,18 @@ struct LocalShadowQuiet {
         bool Quiet = false;
         std::uint64_t Key = 0;
     };
+
+// G4-c: LOD level changes since the last look, as slot changes where each flipped renderer stands. A level change swaps
+// which renderers a light gathers without moving any slot. A renderer flipped and back between two looks (another
+// view's levels applied in between, as the editor's Scene and Game views do each frame) nets out against what the last
+// look saw.
+struct LodToggleWake {
+    // Entity slot -> the entity the last look saw LOD-culled there (null: none), as World::IsLodCulled.
+    std::vector<entt::entity> Seen;
+    const World* For = nullptr;
+    std::vector<entt::entity> Toggled; // scratch
+    void Append(World& world, GpuScene::ChangeLog& log);
+};
     Light Spots[SpotShadowMap::kMaxSpots];
     Light Points[PointShadowMap::kMaxPoints];
     std::uint32_t Epoch = 0;
@@ -175,6 +187,7 @@ private:
     std::uint64_t m_PointKey[PointShadowMap::kMaxPoints] = {};
     bool m_SlotDirty = false; // G4-c on this frame
     LocalShadowQuiet m_Quiet;
+    LodToggleWake m_LodWake;
     GpuScene::ChangeLog m_ChangeLog;
     // Verify mode: each look's static casters (CollectLocalCasters), and each light's from its last look.
     struct VerifyCaster {

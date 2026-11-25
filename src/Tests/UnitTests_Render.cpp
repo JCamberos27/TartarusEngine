@@ -694,6 +694,63 @@ void LocalShadowQuietWake() {
     CHECK(!q.Spots[0].Quiet && !q.Spots[1].Quiet && !q.Points[0].Quiet);
 }
 
+// G4-c: a LOD level change wakes the lights around the renderers it swapped (no slot moves), and a flip that is undone
+// before the next look (another view's levels in between) wakes nothing.
+void LocalShadowLodToggles() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity group = w.CreateEmptyEntity(zero, zero, one, "Group");
+    w.Registry.emplace<LODGroupComponent>(group).Size = 2.0f;
+    entt::entity lv[2];
+    for (int i = 0; i < 2; ++i) {
+        lv[i] = w.CreateModelEntity(model, zero, zero, one, "LOD" + std::to_string(i));
+        CHECK(w.SetParent(lv[i], group));
+    }
+    w.RebuildWorldTransformCache();
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    auto lod = [&](float dist) { w.ApplyLod(glm::vec3(0.0f, 0.0f, dist), proj); }; // 1: LOD 0 shows, 2: LOD 1
+    LodToggleWake wake;
+    GpuScene::ChangeLog log;
+    auto look = [&] {
+        log.All = false;
+        log.Changes.clear();
+        wake.Append(w, log);
+    };
+    lod(1.0f);
+    CHECK(w.IsLodCulled(lv[1]) && !w.IsLodCulled(lv[0]));
+    look(); // the first look: everything
+    CHECK(log.All);
+    look(); // nothing flipped
+    CHECK(!log.All && log.Changes.empty());
+    lod(2.0f); // LOD 0 out, LOD 1 in: both renderers' boxes
+    look();
+    CHECK(!log.All && log.Changes.size() == 2);
+    for (const GpuScene::SlotChange& c : log.Changes)
+        CHECK(c.Bounded && glm::all(glm::lessThanEqual(c.Min, glm::vec3(0.01f))) && glm::all(glm::greaterThanEqual(c.Max, glm::vec3(-0.01f))));
+    lod(1.0f); // another view's levels, then this one's again before the next look
+    lod(2.0f);
+    look();
+    CHECK(!log.All && log.Changes.empty());
+    w.Registry.get<RenderableComponent>(lv[0]).CastShadows = RenderableComponent::ShadowCasting::Off;
+    lod(1.0f); // LOD 0 casts nothing: only LOD 1 going out counts
+    look();
+    CHECK(log.Changes.size() == 1);
+    w.ClearLod(); // its untags count too
+    look();
+    CHECK(!log.All && log.Changes.size() == 1);
+    World other; // another world: everything
+    wake.Append(other, log);
+    CHECK(log.All);
+}
+
 // GpuScene's upload plan and packing, without GL.
 void GpuSceneRuns() {
     using Run = GpuScene::Run;
@@ -3049,6 +3106,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GpuScene: SyncOnce's key follows every Sync (another world in between syncs again)", GpuSceneSyncOnceKey});
     tests.push_back({"GpuScene: the change log lists every changed slot with where it was and is (300 random frames)", GpuSceneChangeLog});
     tests.push_back({"Local shadows (G4-c): a frame's changes wake the quiet lights they reach, and only those", LocalShadowQuietWake});
+    tests.push_back({"Local shadows (G4-c): a LOD level change wakes the lights around the renderers it swapped", LocalShadowLodToggles});
     tests.push_back({"GpuScene: upload runs (merge, cap, whole list) and layer packing", GpuSceneRuns});
     tests.push_back({"GatherPatch", GatherPatch});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
