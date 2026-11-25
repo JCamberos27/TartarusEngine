@@ -184,6 +184,7 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
             ((gameHasInput && InputMap::GetButton("Fire2")) || (npcTest && npcTest->Aiming()));
         player.SprintBlocked=firstPersonPresentation.ActionBlocksSprint();
         // TEMPORARY sizing (diag only): TARTARUS_DIAG_WALK=1 walks a fixed path from Play start (segments 0-5).
+#pragma warning(suppress : 4996)
         static const bool diagWalk = std::getenv("TARTARUS_DIAG_WALK") != nullptr;
         static double diagT = 0.0;
         const glm::vec3 diagFrom = player.Cam.Position;
