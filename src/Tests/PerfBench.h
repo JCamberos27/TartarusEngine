@@ -103,7 +103,7 @@ private:
     std::vector<FrameLoads::Event> m_Loads; // the frame's loads, from TakeFrameMs
     // G5-0: the skinning counters (Model::SkinFrameStats) of the frame TakeFrameMs closed, and their phase sums.
     struct SkinSums {
-        double Frames = 0, Listed = 0, Dispatched = 0, Idle = 0, Fallback = 0, Verts = 0, Offscreen = 0, OffscreenVerts = 0,
+        double Frames = 0, Listed = 0, Dispatched = 0, Idle = 0, Fallback = 0, Unseen = 0, Verts = 0, Offscreen = 0, OffscreenVerts = 0,
                PosedDraws = 0, PosedMs = 0, PosedMsMax = 0;
     };
     SkinSums m_SkinFrame, m_Skin;

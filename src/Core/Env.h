@@ -105,6 +105,7 @@
     X(NoProgramCache, "TARTARUS_NO_PROGRAM_CACHE", Flag, "compile every shader program (skip Library/ShaderCache)")    \
     X(NoSkinArena, "TARTARUS_NO_SKIN_ARENA", Flag, "disable the skinned mesh arena")                                  \
     X(NoPreskin, "TARTARUS_NO_PRESKIN", Flag, "disable compute pre-skinning")                                         \
+    X(NoSkinCull, "TARTARUS_NO_SKIN_CULL", Flag, "pre-skin characters no pass drew last frame")                       \
     X(NoAsyncUpload, "TARTARUS_NO_ASYNC_UPLOAD", Flag, "disable async texture/mesh uploads")                          \
     X(NoCascadeAlternate, "TARTARUS_NO_CASCADE_ALTERNATE", Flag, "render every sun cascade every frame")              \
     X(NoEngineVariants, "TARTARUS_NO_ENGINE_VARIANTS", Flag, "disable engine shader variants")                        \

@@ -294,6 +294,7 @@ public:
         int Dispatched = 0;                    // ...skinned on the GPU this frame (their pose changed)
         int Idle = 0;                          // ...whose vertices were still in place (pose unchanged): no dispatch
         int Fallback = 0;                      // ...left to the vertex shader (buffer cap, not uploaded, no program)
+        int Unseen = 0;                        // ...not skinned: no pass drew them last frame (skin per pass if one does now)
         std::uint64_t DispatchedVertices = 0;
         int OffscreenModels = 0;               // dispatched by the previous PreSkin and drawn by no pass after it
         std::uint64_t OffscreenVertices = 0;
@@ -608,6 +609,7 @@ private:
         int Count = 0;
         int Base = 0;
         std::uint64_t Layout = 0; // the skinned buffer's layout its vertices were last written in (Model::PreSkin)
+        std::uint64_t Drawn = 0;  // the render frame a pass last drew it (UploadBoneMatrices); PreSkin skips the unseen
     };
     mutable PreSkinRange m_PreSkin;
     // The palette this pose skins with (null when there is none to upload) and its bone count.
