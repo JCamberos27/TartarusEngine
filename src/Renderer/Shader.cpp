@@ -1,5 +1,6 @@
 #include "Shader.h"
 #include "ShaderLibrary.h"
+#include "ProgramBinaryCache.h"
 #include "GLDebug.h"
 #include "Log.h"
 #include "gl.h"
@@ -55,6 +56,15 @@ std::string ShaderLog(unsigned int shader) {
 
 Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc, const char* debugName) {
     const auto start = std::chrono::steady_clock::now();
+    // A-2: a program linked on an earlier run comes back from Library/ShaderCache without compiling.
+    const ProgramBinaryCache::Key cacheKey = ProgramBinaryCache::MakeKey({vertexSrc, fragmentSrc});
+    if (const unsigned int cached = ProgramBinaryCache::TryLoad(cacheKey)) {
+        m_Program = cached;
+        m_Serial = NextSerial();
+        TagProgram(m_Program, debugName);
+        NoteBuilt(debugName, start);
+        return;
+    }
     unsigned int vs = Compile(GL_VERTEX_SHADER, vertexSrc);
     unsigned int fs = 0;
     try {
@@ -68,6 +78,7 @@ Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc, con
     m_Serial = NextSerial();
     glAttachShader(m_Program, vs);
     glAttachShader(m_Program, fs);
+    ProgramBinaryCache::PrepareForStore(m_Program, cacheKey);
     glLinkProgram(m_Program);
     // Flagged for deletion now; the driver frees them once they're detached at link time.
     // Doing it here (not after the status check) means a link failure below can't leak them.
@@ -82,17 +93,27 @@ Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc, con
         m_Program = 0;
         throw std::runtime_error(std::string("Shader link error: ") + log);
     }
+    ProgramBinaryCache::Store(cacheKey, m_Program, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
     TagProgram(m_Program, debugName);
     NoteBuilt(debugName, start);
 }
 
 Shader::Shader(const std::string& computeSrc, const char* debugName) {
     const auto start = std::chrono::steady_clock::now();
+    const ProgramBinaryCache::Key cacheKey = ProgramBinaryCache::MakeKey({computeSrc});
+    if (const unsigned int cached = ProgramBinaryCache::TryLoad(cacheKey)) {
+        m_Program = cached;
+        m_Serial = NextSerial();
+        TagProgram(m_Program, debugName);
+        NoteBuilt(debugName, start);
+        return;
+    }
     unsigned int cs = Compile(GL_COMPUTE_SHADER, computeSrc);
 
     m_Program = glCreateProgram();
     m_Serial = NextSerial();
     glAttachShader(m_Program, cs);
+    ProgramBinaryCache::PrepareForStore(m_Program, cacheKey);
     glLinkProgram(m_Program);
     glDeleteShader(cs);
 
@@ -104,6 +125,7 @@ Shader::Shader(const std::string& computeSrc, const char* debugName) {
         m_Program = 0;
         throw std::runtime_error(std::string("Compute shader link error: ") + log);
     }
+    ProgramBinaryCache::Store(cacheKey, m_Program, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
     TagProgram(m_Program, debugName);
     NoteBuilt(debugName, start);
 }
