@@ -22,8 +22,9 @@ struct MaterialAsset;
 class VisibleIndexBuffer;
 struct FrameLights;
 
-// A local (spot / point) caster's change signature: its id, model, every material slot, transform, hidden-triangle set
-// (VisibleIndexBuffer id, 0 = none) and Two Sided. A still light keeps its static depth while the signatures hold.
+// A local (spot / point) caster's change signature: its id, model, every material slot and what each mesh's depth draw
+// reads from it (Model::DepthMeshState: queue, cull, cutout, sway), transform, hidden-triangle set (VisibleIndexBuffer
+// id, 0 = none) and Two Sided. A still light keeps its static depth while the signatures hold.
 std::uint64_t LocalCasterHash(std::uint32_t id, const Model* model, const std::vector<std::shared_ptr<MaterialAsset>>& materials,
                               const glm::mat4& xform, unsigned visibleId, bool twoSided);
 
