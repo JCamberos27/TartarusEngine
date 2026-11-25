@@ -1275,7 +1275,7 @@ static void TestPlaySnapshotsOneWalk() {
     for(int i=0;i<40;++i)world.CreateEmptyEntity({float(i),0,0},{0,float(i),0},{1,1,1},"P55 fixture "+std::to_string(i));
     world.Render.ExposureEV=0.5f;
     assets.RegisterSound("assets/Audio/p55_fixture.wav");
-    assets.CreateFolder("P55 Fixture/Sub");
+    assets.RegisterSound("assets/Audio/p55_fixture_b.wav"); // library entries that write nothing to disk (a folder would persist to settings.json)
     {
         std::string entityOnly,withLibrary,library;
         SceneSerializer::SnapshotTimes times;
@@ -1283,7 +1283,7 @@ static void TestPlaySnapshotsOneWalk() {
         CHECK(entityOnly==SceneSerializer::SaveToString(world));
         CHECK(withLibrary==SceneSerializer::SaveToString(world,assets));
         CHECK(library==SceneSerializer::LibraryStateString(assets));
-        CHECK(withLibrary.find("p55_fixture.wav")!=std::string::npos && withLibrary.find("P55 Fixture/Sub")!=std::string::npos);
+        CHECK(withLibrary.find("p55_fixture.wav")!=std::string::npos && withLibrary.find("p55_fixture_b.wav")!=std::string::npos);
         CHECK(times.BuildMs>=0.0 && times.DumpMs>=0.0 && times.LibraryMs>=0.0 && times.LibraryDumpMs>=0.0);
         std::string alone;
         SceneSerializer::SaveToStrings(world,alone); // entities only
@@ -1311,11 +1311,11 @@ static void TestPlaySnapshotsOneWalk() {
         EditorHistoryTestAccess::ExitPlay(editor,world,assets);
         CHECK(SceneSerializer::SaveToString(world,assets)==edited);
         CHECK(EditorHistoryTestAccess::Current(editor)==edited);
-        // The library changed during Play (a folder made): Stop leaves the baseline to a fresh save.
+        // The library changed during Play (a sound registered): Stop leaves the baseline to a fresh save.
         EditorHistoryTestAccess::EnterPlay(editor,world);
-        assets.CreateFolder("P55 Fixture/Made In Play");
+        assets.RegisterSound("assets/Audio/p55_made_in_play.wav");
         EditorHistoryTestAccess::ExitPlay(editor,world,assets);
-        CHECK(EditorHistoryTestAccess::Current(editor).empty() || EditorHistoryTestAccess::Current(editor)==SceneSerializer::SaveToString(world,assets));
+        CHECK(EditorHistoryTestAccess::Current(editor).empty());
         EditorHistoryTestAccess::Clear(editor);
     }
     ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);
