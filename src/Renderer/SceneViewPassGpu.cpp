@@ -443,12 +443,19 @@ void SceneRenderer::ViewPass::CullGpuView(const VisibilityQuery& framed) {
     if (GpuCull::VerifyEnabled()) {
         std::uint64_t checked = 0, missing = 0;
         SceneSlot s;
+        const GpuCull::ViewQuery vq = GpuCull::MakeQuery(framed);
         for (std::size_t g = 0; g < groups; ++g) {
             if (t.GroupSeen[g]) continue;
             const GpuCull::Group& grp = t.StageGroups[g];
             for (std::uint32_t k = 0; k < grp.Count; ++k) {
                 const std::uint32_t slot = t.RunSlotsCpu[grp.Base + k];
-                if (!ReadSceneSlot(slot, s) || !s.Bounded) continue;
+                // Only what this view would take from the table: alive, owned, not rejected (moved, this frame's CPU
+                // path, LOD), not left out by its flags or (editor) layer.
+                if (!ReadSceneSlot(slot, s) || !s.Alive || !s.Bounded || !TestBit(t.Owned, slot) || TestBit(t.Reject, slot))
+                    continue;
+                if (s.Flags & vq.RejectFlags) continue;
+                if ((vq.Bits & GpuCull::kQCheckLayer) && s.Layer >= 0 && s.Layer < 32 && !((vq.LayerMask >> s.Layer) & 1u))
+                    continue;
                 ++checked;
                 const bool outside = framed.Cull && !framed.Cull->Intersects(AABB{s.WorldMin, s.WorldMax});
                 const bool small = sizeCull && TooSmallOnScreen(s.WorldMin, s.WorldMax, *framed.SizeCullEye,
