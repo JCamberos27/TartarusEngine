@@ -61,3 +61,13 @@ Poses are world positions (entity ids were renumbered on main; positions are not
   => the spec-unscale / room cube is NOT the cause of Jacob's 'red-room metal too shiny' in these poses; hypothesis (a) NOT confirmed. Suspect (b): the red lamps'
   DIRECT specular (Red Bulb, Lamp_stand, nightstand lamps) on gloss surfaces (nightstand top, desk edge). Not yet A/B'd (needs: lamps' specular off, same tour).
 - Next: ask Jacob which object; direct-specular A/B in a later GPU slot. PR #1217 stays draft: do not merge for the red room.
+
+## 8. Final 2026-11-24 ~23:45 UTC (end of Argus session)
+- Red-room metals: pole + lamp base = near-black metal (ambient spec ~0) with hard streaks = the lamps' DIRECT specular (not fixed; material/direct-spec design call).
+  The armchair rail was grey because the room reflects the ONE big House Probe Upstairs cube. FIX SHIPPED in #1218: 'Probe Master Bedroom' (id 36200, order 268794, importance 0.5,
+  Capture Scene, centre -9.95,4.6,23.1, size 6.4x2.8x5.9) via tools/descent/fix4/master_probe.py (branch dev/argus-master-probe 9f0b1544; applied on dev/fix4-house d9403a31).
+  Rail (38,31,26) -> (48,13,10); no visible tint elsewhere. Importance 3 leaks red into the ground-floor kitchen: probe choice = importance/(1+d^2) of the TOP 2, NOT box containment
+  (ReflectionProbeArray::Select). A real containment weight would be a C++ change (not done): worth doing before adding more small probes.
+- This branch (dev/argus-spec-fix, PR #1217 DRAFT/HELD): room-cube clamp 4 + floor 0.4 + spec AO. Clamp changes nothing visible; sink lift small (basin 8.6 -> 10.1, floor 0.6: 13.3). Do not merge for the red room.
+  If a 'sink lift' is wanted: floor 0.6, after Jacob's OK.
+- Scripts: run_fix_ab.ps1, run_red_ab.ps1, run_probe_ab.ps1 (probe variants), make_sheet.py, add_master_probe.py, tours tour_redroom_*.json / tour_probe_leak.json (world positions).
