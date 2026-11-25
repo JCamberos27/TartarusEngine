@@ -3,6 +3,8 @@
 #include "SceneSnapshotJson.h"
 
 #include <chrono>
+#include <vector>
+#include <string_view>
 #include <stdexcept>
 
 using namespace SceneDetail;
@@ -198,10 +200,81 @@ namespace {
 // AppendAssetLibraryJson writes.
 constexpr const char* kLibraryKeys[] = {"hasAssetLibrarySnapshot", "libraryModels", "libraryTextures", "libraryMaterials",
                                         "librarySounds", "libraryPrefabs", "assetFolders", "removedDiskFolders", "assetMeta"};
+// A JSON object's top-level members as (key, value) slices of its text, without parsing the values: what
+// SameSceneContent compares before it parses both snapshots (~20 MB each in the Forest, ~0.9 s). False when the text
+// isn't one object it can split (the caller parses then).
+bool TopLevelMembers(std::string_view s, std::vector<std::pair<std::string_view, std::string_view>>& out) {
+    out.clear();
+    size_t i = 0;
+    auto skipSpace = [&] { while (i < s.size() && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r')) ++i; };
+    auto skipString = [&] { // at the opening quote; ends past the closing one
+        for (++i; i < s.size(); ++i) {
+            if (s[i] == '\\') ++i;
+            else if (s[i] == '"') { ++i; return true; }
+        }
+        return false;
+    };
+    skipSpace();
+    if (i >= s.size() || s[i] != '{') return false;
+    ++i;
+    skipSpace();
+    if (i < s.size() && s[i] == '}') return true;
+    while (i < s.size()) {
+        skipSpace();
+        if (i >= s.size() || s[i] != '"') return false;
+        const size_t keyStart = i + 1;
+        if (!skipString()) return false;
+        const std::string_view key = s.substr(keyStart, i - 1 - keyStart);
+        skipSpace();
+        if (i >= s.size() || s[i] != ':') return false;
+        ++i;
+        skipSpace();
+        const size_t valueStart = i;
+        int depth = 0;
+        while (i < s.size()) {
+            const char c = s[i];
+            if (c == '"') { if (!skipString()) return false; continue; }
+            if (c == '{' || c == '[') ++depth;
+            else if (c == '}' || c == ']') { if (depth == 0) break; --depth; }
+            else if (c == ',' && depth == 0) break;
+            ++i;
+        }
+        if (i >= s.size()) return false;
+        size_t valueEnd = i;
+        while (valueEnd > valueStart && (s[valueEnd - 1] == ' ' || s[valueEnd - 1] == '\t' || s[valueEnd - 1] == '\n' || s[valueEnd - 1] == '\r')) --valueEnd;
+        out.emplace_back(key, s.substr(valueStart, valueEnd - valueStart));
+        if (s[i] == '}') { ++i; skipSpace(); return i == s.size(); }
+        if (s[i] != ',') return false;
+        ++i;
+    }
+    return false;
+}
+
+// The same text for every member but the library keys: then the scenes are the same (both come from dump(), which
+// writes equal values the same way). Different text can still be equal JSON (formatting, -0 vs 0): the caller parses.
+bool SameTextApartFromLibrary(const std::string& a, const std::string& b) {
+    static thread_local std::vector<std::pair<std::string_view, std::string_view>> ma, mb;
+    if (!TopLevelMembers(a, ma) || !TopLevelMembers(b, mb)) return false;
+    auto isLibrary = [](std::string_view key) {
+        for (const char* k : kLibraryKeys)
+            if (key == k) return true;
+        return false;
+    };
+    size_t x = 0, y = 0;
+    for (;;) {
+        while (x < ma.size() && isLibrary(ma[x].first)) ++x;
+        while (y < mb.size() && isLibrary(mb[y].first)) ++y;
+        if (x == ma.size() || y == mb.size()) return x == ma.size() && y == mb.size();
+        if (ma[x] != mb[y]) return false;
+        ++x;
+        ++y;
+    }
+}
 } // namespace
 
 bool SceneSerializer::SameSceneContent(const std::string& a, const std::string& b) {
     if (a == b) return true;
+    if (SameTextApartFromLibrary(a, b)) return true; // P-55b: the usual case (only the library re-listed), no parse
     try {
         json ja = json::parse(a), jb = json::parse(b);
         for (const char* k : kLibraryKeys) { ja.erase(k); jb.erase(k); }
