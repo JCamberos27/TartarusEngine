@@ -55,6 +55,8 @@ struct EditorHistoryTestAccess {
     static void EnterPlay(EditorLayer& e,World& w) {e.OnEnterPlayMode(w);}
     static void ExitPlay(EditorLayer& e,World& w,AssetLibrary& a) {e.OnExitPlayMode(w,a);}
     static const std::string& Current(const EditorLayer& e) {return e.m_CurrentUndoScene;}
+    static bool FromStop(const EditorLayer& e) {return e.m_BaselineFromStop;}
+    static void NoteOutside(EditorLayer& e) {e.NoteChangeOutsideUndo();}
     static void Clear(EditorLayer& e) {e.ClearUndoHistory();}
     static std::string TopLabel(const EditorLayer& e) {return e.m_UndoStack.empty()?std::string():e.m_UndoStack.back().Label;}
     static void Undo(EditorLayer& e,World& w,AssetLibrary& a) {e.Undo(w,a);}
@@ -1327,9 +1329,30 @@ static void TestPlaySnapshotsOneWalk() {
         EditorHistoryTestAccess::ExitPlay(editor,world,assets);
         CHECK(SceneSerializer::SaveToString(world,assets)==before);
         CHECK(EditorHistoryTestAccess::Current(editor)==before); // P-55c: Stop takes the pre-Play save back, byte for byte
+        // P-55c: until the next editor frame, a landing needs no pre-landing save (nothing ran since the reload).
+        CHECK(EditorHistoryTestAccess::FromStop(editor));
+        editor.JournalBeforeOutfitLanding(world);
+        CHECK(EditorHistoryTestAccess::Count(editor)==0 && EditorHistoryTestAccess::FromStop(editor));
         nextFrame();
+        CHECK(!EditorHistoryTestAccess::FromStop(editor)); // the editor frame ends it
         CHECK(EditorHistoryTestAccess::Current(editor)==before);
         CHECK(EditorHistoryTestAccess::Count(editor)==0);
+        // After that frame the pre-landing check is back: an unrecorded change becomes its own step before a landing.
+        world.Render.ExposureEV=0.75f;
+        editor.JournalBeforeOutfitLanding(world);
+        CHECK(EditorHistoryTestAccess::Count(editor)==1 && EditorHistoryTestAccess::TopLabel(editor)=="Unrecorded Change");
+        world.Render.ExposureEV=0.5f;
+        EditorHistoryTestAccess::Clear(editor);
+        nextFrame();
+        CHECK(EditorHistoryTestAccess::Current(editor)==before);
+        // A change noted outside undo right after Stop ends it too.
+        EditorHistoryTestAccess::EnterPlay(editor,world);
+        EditorHistoryTestAccess::ExitPlay(editor,world,assets);
+        CHECK(EditorHistoryTestAccess::FromStop(editor));
+        EditorHistoryTestAccess::NoteOutside(editor);
+        CHECK(!EditorHistoryTestAccess::FromStop(editor));
+        nextFrame();
+        CHECK(EditorHistoryTestAccess::Current(editor)==before && EditorHistoryTestAccess::Count(editor)==0);
         // A change made without an undo step before Play is journaled at Play, as before.
         world.Render.ExposureEV=1.5f;
         const std::string edited=SceneSerializer::SaveToString(world,assets);

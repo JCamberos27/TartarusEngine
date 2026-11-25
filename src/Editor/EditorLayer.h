@@ -1364,7 +1364,11 @@ private:
     // an outfit landing isn't in the baseline yet, the auto-save reads the World itself; otherwise
     // it writes the baseline (the same bytes, without walking every entity on the UI thread).
     unsigned m_ChangesOutsideUndo = 0;
-    void NoteChangeOutsideUndo() { ++m_ChangesOutsideUndo; }
+    void NoteChangeOutsideUndo() { ++m_ChangesOutsideUndo; m_BaselineFromStop = false; }
+    // P-55c: Stop just made the baseline from the Play snapshot it loaded back, and no editor frame has run since
+    // (cleared by the next BeginGlobalUndoFrame, any undo push, NoteChangeOutsideUndo, Play, a history clear). Until
+    // then the World is that baseline, so an outfit landing due before that frame needs no pre-landing save.
+    bool m_BaselineFromStop = false;
     bool UndoBaselineIsCurrent() const;
     void WaitRecoveryWrite();
     void PollRecoveryWrite(); // once a frame: logs the finished write

@@ -153,6 +153,7 @@ void EditorLayer::JournalFilesBefore(const World& world, const std::vector<Edito
 }
 
 void EditorLayer::BeginGlobalUndoFrame(const World& world) {
+    m_BaselineFromStop = false; // P-55c: an editor frame runs from here; edits may follow
     // #15 - an outfit change landed since last frame (a scene just opened rebuilding a stale body,
     // or the async half of an outfit edit already on the undo stack): part of the baseline, not
     // an unrecorded change for the next Undo to journal. Not while an edit is open: its commit
@@ -297,6 +298,8 @@ void EditorLayer::JournalBeforeOutfitLanding(const World& world) {
     // An open edit takes the landing into its own step when it commits (FinishGlobalUndo).
     if (m_InPlayMode || m_GlobalUndoActive || m_GlobalUndoApplying || m_CurrentUndoScene.empty() || !m_AssetsPtr ||
         Openable::BakePosed()) return;
+    // P-55c: Stop's baseline, nothing run since: the World is the snapshot Stop loaded, there is no change to keep.
+    if (m_BaselineFromStop && m_ChangesOutsideUndo == 0) return;
     PROFILE_SCOPE("Undo Pre-Landing Check");
     std::string current = SceneSerializer::SaveToString(world, *m_AssetsPtr);
     if (SceneSerializer::SameSceneContentApartFromOutfits(current, m_CurrentUndoScene)) return;
@@ -392,6 +395,7 @@ void EditorLayer::RememberLastScene(const std::string& path) {
 }
 
 void EditorLayer::ClearUndoHistory() {
+    m_BaselineFromStop = false; // P-55c
     m_GlobalUndoActive=false;m_FileJournal.Clear();m_GlobalUndoScene.clear();m_GlobalUndoSelection.clear();
     m_GlobalUndoHasScene=false;m_CurrentUndoScene.clear();
     m_UndoStack.clear();
@@ -966,6 +970,7 @@ void EditorLayer::RestoreSelectionByOrder(World& world, const std::vector<int>& 
 void EditorLayer::PushUndo(const World& world, const std::string& label, bool selectionOnly,
                            const std::vector<int>* selectedOrdersOverride) {
     PROFILE_SCOPE("PushUndo");
+    m_BaselineFromStop = false; // P-55c
     if(m_GlobalUndoActive && !m_GlobalUndoApplying && selectionOnly) return;
     if (!selectionOnly && !m_GlobalUndoApplying) {
         const EditorSound::Event sound = EditorSound::UndoLabelEvent(label);
@@ -1345,6 +1350,7 @@ void EditorLayer::JumpToRedoEntry(World& world, AssetLibrary& assets, size_t red
 }
 
 void EditorLayer::OnEnterPlayMode(const World& world) {
+    m_BaselineFromStop = false; // P-55c
     FinishGlobalUndo(world,true);
     // P-55: one walk of the scene gives both the Play snapshot (entities only) and the with-library snapshot the #15
     // check below compares with the undo baseline. They used to be two full saves.
@@ -1503,6 +1509,7 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
         PROFILE_SCOPE("Undo Baseline From Play Entry");
         m_CurrentUndoScene = SceneSerializer::WithLiveLibrary(prePlayBaseline, assets);
         if (!m_CurrentUndoScene.empty()) m_ChangesOutsideUndo = 0;
+        m_BaselineFromStop = !m_CurrentUndoScene.empty();
     }
     m_PlayModeSnapshot.clear();
 
