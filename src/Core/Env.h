@@ -112,7 +112,7 @@
     X(NoAsyncUpload, "TARTARUS_NO_ASYNC_UPLOAD", Flag, "disable async texture/mesh uploads")                          \
     X(NoCascadeAlternate, "TARTARUS_NO_CASCADE_ALTERNATE", Flag, "render every sun cascade every frame")              \
     X(NoSunCasterCache, "TARTARUS_NO_SUN_CASTER_CACHE", Flag, "A/B: group + build the sun casters' multi-draws every frame (no reuse)") \
-    X(NoSunCasterDelta, "TARTARUS_NO_SUN_CASTER_DELTA", Flag, "A/B: refill every sun caster every frame (no change-log delta)") \
+    X(NoSunCasterDelta, "TARTARUS_NO_SUN_CASTER_DELTA", Flag, "A/B: refill every sun caster every frame (no change-log delta)")     X(NoSunGatherReuse, "TARTARUS_NO_SUN_GATHER_REUSE", Flag, "A/B: gather the sun casters every frame (no padded-cascade reuse)") \
     X(SkyLutEveryFrame, "TARTARUS_SKY_LUT_EVERY_FRAME", Flag, "A/B: rewrite the sky-view LUTs every frame (no unchanged-input skip)") \
     X(SunFarRefresh, "TARTARUS_SUN_FAR_REFRESH", Int, "frames between sun cascade 2-3 redraws (2..8, default 4; 2 = alternate frames)") \
     X(NoEngineVariants, "TARTARUS_NO_ENGINE_VARIANTS", Flag, "disable engine shader variants")                        \
