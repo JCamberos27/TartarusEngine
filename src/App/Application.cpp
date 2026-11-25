@@ -1,5 +1,6 @@
 #include "App/Application.h"
 #include "App/GameShellWiring.h"
+#include "App/OutfitWaitGate.h"
 #include "TerrainSystem.h"
 
 #include "Window.h"
@@ -1305,7 +1306,10 @@ bool AppSession::Frame() {
     const float dt = Time::UnscaledDeltaTime();
     // --npc-test runs on a fixed step, so its timings don't depend on the machine.
     // (--npc-test ragdoll stops time for a few frames to shoot one moment from four sides.)
-    const float gameDt = opt.npcTestMode ? (playing && !(npcTest && npcTest->Frozen()) ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
+    // (Set late in the frame, read here on the next one: the first loading frame still advances 1/60 s and the first frame
+    // after the hold stays frozen. Deterministic either way.)
+    static bool outfitHold = false; // set below while an outfit change's loads are in flight (harness runs): time stands still
+    const float gameDt = opt.npcTestMode ? (playing && !(npcTest && npcTest->Frozen()) && !outfitHold ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
     if (!playing && sprayCans.Spraying() > 0) sprayCans.Stop(); // Play ended mid-spray: the hiss stops
 
     // #158 — shader hot reload (editor and development builds; the scan itself runs at 1 Hz). Engine
@@ -1750,40 +1754,32 @@ bool AppSession::Frame() {
     // --npc-test and the --perf-bench --smoke-shots picture: an outfit change in Play lands on the frame that asked for
     // it, not when the machine finishes loading it (the player's pieces, asked for in Play's first frames, landed 0.2-0.5 s
     // in and rebuilt the body - OutfitChanged - on a frame that followed the machine's load, so no two runs matched: the
-    // picture's view-model arm landed in one of two poses). It waits only while the loads progress: a change whose loads
-    // stall (5 s with none finishing - a file that never loads) stops the waiting until an outfit change lands again, and
-    // that change lands whenever it can, as in Play. Timed perf-bench runs (no pictures) don't wait.
-    if ((opt.npcTestMode || (opt.perfBenchMode && !opt.smokeShotsDir.empty())) && playing && OutfitSystem::AnyPending()) {
-        static unsigned s_stalledAt = ~0u; // the landed generation the last stall happened at
-        if (OutfitSystem::LandedGeneration() != s_stalledAt) {
-            // Progress: one more of the waiting changes' own loads done (not the library's in-flight count, which a
-            // load finishing while another queues leaves unchanged).
-            auto loadsDone = [&] {
-                int done = 0;
-                for (entt::entity root : world.Registry.view<const CharacterOutfitComponent>()) {
-                    int d = 0;
-                    if (OutfitSystem::IsPending(world, root, &d)) done += d;
-                }
-                return done;
-            };
-            auto lastProgress = std::chrono::steady_clock::now();
-            int done = loadsDone();
-            while (OutfitSystem::AnyPending() && !OutfitSystem::LandingDue(world) &&
-                   (assets.AsyncInFlight() > 0 || OutfitSystem::CoverageReading())) {
-                assets.PumpAsync(50.0);
-                UploadStaging::Finish(); // no frames end while this waits: free the staging ring by hand (as CliTools' drain)
-                std::this_thread::sleep_for(std::chrono::milliseconds(2));
-                if (const int now = loadsDone(); now != done) {
-                    done = now;
-                    lastProgress = std::chrono::steady_clock::now();
-                }
-                if (std::chrono::steady_clock::now() - lastProgress > std::chrono::seconds(5)) {
-                    s_stalledAt = OutfitSystem::LandedGeneration();
-                    std::printf("[NpcTest] an outfit change's loads stalled (none done in 5 s, %d in flight): no more waiting for it\n",
-                                assets.AsyncInFlight());
-                    break;
-                }
-            }
+    // picture's view-model arm landed in one of two poses). So while a change's loads are in flight the harness HOLDS:
+    // game time stands still (--npc-test) and the picture's frame count doesn't advance, across normal frames (the loads
+    // need a frame's GPU upload and retire steps to finish; a loop that only pumps never completes them). At
+    // OutfitWaitGate::kCapSeconds it logs, fails --npc-test, and stops holding until an outfit change lands again.
+    // Timed perf-bench runs (no pictures) don't hold.
+    outfitHold = false;
+    if (opt.npcTestMode || (opt.perfBenchMode && !opt.smokeShotsDir.empty())) {
+        static OutfitWaitGate s_gate; // a Stop mid-hold ends it (loading is false outside Play), so the next Play's clock starts fresh
+        static std::chrono::steady_clock::time_point s_t0 = std::chrono::steady_clock::now();
+        static unsigned s_gaveUpAt = ~0u; // the landed generation the last cap hit happened at
+        const bool loading = playing && OutfitSystem::AnyPending() && !OutfitSystem::LandingDue(world) &&
+                             (assets.AsyncInFlight() > 0 || OutfitSystem::CoverageReading()) &&
+                             OutfitSystem::LandedGeneration() != s_gaveUpAt;
+        const double nowSec = std::chrono::duration<double>(std::chrono::steady_clock::now() - s_t0).count();
+        switch (s_gate.Step(loading, nowSec)) {
+        case OutfitWaitGate::State::Done: s_gate = OutfitWaitGate(); break;
+        case OutfitWaitGate::State::Waiting: outfitHold = true; break;
+        case OutfitWaitGate::State::CapHit:
+            s_gaveUpAt = OutfitSystem::LandedGeneration();
+            s_gate = OutfitWaitGate();
+            std::printf("[NpcTest] an outfit change's loads were still in flight after %.0f s (%d in flight): no more holding for it%s\n",
+                        OutfitWaitGate::kCapSeconds, assets.AsyncInFlight(),
+                        npcTest ? "" : " (the _playmax picture may show a half-loaded outfit)");
+            if (npcTest) npcTest->Fail("the outfit change's loads finished within the hold cap (the picture would show a half-loaded outfit)");
+            else Log::Error("[SmokeTest] an outfit change's loads did not finish within the hold cap: the --smoke-shots picture may show a half-loaded outfit");
+            break;
         }
     }
     { PROFILE_SCOPE("Asset Pump"); assets.PumpAsync(AssetLibrary::PumpBudgetMs(playing, OutfitSystem::AnyPending(), lastFrameWorkMs)); }
@@ -2401,6 +2397,7 @@ bool AppSession::Frame() {
             perfMaxScene = smoke.CurrentPath();
             perfMaxFrames = 0;
         }
+        if (outfitHold) return; // an outfit change is still loading: not counted
         if (++perfMaxFrames != 400) return;
         std::vector<unsigned char> px = FrameCapture::GrabTopDown(fbo, w, h);
         for (size_t i = 3; i < px.size(); i += 4) px[i] = 255;
