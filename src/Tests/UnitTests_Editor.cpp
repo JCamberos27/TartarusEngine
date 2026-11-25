@@ -774,6 +774,32 @@ void TestAutoSaveFromUndoSnapshot() {
     std::filesystem::remove_all(dir, ec);
 }
 
+// P-55b: SameSceneContent's no-parse path (top-level members compared as text, library keys left out) gives the
+// parse's answer: escaped quotes and brackets inside strings, a library-named key below the top level, and text that
+// differs but is the same JSON (left to the parse).
+void TestSameSceneContentFastPath() {
+    const std::string a = R"({"assetFolders":["A"],"boxes":[{"id":0,"name":"x\"}],{"}],"libraryModels":[1],"skyTint":[1.0,2.0]})";
+    const std::string libOnly = R"({"assetFolders":["A","B"],"boxes":[{"id":0,"name":"x\"}],{"}],"libraryModels":[1,2],"skyTint":[1.0,2.0]})";
+    const std::string sceneDiff = R"({"assetFolders":["A"],"boxes":[{"id":0,"name":"x\"}],{!"}],"libraryModels":[1],"skyTint":[1.0,2.0]})";
+    const std::string noLibrary = R"({"boxes":[{"id":0,"name":"x\"}],{"}],"skyTint":[1.0,2.0]})";
+    const std::string pretty = "{ \"boxes\" : [ { \"id\" : 0, \"name\" : \"x\\\"}],{\" } ],\n \"skyTint\" : [1.0, 2.0] }";
+    const std::string nested = R"({"boxes":[{"assetFolders":1,"id":0}]})";
+    const std::string nestedDiff = R"({"boxes":[{"assetFolders":2,"id":0}]})";
+    const std::string extraKey = R"({"assetFolders":["A"],"boxes":[{"id":0,"name":"x\"}],{"}],"fog":1,"libraryModels":[1],"skyTint":[1.0,2.0]})";
+    CHECK(SceneSerializer::SameSceneContent(a, libOnly));
+    CHECK(SceneSerializer::SameSceneContent(a, noLibrary));
+    CHECK(!SceneSerializer::SameSceneContent(a, sceneDiff));
+    CHECK(SceneSerializer::SameSceneContent(a, pretty)); // different text, same JSON: the parse decides
+    const std::string reordered = R"({"skyTint":[1.0,2.0],"libraryModels":[1],"boxes":[{"id":0,"name":"x\"}],{"}],"assetFolders":["A"]})";
+    CHECK(SceneSerializer::SameSceneContent(a, reordered)); // same members in another order: the parse decides
+    CHECK(SceneSerializer::SameSceneContent(reordered, a));
+    CHECK(!SceneSerializer::SameSceneContent(nested, nestedDiff)); // only top-level library keys are left out
+    CHECK(!SceneSerializer::SameSceneContent(a, extraKey));
+    CHECK(!SceneSerializer::SameSceneContent(extraKey, a));
+    CHECK(!SceneSerializer::SameSceneContent(a, "{\"boxes\":")); // cut short: neither path takes it
+    CHECK(SceneSerializer::SameSceneContent("{}", R"({"libraryModels":[]})"));
+}
+
 void TestUndoDeltaChain() {
     const std::string s1 = R"({"entities":[{"name":"A","x":1}],"sky":1})";
     const std::string s2 = R"({"entities":[{"name":"A","x":2}],"sky":1})";
@@ -1337,6 +1363,7 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor prefs v2: clean view migration, restore defaults, per-scene cameras",TestPrefsMigrationToCleanView);
     tests.emplace_back("Editor search: filters, t: / l: syntax, search tokens",TestEditorSearch);
     tests.push_back({"UndoDeltaChain", TestUndoDeltaChain});
+    tests.emplace_back("SameSceneContent: no-parse path matches the parse",TestSameSceneContentFastPath);
     tests.emplace_back("Undo in place: which steps qualify (move / rotate / scale / rename only)",TestUndoInPlaceClassify);
     tests.emplace_back("Undo in place: move / rename undo and redo match the full reload; structural steps reload",TestUndoInPlaceMatchesReload);
     tests.emplace_back("Auto-save from the undo snapshot writes what Save writes",TestAutoSaveFromUndoSnapshot);
