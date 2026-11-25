@@ -3,6 +3,8 @@
 #include "AssetDatabase.h"
 #include "Core/Paths.h"
 #include <algorithm>
+#include <chrono>
+#include <thread>
 #include <cmath>
 #include <filesystem>
 
@@ -70,27 +72,15 @@ void FreeSlot(uint32_t index) {
 
 } // namespace AudioInternal
 
-bool AudioEngine::Load(const std::string& path) {
-    if (g_Audio.Preloaded.find(path) != g_Audio.Preloaded.end()) return true; // already preloaded
-    if (g_Audio.LoadFailed.count(path)) return false;                    // failed before (logged then); Reload(path) lifts it
-
-    // Force the decode to the engine's own output format/rate so playing a preloaded clip needs
-    // no per-instance resample - just a straight PCM copy into a fresh ma_audio_buffer.
-    ma_decoder_config config = ma_decoder_config_init(
-        ma_format_f32,
-        g_Audio.Initialized ? ma_engine_get_channels(&g_Audio.Engine) : 2,
-        g_Audio.Initialized ? ma_engine_get_sample_rate(&g_Audio.Engine) : 48000);
-
+namespace {
+// `path` decoded whole into the engine's own output format/rate (PreloadDecodeFormat), so playing a preloaded clip
+// needs no per-instance resample - just a straight PCM copy into a fresh ma_audio_buffer. Null when it won't decode.
+// No engine state: safe on any thread.
+std::shared_ptr<PreloadedClip> DecodeClip(const std::string& path, AudioEngine::PreloadFormat format) {
+    ma_decoder_config config = ma_decoder_config_init(ma_format_f32, format.Channels, format.SampleRate);
     ma_uint64 frameCount = 0;
     void* pFrames = nullptr;
-    if (ma_decode_file(path.c_str(), &config, &frameCount, &pFrames) != MA_SUCCESS) {
-        if (!AssetDatabase::IsUnfetchedExternal(path)) { // a Drive file not fetched yet: the scan's warning counts it
-            Log::Error("Audio: failed to preload '" + path + "'.", LogContext::Asset(path));
-            g_Audio.LoadFailed.insert(path);
-        }
-        return false;
-    }
-
+    if (ma_decode_file(path.c_str(), &config, &frameCount, &pFrames) != MA_SUCCESS) return nullptr;
     auto clip = std::make_shared<PreloadedClip>();
     clip->Format = config.format;
     clip->Channels = config.channels;
@@ -100,7 +90,75 @@ bool AudioEngine::Load(const std::string& path) {
     const uint8_t* begin = static_cast<const uint8_t*>(pFrames);
     clip->Data.assign(begin, begin + bytes);
     ma_free(pFrames, nullptr);
+    return clip;
+}
 
+// Load's failure: logged and remembered (Reload(path) lifts it) - unless it is a Drive file not fetched yet, which the
+// asset scan's warning already counts.
+void NoteLoadFailed(const std::string& path) {
+    if (AssetDatabase::IsUnfetchedExternal(path)) return;
+    Log::Error("Audio: failed to preload '" + path + "'.", LogContext::Asset(path));
+    g_Audio.LoadFailed.insert(path);
+}
+} // namespace
+
+struct AudioEngine::DecodedSounds {
+    std::vector<std::pair<std::string, std::shared_ptr<PreloadedClip>>> Clips; // null: the file wouldn't decode
+};
+
+AudioEngine::PreloadFormat AudioEngine::PreloadDecodeFormat() {
+    PreloadFormat f;
+    if (g_Audio.Initialized) {
+        f.Channels = ma_engine_get_channels(&g_Audio.Engine);
+        f.SampleRate = ma_engine_get_sample_rate(&g_Audio.Engine);
+    }
+    return f;
+}
+
+std::shared_ptr<AudioEngine::DecodedSounds> AudioEngine::DecodeForPreload(const std::vector<std::string>& paths,
+                                                                          PreloadFormat format, const std::atomic<bool>* cancel,
+                                                                          std::chrono::microseconds pause) {
+    auto out = std::make_shared<DecodedSounds>();
+    out->Clips.reserve(paths.size());
+    for (const std::string& p : paths) {
+        if (cancel && cancel->load(std::memory_order_relaxed)) break;
+        out->Clips.emplace_back(p, DecodeClip(p, format));
+        if (pause.count() > 0) std::this_thread::sleep_for(pause); // a breather between files for the frames it overlaps
+    }
+    return out;
+}
+
+int AudioEngine::AdoptPreloaded(DecodedSounds& sounds) {
+    int adopted = 0;
+    for (auto& [path, clip] : sounds.Clips) {
+        if (g_Audio.Preloaded.count(path) || g_Audio.LoadFailed.count(path)) continue; // Load or Reload got there first
+        if (!clip) { NoteLoadFailed(path); continue; }
+        g_Audio.Preloaded.emplace(path, std::move(clip));
+        ++adopted;
+    }
+    sounds.Clips.clear();
+    return adopted;
+}
+
+std::size_t AudioEngine::DecodedBytes(const DecodedSounds& sounds) {
+    std::size_t n = 0;
+    for (const auto& [path, clip] : sounds.Clips)
+        if (clip) n += clip->Data.size();
+    return n;
+}
+
+int AudioEngine::DecodedCount(const DecodedSounds& sounds) { return (int)sounds.Clips.size(); }
+
+bool AudioEngine::IsPreloaded(const std::string& path) { return g_Audio.Preloaded.count(path) != 0; }
+
+bool AudioEngine::Load(const std::string& path) {
+    if (g_Audio.Preloaded.find(path) != g_Audio.Preloaded.end()) return true; // already preloaded
+    if (g_Audio.LoadFailed.count(path)) return false;                    // failed before (logged then); Reload(path) lifts it
+    std::shared_ptr<PreloadedClip> clip = DecodeClip(path, PreloadDecodeFormat());
+    if (!clip) {
+        NoteLoadFailed(path);
+        return false;
+    }
     g_Audio.Preloaded.emplace(path, std::move(clip));
     return true;
 }

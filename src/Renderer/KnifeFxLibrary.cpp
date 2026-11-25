@@ -54,22 +54,42 @@ unsigned Upload(const std::vector<std::uint8_t>& data, int layers, int size, int
 }
 } // namespace
 
-bool KnifeFxLibrary::Load() {
-    if (m_LoadTried) return m_Loaded;
-    m_LoadTried = true;
+struct KnifeFxLibrary::FileData {
+    std::vector<std::pair<int, KnifeFxImport::LibraryData>> Libs; // library index, parsed
+    std::vector<std::string> Errors;                               // logged by Load, on the main thread
+};
+
+std::shared_ptr<KnifeFxLibrary::FileData> KnifeFxLibrary::ReadFiles(const std::atomic<bool>* cancel) {
     namespace fs = std::filesystem;
+    auto out = std::make_shared<FileData>();
     const fs::path dir = fs::u8path(ProjectPaths::Resolve("assets/Effects/Knife"));
-    size_t bytes = 0;
     for (int l = 0; l < (int)KnifeFxImport::Library::Count; ++l) {
-        const auto lib = (KnifeFxImport::Library)l;
-        const std::string path = (dir / KnifeFxImport::LibraryFile(lib)).u8string();
+        if (cancel && cancel->load(std::memory_order_relaxed)) break;
+        const std::string path = (dir / KnifeFxImport::LibraryFile((KnifeFxImport::Library)l)).u8string();
         if (!fs::exists(fs::u8path(path))) continue;
         KnifeFxImport::LibraryData data;
         std::string err;
-        if (!KnifeFxImport::ReadLibrary(path, data, &err)) {
-            Log::Error("KnifeFx: " + path + ": " + err);
-            continue;
-        }
+        if (!KnifeFxImport::ReadLibrary(path, data, &err)) out->Errors.push_back("KnifeFx: " + path + ": " + err);
+        else out->Libs.emplace_back(l, std::move(data));
+    }
+    return out;
+}
+
+std::size_t KnifeFxLibrary::Bytes(const FileData& files) {
+    std::size_t n = 0;
+    for (const auto& [l, data] : files.Libs) n += data.Color.size() + data.Normal.size();
+    return n;
+}
+
+bool KnifeFxLibrary::Load(const FileData* prefetched) {
+    if (m_LoadTried) return m_Loaded;
+    m_LoadTried = true;
+    std::shared_ptr<FileData> read;
+    if (!prefetched) prefetched = (read = ReadFiles()).get();
+    for (const std::string& e : prefetched->Errors) Log::Error(e);
+    size_t bytes = 0;
+    for (const auto& [l, data] : prefetched->Libs) {
+        const auto lib = (KnifeFxImport::Library)l;
         const auto& h = data.Header;
         m_Color[l] = Upload(data.Color, (int)h.ColorLayers, (int)h.Size, (int)h.Mips, GL_COMPRESSED_RGBA_S3TC_DXT5_EXT);
         m_Normal[l] = Upload(data.Normal, (int)h.NormalLayers, (int)h.Size, (int)h.Mips, GL_COMPRESSED_RG_RGTC2);

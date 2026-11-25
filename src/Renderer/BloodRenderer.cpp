@@ -72,29 +72,52 @@ int BloodRenderer::SimIndex(const std::string& name) const {
     return -1;
 }
 
-bool BloodRenderer::Load() {
-    if (m_LoadTried) return m_Loaded;
-    m_LoadTried = true;
+struct BloodRenderer::FileData {
+    bool AnyFiles = false;
+    std::vector<std::pair<std::string, BloodFxImport::VatData>> Sims; // path, parsed
+    std::vector<std::string> Errors;                                   // logged by Load, on the main thread
+};
+
+std::shared_ptr<BloodRenderer::FileData> BloodRenderer::ReadFiles(const std::atomic<bool>* cancel) {
     namespace fs = std::filesystem;
+    auto out = std::make_shared<FileData>();
     const fs::path dir = fs::u8path(ProjectPaths::Resolve("assets/Effects/Blood"));
     std::error_code ec;
     std::vector<std::string> files;
     for (const auto& e : fs::directory_iterator(dir, ec))
         if (e.path().extension() == ".bvat") files.push_back(e.path().u8string());
     std::sort(files.begin(), files.end());
-    if (files.empty()) {
+    out->AnyFiles = !files.empty();
+    for (const std::string& f : files) {
+        if (cancel && cancel->load(std::memory_order_relaxed)) break;
+        BloodFxImport::VatData vat;
+        std::string err;
+        if (!BloodFxImport::ReadVat(f, vat, &err)) out->Errors.push_back("Blood: " + f + ": " + err);
+        else out->Sims.emplace_back(f, std::move(vat));
+    }
+    return out;
+}
+
+std::size_t BloodRenderer::Bytes(const FileData& files) {
+    std::size_t n = 0;
+    for (const auto& [path, vat] : files.Sims) n += vat.Texels.size() * sizeof(vat.Texels[0]);
+    return n;
+}
+
+bool BloodRenderer::Load(const FileData* prefetched) {
+    if (m_LoadTried) return m_Loaded;
+    m_LoadTried = true;
+    namespace fs = std::filesystem;
+    std::shared_ptr<FileData> read;
+    if (!prefetched) prefetched = (read = ReadFiles()).get();
+    if (!prefetched->AnyFiles) {
         Log::Warn("Blood: no volumetric blood data in assets/Effects/Blood (convert the VolumetricBloodFX package with --import-blood <dir>)");
         return false;
     }
+    for (const std::string& e : prefetched->Errors) Log::Error(e);
     std::vector<glm::vec4> frameBounds;
     size_t bytes = 0;
-    for (const std::string& f : files) {
-        BloodFxImport::VatData vat;
-        std::string err;
-        if (!BloodFxImport::ReadVat(f, vat, &err)) {
-            Log::Error("Blood: " + f + ": " + err);
-            continue;
-        }
+    for (const auto& [f, vat] : prefetched->Sims) {
         const auto& h = vat.Header;
         GpuSim g;
         g.FrameBase = (int)frameBounds.size();
