@@ -531,8 +531,7 @@ void ShaderAsset::CompileVariant(ShaderVariantKey key) {
             if (!On) return;
             const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Start).count();
             OpenProfile::Add("shader: compile + link a variant", ms);
-            std::printf("[OpenProfile] variant %8.1f ms  %s
-", ms, Name.c_str());
+            std::printf("[OpenProfile] variant %8.1f ms  %s\n", ms, Name.c_str());
         }
     } noteCompile{profiled, debugName, compileStart};
     try {
