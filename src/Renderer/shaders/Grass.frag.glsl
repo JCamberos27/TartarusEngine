@@ -19,6 +19,7 @@ layout(location = 1) out vec2 oVelocity;
 struct GrassArea { vec4 Origin; vec4 Axes; vec4 Size; vec4 Shape; vec4 Base; vec4 Tip; vec4 Dry; vec4 Lod; vec4 Wind; vec4 Map; };
 layout(std430, binding = 30) readonly buffer GrassAreas { GrassArea uAreas[]; };
 uniform int uDepthOnly;
+uniform int uGrassProbe; // TARTARUS_GRASS_PROBE bits (GrassRenderer.h kProbe*): measurement only
 
 const float kVelocityUnknown = 4.0;
 
@@ -58,6 +59,7 @@ void main() {
     albedo = max(albedo * (1.0 + (rnd - 0.5) * 2.0 * A.Base.a), vec3(0.0));
     float occl = mix(0.22, 1.0, pow(gT, 0.65));
     bool receive = A.Dry.a > 0.5;
+    if ((uGrassProbe & 2) != 0) { FragColor = vec4(albedo * occl, 1.0); return; }
 
     vec3 V = normalize(uViewPos - vWorldPos);
     vec3 N = dot(vNormal, vNormal) > 1e-12 ? normalize(vNormal) : vec3(0.0, 1.0, 0.0);
@@ -73,13 +75,13 @@ void main() {
         // centimetres toward the light, clear of the blade's own depth there: the neighbours' shadows land, its own
         // doesn't. The offset normal is the light's, not the blade's tilted, swaying one (that broke the shadow into
         // acne and crawling speckles).
-        float shadow = uLights[i].Params.y >= 0.0 ? (receive ? SunShadow(vWorldPos + L * 0.04, L, L) : 1.0) * CloudShadow(vWorldPos) : 1.0;
+        float shadow = (uGrassProbe & 4) != 0 ? 1.0 : uLights[i].Params.y >= 0.0 ? (receive ? SunShadow(vWorldPos + L * 0.04, L, L) : 1.0) * CloudShadow(vWorldPos) : 1.0;
         Lo += GrassLight(albedo, N, V, L, uLights[i].ColorRange.rgb * shadow, occl);
     }
     bool clustered = uClusterEnabled == 1;
     uint cluster = clustered ? clusterIndex() : 0u;
     uint lightOffset = clustered ? uClusterRange[cluster].offset : 0u;
-    uint lightCount = clustered ? uClusterRange[cluster].count : uLightCount;
+    uint lightCount = (uGrassProbe & 8) != 0 ? 0u : clustered ? uClusterRange[cluster].count : uLightCount;
     for (uint j = 0u; j < lightCount; ++j) {
         uint li = clustered ? uClusterLightIndices[lightOffset + j] : j;
         if (!clustered && int(uLights[li].PositionType.w) == 0) continue;
@@ -91,9 +93,9 @@ void main() {
 
     // No SSAO: the blades aren't in its depth (SceneRenderer draws them in after its copy); the root darkening
     // (occl) is their occlusion.
-    vec3 irradiance = uIBLEnabled == 1 ? texture(uIrradianceMap, N).rgb * uIBLIntensity : vec3(0.03);
+    vec3 irradiance = (uIBLEnabled == 1 && (uGrassProbe & 32) == 0) ? texture(uIrradianceMap, N).rgb * uIBLIntensity : vec3(0.03);
     vec3 ambient = irradiance * albedo * occl;
-    vec3 color = ApplyVolumetricFog(ApplyAerialPerspective(ApplyFog(Lo + ambient)));
+    vec3 color = (uGrassProbe & 16) != 0 ? Lo + ambient : ApplyVolumetricFog(ApplyAerialPerspective(ApplyFog(Lo + ambient)));
     if (uApplyTonemap == 1) {
         color = color / (color + vec3(1.0));
         color = pow(color, vec3(1.0 / 2.2));

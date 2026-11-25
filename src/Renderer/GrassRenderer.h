@@ -39,6 +39,17 @@ public:
                                                     // blade is under a texel, its shadow lost in the PCF blur)
     static constexpr float kShadowDistance = 14.0f; // metres from the eye that blades cast shadows
 
+    // TARTARUS_GRASS_PROBE bits (measurement only, P-52): what the lit pass skips. Grass.frag.glsl reads the
+    // shading bits from uGrassProbe.
+    static constexpr int kProbeNoVelocity = 1;  // no TAA motion vectors (one BladePoint per vertex)
+    static constexpr int kProbeFlat       = 2;  // albedo only: no lights, shadows, ambient or fog
+    static constexpr int kProbeNoSun      = 4;  // sun shadow + cloud shadow lookups skipped
+    static constexpr int kProbeNoLocal    = 8;  // no clustered point/spot loop
+    static constexpr int kProbeNoFog      = 16; // no fog, aerial perspective or volumetric fog
+    static constexpr int kProbeNoIbl      = 32; // flat ambient instead of the irradiance cube
+    static constexpr int kProbeNoNear     = 64; // near (curved) blades not drawn, every pass
+    static constexpr int kProbeNoFar      = 128; // far (single triangle) blades not drawn, every pass
+
     // Cells (one blade each) per chunk side for `density` blades per square metre: a whole number of cells close
     // to kChunkSize metres, at least 1.
     static int CellsPerChunk(float density);

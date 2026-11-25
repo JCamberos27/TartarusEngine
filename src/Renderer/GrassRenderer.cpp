@@ -357,12 +357,13 @@ void GrassRenderer::Draw(Shader& prog, const glm::mat4& view, const glm::mat4& p
     glBindVertexArray(m_Vao);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, m_CmdBuf);
     GLCullOffScope cullOff; // blades are seen from both sides
+    static const int probe = Env::Int(Env::Var::GrassProbe, 0);
     prog.SetInt("uInstanceBase", 0);
     prog.SetInt("uSegments", nearSegments);
-    glDrawArraysIndirect(GL_TRIANGLE_STRIP, (const void*)0);
+    if (!(probe & kProbeNoNear)) glDrawArraysIndirect(GL_TRIANGLE_STRIP, (const void*)0);
     prog.SetInt("uInstanceBase", (int)kNearCap);
     prog.SetInt("uSegments", 1);
-    glDrawArraysIndirect(GL_TRIANGLE_STRIP, (const void*)(4 * sizeof(std::uint32_t)));
+    if (!(probe & kProbeNoFar)) glDrawArraysIndirect(GL_TRIANGLE_STRIP, (const void*)(4 * sizeof(std::uint32_t)));
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
     glBindVertexArray(0);
     GLStateCache::Invalidate();
@@ -399,6 +400,9 @@ void GrassRenderer::DrawLit(const glm::mat4& view, const glm::mat4& proj, bool d
     Shader& prog = *m_Draw;
     applyFrameState(prog);
     prog.Bind();
+    static const int probe = Env::Int(Env::Var::GrassProbe, 0);
+    prog.SetInt("uGrassProbe", probe);
+    if (probe & kProbeNoVelocity) prog.SetInt("uTaaVelocity", 0);
     prog.SetInt("uDepthOnly", 0);
     prog.SetInt("uObjectLayerBit", 1);
     prog.SetInt("uNoReceiveShadows", 0);

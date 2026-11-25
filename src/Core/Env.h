@@ -97,6 +97,7 @@
     X(NoEngineVariants, "TARTARUS_NO_ENGINE_VARIANTS", Flag, "disable engine shader variants")                        \
     X(NoFur, "TARTARUS_NO_FUR", Flag, "disable fur rendering")                                                        \
     X(NoGrass, "TARTARUS_NO_GRASS", Flag, "disable grass rendering")                                                  \
+    X(GrassProbe, "TARTARUS_GRASS_PROBE", Int, "grass lit-pass cost probe bits (GrassRenderer.h)")                    \
     X(NoImpostors, "TARTARUS_NO_IMPOSTORS", Flag, "draw the LOD levels instead of the octahedral impostors")          \
     X(ImpostorDistance, "TARTARUS_IMPOSTOR_DISTANCE", Float, "metres where the impostors start (overrides the sets')")  \
     X(NoSubstrate, "TARTARUS_NO_SUBSTRATE", Flag, "disable decal substrate")                                          \
