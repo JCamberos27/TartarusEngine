@@ -2524,9 +2524,8 @@ void TestPhysicalSky() {
     CHECK(clamped.Render.Sky.CloudsEnabled); // a non-boolean is ignored, keeping the default
 }
 
-// --- TextureCache: one texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's)
-// keeps both entries - they used to share one and evict each other every session, re-decoding (and re-compressing) both.
-// P-53: the size cap never evicts this session's working set, grows with it, and keeps 20 GB of disk free.
+// --- TextureCache. P-53: the size cap never evicts this session's working set (loaded, stored or requested), grows with
+// it, and keeps 20 GB of disk free.
 void TestTextureCachePinEvict() {
     constexpr uint64_t GiB = 1024ull * 1024 * 1024;
     constexpr uint64_t unknownFree = std::numeric_limits<uint64_t>::max();
@@ -2549,8 +2548,20 @@ void TestTextureCachePinEvict() {
     for (size_t i : v) CHECK(!e[i].Pinned);
     // Under the cap with plenty of disk: nothing.
     CHECK(TextureCache::ChooseEvictions({{"a", GiB, 0, false}}, 500 * GiB).empty());
+    // Pinned at request time (the async loader, before its decode): Prune keeps it, and the pin check doesn't expect it
+    // on disk yet.
+    const std::string queued = (std::filesystem::temp_directory_path() / "tt_cache_pin_request_test.png").string();
+    TextureImportSettings s;
+    s.MaxTextureSize = 333; // a variant nothing else uses
+    const int missingBefore = TextureCache::SessionEntriesMissing();
+    CHECK(!TextureCache::Pinned(queued, s));
+    TextureCache::Pin(queued, s);
+    CHECK(TextureCache::Pinned(queued, s));
+    CHECK(TextureCache::SessionEntriesMissing() == missingBefore);
 }
 
+// One texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's) keeps both
+// entries - they used to share one and evict each other every session, re-decoding (and re-compressing) both.
 void TestTextureCacheVariants() {
     const std::string src = (std::filesystem::temp_directory_path() / "tt_cache_variant_test.png").string();
     {
