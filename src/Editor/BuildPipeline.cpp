@@ -10,7 +10,10 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <map>
+#include <set>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -49,6 +52,22 @@ bool IsInside(const fs::path& child, const fs::path& parent) {
 }
 
 // Project folders that only matter to the editor.
+// The "scenes/..." paths a scene file names: files kept beside the scenes (a GI volume's bake file) that the scenes/
+// folder skip below would otherwise leave out of the build. A text scan, so any field naming one counts.
+std::vector<std::string> SceneFolderRefs(const fs::path& scene) {
+    std::vector<std::string> out;
+    std::ifstream f(scene, std::ios::binary);
+    const std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    static constexpr char kPrefix[] = "\"scenes/";
+    for (size_t at = text.find(kPrefix); at != std::string::npos; at = text.find(kPrefix, at + 1)) {
+        const size_t end = text.find('"', at + 1);
+        if (end == std::string::npos) break;
+        std::string ref = text.substr(at + 1, end - at - 1);
+        if (ref.find("..") == std::string::npos && ref.find('\\') == std::string::npos) out.push_back(std::move(ref));
+    }
+    return out;
+}
+
 bool IsEditorOnlyProjectDir(const std::string& name) {
     return name == "Library" || name == "screenshots" || name == "layouts" || name == "scenes";
 }
@@ -255,10 +274,18 @@ Report BuildUnguarded(const ProjectSettings::BuildSettings& s, Progress* progres
                 if (!copy.File(it->path(), out / "project" / "Library" / sub / name, "Cooked data")) return false;
             }
         }
+        std::set<std::string> sidecars; // files under scenes/ that a build scene names (a GI volume's "scenes/Forest.gi")
         for (const std::string& sc : s.Scenes) {
             if (!copy.File(projectRoot / sc, out / "project" / sc, "Scenes")) return false;
             const fs::path meta = projectRoot / (sc + ".meta");
             if (fs::exists(meta, ec) && !copy.File(meta, out / "project" / (sc + ".meta"), "Scenes")) return false;
+            for (std::string& ref : SceneFolderRefs(projectRoot / sc)) sidecars.insert(std::move(ref));
+        }
+        for (const std::string& ref : sidecars) {
+            std::error_code rec;
+            if (std::find(s.Scenes.begin(), s.Scenes.end(), ref) != s.Scenes.end() || !fs::is_regular_file(projectRoot / ref, rec))
+                continue;
+            if (!copy.File(projectRoot / ref, out / "project" / ref, "Scenes")) return false;
         }
         return true;
     };
