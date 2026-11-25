@@ -9,6 +9,7 @@
 #include "ClusterGrid.h"
 #include "Components.h"
 #include "Core/Env.h"
+#include "Renderer/TextureCache.h"
 #include "Core/FrameLoads.h"
 #include "Core/Paths.h"
 #include "Core/Profiler.h"
@@ -298,6 +299,17 @@ void SmokeHarness::LoadScene() {
                 (modelsAfter.HitMs - modelsBefore.HitMs) / 1000.0, modelsAfter.Cooked - modelsBefore.Cooked,
                 (modelsAfter.CookMs - modelsBefore.CookMs) / 1000.0);
     std::fflush(stdout);
+    // P-53 pin check: prune with the scene open, as an editor session's later prune would, under a deliberately
+    // small cap. The scene's own textures (loaded or stored by this process) must all survive.
+    if (const int pruneMb = Env::Int(Env::Var::TexturePruneAfterOpenMb, 0); pruneMb > 0 && m_SceneLoadOk) {
+        const TextureCache::PruneStats ps = TextureCache::Prune(nullptr, (uint64_t)pruneMb * 1024 * 1024);
+        constexpr double MB = 1024.0 * 1024.0;
+        std::printf("[SmokeTest] Texture cache pin check: %d entries %.0f MB, %d pinned %.0f MB, cap %.0f MB; evicted %d "
+                    "(%.0f MB), %d of them pinned%s\n",
+                    ps.Entries, ps.Bytes / MB, ps.Pinned, ps.PinnedBytes / MB, ps.CapBytes / MB, ps.Evicted,
+                    ps.EvictedBytes / MB, ps.EvictedPinned, ps.EvictedPinned == 0 ? "" : "  FAIL");
+        std::fflush(stdout);
+    }
     if (m_SceneLoadOk) {
         SmokeChecks::SceneLoaded(world, m_Ctx.assets, path, [this](const std::string& label) { MemSnapshot(label); });
         FirstPersonPresentation::PrefetchPlayAssets(world, m_Ctx.assets); // as the editor's scene open

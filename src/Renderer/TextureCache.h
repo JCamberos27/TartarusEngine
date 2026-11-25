@@ -69,11 +69,17 @@ std::string EntryPath(const std::string& sourcePath, const TextureImportSettings
 // recently used (Load/Store refresh an entry's timestamp) are deleted until they fit, except the
 // entries this process loaded or stored (P-53: the open scene's working set is never evicted). Temp files left by
 // an interrupted Store are removed once they're over an hour old.
-void Prune(const std::function<std::optional<uint64_t>(const std::string& sourcePath)>& currentSettingsHash = nullptr);
+// `minCapBytes` (0 = the 8 GB default) lowers the cap's floor: tests and the smoke harness's pin check.
+struct PruneStats {
+    int Entries = 0, Pinned = 0, Evicted = 0, EvictedPinned = 0; // after the stale sweep
+    uint64_t Bytes = 0, PinnedBytes = 0, EvictedBytes = 0, CapBytes = 0;
+};
+PruneStats Prune(const std::function<std::optional<uint64_t>(const std::string& sourcePath)>& currentSettingsHash = nullptr,
+                 uint64_t minCapBytes = 0);
 
 // P-53 - the size cap Prune enforces: at least 8 GB, and 1.25x the bytes this session loaded or stored
 // (its working set) when that's larger. Those entries are pinned: never evicted, whatever the cap.
-uint64_t CapBytes(uint64_t pinnedBytes);
+uint64_t CapBytes(uint64_t pinnedBytes, uint64_t minCapBytes = 0);
 
 // One valid entry as Prune's size cap sees it.
 struct EntryInfo {
@@ -84,7 +90,7 @@ struct EntryInfo {
 };
 // Which entries (indices) the size cap evicts: least recently used first, never a pinned one, until the
 // rest fits CapBytes(pinned bytes) and leaves at least 20 GB of `freeDiskBytes` (UINT64_MAX = unknown).
-std::vector<size_t> ChooseEvictions(const std::vector<EntryInfo>& entries, uint64_t freeDiskBytes);
+std::vector<size_t> ChooseEvictions(const std::vector<EntryInfo>& entries, uint64_t freeDiskBytes, uint64_t minCapBytes = 0);
 
 // Total bytes and entry count currently on disk (#159) - a directory walk, so callers showing
 // it in the UI should cache the result rather than calling it every frame.

@@ -268,17 +268,17 @@ void Store(const std::string& sourcePath, const TextureImportSettings& settings,
     else MarkUsedThisSession(finalPath);
 }
 
-uint64_t CapBytes(uint64_t pinnedBytes) {
-    return std::max(kMinCapBytes, pinnedBytes + pinnedBytes / 4);
+uint64_t CapBytes(uint64_t pinnedBytes, uint64_t minCapBytes) {
+    return std::max(minCapBytes ? minCapBytes : kMinCapBytes, pinnedBytes + pinnedBytes / 4);
 }
 
-std::vector<size_t> ChooseEvictions(const std::vector<EntryInfo>& entries, uint64_t freeDiskBytes) {
+std::vector<size_t> ChooseEvictions(const std::vector<EntryInfo>& entries, uint64_t freeDiskBytes, uint64_t minCapBytes) {
     uint64_t total = 0, pinned = 0;
     for (const EntryInfo& e : entries) {
         total += e.Bytes;
         if (e.Pinned) pinned += e.Bytes;
     }
-    uint64_t cap = CapBytes(pinned);
+    uint64_t cap = CapBytes(pinned, minCapBytes);
     if (freeDiskBytes != std::numeric_limits<uint64_t>::max()) {
         // Deleting entries frees their bytes: the directory may hold at most (total + free) - the reserve.
         const uint64_t room = total + freeDiskBytes;
@@ -299,9 +299,11 @@ std::vector<size_t> ChooseEvictions(const std::vector<EntryInfo>& entries, uint6
     return victims;
 }
 
-void Prune(const std::function<std::optional<uint64_t>(const std::string& sourcePath)>& currentSettingsHash) {
+PruneStats Prune(const std::function<std::optional<uint64_t>(const std::string& sourcePath)>& currentSettingsHash,
+                 uint64_t minCapBytes) {
+    PruneStats stats;
     std::error_code ec;
-    if (!std::filesystem::is_directory(CacheDir(), ec)) return; // no cache directory yet: nothing to prune
+    if (!std::filesystem::is_directory(CacheDir(), ec)) return stats; // no cache directory yet: nothing to prune
 
     std::vector<EntryInfo> survivors; // valid entries, candidates for the size cap below
     const auto now = std::filesystem::file_time_type::clock::now();
@@ -381,10 +383,20 @@ void Prune(const std::function<std::optional<uint64_t>(const std::string& source
     std::error_code spaceEc;
     const auto space = std::filesystem::space(CacheDir(), spaceEc);
     const uint64_t freeBytes = spaceEc ? std::numeric_limits<uint64_t>::max() : (uint64_t)space.available;
-    for (size_t i : ChooseEvictions(survivors, freeBytes)) {
-        std::error_code rmEc;
-        std::filesystem::remove(survivors[i].Path, rmEc);
+    for (const EntryInfo& e : survivors) {
+        ++stats.Entries;
+        stats.Bytes += e.Bytes;
+        if (e.Pinned) { ++stats.Pinned; stats.PinnedBytes += e.Bytes; }
     }
+    stats.CapBytes = CapBytes(stats.PinnedBytes, minCapBytes);
+    for (size_t i : ChooseEvictions(survivors, freeBytes, minCapBytes)) {
+        std::error_code rmEc;
+        if (!std::filesystem::remove(survivors[i].Path, rmEc)) continue;
+        ++stats.Evicted;
+        stats.EvictedBytes += survivors[i].Bytes;
+        if (survivors[i].Pinned) ++stats.EvictedPinned; // must stay 0: ChooseEvictions never picks a pinned entry
+    }
+    return stats;
 }
 
 Usage DiskUsage() {
