@@ -61,20 +61,19 @@ void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const s
     thread_local IK::Pose pose;
     thread_local std::vector<int> bones, slot; // slot: the bone's place in the chain (its weight and limit)
     const auto& list = models ? *models : m_Models;
-    for (size_t k = 0; k < list.size(); ++k) {
-        const auto& mp = list[k];
-        if (!mp) continue;
-        Model& m = *mp;
+    // The turn on one piece (k: its place in `list`); false when it doesn't turn there.
+    auto turnPiece = [&](size_t k) {
+        Model& m = *list[k];
         pose = m.AppliedLocalPose();
-        if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
+        if (pose.empty() || (int)pose.size() != m.NodeCount()) return false;
         bones.clear();
         slot.clear();
         for (size_t c = 0; c < chain.size(); ++c)
             if (const int i = m.NodeIndex(Bone(chain[c])); i >= 0) { bones.push_back(i); slot.push_back((int)c); }
-        if (bones.empty()) continue;
+        if (bones.empty()) return false;
         // A piece skinning nothing the chain moves (legs, feet) draws the same either way. The driver always
         // turns: its head and shoulders are read for the camera and the arms.
-        if ((k >= m_Pieces.size() || m_Pieces[k] != m_Driver) && !SkinsUnder(m, bones, chain.front())) continue;
+        if ((k >= m_Pieces.size() || m_Pieces[k] != m_Driver) && !SkinsUnder(m, bones, chain.front())) return false;
         parents.resize(pose.size());
         for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
         // Only the chain and what's above it are read before ApplyLocalPose re-derives the rest.
@@ -105,7 +104,58 @@ void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const s
             IK::OffsetBoneOnly(pose, parents, globals, i, glm::vec3(0.0f), step, IK::Position(globals[i]));
         }
         m.ApplyLocalPose(pose);
+        return true;
+    };
+    // The body's own pieces: turned once, on the driver, and the chain's bones (and the pelvis, when it takes a share)
+    // copied to every piece that skins under the chain - the same pieces that turned before. Another list (the twins),
+    // or no driver piece: every piece turns its own.
+    size_t driver = list.size();
+    if (!models)
+        for (size_t k = 0; k < list.size() && k < m_Pieces.size(); ++k)
+            if (m_Pieces[k] == m_Driver && list[k]) driver = k;
+    if (driver == list.size() || !turnPiece(driver)) {
+        for (size_t k = 0; k < list.size(); ++k)
+            if (list[k] && k != driver) turnPiece(k);
+        return;
     }
+    const Model& src = *list[driver];
+    const IK::Pose& from = src.AppliedLocalPose();
+    const bool pelvisToo = dist && std::clamp(dist->PelvisAlpha, 0.0f, 1.0f) > 0.0f;
+    for (size_t k = 0; k < list.size(); ++k) {
+        if (k == driver || !list[k]) continue;
+        Model& m = *list[k];
+        pose = m.AppliedLocalPose();
+        if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
+        bones.clear();
+        for (size_t c = 0; c < chain.size(); ++c)
+            if (const int i = m.NodeIndex(Bone(chain[c])); i >= 0) bones.push_back(i);
+        if (bones.empty() || !SkinsUnder(m, bones, chain.front())) continue; // as turnPiece skips it
+        // The pelvis's local is only the driver's turn when it hangs under the same nodes (some pieces' skeletons have a
+        // root node more or less above it): otherwise the piece turns in its own frame, as before.
+        if (pelvisToo) {
+            const int i = src.NodeIndex(Bone(FPBody::kBonePelvis)), o = m.NodeIndex(Bone(FPBody::kBonePelvis));
+            if (i >= 0 && o >= 0 && !SameAncestry(src, i, m, o)) {
+                turnPiece(k);
+                continue;
+            }
+        }
+        bool changed = false;
+        auto copyBone = [&](const std::string& name) {
+            if (const int i = src.NodeIndex(Bone(name)), o = m.NodeIndex(Bone(name)); i >= 0 && o >= 0) {
+                pose[(size_t)o] = from[(size_t)i];
+                changed = true;
+            }
+        };
+        for (const std::string& b : chain) copyBone(b);
+        if (pelvisToo) copyBone(FPBody::kBonePelvis);
+        if (changed) m.ApplyLocalPose(pose);
+    }
+}
+// Node `a` of `ma` and node `b` of `mb` under the same chain of parents, by name, up to the root.
+bool FirstPersonBody::SameAncestry(const Model& ma, int a, const Model& mb, int b) {
+    for (a = ma.NodeParent(a), b = mb.NodeParent(b); a >= 0 && b >= 0; a = ma.NodeParent(a), b = mb.NodeParent(b))
+        if (ma.NodeName(a) != mb.NodeName(b)) return false;
+    return a < 0 && b < 0;
 }
 bool FirstPersonBody::SkinsUnder(const Model& m, const std::vector<int>& roots, const std::string& key) {
     const auto id = std::make_pair(&m, key);

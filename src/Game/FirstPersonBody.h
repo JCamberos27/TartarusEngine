@@ -340,6 +340,7 @@ private:
     bool SkinsUpperBody(const Model& m);
     // The same question for any set of roots (a chain's bones), cached by the chain's first name.
     std::map<std::pair<const Model*, std::string>, bool> m_SkinsUnder;
+    static bool SameAncestry(const Model& ma, int a, const Model& mb, int b); // the same parents, by name, to the root
     bool SkinsUnder(const Model& m, const std::vector<int>& roots, const std::string& key);
     float m_TwinHandGap[2] = {0.0f, 0.0f}; // m each world hand ended up off the world gun's grip (the twins' solve)
     FirstPersonArmTwist m_ArmTwist;
