@@ -182,17 +182,10 @@ struct Material {
         return m_HashCache.Value;
     }
     // What the depth-only draws (shadow maps, the depth pre-pass) read from a material: the cutout (AlphaClip,
-    // AlphaCutoff, the albedo map and its UV tiling/offset), the foliage sway, Double Sided and vertex colour.
-    std::uint64_t DepthKey() const {
-        const float scalars[] = {AlphaCutoff, UVTiling.x, UVTiling.y, UVOffset.x, UVOffset.y,
-                                 WindStrength, WindFrequency, WindFlutter, WindHeight};
-        std::uint64_t h = 0xcbf29ce484222325ull;
-        const auto mix = [&h](std::uint64_t w) { h = (h ^ w) * 0x100000001b3ull; h ^= h >> 29; };
-        for (const float f : scalars) { std::uint32_t w; std::memcpy(&w, &f, 4); mix(w); }
-        mix((std::uint64_t)(std::uintptr_t)AlbedoMap.get());
-        mix((AlphaClip ? 1u : 0u) | (Foliage ? 2u : 0u) | (DoubleSided ? 4u : 0u) | (UseVertexColor ? 8u : 0u));
-        return h;
-    }
+    // AlphaCutoff, the albedo map and its UV tiling/offset), the foliage sway, Double Sided and vertex colour. For a
+    // cutout it also counts whether the albedo map has landed: a streamed texture keeps its pointer and only turns
+    // valid when its upload finishes, and the depth draw cuts out only from then on.
+    TARTARUS_CORE_API std::uint64_t DepthKey() const;
     // A new frame: every material's Hash() is worked out again on first use (values may have been edited since).
     static void NextHashFrame() {
         if (++s_HashFrame == 0) s_HashFrame = 1;

@@ -1983,11 +1983,10 @@ void TestLocalCasterHashMaterialContent() {
     CHECK(h1 != h0);
     CHECK(RenderSettingsEpoch() != e0);      // the hash's depth watch reported it
     const std::uint32_t e1 = RenderSettingsEpoch();
-    leaf->Mat.BaseColor = glm::vec3(0.2f);   // colour only: not a depth field, nothing reported
-    sig();
+    leaf->Mat.BaseColor = glm::vec3(0.2f);   // colour only: not a depth field, nothing reported, no redraw
+    CHECK(sig() == h1);
     CHECK(RenderSettingsEpoch() == e1);
     leaf->Mat.BaseColor = glm::vec3(1.0f);
-    CHECK(sig() == h1);
 
     leaf->Mat.DoubleSided = true;            // the depth draw's cull
     CHECK(sig() != h1);

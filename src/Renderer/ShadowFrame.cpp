@@ -86,14 +86,17 @@ std::uint64_t LocalCasterHash(std::uint32_t id, const Model* model, const std::v
     h = HashWord(h, (std::uint64_t)(std::uintptr_t)model);
     h = HashWord(h, (std::uint64_t)materials.size());
     for (const auto& m : materials) h = HashWord(h, (std::uint64_t)(std::uintptr_t)m.get());
-    // ...and what each mesh's depth draw reads from its material (queue, cull, cutout, sway: DepthMeshState), so an
-    // edit written into the same MaterialAsset (a cutoff slider, a texture swap, a reload) redraws the light.
+    // ...and what each mesh's depth draw reads from its material (casts at all + cull: DepthMeshState; cutout, sway:
+    // Material::DepthKey), so an edit written into the same MaterialAsset (a cutoff slider, a texture swap, a reload, a
+    // cutout map that finished streaming) redraws the light, while a colour edit doesn't.
     if (model)
         for (int i = 0; i < model->MeshCount(); ++i) {
             int cull = 0;
             std::uint64_t stateKey = 0;
-            const bool casts = model->DepthMeshState(i, materials, cull, stateKey);
-            h = HashWord(h, casts ? stateKey ^ ((std::uint64_t)(std::uint32_t)cull << 40) : ~0ull);
+            if (!model->DepthMeshState(i, materials, cull, stateKey)) { h = HashWord(h, ~0ull); continue; }
+            const bool hasSlot = i < (int)materials.size() && materials[i];
+            const Material& mat = hasSlot ? materials[i]->Mat : model->MeshMaterial(i);
+            h = HashWord(h, mat.DepthKey() ^ ((std::uint64_t)(std::uint32_t)cull << 40));
         }
     std::uint64_t xw[8];
     std::memcpy(xw, &xform, sizeof xw);
