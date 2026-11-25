@@ -298,10 +298,11 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
 }
 } // namespace
 
-// G5-0: the CPU time a draw call on a skinned model takes (Model::SkinFrameStats::PosedDrawMs).
+// G5-0: the CPU time a draw call on a skinned model takes (Model::SkinFrameStats::PosedDrawMs), only while
+// --perf-bench counts (Model::SkinStatsEnabled): no clock reads otherwise.
 namespace {
 struct PosedDrawTimer {
-    explicit PosedDrawTimer(bool skinned) : On(skinned) {
+    explicit PosedDrawTimer(bool skinned) : On(skinned && Model::SkinStatsEnabled()) {
         if (On) Start = std::chrono::steady_clock::now();
     }
     ~PosedDrawTimer() {

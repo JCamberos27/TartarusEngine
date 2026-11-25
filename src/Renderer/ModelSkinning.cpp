@@ -62,6 +62,7 @@ std::uint64_t g_SkinFrame = 1; // PreSkinRange::Frame of the skinning the buffer
 std::uint64_t g_SkinLayout = 1;
 // G5-0 counters (Model::TakeSkinFrameStats): this frame's, the models the last PreSkin dispatched (with their vertex
 // counts) and the skinned models a pass drew since then. Pointers are only compared, never followed.
+bool g_SkinStatsOn = false; // Model::SetSkinStatsEnabled: off unless --perf-bench asks
 Model::SkinFrameStats g_SkinStats;
 std::vector<std::pair<const void*, std::uint64_t>> g_LastDispatched;
 std::unordered_set<const void*> g_DrawnSinceSkin;
@@ -168,6 +169,17 @@ void Model::BindBonePalette(const std::vector<glm::mat4>& palette, int count) co
     BindBoneRange((GLintptr)u.Offset, bytes);
 }
 
+void Model::SetSkinStatsEnabled(bool on) {
+    g_SkinStatsOn = on;
+    if (!on) {
+        g_SkinStats = {};
+        g_LastDispatched.clear();
+        g_DrawnSinceSkin.clear();
+    }
+}
+
+bool Model::SkinStatsEnabled() { return g_SkinStatsOn; }
+
 Model::SkinFrameStats Model::TakeSkinFrameStats() {
     const SkinFrameStats s = g_SkinStats;
     g_SkinStats = {};
@@ -182,7 +194,7 @@ void Model::NotePosedDraw(double ms) {
 bool Model::UploadBoneMatrices(Shader& shader) const {
     // #98 — skin whenever there are bones: the clip's pose while playing, else the bind pose.
     const bool skinning = m_D->BoneCounter > 0;
-    if (skinning) g_DrawnSinceSkin.insert(this); // G5-0: a pass drew it
+    if (skinning && g_SkinStatsOn) g_DrawnSinceSkin.insert(this); // G5-0: a pass drew it
     const MaterialLocs& locs = CachedMaterialLocs(shader);
     EnsureBoneRing();
     EnsureSkinnedBinding();
@@ -208,13 +220,16 @@ bool Model::UploadBoneMatrices(Shader& shader) const {
 
 void Model::PreSkin(const std::vector<Model*>& models) {
     // G5-0: what the last call skinned and no pass drew since was skinned for nothing (off-screen).
-    for (const auto& [model, verts] : g_LastDispatched)
-        if (!g_DrawnSinceSkin.count(model)) {
-            ++g_SkinStats.OffscreenModels;
-            g_SkinStats.OffscreenVertices += verts;
-        }
-    g_LastDispatched.clear();
-    g_DrawnSinceSkin.clear();
+    const bool stats = g_SkinStatsOn;
+    if (stats) {
+        for (const auto& [model, verts] : g_LastDispatched)
+            if (!g_DrawnSinceSkin.count(model)) {
+                ++g_SkinStats.OffscreenModels;
+                g_SkinStats.OffscreenVertices += verts;
+            }
+        g_LastDispatched.clear();
+        g_DrawnSinceSkin.clear();
+    }
     ++g_SkinFrame; // a second call in one frame rewrites the buffer: what the first one skinned is stale
     static const bool disabled = Env::Flag(Env::Var::NoPreskin);
     if (disabled || models.empty()) return;
@@ -243,14 +258,16 @@ void Model::PreSkin(const std::vector<Model*>& models) {
         work.emplace_back(m, palette);
         counts.push_back(count);
     }
-    for (Model* m : models) g_SkinStats.Listed += m && m->m_D->BoneCounter > 0;
-    g_SkinStats.Fallback += (int)(std::count_if(models.begin(), models.end(), [](const Model* m) { return m && m->m_D->BoneCounter > 0; }) -
-                                  (std::ptrdiff_t)work.size());
+    if (stats) {
+        const int skinned = (int)std::count_if(models.begin(), models.end(), [](const Model* m) { return m && m->m_D->BoneCounter > 0; });
+        g_SkinStats.Listed += skinned;
+        g_SkinStats.Fallback += skinned - (int)work.size();
+    }
     if (work.empty()) return;
     Shader* cs = BindPreSkinProgram();
     if (!cs) {
         for (const auto& item : work) item.first->m_PreSkin.Frame = ~0ull; // not skinned: they skin per pass
-        g_SkinStats.Fallback += (int)work.size();
+        if (stats) g_SkinStats.Fallback += (int)work.size();
         return;
     }
 
@@ -291,11 +308,13 @@ void Model::PreSkin(const std::vector<Model*>& models) {
                 first += n;
             }
             dispatched = true;
-            const std::uint64_t verts = first - (unsigned)p.Base;
-            ++g_SkinStats.Dispatched;
-            g_SkinStats.DispatchedVertices += verts;
-            g_LastDispatched.emplace_back(&m, verts);
-        } else {
+            if (stats) {
+                const std::uint64_t verts = first - (unsigned)p.Base;
+                ++g_SkinStats.Dispatched;
+                g_SkinStats.DispatchedVertices += verts;
+                g_LastDispatched.emplace_back(&m, verts);
+            }
+        } else if (stats) {
             ++g_SkinStats.Idle;
         }
         p.Version = m.m_PoseVersion;

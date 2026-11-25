@@ -287,7 +287,8 @@ public:
     // --smoke-test: skins random vertices (none to eight influences) with PreSkin's shader and compares them with the
     // CPU's blend. False, with the reason, when they differ or the shader doesn't build.
     static bool PreSkinSelfTest(std::string& why);
-    // G5-0: what one frame's skinning and skinned draws cost. --perf-bench takes (and resets) it once a frame.
+    // G5-0: what one frame's skinning and skinned draws cost. --perf-bench switches the counting on and takes (and
+    // resets) it once a frame; everywhere else (the editor, the game) it is off and costs one bool test per skinned draw.
     struct SkinFrameStats {
         int Listed = 0;                        // skinned models handed to PreSkin
         int Dispatched = 0;                    // ...skinned on the GPU this frame (their pose changed)
@@ -299,6 +300,8 @@ public:
         int PosedDraws = 0;                    // Draw / DrawSelected / DrawDepthOnly / DrawMeshIndirect on skinned models
         double PosedDrawMs = 0.0;              // CPU time inside those calls
     };
+    static void SetSkinStatsEnabled(bool on);
+    static bool SkinStatsEnabled();
     static SkinFrameStats TakeSkinFrameStats();
     static void NotePosedDraw(double ms);
     bool IsPlayingAnimation() const { return m_Anim.Clip >= 0; }

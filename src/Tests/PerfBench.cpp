@@ -181,6 +181,7 @@ double PerfBench::TakeFrameMs() {
     if (!FrameLoads::Enabled()) FrameLoads::Enable(true); // only --perf-bench calls this: the log is off otherwise
     FrameLoads::Take(m_Loads);
     if (AssetCost::Enabled()) AssetCost::NoteLoads(m_Loads);
+    Model::SetSkinStatsEnabled(true); // G5-0: counted from here on (the first frame's take is empty)
     const Model::SkinFrameStats k = Model::TakeSkinFrameStats();
     m_SkinFrame = {1, (double)k.Listed, (double)k.Dispatched, (double)k.Idle, (double)k.Fallback, (double)k.DispatchedVertices,
                    (double)k.OffscreenModels, (double)k.OffscreenVertices, (double)k.PosedDraws, k.PosedDrawMs, k.PosedDrawMs};
