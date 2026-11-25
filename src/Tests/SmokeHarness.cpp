@@ -321,6 +321,9 @@ void SmokeHarness::LoadScene() {
                     ps.CapBytes / MB, ps.Evicted, ps.EvictedBytes / MB, missing,
                     (missing == 0 && inFlight == 0) ? "" : "  FAIL");
         std::fflush(stdout);
+        if (missing != 0 || inFlight != 0)
+            Log::Error("[SmokeTest] texture cache pin check: " + std::to_string(missing) + " of this scene's entries evicted, " +
+                       std::to_string(inFlight) + " decodes still in flight");
     }
     if (m_SceneLoadOk) {
         SmokeChecks::SceneLoaded(world, m_Ctx.assets, path, [this](const std::string& label) { MemSnapshot(label); });

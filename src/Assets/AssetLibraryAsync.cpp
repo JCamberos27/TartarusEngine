@@ -19,6 +19,7 @@
 #include "ProjectSettings.h"
 #include "Core/Env.h"
 #include "Core/FrameLoads.h"
+#include "TextureCache.h"
 
 #include <algorithm>
 #include <atomic>
@@ -299,6 +300,7 @@ AssetLibrary::AsyncHandle AssetLibrary::RequestTextureAsync(const std::string& p
         job->K = AsyncJob::Kind::Texture;
         job->Path = path;
         job->TexSettings = GetTextureSettings(path);
+        TextureCache::Pin(path, job->TexSettings); // the startup Prune can run before the worker decodes it
         a.InFlight[key] = job;
         a.Active.push_back(job);
         a.Push(job);
