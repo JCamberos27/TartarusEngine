@@ -1,4 +1,7 @@
 #include "UnitTestSupport.h"
+#include "HarnessView.h"
+#include "../Editor/EditorSettings.h"
+#include "../Editor/FKeyRow.h"
 #include "../Game/Components.h"
 #include "../Game/ComponentRegistry.h"
 #include "../Game/ComponentReflection.h"
@@ -1360,6 +1363,51 @@ static void Test_SceneSnapshot_BytesPinned() {
 // A scene loads to the same thing every time (undo/redo reload the whole scene from its snapshot), the component
 // blocks are read by their key with the old precedence, and a material slot follows its .mat by the GUID it saved.
 // (Empties only: a box or a model would need GL for its mesh.)
+// HarnessView: every persisted view setting that changes the look (draw mode, F5 light views, F6 overlays, post FX,
+// debug overlays) reads as "not lit", and Apply puts each of them back - the guard harness runs use against the user's
+// prefs (an Unlit pref once made every perf-bench measure without lighting).
+static void Test_HarnessView_ForcesLit() {
+    EditorSettings& es = EditorSettings::Get(); // the one instance; its view fields come back as they were
+    const HarnessView::Mode saved = HarnessView::Read(0, es);
+    const auto restore = [&] {
+        es.FRowLightDebug = saved.LightView; es.FRowOverlay = saved.Overlay; es.PostFxOff = saved.PostFxOff;
+        es.PlayDebugOverlay = saved.PlayDebugOverlay; es.PhysicsDebugDrawFlags = saved.PhysicsDebugDraw;
+        es.ShowColliders = saved.Colliders; es.ShowBodyDebug = saved.BodyDebug;
+    };
+    int shading = 0;
+    HarnessView::Apply(shading, es);
+    CHECK(HarnessView::Lit(HarnessView::Read(shading, es)));
+    CHECK(HarnessView::Describe(HarnessView::Read(shading, es)) == "Shaded, lit");
+    const auto spoil = [&](int which) {
+        switch (which) {
+        case 0: shading = 2; break; // Unlit
+        case 1: shading = 1; break; // Wireframe
+        case 2: shading = 5; break; // Mip / Texel
+        case 3: es.FRowLightDebug = FKeyRow::LightAlbedo; break;
+        case 4: es.FRowOverlay = FKeyRow::OverlayPhysics; break;
+        case 5: es.PostFxOff = true; break;
+        case 6: es.PlayDebugOverlay = true; break;
+        case 7: es.PhysicsDebugDrawFlags = 1; break;
+        case 8: es.ShowColliders = true; break;
+        case 9: es.ShowBodyDebug = true; break;
+        }
+    };
+    for (int which = 0; which < 10; ++which) {
+        spoil(which);
+        const HarnessView::Mode bad = HarnessView::Read(shading, es);
+        CHECK(!HarnessView::Lit(bad));
+        CHECK(HarnessView::Describe(bad) != "Shaded, lit");
+        HarnessView::Apply(shading, es);
+        CHECK(HarnessView::Lit(HarnessView::Read(shading, es)));
+    }
+    // All at once, as a prefs file could hold them.
+    for (int which = 0; which < 10; ++which) spoil(which);
+    CHECK(HarnessView::Describe(HarnessView::Read(shading, es)).find("F5 Albedo") != std::string::npos);
+    HarnessView::Apply(shading, es);
+    CHECK(HarnessView::Lit(HarnessView::Read(shading, es)));
+    restore();
+}
+
 static void Test_SceneReload_SameResult() {
     namespace fs = std::filesystem;
     using nlohmann::json;
@@ -1435,6 +1483,7 @@ static void Test_SceneReload_SameResult() {
 }
 
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"HarnessView: any debug view pref is forced back to Shaded and lit", Test_HarnessView_ForcesLit});
     tests.push_back({"SceneSerializer::ReloadSameResult", Test_SceneReload_SameResult});
     tests.push_back({"SceneSerializer::SnapshotBytesPinned", Test_SceneSnapshot_BytesPinned});
     tests.push_back({"SamplingProfiler::SurvivesTheLoaderLock", Test_SamplingProfiler_SurvivesTheLoaderLock});
