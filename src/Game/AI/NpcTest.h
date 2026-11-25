@@ -84,6 +84,8 @@ public:
     bool Done() const { return m_Done; }
     int Checks() const { return m_Checks; }
     int Failures() const { return m_Failures; }
+    // A check the host itself failed (the outfit wait's cap): counted and logged like any other.
+    void Fail(const std::string& what) { Check(false, what); }
     // Non-empty on frames to capture: the file stem.
     const std::string& ShotName() const { return m_Shot; }
     // NPC_TEST_RECORD=<dir>: every other frame of both views goes there as JPEGs (for a video).
