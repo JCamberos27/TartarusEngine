@@ -35,6 +35,11 @@ bool PerspectiveProj(const glm::mat4& proj) { return std::abs(proj[3][3]) < 0.5f
 
 void SetBit(std::vector<std::uint32_t>& bits, std::uint32_t i) { bits[i >> 5] |= 1u << (i & 31u); }
 void ClearBit(std::vector<std::uint32_t>& bits, std::uint32_t i) { bits[i >> 5] &= ~(1u << (i & 31u)); }
+int LowestBit(std::uint32_t v) { // the lowest set bit's index (v != 0)
+    int n = 0;
+    while (!(v & 1u)) { v >>= 1; ++n; }
+    return n;
+}
 bool TestBit(const std::vector<std::uint32_t>& bits, std::uint32_t i) {
     return (i >> 5) < bits.size() && ((bits[i >> 5] >> (i & 31u)) & 1u) != 0;
 }
@@ -128,6 +133,7 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
     t.Owned.assign(words, 0u);
     t.Moved.assign(words, 0u);
     t.MemberEntity.assign(n, kNone);
+    t.GroupOfSlot.assign(n, kNone);
     t.SlotOfEntity.clear();
     t.Cleared.clear();
     t.Leads.clear();
@@ -260,6 +266,7 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
             const std::uint32_t slot = items[i].Slot;
             runs.push_back(slot);
             SetBit(t.Owned, slot);
+            t.GroupOfSlot[slot] = (std::uint32_t)g;
             const Member& mb = items[i];
             const float radius = glm::length(mb.WorldMax - mb.WorldMin) * 0.5f;
             if (k == 0) {
@@ -405,18 +412,28 @@ void SceneRenderer::ViewPass::CullGpuView(const VisibilityQuery& framed) {
     SceneGpuTable& t = m_S.Gpu;
     m_GpuCulled = false;
     if (!m_GpuDraws || !t.Members) return;
-    // The reject bits: moved members, this frame's CPU-path ones, and what this view's LOD levels leave out.
-    t.Reject = t.Moved;
-    for (std::uint32_t slot : t.Cleared) SetBit(t.Reject, slot);
+    // The reject bits: moved members, this frame's CPU-path ones, and what this view's LOD levels leave out - counted
+    // per group, so a group with nothing left (a LOD level not in use here) isn't sent at all.
+    const std::size_t groups = t.StageGroups.size();
+    t.GroupRejected.assign(groups, 0);
+    t.Reject.assign(t.Moved.size(), 0u);
+    const auto reject = [&](std::uint32_t slot) {
+        if (TestBit(t.Reject, slot)) return;
+        SetBit(t.Reject, slot);
+        if (t.GroupOfSlot[slot] != kNone) ++t.GroupRejected[t.GroupOfSlot[slot]];
+    };
+    for (std::size_t w = 0; w < t.Moved.size(); ++w)
+        for (std::uint32_t bits = t.Moved[w]; bits; bits &= bits - 1)
+            reject((std::uint32_t)(w * 32 + (std::uint32_t)LowestBit(bits)));
+    for (std::uint32_t slot : t.Cleared) reject(slot);
     for (entt::entity e : m_World.Registry.storage<LodCulledTag>()) {
         const std::uint32_t integral = (std::uint32_t)entt::to_integral(e);
         const std::uint32_t index = (std::uint32_t)entt::to_entity(e);
         if (index >= t.SlotOfEntity.size()) continue;
         const std::uint32_t slot = t.SlotOfEntity[index];
-        if (slot != kNone && t.MemberEntity[slot] == integral) SetBit(t.Reject, slot);
+        if (slot != kNone && t.MemberEntity[slot] == integral) reject(slot);
     }
     // The groups this view can see (their joined boxes against its frustum), and the batches holding one.
-    const std::size_t groups = t.StageGroups.size();
     t.GroupSeen.assign(groups, 0);
     t.ViewStage.clear();
     t.ViewHiz.clear();
@@ -425,7 +442,9 @@ void SceneRenderer::ViewPass::CullGpuView(const VisibilityQuery& framed) {
     // then culls every one, so nothing the CPU path would draw is left out.
     const bool sizeCull = framed.SizeCullEye && framed.MinScreenHeight > 0.0f && framed.SizeCullProjScale > 0.0f;
     for (std::size_t g = 0; g < groups; ++g) {
-        if (t.GroupAlways[g]) {
+        if (t.GroupRejected[g] >= t.StageGroups[g].Count) {
+            continue; // every member rejected: nothing for the GPU to keep
+        } else if (t.GroupAlways[g]) {
             // sent
         } else if (framed.Cull && !framed.Cull->Intersects(AABB{t.GroupMin[g], t.GroupMax[g]})) {
             continue;

@@ -131,6 +131,7 @@ struct SceneGpuTable {
     std::vector<std::uint8_t> GroupAlways;     // a member without bounds: always sent
     std::vector<float> GroupRadius;            // its largest member's bounding sphere (TooSmallOnScreen's radius)
     std::vector<std::uint32_t> RunSlotsCpu;    // the runs' scene slots (verify mode reads skipped groups' members)
+    std::vector<std::uint32_t> GroupOfSlot;    // per scene slot: its group, ~0u when not a member
     std::vector<std::uint32_t> OpaqueBatchGroups, DepthBatchGroups; // each batch's groups, back to back
     std::vector<std::uint32_t> OpaqueBatchAt, DepthBatchAt;         // where batch i's start (size + 1)
     std::uint32_t Members = 0;
@@ -140,6 +141,7 @@ struct SceneGpuTable {
     std::vector<std::uint32_t> Reject;   // the view's stage-A reject bits
     std::vector<std::uint32_t> MovedNow; // TakeMovedSceneSlots
     std::vector<std::uint8_t> GroupSeen;  // the view's
+    std::vector<std::uint32_t> GroupRejected; // the view's: members its reject bits leave out, per group
     std::vector<GpuCull::Group> ViewStage;
     std::vector<glm::uvec4> ViewHiz;
     std::vector<std::uint8_t> OpaqueBatchOn, DepthBatchOn;
