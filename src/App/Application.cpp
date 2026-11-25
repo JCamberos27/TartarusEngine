@@ -2696,6 +2696,7 @@ bool AppSession::Frame() {
         MotionDemo::CaptureFrame(w, h);
     }
     lastFrameWorkMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frameWorkStart).count();
+    Profiler::EndGpuFrame(); // the frame's last GPU command before the present: the GPU half's end (G-0)
     {
         PROFILE_SCOPE("Swap Buffers");
         // A smoke-harness run (smoke, perf-bench, npc-test) in a window that never shows (KeepsWindowHidden):

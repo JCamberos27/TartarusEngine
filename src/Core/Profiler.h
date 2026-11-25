@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <functional>
 
 // Frame profiler: named scoped timers collected once per frame, read by the editor's Stats
 // overlay (EditorLayer::DrawStatsPanel). CPU timing (ScopeTimer / PROFILE_SCOPE) answers "where
@@ -59,6 +60,20 @@ public:
     static unsigned FrameSerial();
     // That frame's GPU timings once they've been read back, while they're among the last few; else null.
     static const std::vector<Entry>* GpuFrameScopes(unsigned serial);
+
+    // G-0: the whole frame on the GPU, from a GL_TIMESTAMP at BeginFrame to one at EndGpuFrame (call it right before
+    // the swap / present). Read back lagged like the scopes, never waiting on the GPU. While the GPU is the limit this
+    // is its frame time; while the CPU is, the GPU idles between commands and the span reads up to the CPU's submit
+    // time, so which half binds comes from the CPU's wait at the swap, not from this number alone.
+    static void EndGpuFrame();
+    struct GpuFrameResult {
+        unsigned Serial;                    // the frame (FrameSerial) it was recorded in
+        float FrameMs;                      // BeginFrame..EndGpuFrame on the GPU; -1 if EndGpuFrame never ran that frame
+        const std::vector<Entry>* Scopes;   // its scopes, repeated names summed
+    };
+    // Every frame read back (still in the last few) with a serial above `serial`, oldest first: a caller that keeps
+    // the last serial it saw gets each frame exactly once.
+    static void ForEachGpuFrameAfter(unsigned serial, const std::function<void(const GpuFrameResult&)>& fn);
 
     // Constructed at the top of a scope, brackets it with a pair of GL_TIMESTAMP queries under
     // `name` (a string literal: it's stored, not copied). Scopes may nest (#147). Use via PROFILE_GPU_SCOPE(name). Must be constructed on the GL
