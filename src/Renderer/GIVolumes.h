@@ -46,6 +46,8 @@ public:
     // Which volumes a draw whose world bounds are [mn, mx] can touch (bit i = volume i): set per draw as uGIMask, so a
     // pixel tests only those (testing all 46 house volumes on every forest pixel cost 2 ms). AllMask(): every volume.
     std::uint64_t MaskFor(const glm::vec3& mn, const glm::vec3& mx) const;
+    // A hash of everything MaskFor reads (each volume's world box): equal hashes give equal masks.
+    std::uint64_t LayoutHash() const;
     std::uint64_t AllMask() const { return m_Volumes.empty() ? 0u : (m_Volumes.size() >= 64 ? ~0ull : (1ull << m_Volumes.size()) - 1ull); }
     // uGIMaskLo / uGIMaskHi (the mask's low and high 32 bits) and uGIFlatL1 on a program. flatL1: the draw's directional GI
     // term is damped (GIVolumes.glsl GI_FLAT_L1_SCALE): openable leaves, which sit in a doorway between two rooms.

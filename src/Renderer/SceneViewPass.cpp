@@ -290,10 +290,23 @@ void SceneRenderer::ViewPass::BuildDrawLists() {
     const Frustum viewCells[2] = {m_CamFrustum, m_VmFrustum};
     inView.CellCull = viewCells;
     inView.CellCullCount = m_ViewModelPass ? 2 : 1;
+    // G2-b: the batched static world comes from the GPU cull (SceneViewPassGpu.cpp); the gather leaves it out.
+    m_GpuDraws = GpuDrawsWanted();
+    if (m_GpuDraws) PrepareGpuFrame(inView);
     GatherVisible(world, inView, m_S.Visible);
+    if (m_GpuDraws) {
+        VisibilityQuery framed = inView; // what the classify step's frustum test adds: the camera's frustum, per object
+        framed.Cull = &m_CamFrustum;
+        framed.CellCull = nullptr;
+        framed.CellCullCount = 0;
+        framed.SkipSlots = nullptr;
+        CullGpuView(framed);
+    }
     if (GpuCull::Enabled()) { // G2-a verify mode: the GPU's stage A against the same query, then with the camera frustum
-        GpuCull::VerifyView(world, inView);
-        VisibilityQuery framed = inView;
+        VisibilityQuery whole = inView;
+        whole.SkipSlots = nullptr;
+        GpuCull::VerifyView(world, whole);
+        VisibilityQuery framed = whole;
         framed.Cull = &m_CamFrustum;
         framed.CellCull = nullptr;
         framed.CellCullCount = 0;
@@ -630,6 +643,7 @@ void SceneRenderer::ViewPass::DepthPrepass() {
     for (const DrawItem& it : m_S.DrawList)
         if (Prepassed(it)) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform, false, 0, 1, it.Slot});
     DrawDepthCasters(depth, prepass, -1, &m_World);
+    DrawGpuDepth(depth); // G2-b: the table's survivors
     if (m_ImpostorsOn) {
         ImpostorRenderer::Get().DrawDepth(ctx.View, ctx.Proj, ctx.ViewPos);
         m_Stats.DrawCalls += ImpostorRenderer::Get().DrawCalls();
@@ -936,6 +950,15 @@ void SceneRenderer::ViewPass::BuildBatches() {
         if (!m_HizCulled && m_SceneSlots) GpuScene::Get().BindSlotList(28u, slotStaging);
         m_ModelShader.Bind();
     }
+    if (m_GpuCulled && m_HizDepth) {
+        PROFILE_GPU_SCOPE("Occlusion Cull (GPU table)");
+        CullGpuHiz();
+        // The CPU path's batches read 28 as their cull left it.
+        if (m_SceneSlots && !m_S.OpaqueItems.empty()) {
+            if (m_HizCulled) HiZCuller::RebindRemap();
+            else GpuScene::Get().BindSlotList(28u, slotStaging);
+        }
+    }
 }
 
 // Binding 27 for the opaque pass's next draw: the GPU scene's transforms (multi-draw batches reading slots) or this
@@ -1028,6 +1051,7 @@ void SceneRenderer::ViewPass::DrawOpaque() {
         if (m_S.GroupIndirect[g]) {
             if (!prepassedDrawn) {
                 for (std::uint32_t i : prepassedBatches) drawBatch(batches[i]);
+                DrawGpuOpaque(passState, depthWrites); // G2-b: pre-passed too (28 is the table's from here)
                 prepassedDrawn = true;
             }
             for (; nextBatch < batches.size() && tags[batches[nextBatch].Tag].Group == g; ++nextBatch)
@@ -1049,6 +1073,7 @@ void SceneRenderer::ViewPass::DrawOpaque() {
         m_Stats.DrawCalls += it.Meshes;
         countGroup(grp);
     }
+    if (!prepassedDrawn) DrawGpuOpaque(passState, depthWrites); // no CPU batches this view: the table's still draw
     if (depthWrites != GL_TRUE) {
         glDepthMask(GL_TRUE);
         glDepthFunc(GL_LEQUAL);

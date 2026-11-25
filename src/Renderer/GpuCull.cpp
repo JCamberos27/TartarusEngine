@@ -12,6 +12,7 @@
 #include "World.h"
 #include "Components.h"
 #include "Core/Log.h"
+#include "Core/Profiler.h"
 
 #include <cmath>
 #include <algorithm>
@@ -122,8 +123,10 @@ const char* ComputeSource() {
 layout(local_size_x = 64) in;
 // GpuScene's Bounds: per slot, world min (w = 1 bounded, 0 not) then world max (w = the bits of a uint: flags | layer << 16).
 layout(std430, binding = 22) readonly buffer BoundsBlock { vec4 uBounds[]; };
-layout(std430, binding = 23) readonly buffer GroupBlock { uvec4 uGroups[]; };    // slot base, count, cmd first, cmd count
-layout(std430, binding = 24) readonly buffer GroupSlotBlock { uint uGroupSlots[]; }; // the group runs' scene slots
+layout(std430, binding = 23) readonly buffer GroupBlock { uvec4 uGroups[]; };    // slot base, count, cmd list at, cmd count
+// The group runs' scene slots, then each group's command indices (where .z says): commands of a group need not be
+// consecutive (the multi-draw batches order them by how they bind).
+layout(std430, binding = 24) readonly buffer GroupSlotBlock { uint uGroupSlots[]; };
 layout(std430, binding = 25) readonly buffer LodBlock { uint uLodCulled[]; };     // 1 bit per scene slot
 layout(std430, binding = 28) writeonly buffer RemapBlock { uint uRemap[]; };
 layout(std430, binding = 29) buffer CommandBlock { uint uCommands[]; };           // 5 uints per command
@@ -188,7 +191,7 @@ void main() {
         barrier();
         written += total;
     }
-    for (uint i = lid; i < g.w; i += 64u) uCommands[(g.z + i) * 5u + 1u] = written;
+    for (uint i = lid; i < g.w; i += 64u) uCommands[uGroupSlots[g.z + i] * 5u + 1u] = written;
 }
 )";
 }
@@ -219,12 +222,15 @@ void BuildDrawTable(std::uint32_t slotCount, DrawTable& out) {
             return owner[a]->ModelRef.get() == owner[b]->ModelRef.get() && SameSlots(owner[a]->Materials, owner[b]->Materials);
         },
         groups);
-    out.Slots.resize(batched.size());
+    out.RunSlots = (std::uint32_t)batched.size();
+    out.Slots.resize(batched.size() + groups.Groups.size());
     out.Groups.reserve(groups.Groups.size());
     for (std::size_t g = 0; g < groups.Groups.size(); ++g) {
         const InstanceGroups::Group& run = groups.Groups[g];
-        // G2-a: one command per group, whose instanceCount is the survivor count (G2-b gives each mesh its own).
-        out.Groups.push_back({run.First, run.Count, (std::uint32_t)g, 1});
+        // One command per group (command g), whose instanceCount is the survivor count; its index follows the runs.
+        const std::uint32_t at = (std::uint32_t)(batched.size() + g);
+        out.Slots[at] = (std::uint32_t)g;
+        out.Groups.push_back({run.First, run.Count, at, 1});
         for (std::uint32_t k = 0; k < run.Count; ++k) {
             const std::uint32_t slot = batched[groups.Order[run.First + k]];
             out.Slots[run.First + k] = slot;
@@ -266,7 +272,89 @@ bool EnsureProgram() {
     return true;
 }
 
+void SetQueryUniforms(Shader& prog, const ViewQuery& vq) {
+    static const char* const kPlaneNames[6] = {"uPlanes[0]", "uPlanes[1]", "uPlanes[2]",
+                                               "uPlanes[3]", "uPlanes[4]", "uPlanes[5]"};
+    for (int i = 0; i < 6; ++i) prog.SetVec4(kPlaneNames[i], vq.Planes[i]);
+    prog.SetVec4("uWithinMin", vq.WithinMin);
+    prog.SetVec4("uWithinMax", vq.WithinMax);
+    prog.SetVec4("uSizeEye", vq.SizeEye);
+    glUniform1ui(prog.Loc("uRejectFlags"), vq.RejectFlags);
+    glUniform1ui(prog.Loc("uLayerMask"), vq.LayerMask);
+    glUniform1ui(prog.Loc("uBits"), vq.Bits);
+    prog.SetFloat("uMinScreenHeight", vq.MinScreenHeight);
+}
+
+void Dispatch(Shader& prog, std::uint32_t groupCount) {
+    const int offsetLoc = prog.Loc("uGroupOffset");
+    constexpr std::uint32_t kMaxGroupsPerDispatch = 65535; // GL's guaranteed minimum for one dimension
+    for (std::uint32_t first = 0; first < groupCount; first += kMaxGroupsPerDispatch) {
+        glUniform1ui(offsetLoc, first);
+        prog.DispatchCompute(std::min(kMaxGroupsPerDispatch, groupCount - first), 1, 1);
+    }
+}
+
+// A GPU-only store of at least `bytes` (grow-only; its old contents are not kept).
+void EnsureStore(unsigned& buf, std::size_t& capacity, std::size_t bytes) {
+    if (buf && bytes <= capacity) return;
+    if (buf) glDeleteBuffers(1, &buf);
+    capacity = std::max<std::size_t>(bytes + bytes / 2, 4096);
+    glCreateBuffers(1, &buf);
+    glNamedBufferStorage(buf, (GLsizeiptr)capacity, nullptr, 0);
+}
+std::size_t g_StageACap = 0, g_FinalCap = 0;
 } // namespace
+
+bool DrawsEnabled() {
+    static const bool off = Env::Flag(Env::Var::NoGpuCull);
+    return !off && GpuScene::Enabled() && MultiDrawEnabled() && EnsureProgram();
+}
+
+void UploadTable(DrawBuffers& b, const std::vector<Group>& groups, const std::vector<glm::uvec4>& hizGroups,
+                 const std::vector<std::uint32_t>& slots, std::uint32_t runSlots) {
+    if (!b.Groups) {
+        glCreateBuffers(1, &b.Groups);
+        glCreateBuffers(1, &b.HizGroups);
+        glCreateBuffers(1, &b.Slots);
+    }
+    const auto put = [](unsigned buf, const void* data, std::size_t bytes) {
+        static const std::uint32_t none[4] = {};
+        glNamedBufferData(buf, (GLsizeiptr)std::max<std::size_t>(bytes, 16), bytes ? data : none, GL_STATIC_DRAW);
+    };
+    put(b.Groups, groups.data(), groups.size() * sizeof(Group));
+    put(b.HizGroups, hizGroups.data(), hizGroups.size() * sizeof(glm::uvec4));
+    put(b.Slots, slots.data(), slots.size() * sizeof(std::uint32_t));
+    EnsureStore(b.StageA, g_StageACap, std::max<std::size_t>(runSlots, 1) * sizeof(std::uint32_t));
+    EnsureStore(b.Final, g_FinalCap, std::max<std::size_t>(runSlots, 1) * sizeof(std::uint32_t));
+    b.GroupCount = (std::uint32_t)groups.size();
+    b.RunSlots = runSlots;
+}
+
+bool CullView(const DrawBuffers& b, const ViewQuery& q, const std::vector<std::uint32_t>& reject) {
+    GpuScene& scene = GpuScene::Get();
+    if (!b.GroupCount || !scene.Ready() || !scene.BoundsBuffer() || scene.Count() == 0 || !EnsureProgram()) return false;
+    PROFILE_GPU_SCOPE("GPU Cull");
+    const std::uint32_t none = 0;
+    const std::size_t rejectBytes = std::max<std::size_t>(reject.size(), 1) * sizeof(std::uint32_t);
+    if (!InstanceBuffer::UploadRange(25, reject.empty() ? &none : reject.data(), rejectBytes)) {
+        Resources& r = Res();
+        glNamedBufferData(r.Lod, (GLsizeiptr)rejectBytes, reject.empty() ? &none : reject.data(), GL_STREAM_DRAW);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 25, r.Lod);
+    }
+    glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 22, scene.BoundsBuffer(), 0,
+                      (GLsizeiptr)scene.Count() * 2 * (GLsizeiptr)sizeof(glm::vec4));
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 23, b.Groups);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 24, b.Slots);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 28, b.StageA);
+    Shader& prog = *Res().Program;
+    prog.Bind();
+    SetQueryUniforms(prog, q);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT); // the GPU scene's uploads land first
+    Dispatch(prog, b.GroupCount);
+    glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+    GLStateCache::Invalidate();
+    return true;
+}
 
 const VerifyTotals& Totals() { return g_Totals; }
 
@@ -293,7 +381,8 @@ void VerifyView(World& world, const VisibilityQuery& q) {
     const bool anyLod = !world.Registry.storage<LodCulledTag>().empty();
     {
         SceneSlot s;
-        for (std::uint32_t slot : table.Slots) {
+        for (std::uint32_t k = 0; k < table.RunSlots; ++k) {
+            const std::uint32_t slot = table.Slots[k];
             if (!ReadSceneSlot(slot, s)) continue;
             if (anyLod && world.IsLodCulled(s.Entity)) lod[slot >> 5] |= 1u << (slot & 31u);
             const std::size_t e = (std::size_t)entt::to_entity(s.Entity);
@@ -321,24 +410,9 @@ void VerifyView(World& world, const VisibilityQuery& q) {
     const ViewQuery vq = MakeQuery(q);
     Shader& prog = *r.Program;
     prog.Bind();
-    static const char* const kPlaneNames[6] = {"uPlanes[0]", "uPlanes[1]", "uPlanes[2]",
-                                               "uPlanes[3]", "uPlanes[4]", "uPlanes[5]"};
-    for (int i = 0; i < 6; ++i) prog.SetVec4(kPlaneNames[i], vq.Planes[i]);
-    prog.SetVec4("uWithinMin", vq.WithinMin);
-    prog.SetVec4("uWithinMax", vq.WithinMax);
-    prog.SetVec4("uSizeEye", vq.SizeEye);
-    glUniform1ui(prog.Loc("uRejectFlags"), vq.RejectFlags);
-    glUniform1ui(prog.Loc("uLayerMask"), vq.LayerMask);
-    glUniform1ui(prog.Loc("uBits"), vq.Bits);
-    prog.SetFloat("uMinScreenHeight", vq.MinScreenHeight);
-    const int offsetLoc = prog.Loc("uGroupOffset");
+    SetQueryUniforms(prog, vq);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT); // the GPU scene's uploads land first
-    constexpr std::uint32_t kMaxGroupsPerDispatch = 65535; // GL's guaranteed minimum for one dimension
-    const std::uint32_t groupCount = (std::uint32_t)table.Groups.size();
-    for (std::uint32_t first = 0; first < groupCount; first += kMaxGroupsPerDispatch) {
-        glUniform1ui(offsetLoc, first);
-        prog.DispatchCompute(std::min(kMaxGroupsPerDispatch, groupCount - first), 1, 1);
-    }
+    Dispatch(prog, (std::uint32_t)table.Groups.size());
     glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
     static std::vector<std::uint32_t> remap;
     remap.resize(table.Slots.size());

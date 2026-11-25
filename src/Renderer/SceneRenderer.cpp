@@ -178,6 +178,18 @@ struct CandidateCache {
         bool operator!=(const LiveKey& o) const { return Mesh != o.Mesh || Bits != o.Bits; }
     };
     std::vector<LiveKey> Live; // by List index; empty until a full hand-out fills it
+    // G2-b's draw table (SceneSlotTableGeneration): bumped on anything but a plain move. Moved: TakeMovedSceneSlots.
+    std::uint64_t TableGen = 1;
+    bool TrackMoves = false;
+    std::vector<std::uint32_t> Moved;
+    std::vector<std::uint8_t> MovedMark;
+    void NoteMoved(std::uint32_t i) {
+        if (!TrackMoves) return;
+        if (MovedMark.size() <= i) MovedMark.resize((size_t)i + 1, 0);
+        if (MovedMark[i]) return;
+        MovedMark[i] = 1;
+        Moved.push_back(i);
+    }
     std::uint32_t SeenEpoch = 0;
     size_t SweepAt = 0;
     void MarkSlot(std::uint32_t i) {
@@ -273,6 +285,7 @@ void PatchMovedCandidates(World& world, CandidateCache& cache) {
         c.V.Normal = NormalMatrix(c.V.Xform);
         FillBounds(c.V, *c.Renderable);
         cache.MarkSlot(cache.Index[slot]);
+        cache.NoteMoved(cache.Index[slot]);
         CandidateCell& cell = cache.Cells[c.Cell];
         if (!cell.Always) {
             if (!c.V.Bounded) {
@@ -466,6 +479,7 @@ const CandidateCache& Candidates(World& world) {
     const size_t patchedIn = cache.Dead + (cache.PatchCell != ~0u ? cache.Cells[cache.PatchCell].Count : 0);
     if (afterOneRebuild && (!world.TransformCacheMembershipChanged() || world.TransformStructureChanges().Valid) &&
         patchedIn <= std::max<size_t>(1024, cache.List.size() / 8) && RefreshCandidates(world, cache)) {
+        ++cache.TableGen; // renderable pointers, flags, layers or models may have changed
         cache.Stamp = world.TransformCacheStamp();
         cache.Renderables = storage.size();
         cache.First = first;
@@ -476,6 +490,9 @@ const CandidateCache& Candidates(World& world) {
         return cache;
     }
     ++cache.FullBuilds;
+    ++cache.TableGen;
+    cache.Moved.clear();
+    cache.MovedMark.clear();
     cache.SlotsRebuilt = true; // every slot is another renderable now: GpuScene re-reads them all
     cache.DirtySlots.clear();
     cache.DirtyMark.clear();
@@ -595,8 +612,10 @@ void ScanLiveKeys(CandidateCache& cache, size_t begin, size_t end, bool full) {
     if (chunks > 1) std::for_each(std::execution::par, chunkIds.begin(), chunkIds.end(), scan);
     else scan(0);
     if (full) return;
-    for (size_t c = 0; c < chunks; ++c)
+    for (size_t c = 0; c < chunks; ++c) {
+        if (!changed[c].empty()) ++cache.TableGen; // a live setting (Cast Shadows, the first material, the model) changed
         for (std::uint32_t i : changed[c]) cache.MarkSlot(i);
+    }
 }
 // The slots whose live settings may have changed since the last call: all of them after a rebuild or a reported
 // write (RenderSettingsEpoch moved), else the ones appended since and one sweep slice (1/64, at least 1024).
@@ -648,6 +667,17 @@ void TakeSceneSlotChanges(World& world, SceneSlotChanges& out) {
     cache.SlotsRebuilt = false;
 }
 
+std::uint64_t SceneSlotTableGeneration() { return CandidateStore().TableGen; }
+
+void TakeMovedSceneSlots(std::vector<std::uint32_t>& out) {
+    CandidateCache& cache = CandidateStore();
+    cache.TrackMoves = true;
+    out.swap(cache.Moved);
+    cache.Moved.clear();
+    for (std::uint32_t i : out)
+        if (i < cache.MovedMark.size()) cache.MovedMark[i] = 0;
+}
+
 bool ReadSceneSlot(std::uint32_t slot, SceneSlot& out) {
     const CandidateCache& cache = CandidateStore();
     if (slot >= cache.List.size()) return false;
@@ -666,6 +696,8 @@ bool ReadSceneSlot(std::uint32_t slot, SceneSlot& out) {
     out.Bounded = v.Bounded;
     out.WorldMin = v.WorldMin;
     out.WorldMax = v.WorldMax;
+    out.LocalMin = v.LocalMin;
+    out.LocalMax = v.LocalMax;
     return true;
 }
 std::uint64_t GatherCandidateFullBuilds() { return CandidateStore().FullBuilds; }
@@ -713,6 +745,7 @@ void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRe
     // table), so the static cells below run across the cores.
     const auto consider = [&](std::uint32_t i, std::vector<VisibleRenderable>& to) {
         // GameObject active / LOD level (#163); PoseSourceTag is animated only (the first-person arms rig).
+        if (q.SkipSlots && ((q.SkipSlots[i >> 5] >> (i & 31u)) & 1u)) return; // drawn from the GPU cull (G2-b)
         const CandidateCache::HotCandidate& hot = cache.Hot[i];
         if (hot.Flags & (kCandInactive | kCandPoseSource)) return;
         if (anyLod && world.IsLodCulled(hot.Entity)) return;

@@ -126,6 +126,11 @@ public:
     // This frame's splats and which entities draw which run of them (entity -> first, count).
     void SetSplats(const std::vector<Splat>& splats, const std::vector<std::pair<unsigned, glm::ivec2>>& ranges);
     bool SplatRange(unsigned entity, int& first, int& count) const;
+    // Calls f(entity) for every entity with splats on it this frame (SplatRange's keys).
+    template <class F>
+    void ForEachSplatEntity(F&& f) const {
+        for (const auto& kv : m_SplatRanges) f(kv.first);
+    }
     // The palette `entity`'s splats are drawn in (after SetSplats, which forgets them all; unset: a person's), and the
     // look a mesh's splats take: fresh and dried colour, each with its roughness on cloth / skin.
     void SetSplatPalette(unsigned entity, int palette);

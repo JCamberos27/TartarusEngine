@@ -1,4 +1,5 @@
 #include "World.h"
+#include <algorithm>
 #include <cstring>
 #include <atomic>
 #include <execution>
@@ -39,6 +40,7 @@ void World::ClearLod() {
     // impostor at the origin (GetCachedWorldTransform of a dead entity is identity).
     m_LodImpostors = false;
     std::fill(m_LodFadeOwner.begin(), m_LodFadeOwner.end(), entt::null);
+    m_LodFadeList.clear();
     m_LodFading.clear();
     m_LodState.clear();
     std::fill(m_LodIndex.begin(), m_LodIndex.end(), ~0u);
@@ -197,6 +199,11 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
     // groups reads them front to back.
     // LodSmooth cross-fades (see LodFadeOf): the fade value of every renderer under `root`.
     const double now = !LodSmooth ? 0.0 : LodClockOverride >= 0.0 ? LodClockOverride : Time::RealtimeSinceStartup();
+    // LodFadeCandidates: the ones whose fade ended leave (the list stays about as long as the fades under way).
+    if (m_LodFadeList.size() > 64)
+        m_LodFadeList.erase(std::remove_if(m_LodFadeList.begin(), m_LodFadeList.end(),
+                                           [&](entt::entity e) { return LodFadeOf(e) == 0.0f; }),
+                            m_LodFadeList.end());
     auto setFade = [&](entt::entity root, float v) {
         stack.assign(1, root);
         while (!stack.empty()) {
@@ -209,6 +216,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
                     m_LodFadeOwner.resize(s + 1, entt::null);
                     m_LodFadeValue.resize(s + 1, 0.0f);
                 }
+                if (v != 0.0f && m_LodFadeOwner[s] != e) m_LodFadeList.push_back(e);
                 m_LodFadeOwner[s] = v != 0.0f ? e : entt::null;
                 m_LodFadeValue[s] = v;
             }

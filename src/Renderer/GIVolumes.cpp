@@ -201,6 +201,19 @@ void GIVolumes::SetMask(Shader& program, std::uint64_t mask, bool flatL1) {
     program.SetInt("uGIMaskHi", (int)(std::uint32_t)(mask >> 32));
 }
 
+std::uint64_t GIVolumes::LayoutHash() const {
+    std::uint64_t h = 0xcbf29ce484222325ull ^ m_Volumes.size();
+    const auto mix = [&h](const void* p, std::size_t n) {
+        const unsigned char* b = (const unsigned char*)p;
+        for (std::size_t i = 0; i < n; ++i) h = (h ^ b[i]) * 0x100000001b3ull;
+    };
+    for (std::size_t i = 0; i < m_Volumes.size() && i < 64; ++i) {
+        mix(&m_Volumes[i].WorldMin, sizeof m_Volumes[i].WorldMin);
+        mix(&m_Volumes[i].WorldMax, sizeof m_Volumes[i].WorldMax);
+    }
+    return h;
+}
+
 std::uint64_t GIVolumes::MaskFor(const glm::vec3& mn, const glm::vec3& mx) const {
     std::uint64_t m = 0;
     for (std::size_t i = 0; i < m_Volumes.size() && i < 64; ++i) {

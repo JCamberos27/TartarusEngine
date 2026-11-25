@@ -36,6 +36,8 @@ public:
     std::uint32_t SelectionKey(const glm::vec3& centre) const;
 
     int Count() const { return (int)m_Probes.size(); }
+    // A hash of everything SelectionKey reads (each probe's place, size and importance): equal hashes pick equally.
+    std::uint64_t LayoutHash() const;
 
     // Room captures (ReflectionProbeCapture): probe i samples layer `layer` of the captured, prefiltered cube array
     // instead of the sky's specular cube; -1 (what Update() leaves) = the sky. Bind() uploads uProbeLayer[]. The

@@ -50,6 +50,9 @@ struct VisibilityQuery {
     // in a cell, so they always come through.
     const Frustum* CellCull = nullptr;
     int CellCullCount = 0;
+    // GPU-driven draws (G2-b): candidate slots whose bit is set here (1 bit per slot) are drawn from the GPU cull's lists,
+    // so this gather leaves them out. Null: none.
+    const std::uint32_t* SkipSlots = nullptr;
 };
 struct VisibleRenderable {
     entt::entity Entity;
@@ -84,6 +87,7 @@ struct SceneSlot {
     glm::mat4 Xform{1.0f};
     glm::mat3 Normal{1.0f};       // transpose(inverse(mat3(Xform)))
     glm::vec3 WorldMin{0.0f}, WorldMax{0.0f};
+    glm::vec3 LocalMin{0.0f}, LocalMax{0.0f}; // the model's bounds as posed (VisibleRenderable::LocalMin/Max)
     bool Bounded = false;
     bool Alive = false;           // false: nothing to draw from it (left, lost its model, or inactive)
     // The candidate's CandidateFlag bits (SceneViewPass.h, bits 0-7) and the renderable's own settings GatherVisible
@@ -110,6 +114,12 @@ void TakeSceneSlotChanges(World& world, SceneSlotChanges& out);
 // Slot `slot` as GatherVisible would read it now (posed bounds live). False past the list's end. Read after
 // TakeSceneSlotChanges in the same frame.
 bool ReadSceneSlot(std::uint32_t slot, SceneSlot& out);
+// What the GPU cull's draw table is built from (G2-b): moves when the slots stand for other renderables, or a slot's
+// renderable pointer, flags, layer, model or live settings changed - not when a candidate only moved.
+std::uint64_t SceneSlotTableGeneration();
+// The slots whose transform moved since the last call (each once), for the draw table: a moved member draws on the CPU
+// path until the next table build. Starts tracking on the first call; `out` is cleared first.
+void TakeMovedSceneSlots(std::vector<std::uint32_t>& out);
 // A box holding every renderable GatherVisible knows (a superset of any query's result), cheaply: the sun's cascades
 // fit their near planes to it before the casters are gathered against them. False when there are none.
 bool RenderableBounds(World& world, glm::vec3& outMin, glm::vec3& outMax);

@@ -77,11 +77,34 @@ const char* ComputeSource();
 struct DrawTable {
     static constexpr std::uint32_t kNoGroup = ~0u;
     std::vector<Group> Groups;
-    std::vector<std::uint32_t> Slots;   // the groups' runs, back to back (Group::Base indexes this)
+    std::vector<std::uint32_t> Slots;   // the groups' runs, back to back (Group::Base indexes this), then the command
+                                        // indices (Group::CmdFirst indexes this)
+    std::uint32_t RunSlots = 0;         // how many of Slots are the runs
     std::vector<std::uint32_t> GroupOf; // scene slot -> group (kNoGroup: not batched)
 };
 // Built from the candidate list as it is now (ReadSceneSlot); the GPU scene must be synced this frame.
 void BuildDrawTable(std::uint32_t slotCount, DrawTable& out);
+
+// G2-b: the camera view's batched static world culled and drawn from the GPU (SceneViewPass: the view's draw table).
+// Needs the GPU scene, multi-draw and the compute program; TARTARUS_NO_GPU_CULL=1 turns it off (the CPU path as before).
+bool DrawsEnabled();
+
+// A draw table's GL side, uploaded when the table is rebuilt; one set, reused by every view in turn.
+struct DrawBuffers {
+    unsigned Groups = 0;     // per group: run base, count, command list at, command count (stage A: every command)
+    unsigned HizGroups = 0;  // per group: run base, foliage sway (float bits), command list at, opaque command count
+    unsigned Slots = 0;      // the runs' scene slots, then the command lists (binding 24 for both stages)
+    unsigned StageA = 0;     // per view: each run's stage-A survivors (scene slots), in slot order
+    unsigned Final = 0;      // per view: what Hi-Z then kept (HiZCuller::CullChained)
+    std::uint32_t GroupCount = 0, RunSlots = 0;
+};
+// (Re)uploads a table: `groups` (stage A's), `hizGroups` (CullChained's) and `slots` (runs + command lists).
+void UploadTable(DrawBuffers& b, const std::vector<Group>& groups, const std::vector<glm::uvec4>& hizGroups,
+                 const std::vector<std::uint32_t>& slots, std::uint32_t runSlots);
+// Per view: stage A for `q` over the table, rejecting the slots set in `reject` (1 bit per scene slot: LOD-culled, or
+// drawn on the CPU path this frame), into `b.StageA` and the instanceCount of the commands bound at storage 29 (the
+// caller's upload). The GPU scene must be synced. False: it did not run.
+bool CullView(const DrawBuffers& b, const ViewQuery& q, const std::vector<std::uint32_t>& reject);
 
 // Verify mode totals since start (TARTARUS_GPU_CULL_VERIFY=1).
 struct VerifyTotals {

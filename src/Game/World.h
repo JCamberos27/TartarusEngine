@@ -136,6 +136,9 @@ public:
         const size_t s = (size_t)entt::to_entity(e);
         return s < m_LodFadeOwner.size() && m_LodFadeOwner[s] == e ? m_LodFadeValue[s] : 0.0f;
     }
+    // Every renderer given a cross-fade since the last ApplyLod pass trimmed the list: a superset of those fading now
+    // (check LodFadeOf). The GPU-driven draws (G2-b) send these down the CPU path, which dithers them.
+    const std::vector<entt::entity>& LodFadeCandidates() const { return m_LodFadeList; }
     // Octahedral impostors (ImpostorLibrary): a LOD group whose LOD 0 matches a baked set draws its impostor instead of
     // any level once its centre is past ImpostorLibrary::StartDistance() from the view (the screen-height levels still
     // decide nearer, and the group stays culled where they cull it). The impostor is a level of its own to ApplyLod:
@@ -299,6 +302,7 @@ private:
     bool m_LodImpostors = false; // some record has an impostor
     std::vector<float> m_LodFadeValue;        // entity slot -> LodFadeOf
     std::vector<entt::entity> m_LodFadeOwner; // entity slot -> the entity the value is for
+    std::vector<entt::entity> m_LodFadeList;  // LodFadeCandidates
     std::vector<entt::entity> m_LodFading;    // groups with a cross-fade under way
     std::vector<LodGroupState> m_LodState;    // dense, in the groups view's order
     std::vector<std::uint32_t> m_LodIndex;    // entity slot -> m_LodState index (~0u: none)

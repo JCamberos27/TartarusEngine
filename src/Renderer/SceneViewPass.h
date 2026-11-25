@@ -6,6 +6,7 @@
 #include "InstanceBatch.h"
 #include "HiZCuller.h"
 #include "Model.h"
+#include "GpuCull.h"
 
 #include <glm/glm.hpp>
 #include <array>
@@ -99,6 +100,37 @@ struct SceneSortKey {
     std::uint32_t Index;
 };
 
+// G2-b: the batched static world the camera views draw from the GPU cull (SceneViewPassGpu.cpp). Built from the GPU
+// scene's slots when they stand for other renderables or settings (SceneSlotTableGeneration), the frame's programs, or
+// the probes' and GI volumes' layout change; every view of every frame culls and draws from it.
+struct SceneGpuTable {
+    bool Built = false;
+    std::uint64_t Gen = 0, ProbeHash = 0, GIHash = 0;
+    const void* Probes = nullptr;
+    const void* GI = nullptr;
+    std::uint32_t Variant = 0;
+    bool AnyProbes = false;
+    std::uint32_t SceneCount = 0;      // the GPU scene's slots at the build
+    std::vector<SceneDrawItem> Leads;  // per group: what its batches bind (the per-draw hook's item)
+    std::vector<std::uint32_t> Owned;  // 1 bit per scene slot: drawn from the table (GatherVisible skips them)
+    std::vector<std::uint32_t> Moved;  // 1 bit per scene slot: a member that moved since the build (CPU path now)
+    std::vector<std::uint32_t> MemberEntity; // per scene slot: the member's entity (integral), ~0u when not a member
+    std::vector<std::uint32_t> SlotOfEntity; // entity index -> scene slot of a member, ~0u none
+    struct DepthTag { std::uint32_t Group; std::uint16_t Mesh; };
+    std::vector<SceneOpaqueTag> OpaqueTags;
+    std::vector<IndirectBatch> OpaqueBatches;
+    std::vector<DepthTag> DepthTags;
+    std::vector<IndirectBatch> DepthBatches;   // First indexes Commands (after the opaque ones)
+    std::vector<IndirectCommand> Commands;     // the opaque batches' commands, then the depth batches'
+    std::uint32_t OpaqueCommands = 0;
+    std::uint32_t Members = 0;
+    GpuCull::DrawBuffers Gl;
+    // Per frame / view scratch.
+    std::vector<std::uint32_t> Cleared;  // Owned bits cleared for this frame (fading, blood): set again next frame
+    std::vector<std::uint32_t> Reject;   // the view's stage-A reject bits
+    std::vector<std::uint32_t> MovedNow; // TakeMovedSceneSlots
+};
+
 // The scene pass's per-frame lists, reused across views and frames rather than reallocated each call. Owned by the
 // SceneRenderer; one view renders at a time.
 struct SceneViewScratch {
@@ -122,6 +154,7 @@ struct SceneViewScratch {
     std::vector<std::uint32_t> HizCmdList, HizSlotGroup;
     std::vector<std::uint32_t> PrepassedBatches;
     std::vector<std::uint32_t> SlotStaging; // the multi-draw copies' GPU scene slots, in instance order (BuildBatches)
+    SceneGpuTable Gpu;                      // G2-b
 };
 
 // One RenderScene call: this view's state, and its stages in the order Run() calls them.
@@ -212,4 +245,19 @@ private:
     bool m_XformsOnScene = false; // binding 27 holds the GPU scene now, not this view's instance ring span
     void BindInstanceXforms(bool scene);
     bool m_VelocityOut = false;
+
+    // G2-b, GPU-driven draws (SceneViewPassGpu.cpp): this view culls and draws the table's batches on the GPU, and its
+    // gather skips them. Off: everything goes the CPU path as before.
+    bool GpuDrawsWanted() const;
+    void PrepareGpuFrame(VisibilityQuery& inView); // table up to date, this frame's CPU-path members, inView.SkipSlots
+    void BuildGpuTable();
+    void CullGpuView(const VisibilityQuery& framed); // stage A (after the gather)
+    void DrawGpuDepth(Shader& depth);                // the table's batches into the depth pre-pass
+    void CullGpuHiz();                               // Hi-Z over stage A's survivors (BuildBatches, after the CPU path's)
+    void DrawGpuOpaque(Model::DrawPassState& passState, unsigned char& depthWrites); // GLboolean: the pass's depth writes
+    bool m_GpuDraws = false;   // the table is in use this view
+    bool m_GpuCulled = false;  // stage A ran: the table's commands hold this view's counts
+    unsigned m_GpuRemap = 0;   // what the table's draws read at 28: stage A's survivors, or Hi-Z's
+    unsigned m_GpuCmdBuffer = 0;
+    std::size_t m_GpuCmdBase = 0; // the table's commands for this view: their indirect buffer and offset
 };

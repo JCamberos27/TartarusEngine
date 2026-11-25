@@ -64,6 +64,20 @@ int ReflectionProbeArray::Select(const glm::vec3& viewCenter, Scored (&best)[kMa
     return found;
 }
 
+std::uint64_t ReflectionProbeArray::LayoutHash() const {
+    std::uint64_t h = 0xcbf29ce484222325ull ^ m_Probes.size();
+    const auto mix = [&h](const void* p, std::size_t n) {
+        const unsigned char* b = (const unsigned char*)p;
+        for (std::size_t i = 0; i < n; ++i) h = (h ^ b[i]) * 0x100000001b3ull;
+    };
+    for (const ProbeData& p : m_Probes) {
+        mix(&p.Center, sizeof p.Center);
+        mix(&p.HalfSize, sizeof p.HalfSize);
+        mix(&p.Importance, sizeof p.Importance);
+    }
+    return h;
+}
+
 std::uint32_t ReflectionProbeArray::SelectionKey(const glm::vec3& centre) const {
     if (m_Probes.empty()) return 0u;
     Scored best[kMaxDraw];

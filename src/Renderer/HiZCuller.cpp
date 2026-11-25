@@ -63,7 +63,11 @@ layout(std430, binding = 23) readonly buffer GroupBlock { uvec4 uGroups[]; };
 layout(std430, binding = 24) readonly buffer CmdListBlock { uint uCmdList[]; };
 layout(std430, binding = 29) buffer CommandBlock { uint uCommands[]; };
 layout(std430, binding = 28) writeonly buffer RemapBlock { int uRemap[]; };
-layout(std430, binding = 25) readonly buffer SceneSlotBlock { uint uSceneSlot[]; }; // read when uSceneSlots is 1
+layout(std430, binding = 25) readonly buffer SceneSlotBlock { uint uSceneSlot[]; }; // read when uSceneSlots is 1 or 2
+// 0: a group's copies are its instance slots, boxes per instance slot. 1: the same, remapped to GPU scene slots (25).
+// 2 (CullChained, after GpuCull's stage A): a group's run at 25 holds stage A's survivors (scene slots), as many as its
+// first command's instanceCount; the boxes are the GPU scene's Bounds by scene slot, padded here as AddBox pads them
+// (group .y = its foliage sway, as float bits).
 uniform int uSceneSlots;
 uniform mat4 uViewProj;
 uniform vec4 uViewport; // x, y, w, h in level-0 pixels
@@ -73,9 +77,16 @@ uniform vec3 uEye;
 uniform float uNearMargin;
 shared uint sScan[64];
 
-bool Visible(uint slot) {
+bool Visible(uint slot, float sway) {
     vec4 lo = uBoxes[slot * 2u], hi = uBoxes[slot * 2u + 1u];
     if (lo.w == 0.0) return true;
+    if (uSceneSlots == 2) { // AddBox: PadBounds, then the sway
+        vec3 pad = (hi.xyz - lo.xyz) * 0.01 + vec3(0.02);
+        lo.xyz -= pad;
+        hi.xyz += pad;
+        lo.xyz -= vec3(sway);
+        hi.xyz += vec3(sway);
+    }
     vec3 d = max(max(lo.xyz - uEye, uEye - hi.xyz), vec3(0.0));
     if (dot(d, d) < uNearMargin * uNearMargin) return true;
     vec2 smin = vec2(1e30), smax = vec2(-1e30);
@@ -109,10 +120,15 @@ bool Visible(uint slot) {
 void main() {
     uvec4 g = uGroups[gl_WorkGroupID.x];
     uint lid = gl_LocalInvocationID.x;
+    bool chained = uSceneSlots == 2;
+    uint count = chained ? (g.w > 0u ? uCommands[uCmdList[g.z] * 5u + 1u] : 0u) : g.y;
+    float sway = chained ? uintBitsToFloat(g.y) : 0.0;
+    barrier(); // every lane has read the count before any lane writes the commands below
     uint written = 0u;
-    for (uint c = 0u; c < g.y; c += 64u) {
+    for (uint c = 0u; c < count; c += 64u) {
         uint k = c + lid;
-        bool v = k < g.y && Visible(g.x + k);
+        uint slot = chained ? (k < count ? uSceneSlot[g.x + k] : 0u) : g.x + k;
+        bool v = k < count && Visible(slot, sway);
         sScan[lid] = v ? 1u : 0u;
         barrier();
         for (uint off = 1u; off < 64u; off <<= 1u) {
@@ -121,7 +137,7 @@ void main() {
             sScan[lid] += t;
             barrier();
         }
-        if (v) uRemap[g.x + written + sScan[lid] - 1u] = int(uSceneSlots != 0 ? uSceneSlot[g.x + k] : g.x + k);
+        if (v) uRemap[g.x + written + sScan[lid] - 1u] = int(chained ? slot : uSceneSlots != 0 ? uSceneSlot[g.x + k] : g.x + k);
         uint total = sScan[63];
         barrier();
         written += total;
@@ -211,6 +227,76 @@ Resources::Pyramid& EnsurePyramid(int w, int h) {
 }
 } // namespace
 
+namespace {
+// The max-depth pyramid of `depthTex` (w x h) in this view size's texture.
+const Resources::Pyramid& BuildPyramidFor(unsigned depthTex, int w, int h) {
+    Resources& r = Res();
+    const Resources::Pyramid& pyr = EnsurePyramid(w, h);
+    glMemoryBarrier(0x00000400u /* GL_FRAMEBUFFER_BARRIER_BIT */ | GL_TEXTURE_FETCH_BARRIER_BIT);
+    r.Copy->Bind();
+    glUniform2i(r.Copy->Loc("uSize"), w, h);
+    glBindTextureUnit(40, depthTex);
+    glBindImageTexture(1, pyr.Tex, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
+    r.Copy->DispatchCompute((unsigned)(w + 7) / 8, (unsigned)(h + 7) / 8, 1);
+    r.Down->Bind();
+    const int srcLoc = r.Down->Loc("uSrcSize"), dstLoc = r.Down->Loc("uDstSize");
+    int sw = w, sh = h;
+    for (int level = 1; level < pyr.Levels; ++level) {
+        const int dw = std::max(1, sw >> 1), dh = std::max(1, sh >> 1);
+        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+        glBindImageTexture(0, pyr.Tex, level - 1, GL_FALSE, 0, GL_READ_ONLY, GL_R32F);
+        glBindImageTexture(1, pyr.Tex, level, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
+        glUniform2i(srcLoc, sw, sh);
+        glUniform2i(dstLoc, dw, dh);
+        r.Down->DispatchCompute((unsigned)(dw + 7) / 8, (unsigned)(dh + 7) / 8, 1);
+        sw = dw;
+        sh = dh;
+    }
+    return pyr;
+}
+
+void SetCullUniforms(Shader& cull, const glm::mat4& viewProj, const glm::vec4& viewport, int w, int h, int levels,
+                     const glm::vec3& eye, int mode) {
+    cull.Bind();
+    cull.SetMat4("uViewProj", viewProj);
+    cull.SetVec4("uViewport", viewport);
+    glUniform2i(cull.Loc("uSize"), w, h);
+    cull.SetInt("uMaxLevel", levels - 1);
+    cull.SetVec3("uEye", eye);
+    cull.SetFloat("uNearMargin", kNearMargin);
+    cull.SetInt("uSceneSlots", mode);
+}
+} // namespace
+
+bool HiZCuller::CullChained(const Chained& c) {
+    if (!c.GroupCount || !c.DepthTex || c.W <= 0 || c.H <= 0 || !EnsurePrograms()) return false;
+    Resources& r = Res();
+    const Resources::Pyramid& pyr = c.PyramidBuilt ? EnsurePyramid(c.W, c.H) : BuildPyramidFor(c.DepthTex, c.W, c.H);
+    glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 22, c.Bounds, 0, (GLsizeiptr)c.BoundsBytes);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 23, c.Groups);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 24, c.CmdList);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 25, c.InSlots);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 28, c.OutRemap);
+    glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 29, c.Commands, (GLintptr)c.CommandsOffset, (GLsizeiptr)c.CommandsBytes);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+    SetCullUniforms(*r.Cull, c.ViewProj, c.Viewport, c.W, c.H, pyr.Levels, c.Eye, 2);
+    glBindTextureUnit(40, pyr.Tex);
+    constexpr std::uint32_t kMaxGroupsPerDispatch = 65535;
+    for (std::uint32_t first = 0; first < c.GroupCount; first += kMaxGroupsPerDispatch) {
+        // A group offset would need a uniform the classic mode lacks: past 65535 groups, rebind 23 at an offset.
+        if (first) glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 23, c.Groups, (GLintptr)first * 16,
+                                     (GLsizeiptr)(std::min(kMaxGroupsPerDispatch, c.GroupCount - first)) * 16);
+        r.Cull->DispatchCompute(std::min(kMaxGroupsPerDispatch, c.GroupCount - first), 1, 1);
+    }
+    glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+    GLStateCache::Invalidate();
+    return true;
+}
+
+void HiZCuller::RebindRemap() {
+    if (Res().Remap) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kRemapBinding, Res().Remap);
+}
+
 bool HiZCuller::Enabled() {
     static const int gate = [] {
         if (Env::Flag(Env::Var::NoHiz)) return 0;
@@ -247,29 +333,7 @@ bool HiZCuller::Cull(unsigned depthTex, int w, int h, const glm::vec4& viewport,
                      unsigned indirectBuffer, std::uint32_t slotCount, bool sceneSlots) {
     if (groups.empty() || !depthTex || w <= 0 || h <= 0 || !indirectBuffer || !EnsurePrograms()) return false;
     Resources& r = Res();
-    const Resources::Pyramid& pyr = EnsurePyramid(w, h);
-
-    // The pyramid.
-    glMemoryBarrier(0x00000400u /* GL_FRAMEBUFFER_BARRIER_BIT */ | GL_TEXTURE_FETCH_BARRIER_BIT);
-    r.Copy->Bind();
-    glUniform2i(r.Copy->Loc("uSize"), w, h);
-    glBindTextureUnit(40, depthTex);
-    glBindImageTexture(1, pyr.Tex, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
-    r.Copy->DispatchCompute((unsigned)(w + 7) / 8, (unsigned)(h + 7) / 8, 1);
-    r.Down->Bind();
-    const int srcLoc = r.Down->Loc("uSrcSize"), dstLoc = r.Down->Loc("uDstSize");
-    int sw = w, sh = h;
-    for (int level = 1; level < pyr.Levels; ++level) {
-        const int dw = std::max(1, sw >> 1), dh = std::max(1, sh >> 1);
-        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-        glBindImageTexture(0, pyr.Tex, level - 1, GL_FALSE, 0, GL_READ_ONLY, GL_R32F);
-        glBindImageTexture(1, pyr.Tex, level, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
-        glUniform2i(srcLoc, sw, sh);
-        glUniform2i(dstLoc, dw, dh);
-        r.Down->DispatchCompute((unsigned)(dw + 7) / 8, (unsigned)(dh + 7) / 8, 1);
-        sw = dw;
-        sh = dh;
-    }
+    const Resources::Pyramid& pyr = BuildPyramidFor(depthTex, w, h);
 
     // The test.
     // The inputs through the instance ring (a fresh span each, bound as a range); re-specifying four buffers per view
@@ -294,14 +358,7 @@ bool HiZCuller::Cull(unsigned depthTex, int w, int h, const glm::vec4& viewport,
     }
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kRemapBinding, r.Remap);
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
-    r.Cull->Bind();
-    r.Cull->SetMat4("uViewProj", viewProj);
-    r.Cull->SetVec4("uViewport", viewport);
-    glUniform2i(r.Cull->Loc("uSize"), w, h);
-    r.Cull->SetInt("uMaxLevel", pyr.Levels - 1);
-    r.Cull->SetVec3("uEye", eye);
-    r.Cull->SetFloat("uNearMargin", kNearMargin);
-    r.Cull->SetInt("uSceneSlots", sceneSlots ? 1 : 0);
+    SetCullUniforms(*r.Cull, viewProj, viewport, w, h, pyr.Levels, eye, sceneSlots ? 1 : 0);
     glBindTextureUnit(40, pyr.Tex);
     r.Cull->DispatchCompute((unsigned)groups.size(), 1, 1);
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <algorithm>
 #include <vector>
@@ -41,6 +42,31 @@ public:
     static bool Cull(unsigned depthTex, int w, int h, const glm::vec4& viewport, const glm::mat4& viewProj,
                      const glm::vec3& eye, const std::vector<Group>& groups, const std::vector<std::uint32_t>& cmdList,
                      unsigned indirectBuffer, std::uint32_t slotCount, bool sceneSlots = false);
+
+    // G2-b: culls GpuCull's stage-A survivors against the pyramid of `DepthTex` (built here unless the view's Cull
+    // above already built it: PyramidBuilt). Each group (uvec4 at `Groups`: survivors' base at `InSlots`, foliage sway
+    // as float bits, where its command indices start in `CmdList`, how many) reads its count from its first command's
+    // instanceCount, writes its visible scene slots in order to `OutRemap` at the same base and the count to all its
+    // commands. Bounds: GpuScene's Bounds buffer. Leaves storage 22-25, 28, 29, texture unit 40 and the program as it
+    // used them.
+    struct Chained {
+        unsigned DepthTex = 0;
+        int W = 0, H = 0;
+        bool PyramidBuilt = false;
+        glm::vec4 Viewport{0.0f};
+        glm::mat4 ViewProj{1.0f};
+        glm::vec3 Eye{0.0f};
+        unsigned Groups = 0;
+        std::uint32_t GroupCount = 0;
+        unsigned Bounds = 0;
+        std::size_t BoundsBytes = 0;
+        unsigned CmdList = 0, InSlots = 0, OutRemap = 0;
+        unsigned Commands = 0; // the indirect commands: `CommandsBytes` from `CommandsOffset` in this buffer
+        std::size_t CommandsOffset = 0, CommandsBytes = 0;
+    };
+    static bool CullChained(const Chained& c);
+    // Binds Cull's remap at 28 again (after something else used 28 before the opaque pass draws from it).
+    static void RebindRemap();
 
     // Testable pieces (unit tests). From origin/dev/occlusion-culling's OcclusionCuller.
     static void PadBounds(glm::vec3& wmin, glm::vec3& wmax);
