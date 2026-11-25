@@ -790,6 +790,9 @@ void TestSameSceneContentFastPath() {
     CHECK(SceneSerializer::SameSceneContent(a, noLibrary));
     CHECK(!SceneSerializer::SameSceneContent(a, sceneDiff));
     CHECK(SceneSerializer::SameSceneContent(a, pretty)); // different text, same JSON: the parse decides
+    const std::string reordered = R"({"skyTint":[1.0,2.0],"libraryModels":[1],"boxes":[{"id":0,"name":"x\"}],{"}],"assetFolders":["A"]})";
+    CHECK(SceneSerializer::SameSceneContent(a, reordered)); // same members in another order: the parse decides
+    CHECK(SceneSerializer::SameSceneContent(reordered, a));
     CHECK(!SceneSerializer::SameSceneContent(nested, nestedDiff)); // only top-level library keys are left out
     CHECK(!SceneSerializer::SameSceneContent(a, extraKey));
     CHECK(!SceneSerializer::SameSceneContent(extraKey, a));
