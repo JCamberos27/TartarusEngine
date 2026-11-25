@@ -1628,6 +1628,8 @@ bool AppSession::Frame() {
     // Reap voices that have finished so repeated Play/Stop cycles don't accumulate
     // ma_sound objects and open file handles (#200).
     // #171 - game audio follows the editor's Pause / Error Pause (resumes mid-clip).
+    {
+    PROFILE_SCOPE("Audio Update");
     AudioEngine::SetPaused(playing && paused);
     if (playing && (playing && paused) != soundWasPaused)
         EditorSound::Play((playing && paused) ? EditorSound::Event::Pause : EditorSound::Event::Resume);
@@ -1648,6 +1650,7 @@ bool AppSession::Frame() {
     }
     EditorSound::Update(); // the notification sounds for what was logged this frame
     AudioEngine::Update();
+    }
 
     // Whether gameplay actually advances this frame: playing and not paused, or a
     // single-frame Step was requested while paused (#236). Everything else about play mode

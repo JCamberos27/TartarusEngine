@@ -37,6 +37,17 @@ public:
     // then clears the phase. `mode` is "edit", "play" or "play-max".
     void ReportPhase(const std::string& sceneFile, const char* mode, int draws, int tris, int width, int height, bool perfSample);
 
+    // The frame's halves: named per-frame values ("cpu.sim", "gpu.frame", "p48.Scene Draw"...) reported per phase as
+    // avg / p50 / p95 / p99 / max (the HALF lines, and "half" rows in TARTARUS_PERF_CSV). Each key keeps its own
+    // samples, one per call, so a value that lands frames late (a GPU timer query) still counts once; a key's N can
+    // trail the frame count by a few. Sample() adds the cpu.* keys itself, every frame.
+    void AddHalf(const std::string& key, double ms);
+    // The key's latest sample, or -1 when it has none this phase.
+    double LastHalf(const std::string& key) const;
+    // The cpu.* bucket a TOP-LEVEL CPU scope's time goes to ("sim", "anim", "physics", "ui", "audio", "assets", "render",
+    // "wait", "editor", "input"), or "other" for a scope nobody mapped yet (the HALF report names those).
+    static const char* CpuBucket(const std::string& scope);
+
 private:
     struct Accum { double Sum = 0.0; double Max = 0.0; int N = 0; };
     using AccumList = std::vector<std::pair<std::string, Accum>>;
@@ -65,6 +76,9 @@ private:
     void ReportHitches(const std::string& sceneFile, const char* label);
     void AppendCsv(const std::string& sceneFile, const char* label, const Stats& all, const Stats& after2s) const;
     void PrintScopeTable();
+    void AddCpuHalves();
+    void ReportHalves(const std::string& sceneFile, const char* label);
+    void PrintMachine() const;
 
     int m_Warmup = 0;
     AccumList m_Cpu, m_Gpu;
@@ -75,4 +89,6 @@ private:
     Worst m_Pending;
     std::vector<FrameLoads::Event> m_Loads; // the frame's loads, from TakeFrameMs
     MachineLoad::Snapshot m_LoadStart;      // at the phase's first measured frame
+    std::vector<std::pair<std::string, std::vector<double>>> m_Halves; // AddHalf's samples, per key, in first-seen order
+    std::vector<std::string> m_UnmappedCpu;  // top-level CPU scopes CpuBucket put in "other" this phase
 };

@@ -93,6 +93,7 @@
 #include "PngWrite.h" // async decode test fixture
 #include "EditorLayerInternal.h" // ClipFilterMatch
 #include "Profiler.h"
+#include "Tests/PerfBench.h"
 #include <set>
 #include <string>
 #include <thread>
@@ -533,6 +534,28 @@ void TestProfilerUnscoped() {
     Profiler::BeginFrame(); // leave an empty frame behind
 }
 
+// --perf-bench's HALF report: top-level scopes land in their cpu.* bucket (prefix rules too, unmapped ones in "other"),
+// and each AddHalf key keeps its own samples (a lagged GPU key can trail the CPU ones).
+void TestPerfBenchHalves() {
+    CHECK(std::string(PerfBench::CpuBucket("Physics Step")) == "physics");
+    CHECK(std::string(PerfBench::CpuBucket("Animators")) == "anim");
+    CHECK(std::string(PerfBench::CpuBucket("First Person IK")) == "anim");
+    CHECK(std::string(PerfBench::CpuBucket("Player Shots + Impacts")) == "sim");
+    CHECK(std::string(PerfBench::CpuBucket("Audio Update")) == "audio");
+    CHECK(std::string(PerfBench::CpuBucket("UI Module Draw")) == "ui");
+    CHECK(std::string(PerfBench::CpuBucket("IBL Bake (Sky)")) == "render");
+    CHECK(std::string(PerfBench::CpuBucket("Swap Buffers")) == "wait");
+    CHECK(std::string(PerfBench::CpuBucket("Asset Pump + Outfit Hiding")) == "assets");
+    CHECK(std::string(PerfBench::CpuBucket("Nobody Mapped This")) == "other");
+    CHECK(std::string(PerfBench::CpuBucket("UI")) == "other"); // "UI *" needs the space
+    PerfBench bench;
+    CHECK(bench.LastHalf("gpu.frame") == -1.0);
+    bench.AddHalf("gpu.frame", 4.0);
+    bench.AddHalf("gpu.frame", 6.0);
+    CHECK(bench.LastHalf("gpu.frame") == 6.0);
+    CHECK(bench.LastHalf("cpu.sim") == -1.0);
+}
+
 void TestFrameLoads() {
     std::vector<FrameLoads::Event> got;
     FrameLoads::Enable(false);
@@ -755,6 +778,7 @@ void RegisterCoreTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Utf8Truncate", TestUtf8Truncate});
     tests.push_back({"FrameLoads", TestFrameLoads});
     tests.push_back({"ProfilerUnscoped", TestProfilerUnscoped});
+    tests.push_back({"PerfBenchHalves", TestPerfBenchHalves});
     tests.push_back({"PhysicMaterial", TestPhysicMaterial});
     tests.push_back({"PhysicsHitchCatchUp", TestPhysicsHitchCatchUp});
     tests.push_back({"PhysicsApplySettings", TestPhysicsApplySettings});
