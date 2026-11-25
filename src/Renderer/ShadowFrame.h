@@ -207,6 +207,7 @@ private:
 
     // Sun: RenderSun's steps, in order, over one SunPass (ShadowFrame.cpp).
     struct SunPass;
+    void DiagPadCheck(World& world, const CascadedShadowMap& shadowMap); // TEMPORARY sizing
     void GatherSunCasters(SunPass& p, const glm::mat4& fitView, const glm::mat4& fitProj);
     void DrawSunCasters(SunPass& p);
     void DrawSunImpostors(SunPass& p);

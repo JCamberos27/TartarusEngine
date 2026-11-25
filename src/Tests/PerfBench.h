@@ -21,7 +21,7 @@
 class PerfBench {
 public:
     // --perf-bench measures each scene twice: kPhaseFrames in edit mode, then as many in Play.
-    static constexpr int kPhaseFrames = 600;
+    static constexpr int kPhaseFrames = 4000; // DIAG walk (main: 600)
 
     // TARTARUS_PERF_PACED (A-3): measure the frames as a player gets them, paced by VSync ("vsync") or a software FPS
     // cap (a number), instead of --perf-bench's default of no VSync and no cap. Only a visible run (TARTARUS_SHOW=1)

@@ -1,7 +1,9 @@
 #include "PlayFrame.h"
+#include "Core/DiagW1.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <functional>
 #include <string>
@@ -181,7 +183,27 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         player.AimHeld=firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped() && !playerVitals.IsDead() &&
             ((gameHasInput && InputMap::GetButton("Fire2")) || (npcTest && npcTest->Aiming()));
         player.SprintBlocked=firstPersonPresentation.ActionBlocksSprint();
+        // TEMPORARY sizing (diag only): TARTARUS_DIAG_WALK=1 walks a fixed path from Play start (segments 0-5).
+        static const bool diagWalk = std::getenv("TARTARUS_DIAG_WALK") != nullptr;
+        static double diagT = 0.0;
+        const glm::vec3 diagFrom = player.Cam.Position;
+        const float diagYaw0 = player.Cam.Yaw;
+        int diagSeg = -1;
+        if (diagWalk) {
+            diagT += gameDt;
+            const double t = diagT;
+            const int sg = t < 5.0 ? 0 : t < 15.0 ? 1 : t < 25.0 ? 2 : t < 30.0 ? 3 : t < 35.0 ? 4 : t < 40.0 ? 5 : 6;
+            diagSeg = sg;
+            player.ScriptedMove = true;
+            player.ScriptMove = (sg >= 1 && sg <= 3) ? glm::vec2(0.0f, 1.0f) : glm::vec2(0.0f);
+            player.ScriptSprint = player.ScriptRun = (sg == 3);
+            player.Cam.Yaw += sg == 2 ? 30.0f * gameDt : sg == 4 ? 90.0f * gameDt : 0.0f;
+        }
         player.Update(gameDt, gameHasInput && !playerVitals.IsDead());
+        if (diagWalk) {
+            const glm::vec3 d = player.Cam.Position - diagFrom;
+            DiagW1Walk(diagSeg, std::sqrt(d.x * d.x + d.z * d.z), std::abs(std::remainder(player.Cam.Yaw - diagYaw0, 360.0f)), gameDt);
+        }
         // Before the body places itself: it is the controller's child, posed in world space.
         if (playControllerEntity != entt::null && world.Registry.valid(playControllerEntity)) {
             const float yaw = glm::radians(player.Cam.Yaw); // Camera forward = (cos, 0, sin)
