@@ -5,6 +5,7 @@
 #include "Model.h"
 #include "Log.h"
 #include "PrimitiveMeshes.h"
+#include "StepPending.h"
 #include "TerrainGrid.h"
 #include "Texture.h"
 #include "gl.h"
@@ -43,16 +44,17 @@ std::shared_ptr<Model> Model::ImportDeferred(const std::string& path, const Mode
 UploadStaging::Step Model::GpuUploadStep() {
     using UploadStaging::Step;
     if (!m_GpuPending) return Step::Done;
-    for (auto& mesh : m_D->Meshes)
-        if (mesh->NeedsUpload()) {
-            const Step s = mesh->UploadStep(true);
-            return s == Step::Done ? Step::Progress : s;
-        }
-    for (auto& [key, tex] : m_D->TextureCache)
-        if (tex && tex->IsPendingUpload()) {
-            const Step s = tex->UploadStep(true);
-            return s == Step::Done ? Step::Progress : s;
-        }
+    // Every pending mesh and texture is offered a step (StepPending), not just the first: one waiting for ring space
+    // behind a later one that holds the space (its copy done, never stepped) stalled the model for good.
+    const PendingStep meshes = StepPending(
+        m_D->Meshes, [](const auto& mesh) { return mesh->NeedsUpload(); },
+        [](auto& mesh) { return mesh->UploadStep(true) != Step::Waiting; });
+    if (meshes == PendingStep::Progress) return Step::Progress;
+    const PendingStep textures = StepPending(
+        m_D->TextureCache, [](const auto& kv) { return kv.second && kv.second->IsPendingUpload(); },
+        [](auto& kv) { return kv.second->UploadStep(true) != Step::Waiting; });
+    if (textures == PendingStep::Progress) return Step::Progress;
+    if (meshes == PendingStep::Waiting || textures == PendingStep::Waiting) return Step::Waiting;
     m_GpuPending = false;
     return Step::Done;
 }

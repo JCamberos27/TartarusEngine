@@ -46,6 +46,7 @@
 #include "../Game/TimeOfDay.h"
 #include "AssetLibrary.h"
 #include "AsyncTicketCount.h"
+#include "StepPending.h"
 #include "../Game/World.h"
 #include "../Game/Components.h"
 #include "../Physics/Frustum.h"
@@ -850,6 +851,37 @@ void AssetPumpWaitingTickets() {
     CHECK(CountWaitingTickets(tickets) == 1);
     loading->Ready = true;
     CHECK(CountWaitingTickets(tickets) == 0);
+}
+
+// A model's pending uploads share the staging ring. The first one waits for ring space that a later one holds (its copy
+// is done and only a step retires it): stepping just the first never frees it. Every pending item gets a step.
+void ModelUploadStepsFreeTheRing() {
+    struct Up { bool Pending = true, Holds = false, CopyDone = false; };
+    int freeSlots = 0; // the ring has room for one reservation, and the second upload holds it
+    std::vector<Up> ups(2);
+    ups[1].Holds = true;
+    ups[1].CopyDone = true;
+    const auto isPending = [](const Up& u) { return u.Pending; };
+    const auto step = [&](Up& u) {
+        if (u.Holds && u.CopyDone) { u.Pending = false; u.Holds = false; ++freeSlots; return true; } // upload + retire
+        if (!u.Holds) {
+            if (freeSlots == 0) return false;                  // the ring is full for now
+            --freeSlots; u.Holds = true; u.CopyDone = true;    // reserved; the worker's copy lands
+        }
+        return false;                                          // copy not in yet: waiting
+    };
+    CHECK(StepPending(ups, isPending, step) == PendingStep::Progress); // the later upload retires its span...
+    int steps = 1;
+    while (StepPending(ups, isPending, step) != PendingStep::None && steps < 10) ++steps;
+    CHECK(!ups[0].Pending && !ups[1].Pending);                         // ...so the first gets its space and finishes
+    CHECK(steps <= 4);
+    // Everything waiting is reported as waiting, nothing pending as none.
+    std::vector<Up> stuck(2);
+    int none = 0;
+    CHECK(StepPending(stuck, isPending, [&](Up&) { return none != 0; }) == PendingStep::Waiting);
+    std::vector<Up> done(2);
+    done[0].Pending = done[1].Pending = false;
+    CHECK(StepPending(done, isPending, step) == PendingStep::None);
 }
 
 // Material slots batch when they draw alike: the same asset, or separate copies with the same values; a different
@@ -2966,6 +2998,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Async uploads: staging ring placement wraps and never overlaps", UploadStagingRing});
     tests.push_back({"Async uploads: the pump budget follows the frame headroom in Play", AssetPumpBudget});
     tests.push_back({"Async uploads: a ticket the budget deferred still counts as in flight", AssetPumpWaitingTickets});
+    tests.push_back({"Async uploads: a model's later upload that holds ring space is stepped too", ModelUploadStepsFreeTheRing});
     tests.push_back({"GPU-driven draws: indirect batches by key, in first-appearance order", IndirectBuilder});
     tests.push_back({"GPU-driven draws: mesh arena free list is first-fit and coalesces", MeshArenaFreeList});
     tests.push_back({"GPU occlusion culling: box padding", HiZPieces});
