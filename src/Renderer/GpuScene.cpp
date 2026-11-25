@@ -43,7 +43,7 @@ void GpuScene::Pack(const SceneSlot& s, glm::mat4 xf[2], glm::vec4 bounds[2]) {
     xf[1] = glm::mat4(s.Normal);
     std::uint32_t bits = (std::uint32_t)s.Flags & 0x7FFFu;
     if (!s.Alive) bits |= kDead;
-    bits |= (std::uint32_t)std::clamp(s.Layer, 0, 0xFFFF) << 16;
+    bits |= (std::uint32_t)(std::uint16_t)s.Layer << 16; // a layer outside 0-31 stays outside it (never hidden)
     bounds[0] = glm::vec4(s.WorldMin, s.Bounded ? 1.0f : 0.0f);
     bounds[1] = glm::vec4(s.WorldMax, AsFloat(bits));
 }
