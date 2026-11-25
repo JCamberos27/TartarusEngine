@@ -626,6 +626,9 @@ void UpdateLiveKeys(CandidateCache& cache, bool rebuilt) {
     cache.Live.resize(n);
     const std::uint32_t epoch = RenderSettingsEpoch();
     if (rebuilt || epoch != cache.SeenEpoch) {
+        // A reported write may be one the LiveKeys don't hold (another material slot, a material asset's own settings):
+        // the draw table reads all of them.
+        if (epoch != cache.SeenEpoch) ++cache.TableGen;
         cache.SeenEpoch = epoch;
         ScanLiveKeys(cache, 0, n, rebuilt);
         return;

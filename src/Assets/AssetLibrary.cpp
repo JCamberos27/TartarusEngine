@@ -507,6 +507,7 @@ int AssetLibrary::HotReloadShaders(const std::vector<std::string>& changedKeys) 
     int reloaded = 0;
     for (auto& [path, sa] : m_ShaderCache)
         if (sa && sa->DependsOnAny(changedKeys) && sa->ReloadFromDisk()) ++reloaded;
+    if (reloaded) NoteRenderSettingsChanged(); // programs (and whether they instance) may differ now
     return reloaded;
 }
 

@@ -136,12 +136,19 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
     t.OpaqueCommands = 0;
     t.Members = 0;
 
-    // The members, as the classify step would make their draw items.
+    // The members: what grouping reads (a draw item is made only for each group's lead, below).
+    struct Member {
+        Model* Ref;
+        const std::vector<std::shared_ptr<MaterialAsset>>* Slots;
+        std::uint64_t GIMask;
+        glm::vec3 Centre;
+        std::uint32_t Slot, Entity;
+        int LayerBit;
+        bool ReceiveShadows;
+    };
     auto& reg = m_World.Registry;
-    static std::vector<DrawItem> items;
-    static std::vector<std::uint32_t> itemSlot;
+    static std::vector<Member> items;
     items.clear();
-    itemSlot.clear();
     SceneSlot s;
     for (std::uint32_t slot = 0; slot < n; ++slot) {
         if (!ReadSceneSlot(slot, s) || !s.Alive || !s.Renderable) continue;
@@ -165,28 +172,35 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
         }
         if (!ok || FurRenderer::HasFur(*m, slots)) continue;
 
+        // As the classify step reads them: the bounds centre (probes), the layer bit, the GI volumes touched.
         const glm::mat4& model = s.Xform;
         const glm::vec3 centre = s.Bounded ? glm::vec3(model * glm::vec4((s.LocalMin + s.LocalMax) * 0.5f, 1.0f))
                                            : glm::vec3(model[3]);
+        const std::uint64_t giMask = gi ? (s.Bounded ? gi->MaskFor(s.WorldMin, s.WorldMax) : gi->AllMask()) : 0;
+        items.push_back({m, &slots, giMask, centre, slot, (std::uint32_t)entt::to_integral(e),
+                         (int)(1u << std::clamp(s.Layer, 0, 31)), r.ReceiveShadows});
+    }
+    // A group's lead as the classify step would make its draw item (what the batches bind and the per-draw hook reads).
+    const auto makeLead = [&](const Member& mb) {
+        ReadSceneSlot(mb.Slot, s);
+        const auto& slots = *mb.Slots;
+        Model* m = mb.Ref;
         const std::uint64_t matKey = (!slots.empty() && slots[0]) ? slots[0]->Mat.Hash() : m->MaterialSortKey();
         std::uint32_t progKeyUnused = 0;
         const Shader* prog = ProgramFor(!slots.empty() ? slots[0].get() : nullptr, progKeyUnused);
-        const int layerBit = (int)(1u << std::clamp(s.Layer, 0, 31));
-        DrawItem item{model, m, &slots, matKey, prog, m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
-                      2000, 0.0f, centre, Model::MeshPass::All, r.ReceiveShadows, layerBit};
+        DrawItem item{s.Xform, m, mb.Slots, matKey, prog, m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
+                      2000, 0.0f, mb.Centre, Model::MeshPass::All, mb.ReceiveShadows, mb.LayerBit};
         item.StaticReceiver = true; // nothing skinned or simulated
-        item.GIMask = gi ? (s.Bounded ? gi->MaskFor(s.WorldMin, s.WorldMax) : gi->AllMask()) : 0;
-        item.SortId = (std::uint32_t)entt::to_integral(e);
+        item.GIMask = mb.GIMask;
+        item.SortId = mb.Entity;
         item.WorldMin = s.WorldMin;
         item.WorldMax = s.WorldMax;
         item.Bounded = s.Bounded;
         item.Normal = s.Normal;
-        item.Slot = slot;
-        // No blood lookup for the batch's lead: a member with splats leaves the table for that frame.
-        item.Entity = 0xFFFFFFFFu;
-        items.push_back(item);
-        itemSlot.push_back(slot);
-    }
+        item.Slot = mb.Slot;
+        item.Entity = 0xFFFFFFFFu; // no blood lookup: a member with splats leaves the table for that frame
+        return item;
+    };
 
     // Groups, as BuildBatches groups (the members' constant fields - pass, sidedness, SSAO, flat L1 - are equal).
     static std::vector<std::uint32_t> probeKey;
@@ -197,15 +211,15 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
     GroupInstances(
         items.size(),
         [&](std::uint32_t i) -> std::uint64_t {
-            const DrawItem& it = items[i];
+            const Member& it = items[i];
             std::uint64_t seed = (std::uint64_t)(std::uintptr_t)it.Ref->ImportId() * 0x9E3779B97F4A7C15ull;
-            seed ^= (std::uint64_t)it.Pass | ((std::uint64_t)it.ReceiveShadows << 5) | ((std::uint64_t)(std::uint32_t)it.LayerBit << 8) |
+            seed ^= (std::uint64_t)Model::MeshPass::All | ((std::uint64_t)it.ReceiveShadows << 5) | ((std::uint64_t)(std::uint32_t)it.LayerBit << 8) |
                     ((std::uint64_t)probeKey[i] << 32) ^ ((std::uint64_t)it.GIMask * 0xC2B2AE3D27D4EB4Full);
             return HashSlots(*it.Slots, seed);
         },
         [&](std::uint32_t a, std::uint32_t b) {
-            const DrawItem& x = items[a];
-            const DrawItem& y = items[b];
+            const Member& x = items[a];
+            const Member& y = items[b];
             return x.Ref->ImportId() == y.Ref->ImportId() && x.ReceiveShadows == y.ReceiveShadows && x.LayerBit == y.LayerBit &&
                    probeKey[a] == probeKey[b] && x.GIMask == y.GIMask && SameSlots(*x.Slots, *y.Slots);
         },
@@ -228,14 +242,14 @@ void SceneRenderer::ViewPass::BuildGpuTable() {
         const std::uint32_t base = (std::uint32_t)runs.size();
         for (std::uint32_t k = 0; k < grp.Count; ++k) {
             const std::uint32_t i = groups.Order[grp.First + k];
-            const std::uint32_t slot = itemSlot[i];
+            const std::uint32_t slot = items[i].Slot;
             runs.push_back(slot);
             SetBit(t.Owned, slot);
-            t.MemberEntity[slot] = items[i].SortId;
-            maxEntity = std::max(maxEntity, (std::uint32_t)entt::to_entity(entt::entity{items[i].SortId}));
+            t.MemberEntity[slot] = items[i].Entity;
+            maxEntity = std::max(maxEntity, (std::uint32_t)entt::to_entity(entt::entity{items[i].Entity}));
         }
-        const DrawItem& lead = items[groups.Order[grp.First]];
-        t.Leads.push_back(lead);
+        t.Leads.push_back(makeLead(items[groups.Order[grp.First]]));
+        const DrawItem& lead = t.Leads.back();
         stageGroups.push_back({base, grp.Count, 0, 0});
         float sw = 0.0f; // foliage sways past its bounds (BuildBatches' Hi-Z boxes)
         for (int m = 0; m < lead.Ref->MeshCount(); ++m) {
