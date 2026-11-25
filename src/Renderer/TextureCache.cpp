@@ -38,26 +38,6 @@ std::string NormalizedSourcePath(const std::string& sourcePath) {
     return ec ? sourcePath : abs.lexically_normal().string();
 }
 
-// The part of an absolute path after its last "project" folder ("assets/x/y.png"), or "" when it has none.
-std::string ProjectTail(const std::string& absPath) {
-    std::string p = absPath;
-    std::replace(p.begin(), p.end(), '\\', '/');
-    const size_t at = p.rfind("/project/");
-    return at == std::string::npos ? std::string() : p.substr(at + 9);
-}
-
-// An entry's stored source path names this source: the same absolute path, or the same file under another copy of
-// the project (a built game's project folder, a second checkout). The entry is keyed by the asset's GUID and stamped
-// with the source's size and write time already; the path only guards against a key collision.
-bool SameSource(const std::string& stored, const std::string& current) {
-    if (stored == current) return true;
-    const std::string a = ProjectTail(stored), b = ProjectTail(current);
-    if (a.empty() || a.size() != b.size()) return false;
-    for (size_t i = 0; i < a.size(); ++i)
-        if (std::tolower((unsigned char)a[i]) != std::tolower((unsigned char)b[i])) return false;
-    return true;
-}
-
 constexpr char kMagic[4] = {'T', 'T', 'E', 'X'};
 // Bump to invalidate every existing entry after a format or decode-behaviour change.
 // v2 (#207): downsample switched from nearest-neighbor to a box filter, so cached pixels baked
@@ -80,7 +60,24 @@ std::string CacheDir() {
     return dir;
 }
 
+// The part of an absolute path after its last "project" folder ("assets/x/y.png"), or "" when it has none.
+std::string ProjectTail(const std::string& absPath) {
+    std::string p = absPath;
+    std::replace(p.begin(), p.end(), '\\', '/');
+    const size_t at = p.rfind("/project/");
+    return at == std::string::npos ? std::string() : p.substr(at + 9);
+}
+
 } // namespace
+
+bool SameSource(const std::string& stored, const std::string& current) {
+    if (stored == current) return true;
+    const std::string a = ProjectTail(stored), b = ProjectTail(current);
+    if (a.empty() || a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i)
+        if (std::tolower((unsigned char)a[i]) != std::tolower((unsigned char)b[i])) return false;
+    return true;
+}
 
 // Cache entries are keyed by the asset's GUID (16 hex chars) when registered in AssetDatabase,
 // falling back to an FNV hash of the absolute path for unregistered sources. The source path is

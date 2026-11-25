@@ -52,6 +52,12 @@ uint64_t HashSettings(const TextureImportSettings& settings);
 // The file Store writes (and Load reads) for this source + settings pair, under Library/Textures.
 std::string EntryPath(const std::string& sourcePath, const TextureImportSettings& settings);
 
+// Whether an entry's stored source path names this source (both absolute, as Store writes them): the same path, or the
+// same file under another copy of the project - a built game's project folder, a second checkout. The entry is keyed
+// by the asset's GUID and stamped with the source's size and write time already; the path only guards against a key
+// collision, so a cooked Library shipped with a build still hits.
+bool SameSource(const std::string& stored, const std::string& current);
+
 // Startup maintenance pass (#226): the cache never evicts on its own, so a texture deleted from
 // the project, or reimported under different settings, leaves its old entry on disk forever.
 // This walks the cache directory once and deletes any entry that's provably stale:

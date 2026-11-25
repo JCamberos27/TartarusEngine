@@ -2317,6 +2317,18 @@ void TestPhysicalSky() {
 
 // --- TextureCache: one texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's)
 // keeps both entries - they used to share one and evict each other every session, re-decoding (and re-compressing) both.
+// A cooked Library shipped with a build (or a second checkout) stores the editor's absolute source paths: the entry
+// still names the same file under the other project folder, and nothing else.
+void TestTextureCacheSameSourceMovedProject() {
+    CHECK(TextureCache::SameSource(R"(C:\a\project\assets\T.png)", R"(C:\a\project\assets\T.png)"));
+    CHECK(TextureCache::SameSource(R"(C:\Users\j\Engine\project\assets\Wood\T_Bark.png)",
+                                   R"(D:\Builds\My Game\project\assets\Wood\T_Bark.png)"));
+    CHECK(TextureCache::SameSource(R"(C:\x\project\assets\t.png)", "D:/y/project/Assets/T.PNG")); // Windows paths: any case or slash
+    CHECK(!TextureCache::SameSource(R"(C:\x\project\assets\a.png)", R"(C:\y\project\assets\b.png)"));
+    CHECK(!TextureCache::SameSource(R"(C:\x\project\assets\a.png)", R"(C:\y\project\other\a.png)"));
+    CHECK(!TextureCache::SameSource(R"(C:\tmp\a.png)", R"(D:\tmp\a.png)")); // outside any project: the exact path only
+}
+
 void TestTextureCacheVariants() {
     const std::string src = (std::filesystem::temp_directory_path() / "tt_cache_variant_test.png").string();
     {
@@ -2457,6 +2469,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"MaterialRobustness", TestMaterialRobustness});
     tests.push_back({"MaterialTextureDefaults", TestMaterialTextureDefaults});
     tests.push_back({"TextureCacheVariants", TestTextureCacheVariants});
+    tests.push_back({"TextureCacheSameSourceMovedProject", TestTextureCacheSameSourceMovedProject});
     tests.push_back({"TextureCacheHash", TestTextureCacheHash});
     tests.push_back({"CameraFrustumValidation", TestCameraFrustumValidation});
     tests.push_back({"CameraRoll", TestCameraRoll});
