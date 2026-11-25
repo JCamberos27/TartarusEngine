@@ -18,6 +18,7 @@
 #include "../Editor/MotionRebake.h"
 
 #include "Core/Paths.h"
+#include "Model.h"
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -26,6 +27,7 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <limits>
 #include <random>
 #include <thread>
@@ -1087,6 +1089,127 @@ void TestSharedDatabasePrefetch() {
     std::filesystem::remove_all(dir, ec);
 }
 
+// The prefetch measured on the driver rig (RigShape, copied on the main thread): Get takes it only for a rig of the same
+// shape, and then gives exactly what its own measuring gives; a job measured on another shape (an outfit changed the
+// driver) or a Get with no rig reads afresh; a job stopped mid-build leaves nothing.
+void TestSharedDatabasePrefetchRig() {
+    std::error_code ec;
+    const std::filesystem::path dir = UnitTestSupport::TempDir("mm_prefetch_rig");
+    std::filesystem::create_directories(dir, ec);
+    const std::string base = (dir / "PrefetchRig").string();
+    {
+        SynthDb s = Build(StandardTakes());
+        std::string err;
+        CHECK(s.Stream.Save(base + ".mmanim", &err) && s.Feat.Save(base + ".mmdb", &err));
+    }
+    // Two rigs, the same nodes: hands down at the hips (nothing over the shoulders) and hands up over the head (all of it).
+    const auto rig = [&](const char* name, const char* handY) {
+        const std::filesystem::path file = dir / name;
+        std::ofstream out(file, std::ios::binary | std::ios::trunc);
+        out << R"({"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],
+"nodes":[{"name":"Root","mesh":0,"children":[1]},{"name":"pelvis","translation":[0,1,0],"children":[2]},
+{"name":"spine_05","translation":[0,0.4,0],"children":[3,5]},
+{"name":"upperarm_l","translation":[0.2,0.1,0],"children":[4]},{"name":"hand_l","translation":[0.1,)" << handY << R"(,0]},
+{"name":"upperarm_r","translation":[-0.2,0.1,0],"children":[6]},{"name":"hand_r","translation":[-0.1,)" << handY << R"(,0]}],
+"meshes":[{"primitives":[{"attributes":{"POSITION":0}}]}],
+"accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3","min":[0,0,0],"max":[1,1,0]}],
+"bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":36}],
+"buffers":[{"byteLength":36,"uri":"data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA"}]})";
+        out.close();
+        return Model::ImportDeferred(file.string(), ModelImportSettings{});
+    };
+    const auto down = rig("rig_down.gltf", "-0.5"), up = rig("rig_up.gltf", "0.5");
+    CHECK(down && up);
+    if (!down || !up) return;
+    CHECK(SharedMotionDatabase::SameShape(*SharedMotionDatabase::ShapeOf(*down), *SharedMotionDatabase::ShapeOf(*down)));
+    CHECK(!SharedMotionDatabase::SameShape(*SharedMotionDatabase::ShapeOf(*down), *SharedMotionDatabase::ShapeOf(*up)));
+
+    // What Get measures itself, per rig (no runner: no prefetch).
+    SharedMotionDatabase::SetPrefetchRunner(nullptr);
+    SharedMotionDatabase::ReleaseKept();
+    const auto same = [](const SharedMotionDatabase& a, const SharedMotionDatabase& b) {
+        if (a.Db.FrameCount() != b.Db.FrameCount() || a.HandsUpFrames != b.HandsUpFrames || a.BentOverFrames != b.BentOverFrames ||
+            a.IdleGestureCuts != b.IdleGestureCuts || a.StartFrame != b.StartFrame || a.TurnInPlaceRate != b.TurnInPlaceRate)
+            return false;
+        for (std::uint32_t f = 0; f < a.Db.FrameCount(); ++f)
+            if (a.Db.Flags(f) != b.Db.Flags(f)) return false;
+        return true;
+    };
+    auto directDown = SharedMotionDatabase::Get(base, nullptr, down.get());
+    auto directUp = SharedMotionDatabase::Get(base, nullptr, up.get());
+    CHECK(directDown && directUp);
+    if (!directDown || !directUp) return;
+    CHECK(directDown->HandsUpFrames == 0 && directUp->HandsUpFrames > 0); // the two shapes measure differently
+    // Copies: a held load is what Get hands out while anything holds it (it would never reach the prefetch).
+    const SharedMotionDatabase refDown = *directDown, refUp = *directUp;
+    directDown.reset();
+    directUp.reset();
+    SharedMotionDatabase::ReleaseKept();
+
+    std::vector<SharedMotionDatabase::PrefetchJob> queued;
+    const std::atomic<bool> noStop{false}, stopNow{true};
+    SharedMotionDatabase::SetPrefetchRunner([&](SharedMotionDatabase::PrefetchJob job) { queued.push_back(std::move(job)); });
+    const auto run = [&](const std::atomic<bool>& stop) {
+        for (auto& job : queued) job(stop);
+        queued.clear();
+    };
+
+    // Measured on the worker, taken by a Get with the same shape: the same database as Get's own measuring.
+    SharedMotionDatabase::Prefetch(base, SharedMotionDatabase::ShapeOf(*down));
+    SharedMotionDatabase::Prefetch(base, SharedMotionDatabase::ShapeOf(*down)); // the same shape pending: not queued twice
+    CHECK(queued.size() == 1);
+    run(noStop);
+    auto got = SharedMotionDatabase::Get(base, nullptr, down.get());
+    CHECK(got && same(*got, refDown) && !SharedMotionDatabase::PrefetchPending());
+    got.reset();
+    SharedMotionDatabase::ReleaseKept();
+
+    // Another shape queued for the same files: the pending one is replaced.
+    SharedMotionDatabase::Prefetch(base, SharedMotionDatabase::ShapeOf(*down));
+    SharedMotionDatabase::Prefetch(base, SharedMotionDatabase::ShapeOf(*up));
+    CHECK(queued.size() == 2);
+    run(noStop); // (the first was dropped: it does nothing)
+    got = SharedMotionDatabase::Get(base, nullptr, up.get());
+    CHECK(got && same(*got, refUp));
+    got.reset();
+    SharedMotionDatabase::ReleaseKept();
+
+    // Measured on the hands-down rig, Get on the hands-up one (the driver changed): read afresh, measured on Get's rig.
+    SharedMotionDatabase::Prefetch(base, SharedMotionDatabase::ShapeOf(*down));
+    run(noStop);
+    got = SharedMotionDatabase::Get(base, nullptr, up.get());
+    CHECK(got && same(*got, refUp));
+    got.reset();
+    SharedMotionDatabase::ReleaseKept();
+
+    // Measured on a rig, Get with none: read afresh, unmeasured.
+    SharedMotionDatabase::Prefetch(base, SharedMotionDatabase::ShapeOf(*down));
+    run(noStop);
+    got = SharedMotionDatabase::Get(base);
+    CHECK(got && got->IdleGestureCuts == -1 && got->HandsUpFrames == 0 && got->Db.FrameCount() == refDown.Db.FrameCount());
+    got.reset();
+    SharedMotionDatabase::ReleaseKept();
+
+    // No rig at Prefetch (the driver's model not loaded yet): read and built on the worker, measured by Get on its rig.
+    SharedMotionDatabase::Prefetch(base);
+    run(noStop);
+    got = SharedMotionDatabase::Get(base, nullptr, up.get());
+    CHECK(got && same(*got, refUp));
+    got.reset();
+    SharedMotionDatabase::ReleaseKept();
+
+    // Stopped (shutdown) once running: the build stops, nothing is held, Get reads.
+    SharedMotionDatabase::Prefetch(base, SharedMotionDatabase::ShapeOf(*down));
+    run(stopNow);
+    got = SharedMotionDatabase::Get(base, nullptr, down.get());
+    CHECK(got && same(*got, refDown));
+    got.reset();
+
+    SharedMotionDatabase::SetPrefetchRunner(nullptr);
+    SharedMotionDatabase::ReleaseKept();
+    std::filesystem::remove_all(dir, ec);
+}
+
 // Live rebake (hot reload): a rewritten database stays cached until Invalidate; after it, Get reads the new files while a
 // holder of the old load keeps its copy, and Generation moves (FirstPersonBodyMotion::Stale).
 void TestSharedDatabaseInvalidate() {
@@ -1168,6 +1291,7 @@ void TestSharedDatabaseInvalidate() {
 void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: shared database invalidate (live rebake)", TestSharedDatabaseInvalidate});
     tests.push_back({"Motion matching: shared database prefetch ahead of Play", TestSharedDatabasePrefetch});
+    tests.push_back({"Motion matching: shared database prefetch measured on the driver rig", TestSharedDatabasePrefetchRig});
     tests.push_back({"Motion matching: database build and boxes", TestDatabaseBuild});
     tests.push_back({"Motion matching: search matches brute force", TestSearchMatchesBruteForce});
     tests.push_back({"Motion matching: search filters and ties", TestSearchFiltersAndTies});

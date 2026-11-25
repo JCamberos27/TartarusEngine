@@ -120,6 +120,15 @@ public:
     bool Start(World& world, Player& player, const FirstPersonBodyMotion* carry = nullptr);
     // Stop + Start, the motion playing on from where it was (OutfitChanged: the new pieces, the same motion).
     bool Restart(World& world, Player& player);
+    // The scene's body (the first active First Person Body) and its pieces as Start takes them: the body itself and its
+    // active children, each with a loaded rigged model. Null / empty when there is none.
+    static entt::entity FindBody(const entt::registry& reg);
+    static std::vector<entt::entity> RiggedPieces(const entt::registry& reg, entt::entity body);
+    // Start's driver: the first piece with the whole skeleton (the pelvis, the head, a hand) through the Bone Map.
+    static entt::entity PickDriver(const entt::registry& reg, const std::vector<entt::entity>& pieces,
+                                   const std::map<std::string, std::string>& boneMap, const std::string& headBone);
+    // The driver's model of the scene's body as Start would pick it now (null: no body, or its models aren't loaded yet).
+    static const Model* SceneDriverModel(const entt::registry& reg);
     // The motion matching database was rebaked while playing (MotionRebake): Restart takes the new one.
     bool MotionStale() const { return m_Mm.Stale(); }
     // The rig's name for a standard bone (the Bone Map; the standard name when unmapped).

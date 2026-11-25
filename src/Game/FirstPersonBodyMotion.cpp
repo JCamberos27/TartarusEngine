@@ -14,6 +14,7 @@
 #include <cctype>
 #include <chrono>
 #include <condition_variable>
+#include <cstring>
 #include <thread>
 #include <cmath>
 #include <cstdio>
@@ -51,22 +52,67 @@ float Toward(float dt, float h) { return h > 1e-5f ? 1.0f - std::exp(-0.69314718
 
 // --- the shared database ---------------------------------------------------------------------------------------------
 
+struct SharedMotionDatabase::RigShape {
+    std::string Path; // (for the log only: the shape, not the file, decides)
+    std::vector<std::string> Names;
+    std::vector<int> Parents;
+    std::vector<LocalTRS> Bind;
+    std::vector<glm::mat4> Globals; // MotionBake::RootSpaceGlobals of Bind, root -1
+    int Pelvis = -1, Chest = -1, Hand[2] = {-1, -1}, Upper[2] = {-1, -1}; // Model::NodeIndex, as the measuring looked them up
+    int NodeCount() const { return (int)Names.size(); }
+};
+
+std::shared_ptr<const SharedMotionDatabase::RigShape> SharedMotionDatabase::ShapeOf(const Model& rig) {
+    auto s = std::make_shared<RigShape>();
+    s->Path = rig.Path();
+    const int n = rig.NodeCount();
+    s->Names.resize((size_t)n);
+    s->Parents.resize((size_t)n);
+    for (int i = 0; i < n; ++i) {
+        s->Names[(size_t)i] = rig.NodeName(i);
+        s->Parents[(size_t)i] = rig.NodeParent(i);
+    }
+    rig.BindLocalPose(s->Bind);
+    MotionBake::RootSpaceGlobals(rig, s->Bind, -1, s->Globals);
+    s->Pelvis = rig.NodeIndex("pelvis");
+    s->Chest = rig.NodeIndex("spine_05");
+    s->Hand[0] = rig.NodeIndex("hand_l");
+    s->Hand[1] = rig.NodeIndex("hand_r");
+    s->Upper[0] = rig.NodeIndex("upperarm_l");
+    s->Upper[1] = rig.NodeIndex("upperarm_r");
+    return s;
+}
+
+bool SharedMotionDatabase::SameShape(const RigShape& a, const RigShape& b) {
+    if (a.Names != b.Names || a.Parents != b.Parents || a.Bind.size() != b.Bind.size() || a.Pelvis != b.Pelvis ||
+        a.Chest != b.Chest || a.Hand[0] != b.Hand[0] || a.Hand[1] != b.Hand[1] || a.Upper[0] != b.Upper[0] || a.Upper[1] != b.Upper[1])
+        return false;
+    for (size_t i = 0; i < a.Bind.size(); ++i) // bit for bit (the globals follow from these)
+        if (std::memcmp(&a.Bind[i].T, &b.Bind[i].T, sizeof(a.Bind[i].T)) || std::memcmp(&a.Bind[i].R, &b.Bind[i].R, sizeof(a.Bind[i].R)) ||
+            std::memcmp(&a.Bind[i].S, &b.Bind[i].S, sizeof(a.Bind[i].S)))
+            return false;
+    return true;
+}
+
 std::vector<float> SharedMotionDatabase::HandOverShoulder(const MotionDatabase& db, const Model& rig, std::vector<float>* chestTilt) {
+    return HandOverShoulder(db, *ShapeOf(rig), chestTilt);
+}
+
+std::vector<float> SharedMotionDatabase::HandOverShoulder(const MotionDatabase& db, const RigShape& rig, std::vector<float>* chestTilt,
+                                                          const std::function<bool()>& go) {
     const MotionClipStream& stream = db.Stream();
     std::vector<float> out(db.FrameCount(), -1.0f);
-    std::vector<LocalTRS> bind;
-    rig.BindLocalPose(bind);
-    std::vector<glm::mat4> g;
-    MotionBake::RootSpaceGlobals(rig, bind, -1, g);
-    const auto binding = stream.Bind(rig, 0.0f);
+    const std::vector<LocalTRS>& bind = rig.Bind;
+    const std::vector<glm::mat4>& g = rig.Globals;
+    const auto binding = stream.BindNames(rig.Names, rig.Pelvis, 0.0f);
     // The nodes from the hands up to the top: posed per frame, parents first (a node's index is above its parent's).
     std::vector<int> nodes;
     std::vector<char> in((size_t)rig.NodeCount(), 0);
-    const int hand[2] = {rig.NodeIndex("hand_l"), rig.NodeIndex("hand_r")}, upper[2] = {rig.NodeIndex("upperarm_l"), rig.NodeIndex("upperarm_r")};
+    const int hand[2] = {rig.Hand[0], rig.Hand[1]}, upper[2] = {rig.Upper[0], rig.Upper[1]};
     if (hand[0] < 0 || hand[1] < 0 || upper[0] < 0 || upper[1] < 0) return out;
     for (int h : hand)
-        for (int i = h; i >= 0 && !in[(size_t)i]; i = rig.NodeParent(i)) in[(size_t)i] = 1;
-    const int chest = rig.NodeIndex("spine_05");
+        for (int i = h; i >= 0 && !in[(size_t)i]; i = rig.Parents[(size_t)i]) in[(size_t)i] = 1;
+    const int chest = rig.Chest;
     if (chestTilt) chestTilt->assign(db.FrameCount(), 0.0f);
     const glm::mat3 chestBindInv = chest >= 0 ? glm::inverse(glm::mat3(g[(size_t)chest])) : glm::mat3(1.0f);
     for (int i = 0; i < rig.NodeCount(); ++i)
@@ -76,10 +122,11 @@ std::vector<float> SharedMotionDatabase::HandOverShoulder(const MotionDatabase& 
         if (binding.Nodes[b] >= 0) streamBone[(size_t)binding.Nodes[b]] = (int)b;
     std::vector<glm::mat4> pose = g;
     for (std::uint32_t f = 0; f < db.FrameCount(); ++f) {
+        if ((f & 1023) == 0 && go && !go()) return {}; // cancelled (the worker)
         for (int i : nodes) {
             LocalTRS l = bind[(size_t)i];
             if (streamBone[(size_t)i] >= 0) l.R = stream.Rotation(f, streamBone[(size_t)i]);
-            const int p = rig.NodeParent(i);
+            const int p = rig.Parents[(size_t)i];
             pose[(size_t)i] = p >= 0 ? pose[(size_t)p] * l.ToMatrix() : l.ToMatrix();
         }
         if (chestTilt && chest >= 0 && in[(size_t)chest]) {
@@ -139,7 +186,9 @@ struct PrefetchLoad {
     State St = State::Queued;
     std::atomic<bool> Cancel{false};
     std::shared_ptr<SharedMotionDatabase> Result; // Done: the loaded database (null: failed or cancelled)
-    double ReadMs = 0.0, BuildMs = 0.0;
+    // The driver rig the job measured Result on (Measure: Result is then final for that shape); null: only read and built.
+    std::shared_ptr<const SharedMotionDatabase::RigShape> Rig;
+    double ReadMs = 0.0, BuildMs = 0.0, MeasureMs = 0.0;
 };
 std::mutex s_PrefetchLock;
 std::condition_variable s_PrefetchDone;
@@ -157,8 +206,11 @@ void DropPrefetchLocked() { // s_PrefetchLock held
 }
 
 // Get's load of `base`, if a prefetch has it (s_SharedLock held): waits while it runs; null when there is none, it was
-// still queued (Get reads, the job then does nothing), it failed, or the files changed since it was queued.
-std::shared_ptr<SharedMotionDatabase> TakePrefetch(const std::string& base) {
+// still queued (Get reads, the job then does nothing), it failed, the files changed since it was queued, or the job
+// measured it on a rig whose shape isn't `rig`'s (its exclusions would be another rig's). `measured`: the job measured it
+// on `rig` (Get skips Measure); else it was only read and built.
+std::shared_ptr<SharedMotionDatabase> TakePrefetch(const std::string& base, const Model* rig, bool& measured) {
+    measured = false;
     std::unique_lock<std::mutex> lock(s_PrefetchLock);
     std::shared_ptr<PrefetchLoad> p = s_Prefetch;
     if (!p || p->Spelling != BaseSpelling(base)) return nullptr;
@@ -182,10 +234,15 @@ std::shared_ptr<SharedMotionDatabase> TakePrefetch(const std::string& base) {
     }
     p->St = PrefetchLoad::State::Taken;
     const bool current = p->Stamps == DatabaseStamps(base);
-    std::printf("[MotionMatching] prefetched database %s (read %.0f ms + build %.0f ms on the worker; Get waited %.0f ms)\n",
-                !p->Result ? "failed: loaded here" : current ? "taken" : "stale (files rewritten): loaded here", p->ReadMs,
-                p->BuildMs, waitMs);
-    return current ? p->Result : nullptr;
+    // A job measured on another shape (an outfit landing changed the driver, or Get has no rig): read afresh.
+    const bool sameRig = !p->Rig || (rig && SharedMotionDatabase::SameShape(*p->Rig, *SharedMotionDatabase::ShapeOf(*rig)));
+    std::printf("[MotionMatching] prefetched database %s (read %.0f ms + build %.0f ms + measure %.0f ms on the worker; Get waited %.0f ms)\n",
+                !p->Result ? "failed: loaded here" : !current ? "stale (files rewritten): loaded here"
+                : !sameRig ? "measured on another rig: loaded here" : p->Rig ? "taken, measured" : "taken",
+                p->ReadMs, p->BuildMs, p->MeasureMs, waitMs);
+    if (!current || !sameRig) return nullptr;
+    measured = p->Result && p->Rig;
+    return p->Result;
 }
 }
 
@@ -195,7 +252,7 @@ void SharedMotionDatabase::SetPrefetchRunner(std::function<void(PrefetchJob)> ru
     s_PrefetchOnWait = std::move(onWait);
 }
 
-void SharedMotionDatabase::Prefetch(const std::string& base) {
+void SharedMotionDatabase::Prefetch(const std::string& base, std::shared_ptr<const RigShape> rig) {
     const std::string spelling = BaseSpelling(base);
     const std::vector<std::filesystem::file_time_type> stamps = DatabaseStamps(base);
     std::lock_guard<std::mutex> shared(s_SharedLock);
@@ -205,12 +262,15 @@ void SharedMotionDatabase::Prefetch(const std::string& base) {
             return;
     std::lock_guard<std::mutex> lock(s_PrefetchLock);
     if (!s_PrefetchRun) return;
-    if (s_Prefetch && s_Prefetch->Spelling == spelling) return; // pending or held: the same files
+    if (s_Prefetch && s_Prefetch->Spelling == spelling &&
+        (s_Prefetch->Rig == rig || (s_Prefetch->Rig && rig && SameShape(*s_Prefetch->Rig, *rig))))
+        return; // pending or held: the same files, the same rig
     DropPrefetchLocked();
     auto p = std::make_shared<PrefetchLoad>();
     p->Base = base;
     p->Spelling = spelling;
     p->Stamps = stamps;
+    p->Rig = std::move(rig);
     s_Prefetch = p;
     s_PrefetchRun([p](const std::atomic<bool>& stop) {
         {
@@ -220,20 +280,34 @@ void SharedMotionDatabase::Prefetch(const std::string& base) {
         }
         auto db = std::make_shared<SharedMotionDatabase>();
         std::string err;
-        // A breather after each file and before the build (the worker's frames-first rule), and the place to stop.
-        const bool ok = db->Db.Load(p->Base, &err, [&] {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        // Asked after each file, through the build and the measuring: the place to stop (a cancel, shutdown), and a 1 ms
+        // breather every kBreatherMs of work (the worker's frames-first rule).
+        constexpr auto kBreatherMs = std::chrono::milliseconds(16);
+        auto worked = std::chrono::steady_clock::now();
+        const std::function<bool()> go = [&] {
+            if (p->Cancel || stop) return false;
+            if (std::chrono::steady_clock::now() - worked >= kBreatherMs) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                worked = std::chrono::steady_clock::now();
+            }
             return !p->Cancel && !stop;
-        });
+        };
+        bool ok = db->Db.Load(p->Base, &err, go);
+        const auto measured0 = std::chrono::steady_clock::now();
+        if (ok && p->Rig) ok = Measure(*db, p->Base, p->Rig.get(), go);
+        const double measureMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - measured0).count();
         {
             std::lock_guard<std::mutex> lock(s_PrefetchLock);
             p->ReadMs = db->Db.ReadSeconds() * 1000.0;
             p->BuildMs = (db->Db.LoadSeconds() - db->Db.ReadSeconds()) * 1000.0;
+            p->MeasureMs = p->Rig ? measureMs : 0.0;
             if (ok && !p->Cancel) p->Result = std::move(db);
             p->St = PrefetchLoad::State::Done;
         }
         s_PrefetchDone.notify_all();
-        if (ok) std::printf("[MotionMatching] prefetch: %s read in %.0f ms, built in %.0f ms (worker)\n", p->Base.c_str(), p->ReadMs, p->BuildMs);
+        if (ok)
+            std::printf("[MotionMatching] prefetch: %s read in %.0f ms, built in %.0f ms, measured in %.0f ms%s (worker)\n", p->Base.c_str(),
+                        p->ReadMs, p->BuildMs, p->MeasureMs, p->Rig ? "" : " (no rig: Get measures)");
     });
 }
 
@@ -269,46 +343,15 @@ void SharedMotionDatabase::Invalidate(const std::string& base) {
 
 std::uint64_t SharedMotionDatabase::Generation() { return s_SharedGeneration.load(); }
 
-std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std::string& base, std::string* error, const Model* rig) {
-    std::lock_guard<std::mutex> lock(s_SharedLock);
-    auto& s_Loaded = s_SharedLoaded;
-    const std::string key = CacheKey(base, rig != nullptr, rig ? rig->Path() : std::string());
-    const std::vector<std::filesystem::file_time_type> stamps = FileStamps(base, rig ? ProjectPaths::Resolve(rig->Path()) : std::string());
-    const auto keep = [&](const std::shared_ptr<const SharedMotionDatabase>& db) {
-        s_SharedKept[key] = KeptLoad{db, stamps, ++s_SharedKeptClock};
-        while (s_SharedKept.size() > kKeptLoads) { // the least recently used goes
-            auto oldest = s_SharedKept.begin();
-            for (auto it = s_SharedKept.begin(); it != s_SharedKept.end(); ++it)
-                if (it->second.LastUse < oldest->second.LastUse) oldest = it;
-            s_SharedKept.erase(oldest);
-        }
-    };
-    const auto kept = s_SharedKept.find(key);
-    if (auto live = s_Loaded[key].lock()) {
-        // Held by a body (beyond `live` here and the kept copy): that load until Invalidate, as before.
-        const bool isKept = kept != s_SharedKept.end() && kept->second.Db == live;
-        if (live.use_count() > (isKept ? 2 : 1)) {
-            if (isKept) kept->second.LastUse = ++s_SharedKeptClock;
-            return live;
-        }
-    }
-    // Nothing holds it: the kept load, unless its files were rewritten since it was read.
-    if (kept != s_SharedKept.end()) {
-        if (kept->second.Stamps == stamps) {
-            kept->second.LastUse = ++s_SharedKeptClock;
-            s_Loaded[key] = kept->second.Db;
-            return kept->second.Db;
-        }
-        s_SharedKept.erase(kept);
-    }
-    std::shared_ptr<SharedMotionDatabase> shared = TakePrefetch(base); // read ahead of Play (Prefetch)
-    if (!shared) {
-        shared = std::make_shared<SharedMotionDatabase>();
-        if (!shared->Db.Load(base, error)) return nullptr;
-    }
+// The rest of a first Get after the files are read and built: the rig's exclusions (with a rig), the gaits, the turn on
+// the spot and the start frame. `go` (the worker) is asked between the steps: false stops it (the load is then thrown away).
+bool SharedMotionDatabase::Measure(SharedMotionDatabase& measured, const std::string& base, const RigShape* rig,
+                                   const std::function<bool()>& go) {
+    SharedMotionDatabase* shared = &measured;
     std::vector<float> tilt;
     if (rig) {
-        const std::vector<float> over = HandOverShoulder(shared->Db, *rig, &tilt);
+        const std::vector<float> over = HandOverShoulder(shared->Db, *rig, &tilt, go);
+        if (over.size() != shared->Db.FrameCount()) return false; // cancelled
         const MotionDatabase& d = shared->Db;
         std::vector<char> bad(d.FrameCount(), 0);
         const auto med = [](std::vector<float> v) {
@@ -428,6 +471,7 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
                     shared->HandsUpFrames, 100.0f * hist[0] / std::max(1, searchable), 100.0f * hist[1] / std::max(1, searchable),
                     100.0f * hist[2] / std::max(1, searchable), 100.0f * hist[3] / std::max(1, searchable), 100.0f * hist[4] / std::max(1, searchable));
     }
+    if (go && !go()) return false;
     const MotionDatabase& db = shared->Db;
     shared->Gaits = GaitSpeedTable::Measure(db);
     std::printf("[MotionMatching] %s: %u frames, %u excluded as capture glitches (a bone over %.0f deg in a frame, %d either side), %u "
@@ -455,6 +499,48 @@ std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std:
         std::printf("[MotionMatching] start frame: %s @ %.2f s\n", db.Clip(db.ClipOf(f)).Name.c_str(), db.SecondsInClip(f));
         break;
     }
+    return true;
+}
+
+std::shared_ptr<const SharedMotionDatabase> SharedMotionDatabase::Get(const std::string& base, std::string* error, const Model* rig) {
+    std::lock_guard<std::mutex> lock(s_SharedLock);
+    auto& s_Loaded = s_SharedLoaded;
+    const std::string key = CacheKey(base, rig != nullptr, rig ? rig->Path() : std::string());
+    const std::vector<std::filesystem::file_time_type> stamps = FileStamps(base, rig ? ProjectPaths::Resolve(rig->Path()) : std::string());
+    const auto keep = [&](const std::shared_ptr<const SharedMotionDatabase>& db) {
+        s_SharedKept[key] = KeptLoad{db, stamps, ++s_SharedKeptClock};
+        while (s_SharedKept.size() > kKeptLoads) { // the least recently used goes
+            auto oldest = s_SharedKept.begin();
+            for (auto it = s_SharedKept.begin(); it != s_SharedKept.end(); ++it)
+                if (it->second.LastUse < oldest->second.LastUse) oldest = it;
+            s_SharedKept.erase(oldest);
+        }
+    };
+    const auto kept = s_SharedKept.find(key);
+    if (auto live = s_Loaded[key].lock()) {
+        // Held by a body (beyond `live` here and the kept copy): that load until Invalidate, as before.
+        const bool isKept = kept != s_SharedKept.end() && kept->second.Db == live;
+        if (live.use_count() > (isKept ? 2 : 1)) {
+            if (isKept) kept->second.LastUse = ++s_SharedKeptClock;
+            return live;
+        }
+    }
+    // Nothing holds it: the kept load, unless its files were rewritten since it was read.
+    if (kept != s_SharedKept.end()) {
+        if (kept->second.Stamps == stamps) {
+            kept->second.LastUse = ++s_SharedKeptClock;
+            s_Loaded[key] = kept->second.Db;
+            return kept->second.Db;
+        }
+        s_SharedKept.erase(kept);
+    }
+    bool measured = false;
+    std::shared_ptr<SharedMotionDatabase> shared = TakePrefetch(base, rig, measured); // read ahead of Play (Prefetch)
+    if (!shared) {
+        shared = std::make_shared<SharedMotionDatabase>();
+        if (!shared->Db.Load(base, error)) return nullptr;
+    }
+    if (!measured) Measure(*shared, base, rig ? ShapeOf(*rig).get() : nullptr);
     s_Loaded[key] = shared;
     keep(shared);
     return shared;
