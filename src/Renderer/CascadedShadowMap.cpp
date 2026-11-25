@@ -304,6 +304,45 @@ bool CascadedShadowMap::CasterReachesSlice(int c, const glm::vec3& boundsMin, co
     return true;
 }
 
+CascadedShadowMap::CasterSlice CascadedShadowMap::CasterSliceOf(int c, float kernelTexels, float normalBias) const {
+    CasterSlice s;
+    if (c < 0 || c >= m_Count) return s;
+    s.ViewProj = m_LightViewProj[c];
+    if (c == 0) {
+        glm::vec2 lo, hi;
+        ReadRect(0, kernelTexels, normalBias, lo, hi);
+        s.Rect = glm::vec4(lo, hi);
+        s.Params.z = 1.0f;
+        return s;
+    }
+    s.Rect = glm::vec4(m_SliceMin[c], m_SliceMax[c]);
+    s.Params.x = MarginNdc(c, kernelTexels, normalBias);
+    s.Params.y = (float)m_SliceAxisCount[c];
+    for (int a = 0; a < m_SliceAxisCount[c]; ++a) {
+        const SliceAxis& ax = m_SliceAxes[c][a];
+        s.Axes[a] = glm::vec4(ax.N, ax.Min, ax.Max);
+    }
+    return s;
+}
+
+bool CascadedShadowMap::ReachesSlice(const CasterSlice& s, const glm::vec3& boundsMin, const glm::vec3& boundsMax) {
+    glm::vec2 lo, hi;
+    Footprint(s.ViewProj, boundsMin, boundsMax, lo, hi);
+    const glm::vec2 rlo(s.Rect.x, s.Rect.y), rhi(s.Rect.z, s.Rect.w);
+    if (s.Params.z != 0.0f) return !(rhi.x < lo.x || rlo.x > hi.x || rhi.y < lo.y || rlo.y > hi.y);
+    const float margin = s.Params.x;
+    lo -= glm::vec2(margin);
+    hi += glm::vec2(margin);
+    if (rhi.x < lo.x || rlo.x > hi.x || rhi.y < lo.y || rlo.y > hi.y) return false;
+    const glm::vec2 mid = (lo + hi) * 0.5f, half = (hi - lo) * 0.5f;
+    for (int a = 0, n = (int)s.Params.y; a < n; ++a) {
+        const glm::vec2 N(s.Axes[a].x, s.Axes[a].y);
+        const float centre = glm::dot(N, mid), radius = std::abs(N.x) * half.x + std::abs(N.y) * half.y;
+        if (s.Axes[a].w < centre - radius || centre + radius < s.Axes[a].z) return false;
+    }
+    return true;
+}
+
 // audit GL-204 — one completeness check of every FBO the cascades use: the per-cascade ones (Begin, and the
 // layered path's partial clears) and the layered one.
 void CascadedShadowMap::CheckComplete() const {

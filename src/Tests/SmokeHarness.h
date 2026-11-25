@@ -165,6 +165,7 @@ private:
     bool m_Cinematic = false;     // TARTARUS_CINEMATIC: this run records the camera path (Tests/Cinematic.h)
     bool m_ViewPlanted = false;   // smoke_min planted a bad view pref for the guard to undo
     std::string m_ViewNotLit;     // this scene drew a frame not Shaded and lit (HarnessView): what it was; fails the scene
+    std::uint64_t m_SunVerifyBefore[4] = {}; // smoke_min: GpuCull::SunTotals() when the G4-a check asked (passes, expected, missing, extra)
     int m_ShotHold = 0;           // frames the current capture has waited for decal textures to stream in
     int m_PerfHold = 0;           // --perf-bench: frames the edit phase has waited for the scene to stream in
     bool m_Sampling = false;      // --npc-test --perf-sample's profile is running
