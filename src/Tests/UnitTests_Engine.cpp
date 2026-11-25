@@ -157,6 +157,15 @@ static void Test_GravityGun_AssistReach() {
     CHECK(GravityGun::AssistReach(s, 10.0f) == 5.0f);
 }
 
+static void Test_Model_PreSkinSkipsUnseen() {
+    CHECK(!Model::PreSkinSkipsUnseen(9, 10, false));  // drawn last frame: pre-skinned
+    CHECK(!Model::PreSkinSkipsUnseen(10, 10, false)); // drawn already this frame: pre-skinned
+    CHECK(Model::PreSkinSkipsUnseen(8, 10, false));   // drawn two frames ago: skipped
+    CHECK(Model::PreSkinSkipsUnseen(0, 2, false));    // never drawn (the render frame count starts at 2): skipped
+    CHECK(!Model::PreSkinSkipsUnseen(0, 2, true));    // TARTARUS_NO_SKIN_CULL: always pre-skinned
+    CHECK(!Model::PreSkinSkipsUnseen(8, 10, true));
+}
+
 static void Test_FxHud_SettingsDrivePureHelpers() {
     FxHudSettingsComponent s;
     // Defaults are the old fixed values.
@@ -1502,6 +1511,7 @@ void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"FxHudSettings::RoundTrip", Test_FxHudSettings_RoundTrip});
     tests.push_back({"BloodSettings::RoundTrip", Test_BloodSettings_RoundTrip});
     tests.push_back({"GravityGun::AssistReach", Test_GravityGun_AssistReach});
+    tests.push_back({"Model::PreSkinSkipsUnseen", Test_Model_PreSkinSkipsUnseen});
     tests.push_back({"DevPanel reset", Test_DevPanelReset});
     tests.push_back({"Model::AffinePaletteMatchesGeneric", Test_Model_AffinePaletteMatchesGeneric});
     tests.push_back({"Model::AxisCorrection", Test_Model_AxisCorrection});
