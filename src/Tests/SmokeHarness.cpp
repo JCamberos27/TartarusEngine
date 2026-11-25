@@ -161,7 +161,8 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
         }
     }
     m_ShotCameraStart = Env::IsSet(Env::Var::ShotStart) ? std::max(1, Env::Int(Env::Var::ShotStart, 0)) : 40;
-    m_FrameBudget = opt.npcTestMode ? 60 * 60 * 6 : opt.perfBenchMode ? 3 * PerfBench::kPhaseFrames
+    m_PerfPlays = std::clamp(Env::Int(Env::Var::PerfPlays, 1), 1, 8);
+    m_FrameBudget = opt.npcTestMode ? 60 * 60 * 6 : opt.perfBenchMode ? (2 + m_PerfPlays) * PerfBench::kPhaseFrames
                   : m_Cinematic ? Cinematic::Warmup() + (int)(Cinematic::Duration() * 60.0f) + 2
                   : !m_ShotCameras.empty() ? m_ShotCameraStart + kShotCameraSettle * (int)m_ShotCameras.size() + 1 : 100;
     m_MemReportDir = Env::Str(Env::Var::MemReport);
@@ -303,6 +304,8 @@ void SmokeHarness::LoadScene() {
         FirstPersonPresentation::PrefetchPlayAssets(world, m_Ctx.assets); // as the editor's scene open
     }
     m_FramesRendered = 0;
+    m_PerfPlay = 1;
+    m_PerfReplay = false;
     m_SceneStartSeconds = glfwGetTime();
     m_WallFrames = 0;
     m_UnfocusedFrames = 0;
@@ -798,17 +801,24 @@ void SmokeHarness::PerfFrame() {
         }
     } else if (opt.perfBenchMode) {
         const double frameMs = m_Perf.TakeFrameMs();
+        if (m_PerfReplay) { // the next Play (its Enter Play frame is this phase's first)
+            m_PerfReplay = false;
+            ++m_PerfPlay;
+            m_Ctx.togglePlay();
+            m_Ctx.setMaximized(true);
+        }
         const int phaseFrame = (m_FramesRendered - 1) % PerfBench::kPhaseFrames + 1;
         if (opt.perfSample && phaseFrame == std::max(m_Perf.Warmup(), 1)) SamplingProfiler::Start(); // warmup 0: from frame 1
         if (phaseFrame > m_Perf.Warmup()) m_Perf.Sample(frameMs, phaseFrame);
         if (phaseFrame == PerfBench::kPhaseFrames) {
-            m_Perf.ReportPhase(std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string(),
-                               !playing ? "edit" : playMaximized ? "play-max" : "play",
+            const std::string phase = !playing ? "edit" : !playMaximized ? "play" : m_PerfPlay > 1 ? "play-max-" + std::to_string(m_PerfPlay) : "play-max";
+            m_Perf.ReportPhase(std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string(), phase.c_str(),
                                m_Ctx.editor.GetRenderStats().DrawCalls, m_Ctx.editor.GetRenderStats().Triangles,
                                m_Ctx.window.GetWidth(), m_Ctx.window.GetHeight(), opt.perfSample);
             if (m_FramesRendered < m_FrameBudget) {
                 if (!playing) m_Ctx.togglePlay();
                 else if (!playMaximized) m_Ctx.setMaximized(true);
+                else if (m_PerfPlay < m_PerfPlays) { m_Ctx.togglePlay(); m_PerfReplay = true; } // Stop; Play again next frame
             }
         }
     }

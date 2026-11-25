@@ -78,7 +78,8 @@ struct SharedMotionDatabase {
     static constexpr float kGestureHandRest = 0.05f, kGestureTiltRest = 5.0f;
     static constexpr int kGestureMax = 120;
     int IdleGestureCuts = -1; // the idle takes' excluded stretches entered mid-gesture (Get; -1: not measured - no rig)
-    // Loads `<base>.mmanim` / `.mmdb` once per process per exclusion policy (kept while anything holds it). Null (with
+    // Loads `<base>.mmanim` / `.mmdb` once per process per exclusion policy (kept while anything holds it, and the last
+    // kKeptLoads loads also after nothing does, so a later Play reuses them; a rewritten database or rig file loads afresh). Null (with
     // `error`) when missing. `rig` (the body's driver): the hands-up frames are measured on it and excluded - a load with a rig
     // and one without are different databases (their excluded frames differ), so each is cached under its own key: the
     // base and the rig's file (none: no rig). (The first caller's policy used to win for everyone.)
@@ -88,6 +89,9 @@ struct SharedMotionDatabase {
     // A rebake rewrote `<base>.mmanim` / `.mmdb`: drops every cached load of it (each rig's) and bumps Generation(). A body
     // still holding the old load keeps it alive and sees FirstPersonBodyMotion::Stale(); the next Get reads the new files.
     static void Invalidate(const std::string& base);
+    // Lets go of the loads kept after their holders stopped (holders keep theirs).
+    static void ReleaseKept();
+    static constexpr size_t kKeptLoads = 2;
     // Bumped by every Invalidate (starts at 0).
     static std::uint64_t Generation();
     // Per frame, the higher hand's height over its shoulder (upper arm bone), m, model space of `rig`.
