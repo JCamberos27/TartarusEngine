@@ -1630,6 +1630,8 @@ bool AppSession::Frame() {
     // Reap voices that have finished so repeated Play/Stop cycles don't accumulate
     // ma_sound objects and open file handles (#200).
     // #171 - game audio follows the editor's Pause / Error Pause (resumes mid-clip).
+    {
+    PROFILE_SCOPE("Audio Update");
     AudioEngine::SetPaused(playing && paused);
     if (playing && (playing && paused) != soundWasPaused)
         EditorSound::Play((playing && paused) ? EditorSound::Event::Pause : EditorSound::Event::Resume);
@@ -1650,6 +1652,7 @@ bool AppSession::Frame() {
     }
     EditorSound::Update(); // the notification sounds for what was logged this frame
     AudioEngine::Update();
+    }
 
     // Whether gameplay actually advances this frame: playing and not paused, or a
     // single-frame Step was requested while paused (#236). Everything else about play mode
@@ -2698,6 +2701,7 @@ bool AppSession::Frame() {
         MotionDemo::CaptureFrame(w, h);
     }
     lastFrameWorkMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frameWorkStart).count();
+    Profiler::EndGpuFrame(); // the frame's last GPU command before the present: the GPU half's end (G-0)
     {
         PROFILE_SCOPE("Swap Buffers");
         // A smoke-harness run (smoke, perf-bench, npc-test) in a window that never shows (KeepsWindowHidden):
