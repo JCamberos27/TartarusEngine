@@ -542,12 +542,14 @@ void SmokeHarness::ShotCameraFrame() {
     // waits (on the same pose) until they're in, up to kShotStreamHold frames per scene.
     if (m_FramesRendered == 1) m_ShotHold = 0;
     constexpr int kShotStreamHold = 3000; // a big pack (500 maps) takes a few thousand frames of async uploads
-    const bool hold = captureFrame && (m_Ctx.decalSystem.Streaming() || m_Ctx.assets.AsyncInFlight() > 0) && m_ShotHold < kShotStreamHold;
+    // A LOD cross-fade (0.6 s wall clock) caught mid-way shows as dither noise, so a capture waits for those too.
+    const bool busy = m_Ctx.decalSystem.Streaming() || m_Ctx.assets.AsyncInFlight() > 0 || m_Ctx.world.LodFadeActive();
+    const bool hold = captureFrame && busy && m_ShotHold < kShotStreamHold;
     if (hold) {
         ++m_ShotHold;
         --m_FramesRendered; // this frame again next time round
-    } else if (captureFrame && m_ShotHold >= kShotStreamHold && (m_Ctx.decalSystem.Streaming() || m_Ctx.assets.AsyncInFlight() > 0)) {
-        Log::Warn("Smoke shots: decal textures still streaming after " + std::to_string(kShotStreamHold) +
+    } else if (captureFrame && m_ShotHold >= kShotStreamHold && busy) {
+        Log::Warn("Smoke shots: decal textures still streaming (or a LOD fade running) after " + std::to_string(kShotStreamHold) +
                   " held frames - captured anyway.");
     }
     if (captureFrame && !hold) {

@@ -136,6 +136,8 @@ public:
         const size_t s = (size_t)entt::to_entity(e);
         return s < m_LodFadeOwner.size() && m_LodFadeOwner[s] == e ? m_LodFadeValue[s] : 0.0f;
     }
+    // True while any cross-fade is under way (the shot harness waits for it: a capture mid-fade shows dither noise).
+    bool LodFadeActive() const { return !m_LodFading.empty(); }
     // Octahedral impostors (ImpostorLibrary): a LOD group whose LOD 0 matches a baked set draws its impostor instead of
     // any level once its centre is past ImpostorLibrary::StartDistance() from the view (the screen-height levels still
     // decide nearer, and the group stays culled where they cull it). The impostor is a level of its own to ApplyLod:
