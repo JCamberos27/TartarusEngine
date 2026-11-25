@@ -4,6 +4,8 @@
 #include "AnimRetarget.h"
 #include "SkinHideBuffer.h"
 #include "Log.h"
+#include "Core/DiagW1.h"
+#include <chrono>
 
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -417,6 +419,7 @@ bool Model::SampleLocalPose(int clip, float seconds, AnimationWrapMode wrap, std
 void Model::ApplyLocalPose(const std::vector<LocalTRS>& pose) {
     const auto& nodes = m_D->Nodes;
     if (pose.size() != nodes.size()) return;
+    if (DiagW1::InFpIk) ++DiagW1::Applies;
     m_AppliedPose = pose;
     ++m_PoseVersion;
     m_ExternalPose = true;
@@ -425,6 +428,8 @@ void Model::ApplyLocalPose(const std::vector<LocalTRS>& pose) {
 }
 
 void Model::ResolveAppliedPose() const {
+    const auto diagT0 = std::chrono::steady_clock::now();
+    struct DiagEnd { std::chrono::steady_clock::time_point t0; size_t n; ~DiagEnd() { if (DiagW1::InFpIk) { ++DiagW1::Resolves; DiagW1::ResolveNodes += n; DiagW1::ResolveMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(); } } } diagEnd{diagT0, m_D->Nodes.size()};
     m_PoseDirty = false;
     const auto& nodes = m_D->Nodes;
     const std::vector<LocalTRS>& pose = m_AppliedPose;

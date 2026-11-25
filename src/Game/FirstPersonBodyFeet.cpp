@@ -105,7 +105,8 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         QueryFilter filter;
         filter.HitTriggers = 0;
         RaycastHit hit;
-        const bool rayHit = PhysicsWorld::RaycastSolid(origin, down, cfg.FootRayLength, filter, hit) && hit.Hit;
+        bool rayHit = false;
+        { PROFILE_SCOPE("DIAG foot rays"); rayHit = PhysicsWorld::RaycastSolid(origin, down, cfg.FootRayLength, filter, hit) && hit.Hit; }
         if (rayHit) {
             offset = std::clamp(hit.Point[1] - m_Feet.y, -maxDrop, cfg.FootMaxRaise);
             ground = std::clamp(hit.Point[1] - capsuleY, -1.0f, 1.0f);
@@ -170,6 +171,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         const glm::vec3 own = foot + glm::vec3(0.0f, legOffset[s] * m_FootWeight / scale, 0.0f); // the clip's foot on the ground
         m_Lock.Overreach(s, lockSet, glm::length(own + yawInverse * lockShift[s] / scale - hip) / leg, glm::length(own - hip) / leg);
     }
+    PROFILE_SCOPE("DIAG foot legs");
     for (const auto& mp : m_Models) {
         Model& m = *mp;
         thread_local IK::Pose pose;

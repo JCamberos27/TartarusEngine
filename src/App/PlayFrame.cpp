@@ -1,4 +1,5 @@
 #include "PlayFrame.h"
+#include "Core/DiagW1.h"
 
 #include <algorithm>
 #include <cmath>
@@ -316,6 +317,9 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         // report counts the first as anim and the second as sim.
         {
         PROFILE_SCOPE("First Person IK");
+        DiagW1::InFpIk = true;
+        ++DiagW1::FpFrames;
+        struct DiagOff { ~DiagOff() { DiagW1::InFpIk = false; } } diagOff;
         {
         PROFILE_SCOPE("FP Body LateUpdate");
         firstPersonBody.LateUpdate(world, player.Cam, gameDt, firstPersonPresentation.ArmsEntity(),

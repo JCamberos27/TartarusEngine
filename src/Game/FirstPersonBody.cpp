@@ -1,6 +1,7 @@
 #include "FirstPersonBody.h"
 #include "FirstPersonBodyInternal.h"
 #include "Profiler.h"
+#include "Core/DiagW1.h"
 #include "BodyDebugDraw.h"
 #include "AnimatorController.h"
 #include "FirstPersonBodyContract.h"
@@ -759,9 +760,11 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
     // Motion matching: this step's pose onto every piece (the controller's update was held), before anything reads it.
     if (m_Mm.Active()) {
+        PROFILE_SCOPE("DIAG mm pose");
         m_Mm.Pose(m_Models);
         CaptureMmClip();
     }
+    DiagW1::FpModels += m_Models.size();
     // The presentation's view punch on the camera this frame (Update / RefreshViewKick put it on after Tick): the walk
     // bob, landing dip, lean and ADS camera share. It stays on - the camera goes to the body's eye plus this, below.
     const glm::vec3 viewKick = m_HaveCameraBase ? camera.Position - m_CameraBase : glm::vec3(0.0f);
@@ -831,6 +834,8 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
                               ? reg.get<RenderableComponent>(weaponArms).ModelRef.get()
                               : nullptr;
     auto shoulderPair = [&](glm::vec3& left, glm::vec3& right) {
+        PROFILE_SCOPE("DIAG shoulderPair");
+        ++DiagW1::ShoulderPairs;
         left = right = glm::vec3(0.0f);
         if (haveShoulders) {
             left = ModelPoint(*model, m_ShoulderNode[0]);
@@ -1040,7 +1045,8 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     {
         const float share = 1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f);
         float limit = -89.0f;
-        const float want = viewPitch < glm::radians(-10.0f) && share > 1e-3f ? share * EyeBodyPush(world, camera, eyeWorld, flat, limit) : 0.0f;
+        float want = 0.0f;
+        { PROFILE_SCOPE("DIAG EyeBodyPush"); want = viewPitch < glm::radians(-10.0f) && share > 1e-3f ? share * EyeBodyPush(world, camera, eyeWorld, flat, limit) : 0.0f; }
         if (share < 0.5f) limit = -89.0f;
         m_LookLimitAge += dt;
         if (limit >= m_LookLimitHeld || m_LookLimitAge > kLookLimitHold) {
@@ -1110,9 +1116,10 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     {
         const float unarmed = 1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f);
         BodyDebug::Info().HandEyePush[0] = BodyDebug::Info().HandEyePush[1] = 0.0f;
+        PROFILE_SCOPE("DIAG KeepHandsFromEye");
         if (mmLayers && unarmed > 1e-3f) KeepHandsFromEye(glm::inverse(yaw) * (camera.Position - m_Feet) / std::max(t.Scale.y, 1e-3f), unarmed);
     }
-    PostureMetrics(world, camera, dt);
+    { PROFILE_SCOPE("DIAG PostureMetrics"); PostureMetrics(world, camera, dt); }
 }
 
 // Puts each foot on the ground under it: a ray down from the animated foot gives how far the ground

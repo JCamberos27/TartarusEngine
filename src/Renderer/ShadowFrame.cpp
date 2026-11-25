@@ -15,6 +15,7 @@
 #include "CubeFaces.h"
 #include "Core/Env.h"
 #include "Core/Log.h"
+#include "Core/DiagW1.h"
 #include "DefaultTextures.h"
 #include "Frustum.h"
 #include "GLStateCache.h"
@@ -159,6 +160,67 @@ bool ShadowFrame::RenderSun(const ShadowFrameInputs& in, const glm::mat4& fitVie
     return true;
 }
 
+// TEMPORARY sizing (diag only): would this frame's cascades fall inside the last re-gather's cascades padded by N texels?
+// A miss re-gathers (here: once more, padded, to count what the padding adds). Logged every 100 calls.
+void ShadowFrame::DiagPadCheck(World& world, const CascadedShadowMap& shadowMap) {
+    PROFILE_SCOPE("DIAG pad check");
+    static const float kPadTex[3] = {4.0f, 16.0f, 64.0f};
+    static glm::mat4 base[3][CascadedShadowMap::kMaxCascades];
+    static bool have[3] = {false, false, false};
+    static int baseCount[3] = {0, 0, 0};
+    static size_t padCount[3] = {0, 0, 0};
+    thread_local std::vector<VisibleRenderable> scratch;
+    const int n = shadowMap.Count();
+    const float res = (float)shadowMap.Resolution();
+    ++DiagW1::SunCalls;
+    DiagW1::Casting += m_Casting.size();
+    for (int k = 0; k < 3; ++k) {
+        const float e = 2.0f * kPadTex[k] / res;
+        bool hit = have[k] && baseCount[k] == n, hitXY = hit;
+        for (int c = 0; c < n && hitXY; ++c) {
+            const glm::mat4 inv = glm::inverse(shadowMap.LightViewProj(c));
+            for (int i = 0; i < 8 && hitXY; ++i) {
+                glm::vec4 w = inv * glm::vec4((i & 1) ? 1.0f : -1.0f, (i & 2) ? 1.0f : -1.0f, (i & 4) ? 1.0f : -1.0f, 1.0f);
+                w /= w.w;
+                const glm::vec4 q = base[k][c] * w;
+                if (std::abs(q.x) > 1.0f + e || std::abs(q.y) > 1.0f + e) hitXY = hit = false;
+                else if (std::abs(q.z) > 1.0f + e) hit = false;
+            }
+        }
+        if (hitXY) ++DiagW1::PadHitXY[k];
+        if (hit) { ++DiagW1::PadHit[k]; DiagW1::PadCasting[k] += padCount[k]; continue; }
+        have[k] = true;
+        baseCount[k] = n;
+        Frustum cells[CascadedShadowMap::kMaxCascades];
+        const glm::mat4 s = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f / (1.0f + e)));
+        for (int c = 0; c < n; ++c) {
+            base[k][c] = shadowMap.LightViewProj(c);
+            cells[c] = Frustum::FromViewProj(s * base[k][c]);
+        }
+        VisibilityQuery q;
+        q.ShadowCasters = true;
+        q.CellCull = cells;
+        q.CellCullCount = n;
+        GatherVisible(world, q, scratch);
+        padCount[k] = scratch.size();
+        DiagW1::PadCasting[k] += padCount[k];
+    }
+    if (DiagW1::SunCalls % 100 == 0) {
+        char line[512];
+        std::snprintf(line, sizeof(line),
+                      "DIAGW1 sun calls=%llu casting=%llu | pad4 hit=%llu xy=%llu cast=%llu | pad16 hit=%llu xy=%llu cast=%llu | pad64 hit=%llu xy=%llu cast=%llu"
+                      " || fp frames=%llu models=%llu applies=%llu resolves=%llu nodes=%llu resolveMs=%.3f chains=%llu chainPieces=%llu shoulderPairs=%llu",
+                      (unsigned long long)DiagW1::SunCalls, (unsigned long long)DiagW1::Casting,
+                      (unsigned long long)DiagW1::PadHit[0], (unsigned long long)DiagW1::PadHitXY[0], (unsigned long long)DiagW1::PadCasting[0],
+                      (unsigned long long)DiagW1::PadHit[1], (unsigned long long)DiagW1::PadHitXY[1], (unsigned long long)DiagW1::PadCasting[1],
+                      (unsigned long long)DiagW1::PadHit[2], (unsigned long long)DiagW1::PadHitXY[2], (unsigned long long)DiagW1::PadCasting[2],
+                      (unsigned long long)DiagW1::FpFrames, (unsigned long long)DiagW1::FpModels, (unsigned long long)DiagW1::Applies,
+                      (unsigned long long)DiagW1::Resolves, (unsigned long long)DiagW1::ResolveNodes, DiagW1::ResolveMs,
+                      (unsigned long long)DiagW1::RotateChains, (unsigned long long)DiagW1::RotatePieces, (unsigned long long)DiagW1::ShoulderPairs);
+        Log::Info(line);
+    }
+}
+
 // The cascades fitted to the view (near planes reaching every occluder), the casters gathered once against them,
 // and sorted by model for the per-draw path.
 void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const glm::mat4& fitProj) {
@@ -172,7 +234,7 @@ void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const g
     // (RenderableBounds, a cheap superset of the casters), so the casters can then be gathered against the fitted
     // cascades - a forest's casters outside every cascade are never read at all.
     glm::vec3 casterMin(std::numeric_limits<float>::max()), casterMax(-std::numeric_limits<float>::max());
-    RenderableBounds(world, casterMin, casterMax);
+    { PROFILE_SCOPE("DIAG RenderableBounds"); RenderableBounds(world, casterMin, casterMax); }
     shadowMap.SetSplitLambda(world.Render.ShadowCascadeSplit);
     shadowMap.Update(fitView, fitProj, fl.SunDir, world.Render.ShadowDistance, &casterMin, &casterMax);
     p.frame = Time::FrameCount();
@@ -183,7 +245,8 @@ void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const g
     casts.ShadowCasters = true;
     casts.CellCull = casterCells; // castsInto below draws nothing outside every cascade's frustum
     casts.CellCullCount = shadowMap.Count();
-    GatherVisible(world, casts, m_Casting);
+    { PROFILE_SCOPE("DIAG sun GatherVisible"); GatherVisible(world, casts, m_Casting); }
+    DiagPadCheck(world, shadowMap);
     m_SceneWorld = &world;
     // The caster list, and G4-d's held far cascades a moved or re-posed caster forces (FillSunCasters).
     SunListIn li;

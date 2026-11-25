@@ -1,6 +1,7 @@
 #include "FirstPersonBody.h"
 #include "FirstPersonBodyInternal.h"
 #include "Profiler.h"
+#include "Core/DiagW1.h"
 #include "BodyDebugDraw.h"
 #include "AnimatorController.h"
 #include "FirstPersonBodyContract.h"
@@ -55,6 +56,8 @@ void FirstPersonBody::RotateSpine(const std::function<glm::quat(float)>& stepFor
 }
 void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const std::function<glm::quat(float)>& stepFor,
                                   const std::vector<std::shared_ptr<Model>>* models, const IK::SpineDistribution* dist) {
+    PROFILE_SCOPE("DIAG RotateChain");
+    ++DiagW1::RotateChains;
     // Scratch kept between calls (several chains a frame, each over every piece's full pose).
     thread_local std::vector<int> parents;
     thread_local std::vector<glm::mat4> globals;
@@ -75,6 +78,7 @@ void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const s
         // A piece skinning nothing the chain moves (legs, feet) draws the same either way. The driver always
         // turns: its head and shoulders are read for the camera and the arms.
         if ((k >= m_Pieces.size() || m_Pieces[k] != m_Driver) && !SkinsUnder(m, bones, chain.front())) continue;
+        ++DiagW1::RotatePieces;
         parents.resize(pose.size());
         for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
         // Only the chain and what's above it are read before ApplyLocalPose re-derives the rest.
