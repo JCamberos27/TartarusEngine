@@ -287,6 +287,20 @@ public:
     // --smoke-test: skins random vertices (none to eight influences) with PreSkin's shader and compares them with the
     // CPU's blend. False, with the reason, when they differ or the shader doesn't build.
     static bool PreSkinSelfTest(std::string& why);
+    // G5-0: what one frame's skinning and skinned draws cost. --perf-bench takes (and resets) it once a frame.
+    struct SkinFrameStats {
+        int Listed = 0;                        // skinned models handed to PreSkin
+        int Dispatched = 0;                    // ...skinned on the GPU this frame (their pose changed)
+        int Idle = 0;                          // ...whose vertices were still in place (pose unchanged): no dispatch
+        int Fallback = 0;                      // ...left to the vertex shader (buffer cap, not uploaded, no program)
+        std::uint64_t DispatchedVertices = 0;
+        int OffscreenModels = 0;               // dispatched by the previous PreSkin and drawn by no pass after it
+        std::uint64_t OffscreenVertices = 0;
+        int PosedDraws = 0;                    // Draw / DrawSelected / DrawDepthOnly / DrawMeshIndirect on skinned models
+        double PosedDrawMs = 0.0;              // CPU time inside those calls
+    };
+    static SkinFrameStats TakeSkinFrameStats();
+    static void NotePosedDraw(double ms);
     bool IsPlayingAnimation() const { return m_Anim.Clip >= 0; }
     int  BoneCount() const { return m_D->BoneCounter; }
     // Changes whenever the pose does (a clip advanced, a pose applied): unchanged, the skinned mesh stands as it did.

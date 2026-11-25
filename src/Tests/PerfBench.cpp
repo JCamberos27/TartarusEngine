@@ -4,6 +4,7 @@
 #include "AssetCost.h"
 #include "SamplingProfiler.h"
 #include "Texture.h"
+#include "Model.h"
 #include "TimeService.h"
 #include "gl.h"
 
@@ -180,6 +181,9 @@ double PerfBench::TakeFrameMs() {
     if (!FrameLoads::Enabled()) FrameLoads::Enable(true); // only --perf-bench calls this: the log is off otherwise
     FrameLoads::Take(m_Loads);
     if (AssetCost::Enabled()) AssetCost::NoteLoads(m_Loads);
+    const Model::SkinFrameStats k = Model::TakeSkinFrameStats();
+    m_SkinFrame = {1, (double)k.Listed, (double)k.Dispatched, (double)k.Idle, (double)k.Fallback, (double)k.DispatchedVertices,
+                   (double)k.OffscreenModels, (double)k.OffscreenVertices, (double)k.PosedDraws, k.PosedDrawMs, k.PosedDrawMs};
     return frameMs;
 }
 
@@ -192,6 +196,27 @@ void PerfBench::Sample(double frameMs, int frameNo) {
     m_G0.Sample([this](const std::string& key, double ms) { AddHalf(key, ms); }); // gpu.*, half.cpu, p48.*, bind
     RecordFrame(frameMs, frameNo);
     for (Worst& w : m_Worst) FillGpu(w);
+    const SkinSums& f = m_SkinFrame;
+    m_Skin.Frames += f.Frames; m_Skin.Listed += f.Listed; m_Skin.Dispatched += f.Dispatched; m_Skin.Idle += f.Idle;
+    m_Skin.Fallback += f.Fallback; m_Skin.Verts += f.Verts; m_Skin.Offscreen += f.Offscreen; m_Skin.OffscreenVerts += f.OffscreenVerts;
+    m_Skin.PosedDraws += f.PosedDraws; m_Skin.PosedMs += f.PosedMs; m_Skin.PosedMsMax = std::max(m_Skin.PosedMsMax, f.PosedMs);
+}
+
+// G5-0: per measured frame, the skinned models and what skinning them and drawing them cost. "off-screen GPU" is the
+// Pre-Skin GPU time scaled by the share of dispatched vertices no pass then drew (skinning cost goes with the vertices).
+void PerfBench::ReportSkin(const char* mode) {
+    if (m_Skin.Frames <= 0.0) return;
+    const double n = m_Skin.Frames;
+    double preSkinGpu = 0.0;
+    for (const auto& [name, a] : m_Gpu)
+        if (name == "Pre-Skin" && a.N > 0) preSkinGpu = a.Sum / n;
+    const double offShare = m_Skin.Verts > 0.0 ? m_Skin.OffscreenVerts / m_Skin.Verts : 0.0;
+    std::printf("[PerfBench] %s skin: per frame listed=%.1f dispatched=%.1f (%.0f verts) idle=%.1f fallback=%.1f  "
+                "off-screen=%.1f (%.0f verts, %.1f%%)  Pre-Skin GPU=%.3f ms, off-screen GPU~%.3f ms  "
+                "posed draws=%.1f CPU=%.3f ms (max %.3f)\n",
+                mode, m_Skin.Listed / n, m_Skin.Dispatched / n, m_Skin.Verts / n, m_Skin.Idle / n, m_Skin.Fallback / n,
+                m_Skin.Offscreen / n, m_Skin.OffscreenVerts / n, 100.0 * offShare, preSkinGpu, preSkinGpu * offShare,
+                m_Skin.PosedDraws / n, m_Skin.PosedMs / n, m_Skin.PosedMsMax);
 }
 
 void PerfBench::Add(AccumList& v, const std::string& name, double ms) {
@@ -341,7 +366,7 @@ void PerfBench::ReportCombat(const std::string& sceneFile, int draws, int tris, 
     ReportHalves(sceneFile, "combat");
     m_G0.Report(sceneFile, "combat");
     std::fflush(stdout);
-    m_Cpu.clear(); m_Gpu.clear(); m_Frame = {};
+    m_Cpu.clear(); m_Gpu.clear(); m_Frame = {}; m_Skin = {};
 }
 
 void PerfBench::ReportPhase(const std::string& sceneFile, const char* mode, int draws, int tris, int width, int height,
@@ -359,8 +384,9 @@ void PerfBench::ReportPhase(const std::string& sceneFile, const char* mode, int 
     ReportHalves(sceneFile, mode);
     m_G0.Report(sceneFile, mode);
     ReportHitches(sceneFile, mode);
+    ReportSkin(mode);
     std::fflush(stdout);
     if (perfSample) SamplingProfiler::Report(mode, 60);
     if (AssetCost::Enabled()) AssetCost::WritePhase(sceneFile, mode);
-    m_Cpu.clear(); m_Gpu.clear(); m_Frame = {};
+    m_Cpu.clear(); m_Gpu.clear(); m_Frame = {}; m_Skin = {};
 }
