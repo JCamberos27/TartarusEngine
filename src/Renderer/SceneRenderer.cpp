@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <array>
+#include <atomic>
 #include <optional>
 #include "RenderFrameContext.h"
 
@@ -547,6 +548,12 @@ const CandidateCache& Candidates(World& world) {
 } // namespace
 
 void ForgetGatherCandidates() { CandidateStore().Forget = true; }
+
+namespace {
+std::atomic<std::uint32_t> g_RenderSettingsEpoch{0};
+}
+void NoteRenderSettingsChanged() { g_RenderSettingsEpoch.fetch_add(1, std::memory_order_relaxed); }
+std::uint32_t RenderSettingsEpoch() { return g_RenderSettingsEpoch.load(std::memory_order_relaxed); }
 
 namespace {
 // A renderable's settings GatherVisible reads live, as SceneSlot flag bits.
