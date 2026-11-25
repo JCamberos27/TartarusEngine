@@ -10,11 +10,6 @@
 namespace {
 constexpr std::size_t kXformBytes = 2 * sizeof(glm::mat4);  // per slot
 constexpr std::size_t kBoundsBytes = 2 * sizeof(glm::vec4); // per slot
-// Slots between two changed ones that are uploaded anyway to merge the runs: one upload call costs more than a few
-// hundred unchanged bytes.
-constexpr std::uint32_t kMergeGap = 16;
-// More runs than this and one upload of the span they cover is cheaper.
-constexpr std::size_t kMaxRuns = 256;
 
 std::uint32_t AsUint(float f) {
     std::uint32_t u;
@@ -43,7 +38,9 @@ void GpuScene::Pack(const SceneSlot& s, glm::mat4 xf[2], glm::vec4 bounds[2]) {
     xf[1] = glm::mat4(s.Normal);
     std::uint32_t bits = (std::uint32_t)s.Flags & 0x7FFFu;
     if (!s.Alive) bits |= kDead;
-    bits |= (std::uint32_t)std::clamp(s.Layer, 0, 0xFFFF) << 16;
+    // The layer's low 16 bits as they are: a clamp sent a negative layer to 0, which a layer mask can hide while the
+    // CPU (which tests 0..31 only) never does.
+    bits |= (std::uint32_t)(std::uint16_t)s.Layer << 16;
     bounds[0] = glm::vec4(s.WorldMin, s.Bounded ? 1.0f : 0.0f);
     bounds[1] = glm::vec4(s.WorldMax, AsFloat(bits));
 }
@@ -75,21 +72,23 @@ void GpuScene::Sync(World& world, bool upload) {
         }
         m_Last.Slots = (std::uint32_t)m_Sorted.size();
     }
+    // What goes up: every slot in one span when the list was rebuilt or the GL buffers don't hold the mirror (new,
+    // grown, or a sync skipped the upload), else the changed slots' runs. Planned before the upload, so the unit
+    // tests (no GL) see it.
+    m_Runs.clear();
+    const bool whole = m_Last.Full || m_GpuStale || (upload && m_Count > m_Capacity);
+    if (whole) {
+        if (m_Count) m_Runs.push_back({0, m_Count - 1});
+    } else {
+        std::sort(m_Sorted.begin(), m_Sorted.end());
+        BuildRuns(m_Sorted, m_Runs);
+    }
     if (!upload || !EnsureCapacity(m_Count)) {
         m_GpuStale = true; // the GL buffers missed this change: everything goes up next time
         return;
     }
-    if (m_Last.Full || m_GpuStale) {
-        m_Sorted.clear();
-        if (m_Count) {
-            m_Sorted.push_back(0);
-            m_Sorted.push_back(m_Count - 1); // one run over everything (the gap merge joins them)
-        }
-        m_GpuStale = false;
-    } else {
-        std::sort(m_Sorted.begin(), m_Sorted.end());
-    }
-    UploadRuns(m_Sorted);
+    m_GpuStale = false;
+    UploadRuns(m_Runs);
 }
 
 bool GpuScene::EnsureCapacity(std::uint32_t count) {
@@ -116,19 +115,19 @@ bool GpuScene::EnsureCapacity(std::uint32_t count) {
     return true;
 }
 
-void GpuScene::UploadRuns(const std::vector<std::uint32_t>& slots) {
-    if (slots.empty()) return;
-    // Runs of slots [first, last], merged across gaps of up to kMergeGap.
-    static std::vector<std::pair<std::uint32_t, std::uint32_t>> runs;
+void GpuScene::BuildRuns(const std::vector<std::uint32_t>& slots, std::vector<Run>& runs) {
     runs.clear();
     for (std::uint32_t i : slots) {
         if (!runs.empty() && i <= runs.back().second + kMergeGap + 1) runs.back().second = std::max(runs.back().second, i);
         else runs.push_back({i, i});
     }
     if (runs.size() > kMaxRuns) {
-        const std::pair<std::uint32_t, std::uint32_t> all{runs.front().first, runs.back().second};
+        const Run all{runs.front().first, runs.back().second};
         runs.assign(1, all);
     }
+}
+
+void GpuScene::UploadRuns(const std::vector<Run>& runs) {
     for (const auto& [first, last] : runs) {
         const std::size_t n = (std::size_t)(last - first) + 1;
         glNamedBufferSubData(m_Xforms, (GLintptr)(first * kXformBytes), (GLsizeiptr)(n * kXformBytes),

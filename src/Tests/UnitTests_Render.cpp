@@ -330,6 +330,8 @@ void GpuSceneMirror() {
     scene.Sync(w, false);
     CHECK(scene.LastSync().Full && scene.Count() == 300);
     CHECK(matches(-1));
+    // A full sync uploads every slot in one span (it once planned just the first and the last).
+    CHECK(scene.LastRuns().size() == 1 && scene.LastRuns()[0] == GpuScene::Run(0u, 299u));
     // Nothing changed: nothing written.
     w.RebuildWorldTransformCache();
     scene.Sync(w, false);
@@ -351,7 +353,7 @@ void GpuSceneMirror() {
             case 5: { auto& r = w.Registry.get<RenderableComponent>(e); r.ModelRef = r.ModelRef == modelA ? modelB : modelA; break; }
             case 6: if (w.Registry.all_of<DeactivatedTag>(e)) w.Registry.remove<DeactivatedTag>(e); else w.Registry.emplace<DeactivatedTag>(e); break;
             case 7: if (w.Registry.all_of<HiddenInSceneTag>(e)) w.Registry.remove<HiddenInSceneTag>(e); else w.Registry.emplace<HiddenInSceneTag>(e); break;
-            case 8: w.Registry.emplace_or_replace<LayerComponent>(e).Layer = (int)pick(5); break;
+            case 8: w.Registry.emplace_or_replace<LayerComponent>(e).Layer = (int)pick(7) - 2; break; // negatives too
             case 9: { auto& r = w.Registry.get<RenderableComponent>(e); r.ModelRef = r.ModelRef ? nullptr : modelA; break; }
             default: w.Registry.get<TransformComponent>(e).Position = at(); break;
             }
@@ -359,6 +361,8 @@ void GpuSceneMirror() {
         w.RebuildWorldTransformCache();
         scene.Sync(w, false);
         ++frames;
+        // Without an upload the GL buffers are stale, so every sync plans the whole list.
+        CHECK(scene.Count() == 0 || (scene.LastRuns().size() == 1 && scene.LastRuns()[0] == GpuScene::Run(0u, scene.Count() - 1)));
         if (!scene.LastSync().Full) {
             ++incremental;
             written += scene.LastSync().Slots;
@@ -372,6 +376,45 @@ void GpuSceneMirror() {
                 (unsigned long long)written, (unsigned long long)total);
     CHECK(incremental * 2 > frames);
     CHECK(written * 10 < total); // a few changes a frame: a few slots, not the list
+}
+
+// GpuScene's upload plan and packing, without GL.
+void GpuSceneRuns() {
+    using Run = GpuScene::Run;
+    std::vector<Run> runs;
+    GpuScene::BuildRuns({}, runs);
+    CHECK(runs.empty());
+    GpuScene::BuildRuns({5}, runs);
+    CHECK(runs.size() == 1 && runs[0] == Run(5u, 5u));
+    // A gap of up to kMergeGap unchanged slots is uploaded with its neighbours; one more splits the run.
+    GpuScene::BuildRuns({0, 1 + GpuScene::kMergeGap}, runs);
+    CHECK(runs.size() == 1 && runs[0] == Run(0u, 1 + GpuScene::kMergeGap));
+    GpuScene::BuildRuns({0, 2 + GpuScene::kMergeGap, 2 + GpuScene::kMergeGap, 2 * GpuScene::kMergeGap + 3}, runs); // a repeat merges too
+    CHECK(runs.size() == 2 && runs[0] == Run(0u, 0u) && runs[1] == Run(2 + GpuScene::kMergeGap, 2 * GpuScene::kMergeGap + 3));
+    // Past kMaxRuns runs: one span over all of them.
+    std::vector<std::uint32_t> sparse;
+    for (std::uint32_t i = 0; i <= GpuScene::kMaxRuns; ++i) sparse.push_back(i * 100);
+    GpuScene::BuildRuns(sparse, runs);
+    CHECK(runs.size() == 1 && runs[0] == Run(0u, sparse.back()));
+    sparse.pop_back();
+    GpuScene::BuildRuns(sparse, runs);
+    CHECK(runs.size() == GpuScene::kMaxRuns);
+    // The layer goes in as its low 16 bits: a negative one is not folded into layer 0.
+    SceneSlot s;
+    s.Alive = true;
+    glm::mat4 xf[2];
+    glm::vec4 b[2];
+    auto layerBits = [&](int layer) {
+        s.Layer = layer;
+        GpuScene::Pack(s, xf, b);
+        std::uint32_t bits;
+        std::memcpy(&bits, &b[1].w, sizeof bits);
+        return bits >> 16;
+    };
+    CHECK(layerBits(3) == 3u);
+    CHECK(layerBits(0) == 0u);
+    CHECK(layerBits(-1) == 0xFFFFu);
+    CHECK(layerBits(-2) != layerBits(0));
 }
 
 // mergeByMaterial: the same geometry and bounds in fewer meshes. Needs the model library (Drive assets).
@@ -2588,6 +2631,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Light bounds: per-face fade (Bounds Fade - / +), uniform = the old single fade", LightBoundsFaceFade});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
     tests.push_back({"GpuScene: the mirror matches the candidate list slot by slot, frame after frame", GpuSceneMirror});
+    tests.push_back({"GpuScene: upload runs (merge, cap, whole list) and layer packing", GpuSceneRuns});
     tests.push_back({"GatherPatch", GatherPatch});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
     tests.push_back({"GPU instancing: grouping keeps first-appearance order, kNoBatch stands alone", InstanceGrouping});
