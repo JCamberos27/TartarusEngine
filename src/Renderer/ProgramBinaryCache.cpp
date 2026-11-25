@@ -155,9 +155,10 @@ bool ReadEntryFile(const Key& key, std::string_view driver, std::uint32_t& forma
     const fs::path path = EntryPath(key);
     if (!ReadFile(path, bytes)) return false;
     if (!DecodeEntry(bytes, key, driver, format, binary)) return false;
-    // Mark it used, so Prune's month-unused rule and the size cap's LRU order see real use.
+    // Mark it used, so Prune's month-unused rule and the size cap's LRU order see real use. Never on a file with another
+    // name (a hard link from another checkout): touching it would change that checkout's copy too.
     std::error_code ec;
-    fs::last_write_time(path, fs::file_time_type::clock::now(), ec);
+    if (fs::hard_link_count(path, ec) == 1 && !ec) fs::last_write_time(path, fs::file_time_type::clock::now(), ec);
     return true;
 }
 
