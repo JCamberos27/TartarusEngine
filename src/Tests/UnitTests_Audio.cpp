@@ -3630,6 +3630,14 @@ void TestPlayAssetsWarmupSounds() {
     cancel = true;
     auto none = AudioEngine::DecodeForPreload({a, b}, AudioEngine::PreloadDecodeFormat(), &cancel);
     CHECK(none && AudioEngine::DecodedBytes(*none) == 0);
+    // Waited on (hurry): no breathers. Four files with a 250 ms pause each would take a second.
+    cancel = false;
+    std::atomic<bool> hurry{true};
+    const auto t0 = std::chrono::steady_clock::now();
+    auto quick = AudioEngine::DecodeForPreload({a, b, a, b}, AudioEngine::PreloadDecodeFormat(), &cancel,
+                                               std::chrono::milliseconds(250), &hurry);
+    CHECK(quick && AudioEngine::DecodedCount(*quick) == 4);
+    CHECK(std::chrono::steady_clock::now() - t0 < std::chrono::milliseconds(500));
     fs::remove_all(dir, ec);
 }
 

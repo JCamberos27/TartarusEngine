@@ -1,6 +1,7 @@
 #include "FirstPersonPresentation.h"
 #include "FirstPersonPresentationInternal.h"
 #include "FirstPersonMovementInput.h"
+#include "FirstPersonBodyMotion.h"
 #include "GameRules.h"
 #include "LiveReload.h"
 #include "WeaponRules.h"
@@ -134,6 +135,15 @@ int FirstPersonPresentation::PrefetchPlayAssets(World& world, AssetLibrary& asse
     for (const std::string& m : models) asked += AssetLibrary::IsReady(assets.RequestModelAsync(m)) ? 0 : 1;
     for (const std::string& m : materials) asked += AssetLibrary::IsReady(assets.RequestMaterialAsync(m)) ? 0 : 1;
     for (const std::string& c : clips) asked += AssetLibrary::IsReady(assets.RequestAnimationSourceAsync(c)) ? 0 : 1;
+    // The body's motion database (~1.6 s of the first Play's FirstPersonBody start): read ahead on the Play warm-up worker
+    // once nothing is loading. A scene without a body drops a pending one (another scene's body's, held for nothing).
+    const auto bodies = world.Registry.view<FirstPersonBodyComponent>(entt::exclude<InactiveTag>);
+    const std::string database = FirstPersonBodyMotion::PlayerDatabase();
+    std::error_code ec;
+    if (bodies.begin() != bodies.end() && std::filesystem::exists(std::filesystem::u8path(database + ".mmdb"), ec))
+        SharedMotionDatabase::Prefetch(database);
+    else
+        SharedMotionDatabase::CancelPrefetch();
     if (asked > 0) {
         char line[220];
         std::snprintf(line, sizeof(line), "Scene open: first-person Play assets - %d load(s) started in the background (%zu model(s), %zu material(s), %zu clip file(s) in the slots' sets).",

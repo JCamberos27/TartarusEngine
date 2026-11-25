@@ -41,7 +41,9 @@
 
 #include <glm/glm.hpp>
 
+#include <atomic>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -97,6 +99,23 @@ struct SharedMotionDatabase {
     static std::vector<std::string> WatchedFiles(const std::string& base, const std::string& rigPath);
     // Bumped by every Invalidate (starts at 0).
     static std::uint64_t Generation();
+
+    // The first Play's database load ahead of Play: reads `<base>.mmanim` / `.mmdb` and builds the database (the
+    // rig-free ~80% of a first Get, ~1.6 s) on the prefetch runner (SetPrefetchRunner: the Play warm-up worker). The
+    // next Get of `base` that has to load takes it instead of reading: it waits while the prefetch runs, runs it itself
+    // while it is still queued (never two loads), and reads afresh when the files were rewritten since it began or an
+    // Invalidate of `base` came in between. Does nothing with no runner, or when a prefetch of `base` is already
+    // pending or held, or a kept load of `base` is current. Main thread.
+    static void Prefetch(const std::string& base);
+    // Drops a pending or held prefetch (the scene closed, or one without a first-person controller opened): a queued
+    // one never runs, a running one's result is thrown away. Main thread.
+    static void CancelPrefetch();
+    // Whether a prefetch is pending or held, not yet taken by Get or dropped.
+    static bool PrefetchPending();
+    // Where Prefetch runs its job (null: Prefetch does nothing), and what Get calls around a wait on a running one
+    // (true before, false after: the Play warm-up worker runs at normal priority while the main thread waits on it).
+    using PrefetchJob = std::function<void(const std::atomic<bool>& cancel)>;
+    static void SetPrefetchRunner(std::function<void(PrefetchJob)> run, std::function<void(bool waiting)> onWait = {});
     // Per frame, the higher hand's height over its shoulder (upper arm bone), m, model space of `rig`.
     // ... and (chestTilt) the chest's tilt off its bind pose's upright (deg).
     static std::vector<float> HandOverShoulder(const MotionDatabase& db, const Model& rig, std::vector<float>* chestTilt = nullptr);
@@ -193,6 +212,8 @@ public:
     static float StepCharacterFacing(float yaw, float clipTurn, float simYaw, const Settings& cfg, float dt);
     // The root speed (m/s) and turn rate (rad/s) a database frame's root has, as captured (over +-5 frames in its take).
     static float RootSpeed(const MotionDatabase& db, std::uint32_t frame);
+    // The database the player's body plays (Start), resolved: the one PrefetchPlayAssets reads ahead of Play.
+    static std::string PlayerDatabase();
     static float RootYawRate(const MotionDatabase& db, std::uint32_t frame);
 
 private:

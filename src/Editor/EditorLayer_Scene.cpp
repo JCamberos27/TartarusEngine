@@ -7,6 +7,7 @@
 #include <future>
 #include <iterator>
 #include "EditorSound.h"
+#include "FirstPersonBodyMotion.h"
 #include "EditorTheme.h"
 #include "EditorPanels.h"
 #include "MaterialAsset.h"
@@ -1560,6 +1561,7 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
     }
     m_QuietDirtyEdgeFrames = 2; // an unwritable fresh scene starts dirty: that isn't an edit
     world = World();
+    SharedMotionDatabase::CancelPrefetch(); // the closed scene's body's database, read ahead for a Play that won't come
     InvalidateModelThumbnail();
     ClearSelection();
     m_SoloLights.clear();

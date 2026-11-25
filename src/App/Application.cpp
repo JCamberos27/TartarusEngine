@@ -402,6 +402,12 @@ private:
     struct CoreShutdownGuard {
         ~CoreShutdownGuard() { PlayAssetsWarmup::Get().Shutdown(); AudioEngine::Shutdown(); PhysicsWorld::Shutdown(); }
     } coreShutdownGuard;
+    Step stepPrefetchRunner{[&] {
+        // The first Play's motion database reads on the Play warm-up worker (FirstPersonPresentation::PrefetchPlayAssets).
+        SharedMotionDatabase::SetPrefetchRunner(
+            [](SharedMotionDatabase::PrefetchJob job) { PlayAssetsWarmup::Get().Enqueue(std::move(job)); },
+            [](bool waiting) { waiting ? PlayAssetsWarmup::Get().BeginWait() : PlayAssetsWarmup::Get().EndWait(); });
+    }};
 
     Step step16{[&] {
         ShaderLibrary::Init(EnginePaths::Resolve("assets/shaders"));
