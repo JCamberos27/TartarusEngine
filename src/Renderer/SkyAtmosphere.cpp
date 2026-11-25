@@ -6,6 +6,7 @@
 #include "DefaultTextures.h"
 #include "GLStateCache.h"
 #include "Core/Profiler.h"
+#include "Core/Env.h"
 #include "gl.h"
 
 #include <cstring>
@@ -139,6 +140,7 @@ void SkyAtmosphere::ViewResources::Release() {
     for (unsigned int t : texs)
         if (t) glDeleteTextures(1, &t);
     SkyViewSun = SkyViewMoon = Aerial = SkyAmbient = 0;
+    SkyViewKeyValid = false;
     Clouds.Release();
     CloudTexture = 0;
     CloudsValid = false;
@@ -326,6 +328,7 @@ void SkyAtmosphere::UpdateAtmosphereUniforms(const SkySettings& s, const SkyLigh
 
 void SkyAtmosphere::RenderLuts() {
     PROFILE_SCOPE("Atmosphere LUTs");
+    ++m_LutGeneration;
     m_TransmittanceShader->Bind();
     glBindImageTexture(0, m_TransmittanceLut, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
     m_TransmittanceShader->DispatchCompute(Groups(kTransmittanceW, 8), Groups(kTransmittanceH, 8), 1);
@@ -347,7 +350,27 @@ void SkyAtmosphere::BindLuts(const ViewResources& vr) {
     glBindTextureUnit(kSkyAmbientUnit, vr.SkyAmbient);
 }
 
+void SkyAtmosphere::SkyViewKey(glm::vec4 (&key)[18]) const {
+    // AtmosphereUbo order (AtmosphereCommon.glsl AtmosphereBlock): [10] Camera (xyz km, w star clock), [13..16] the
+    // star rotation. AtmosphereSkyView / SkyAmbient read the camera only through its height and up: a step along the
+    // ground turns up by metres over the planet's 6360 km (nothing), so the height in 1 m steps stands for it.
+    static_assert(sizeof(m_UboContents) == 17 * sizeof(glm::vec4), "SkyViewKey indexes AtmosphereUbo by vec4");
+    for (int i = 0; i < 17; ++i) key[i] = m_UboContents[i];
+    const float heightKm = glm::length(glm::vec3(m_UboContents[10]));
+    key[10] = glm::vec4(0.0f, std::round(heightKm * 1000.0f), 0.0f, 0.0f);
+    for (int i = 13; i < 17; ++i) key[i] = glm::vec4(0.0f);
+    key[17] = glm::vec4((float)m_LutGeneration, 0.0f, 0.0f, 0.0f);
+}
+
 void SkyAtmosphere::RenderSkyViewLuts(ViewResources& vr) {
+    // P-49: unchanged inputs (sun, moon, medium, camera height) and LUTs give the same sky-view LUTs: the frame's and
+    // each view's were rewritten every frame with the same values. TARTARUS_SKY_LUT_EVERY_FRAME (A/B) still does.
+    static const bool everyFrame = Env::Flag(Env::Var::SkyLutEveryFrame);
+    glm::vec4 key[18];
+    SkyViewKey(key);
+    if (!everyFrame && vr.SkyViewSun && vr.SkyViewKeyValid && std::memcmp(key, vr.SkyViewKey, sizeof(key)) == 0) return;
+    std::memcpy(vr.SkyViewKey, key, sizeof(key));
+    vr.SkyViewKeyValid = true;
     if (!vr.SkyViewSun) {
         vr.SkyViewSun = MakeLut2D(kSkyViewW, kSkyViewH);
         vr.SkyViewMoon = MakeLut2D(kSkyViewW, kSkyViewH);
