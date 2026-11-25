@@ -370,6 +370,7 @@ bool ShadowFrame::DynamicFor(const LocalCaster& c, int turnSlot, std::uint64_t f
 namespace {
 bool g_CacheVerify = Env::Flag(Env::Var::ShadowCacheVerify);
 ShadowFrame::VerifyTotals g_VerifyTotals;
+ShadowFrame::QuietTotals g_QuietTotals;
 } // namespace
 
 bool ShadowFrame::SlotDirtyEnabled() {
@@ -379,6 +380,7 @@ bool ShadowFrame::SlotDirtyEnabled() {
 void ShadowFrame::SetCacheVerify(bool on) { g_CacheVerify = on; }
 bool ShadowFrame::CacheVerify() { return g_CacheVerify; }
 const ShadowFrame::VerifyTotals& ShadowFrame::CacheVerifyTotals() { return g_VerifyTotals; }
+const ShadowFrame::QuietTotals& ShadowFrame::LocalQuietTotals() { return g_QuietTotals; }
 
 void ShadowFrame::VerifyQuiet(bool wasQuiet, bool drawn, const char* kind, int light, std::uint64_t frame,
                               std::vector<VerifyCaster>& last) {
@@ -529,8 +531,13 @@ void ShadowFrame::RenderLocal(const ShadowFrameInputs& in) {
     if (m_SlotDirty) {
         PROFILE_SCOPE("Local Shadow Wake");
         GpuScene& scene = GpuScene::Get();
-        scene.Sync(world); // this frame's changes, posed slots included (SyncOnce skips a frame whose transforms held)
-        scene.TakeChangeLog(world, m_ChangeLog);
+        {
+            // Its own scope: most of Wake's cost is this Sync, which moved here from the draw's SyncOnce (that one now
+            // finds the scene up to date), so it isn't new work.
+            PROFILE_SCOPE("Local Shadow Wake Sync");
+            scene.Sync(world); // this frame's changes, posed slots included (SyncOnce skips a frame whose transforms held)
+            scene.TakeChangeLog(world, m_ChangeLog);
+        }
         m_LodWake.Append(world, m_ChangeLog); // ApplyLod ran for this frame's local shadows (Application)
         LocalShadowQuiet::Lights lights;
         lights.SpotCount = fl.SpotCount;
@@ -801,10 +808,10 @@ void ShadowFrame::RenderSpots(const ShadowFrameInputs& in) {
     const LocalPassLocs locs = BeginLocalPass(*in.localShader);
     for (int s = 0; s < fl.SpotCount; ++s) {
         if (!fl.SpotLive[s]) continue;
-        ++m_Stats.SpotLive;
+        ++m_Stats.SpotLive; ++g_QuietTotals.Live;
         const bool wasQuiet = m_SlotDirty && m_Quiet.Spots[s].Quiet;
         if (wasQuiet && !CacheVerify()) { // G4-c: nothing it sees changed since its last look
-            ++m_Stats.SpotQuiet;
+            ++m_Stats.SpotQuiet; ++g_QuietTotals.Quiet;
             continue;
         }
         bool lightMoved = false, busy = false;
@@ -827,10 +834,10 @@ void ShadowFrame::RenderPoints(const ShadowFrameInputs& in) {
     const LocalPassLocs locs = BeginLocalPass(localShadowShader);
     for (int s = 0; s < fl.PointCount; ++s) {
         if (!fl.PointLive[s]) continue;
-        ++m_Stats.PointLive;
+        ++m_Stats.PointLive; ++g_QuietTotals.Live;
         const bool wasQuiet = m_SlotDirty && m_Quiet.Points[s].Quiet;
         if (wasQuiet && !CacheVerify()) { // G4-c: nothing it sees changed since its last look
-            ++m_Stats.PointQuiet;
+            ++m_Stats.PointQuiet; ++g_QuietTotals.Quiet;
             continue;
         }
         // The light's whole reach: casters outside it can't show on any face.

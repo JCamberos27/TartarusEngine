@@ -104,12 +104,15 @@ public:
 
     // G4-c is on: TARTARUS_NO_SHADOW_SLOT_DIRTY unset and the GPU scene on (its change log).
     static bool SlotDirtyEnabled();
-    // Verify mode (TARTARUS_SHADOW_CACHE_VERIFY=1, or the smoke run): quiet lights are looked at anyway, and one that
+    // Verify mode (TARTARUS_SHADOW_CACHE_VERIFY=1, or --smoke-test): quiet lights are looked at anyway, and one that
     // then redraws anything is a miss (Log::Error). Totals since start.
     static void SetCacheVerify(bool on);
     static bool CacheVerify();
     struct VerifyTotals { std::uint64_t Checked = 0, Missed = 0; };
     static const VerifyTotals& CacheVerifyTotals();
+    // Live local lights looked at and of them kept quiet (G4-c), totals since start: --perf-bench prints each phase's share.
+    struct QuietTotals { std::uint64_t Live = 0, Quiet = 0; };
+    static const QuietTotals& LocalQuietTotals();
 
 private:
     LocalStats m_Stats;

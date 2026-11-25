@@ -178,7 +178,9 @@ SmokeHarness::SmokeHarness(const LaunchOptions& opt, const SmokeContext& ctx) : 
 
     if (opt.smokeTestMode) {
         // G4-c's hard gate: every local light kept quiet is looked at anyway, and one whose map changed is a log error.
-        ShadowFrame::SetCacheVerify(true);
+        // Not in --perf-bench: verify does the full look the quiet path skips, so timings would measure verify, not the
+        // feature. A perf-bench gate run sets TARTARUS_SHADOW_CACHE_VERIFY=1 instead.
+        if (!opt.perfBenchMode) ShadowFrame::SetCacheVerify(true);
         // Scene source: explicit --smoke-test <dir> arg, else the engine's committed
         // regression scenes, else the user project's scenes/ (audit TEST-101).
         std::string scenesDir;
@@ -426,7 +428,7 @@ void SmokeHarness::BeginFrame() {
     }
 
     // Every scene: how many quiet local lights the verify mode checked so far (a miss is already a log error).
-    if (m_SceneActive && m_FramesRendered == 15 && ShadowFrame::SlotDirtyEnabled()) {
+    if (m_SceneActive && m_FramesRendered == 15 && ShadowFrame::SlotDirtyEnabled() && ShadowFrame::CacheVerify()) {
         const ShadowFrame::VerifyTotals& v = ShadowFrame::CacheVerifyTotals();
         std::cout << "[SmokeTest]   local shadow quiet lights: " << v.Checked << " checked, " << v.Missed << " missed" << std::endl;
     }

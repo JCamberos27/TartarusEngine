@@ -6,6 +6,7 @@
 #include "Tests/PerfG0.h"
 
 #include <chrono>
+#include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
@@ -90,6 +91,7 @@ private:
     Worst m_Pending;
     std::vector<FrameLoads::Event> m_Loads; // the frame's loads, from TakeFrameMs
     MachineLoad::Snapshot m_LoadStart;      // at the phase's first measured frame
+    std::uint64_t m_QuietLive0 = 0, m_Quiet0 = 0; // ShadowFrame::LocalQuietTotals there (G4-c share per phase)
     std::vector<std::pair<std::string, std::vector<double>>> m_Halves; // AddHalf's samples, per key, in first-seen order
     std::vector<std::string> m_UnmappedCpu;
     PerfG0 m_G0; // G-0: the GPU half, the P-48 render rows and which half bound each frame (into m_Halves)  // top-level CPU scopes CpuBucket put in "other" this phase

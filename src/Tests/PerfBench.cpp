@@ -2,6 +2,7 @@
 
 #include "Core/Env.h"
 #include "AssetCost.h"
+#include "ShadowFrame.h"
 #include "SamplingProfiler.h"
 #include "Texture.h"
 #include "TimeService.h"
@@ -184,7 +185,10 @@ double PerfBench::TakeFrameMs() {
 }
 
 void PerfBench::Sample(double frameMs, int frameNo) {
-    if (m_Frame.N == 0) { m_LoadStart = MachineLoad::Take(); m_G0.BeginPhase(); }
+    if (m_Frame.N == 0) {
+        m_LoadStart = MachineLoad::Take(); m_G0.BeginPhase();
+        m_QuietLive0 = ShadowFrame::LocalQuietTotals().Live; m_Quiet0 = ShadowFrame::LocalQuietTotals().Quiet;
+    }
     m_Frame.Sum += frameMs; m_Frame.Max = std::max(m_Frame.Max, frameMs); ++m_Frame.N;
     for (const Profiler::Entry& e : Profiler::GetLastFrame()) Add(m_Cpu, e.Name, e.Milliseconds);
     for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) Add(m_Gpu, e.Name, e.Milliseconds);
@@ -280,6 +284,15 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
     const int cores = MachineLoad::Cores();
     const std::string machine = MachineLoad::Describe(MachineLoad::Between(m_LoadStart, MachineLoad::Take(), cores), cores);
     if (!machine.empty()) std::printf("[PerfBench] %s machine: %s\n", label, machine.c_str());
+    // G4-c: of the live local lights each frame, how many kept their map without a look (0 with verify on or G4-c off).
+    {
+        const ShadowFrame::QuietTotals& q = ShadowFrame::LocalQuietTotals();
+        const std::uint64_t live = q.Live - m_QuietLive0, quiet = q.Quiet - m_Quiet0;
+        std::printf("[PerfBench] %s local shadows: %llu of %llu live light looks kept quiet%s\n", label,
+                    (unsigned long long)quiet, (unsigned long long)live,
+                    ShadowFrame::CacheVerify() ? " (verify on: quiet lights looked at anyway)"
+                    : !ShadowFrame::SlotDirtyEnabled() ? " (G4-c off)" : "");
+    }
     for (const Worst& w : m_Worst) {
         char unscoped[64] = "-";
         if (w.UnscopedMs >= 0.0f) std::snprintf(unscoped, sizeof(unscoped), "%.2f of %.2f", w.UnscopedMs, w.WallMs);
