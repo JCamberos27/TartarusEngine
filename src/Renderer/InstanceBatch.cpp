@@ -10,6 +10,8 @@
 #include "ShaderAsset.h"
 #include "Core/Env.h"
 #include "UploadStaging.h"
+#include "RenderSettingsEpoch.h"
+#include "TimeService.h"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -238,17 +240,21 @@ namespace {
 // `sceneSlots`: the copies stage their GPU scene slot (GpuScene.h) instead of their transform - binding 27 holds the
 // scene's transforms and 28 the slots while the batches draw (ShadowDepth.vert.glsl uInstanced 2); a group with a copy
 // that has no slot goes to `rest`.
-int DrawDepthIndirect(Shader& shader, const std::vector<DepthCaster>& casters, const InstanceGroups& groups, int firstLoc,
-                      std::vector<std::uint32_t>& rest, bool sceneSlots) {
-    struct Tag { std::uint32_t Group; std::uint16_t Mesh; };
-    static std::vector<Tag> tags;
-    static std::vector<IndirectItem> items;
-    static std::vector<IndirectCommand> commands;
-    static std::vector<IndirectBatch> batches;
+// BuildDepthIndirect works the commands out (no GL; without `sceneSlots` it stages the copies' transforms), and
+// SubmitDepthIndirect uploads and draws them - every frame, also when DepthCasterCache kept the build.
+void BuildDepthIndirect(const std::vector<DepthCaster>& casters, const InstanceGroups& groups, bool sceneSlots,
+                        DepthIndirectBuild& out) {
+    using Tag = DepthIndirectBuild::Tag;
+    std::vector<Tag>& tags = out.Tags;
+    std::vector<IndirectItem>& items = out.Items;
+    std::vector<std::uint32_t>& slots = out.Slots;
+    std::vector<std::uint32_t>& rest = out.Rest;
     tags.clear();
     items.clear();
-    static std::vector<std::uint32_t> slots;
     slots.clear();
+    rest.clear();
+    out.Commands.clear();
+    out.Batches.clear();
     const std::uint32_t sceneCount = sceneSlots ? GpuScene::Get().Count() : 0;
     std::vector<glm::mat4>& staging = InstanceBuffer::Staging();
     staging.clear();
@@ -284,15 +290,21 @@ int DrawDepthIndirect(Shader& shader, const std::vector<DepthCaster>& casters, c
                               (std::int32_t)r.BaseVertex, base}});
         }
     }
-    if (items.empty()) return 0;
+    if (!items.empty()) BuildIndirectBatches(items, out.Commands, out.Batches);
+}
+
+int SubmitDepthIndirect(Shader& shader, const std::vector<DepthCaster>& casters, const InstanceGroups& groups,
+                        const DepthIndirectBuild& build, int firstLoc, bool sceneSlots) {
+    const std::vector<DepthIndirectBuild::Tag>& tags = build.Tags;
+    const std::vector<IndirectBatch>& batches = build.Batches;
+    if (batches.empty()) return 0;
     if (sceneSlots) {
-        GpuScene::Get().BindSlotList(28, slots);
+        GpuScene::Get().BindSlotList(28, build.Slots);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, InstanceBuffer::kXformBinding, GpuScene::Get().XformBuffer());
     } else {
         InstanceBuffer::Upload();
     }
-    BuildIndirectBatches(items, commands, batches);
-    IndirectBuffer::Upload(commands);
+    IndirectBuffer::Upload(build.Commands);
 
     const bool passCull = glIsEnabled(GL_CULL_FACE) == GL_TRUE;
     GLint passFace = GL_BACK;
@@ -302,7 +314,7 @@ int DrawDepthIndirect(Shader& shader, const std::vector<DepthCaster>& casters, c
     const int layersLoc = shader.Loc("uInstanceLayers");
     int firstNow = -1, layersNow = -1, cullNow = 0;
     for (const IndirectBatch& b : batches) {
-        const Tag& t = tags[b.Tag];
+        const DepthIndirectBuild::Tag& t = tags[b.Tag];
         const DepthCaster& lead = casters[groups.Order[groups.Groups[t.Group].First]];
         if (firstLoc >= 0 && lead.LayerFirst != firstNow) shader.SetInt(firstLoc, firstNow = lead.LayerFirst);
         if (lead.Layers != layersNow) shader.SetInt(layersLoc, layersNow = lead.Layers);
@@ -405,17 +417,73 @@ int DrawDepthCastersDirect(Shader& shader, const std::vector<DepthCaster>& caste
 }
 } // namespace
 
-int DrawDepthCasters(Shader& shader, const std::vector<DepthCaster>& casters, int firstLoc, World* sceneWorld) {
+namespace {
+DepthCasterCache::Totals g_DepthCacheTotals;
+}
+DepthCasterCache::Totals DepthCasterCache::AllTotals() { return g_DepthCacheTotals; }
+
+bool DepthCasterCache::Reuse(const std::vector<DepthCaster>& casters, const Epochs& epochs, std::uint64_t frame) {
+    m_Next.resize(casters.size());
+    for (std::size_t i = 0; i < casters.size(); ++i) {
+        const DepthCaster& c = casters[i];
+        Entry& e = m_Next[i];
+        std::memset(&e, 0, sizeof e);
+        e.Ref = c.Ref;
+        e.Import = c.Ref ? c.Ref->ImportStamp() : 0;
+        e.SlotList = c.Slots;
+        std::uint64_t h = 0xcbf29ce484222325ull;
+        if (c.Slots)
+            for (const auto& m : *c.Slots) h = (h ^ (std::uint64_t)(std::uintptr_t)m.get()) * 0x100000001b3ull;
+        e.SlotsHash = h;
+        e.Visible = c.Visible;
+        e.Slot = c.Slot;
+        e.Run = (c.TwoSided ? 1 : 0) | (c.LayerFirst << 1) | (c.Layers << 8);
+    }
+    const bool same = m_Valid && frame >= m_BuiltFrame && frame - m_BuiltFrame < kMaxAgeFrames && epochs == m_Epochs &&
+                      m_Next.size() == m_Key.size() &&
+                      (m_Key.empty() || std::memcmp(m_Next.data(), m_Key.data(), m_Key.size() * sizeof(Entry)) == 0);
+    if (same) {
+        ++m_Reused;
+        ++g_DepthCacheTotals.Reused;
+        return true;
+    }
+    m_Key.swap(m_Next);
+    m_Epochs = epochs;
+    m_Valid = false;
+    ++m_Rebuilt;
+    ++g_DepthCacheTotals.Rebuilt;
+    return false;
+}
+
+int DrawDepthCasters(Shader& shader, const std::vector<DepthCaster>& casters, int firstLoc, World* sceneWorld,
+                     DepthCasterCache* cache) {
     if (casters.empty()) return 0;
     const bool instancing = ProjectSettings::Quality().GpuInstancing;
     if (!instancing || !MultiDrawEnabled()) return DrawDepthCastersDirect(shader, casters, firstLoc);
     const bool sceneSlots = sceneWorld && GpuScene::Get().SyncOnce(*sceneWorld);
 
     // GPU-driven: the arena models go out as multi-draws; what's left (skinned, partly hidden) draws directly.
-    static std::vector<std::uint32_t> rest;
+    // A cache only keeps a slot build: a transform build stages this frame's matrices.
+    static DepthIndirectBuild scratch;
+    const InstanceGroups* useGroups = nullptr;
+    const DepthIndirectBuild* build = &scratch;
+    if (cache && sceneSlots) {
+        const std::uint64_t frame = Time::FrameCount();
+        if (!cache->Reuse(casters, {RenderSettingsEpoch(), GpuScene::Get().Count()}, frame)) {
+            cache->Groups = GroupCasters(casters, instancing);
+            BuildDepthIndirect(casters, cache->Groups, sceneSlots, cache->Build);
+            cache->Built(frame);
+        }
+        useGroups = &cache->Groups;
+        build = &cache->Build;
+    } else {
+        if (cache) cache->Invalidate();
+        useGroups = &GroupCasters(casters, instancing); // valid until the next GroupCasters (the rest's, after the draws)
+        BuildDepthIndirect(casters, *useGroups, sceneSlots, scratch);
+    }
+    const int indirectDraws = SubmitDepthIndirect(shader, casters, *useGroups, *build, firstLoc, sceneSlots);
+    const std::vector<std::uint32_t>& rest = build->Rest;
     static std::vector<DepthCaster> restCasters;
-    rest.clear();
-    const int indirectDraws = DrawDepthIndirect(shader, casters, GroupCasters(casters, instancing), firstLoc, rest, sceneSlots);
     if (rest.empty()) return indirectDraws;
     restCasters.clear();
     for (std::uint32_t i : rest) restCasters.push_back(casters[i]);
