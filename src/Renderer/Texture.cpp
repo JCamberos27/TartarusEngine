@@ -442,7 +442,7 @@ UploadStaging::Step Texture::UploadStep(bool stage) {
         const std::size_t texels = (std::size_t)d.Width * d.Height;
         const bool stageable = stage && !expands && !d.Pixels.empty() && (!widen || d.Pixels.size() == texels * 3);
         const std::size_t bytes = widen ? texels * 4 : d.Pixels.size();
-        if (stageable) m_Stage = UploadStaging::Reserve(bytes);
+        if (stageable) m_Stage = UploadStaging::Reserve(bytes, "texture");
         if (!m_Stage.Valid() && stageable && UploadStaging::Stageable(bytes)) return Step::Waiting; // the ring is full for now
         if (!m_Stage.Valid()) {
             FinishUpload();

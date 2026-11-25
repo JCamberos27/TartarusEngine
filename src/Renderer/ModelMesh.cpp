@@ -86,7 +86,7 @@ UploadStaging::Step ModelMesh::UploadStep(bool stage) {
     const std::size_t iBytes = m_LocalIndices.size() * sizeof(unsigned int);
     if (!m_Stage.Valid()) {
         const std::size_t bytes = StagedIndexOffset(vBytes) + iBytes;
-        if (stage && vBytes && iBytes) m_Stage = UploadStaging::Reserve(bytes);
+        if (stage && vBytes && iBytes) m_Stage = UploadStaging::Reserve(bytes, "mesh");
         if (!m_Stage.Valid() && stage && vBytes && iBytes && UploadStaging::Stageable(bytes)) return Step::Waiting; // ring full for now
         if (!m_Stage.Valid()) {
             FinishUpload();

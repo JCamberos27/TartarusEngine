@@ -37,7 +37,7 @@ struct Region {
 };
 
 // Space for `size` bytes (offset aligned to 256), or an invalid region when staging is off or the ring is full.
-Region Reserve(std::size_t size);
+Region Reserve(std::size_t size, const char* tag = "?");
 // Whether a `size`-byte request can ever be staged (staging on, the ring mapped, not too big for it): when it can and
 // Reserve still failed, the ring is only full for now - wait a pump for the GPU to free some, rather than going the
 // slow way on the main thread.

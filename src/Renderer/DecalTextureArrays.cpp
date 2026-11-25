@@ -609,7 +609,7 @@ void DecalTextureArrays::BeginFrame() {
             }
         }
         if (!e.Stage.Valid()) {
-            if (total > 0) e.Stage = UploadStaging::Reserve(total);
+            if (total > 0) e.Stage = UploadStaging::Reserve(total, "decal");
             if (e.Stage.Valid()) {
                 std::shared_ptr<const Decoded> maps = e.Staged; // alive until the copy is done (it is released after)
                 UploadStaging::StageCopy(e.Stage, [maps](unsigned char* dst) {

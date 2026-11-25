@@ -28,6 +28,7 @@ struct Live {
     std::size_t Offset, End;
     std::uint64_t Frame = 0; // the frame it was retired in
     bool Retired = false;
+    const char* Tag = "?"; // DIAG
 };
 
 struct Ring {
@@ -136,9 +137,9 @@ void DebugDump() { // DIAG (temporary)
     }
     int n = 0;
     for (const Live& s : r.Spans) {
-        if (n++ < 12)
-            std::printf("[RingDiag]  span %zu..%zu (%zu MiB) retired=%d retiredFrame=%llu\n", s.Offset, s.End, (s.End - s.Offset) >> 20, (int)s.Retired,
-                        (unsigned long long)s.Frame);
+        if (n++ < 6 || !s.Retired)
+            std::printf("[RingDiag]  span %zu..%zu (%zu MiB) retired=%d retiredFrame=%llu tag=%s\n", s.Offset, s.End, (s.End - s.Offset) >> 20, (int)s.Retired,
+                        (unsigned long long)s.Frame, s.Tag);
     }
 }
 
@@ -160,7 +161,7 @@ bool Stageable(std::size_t size) {
     return Enabled() && size > 0 && size <= kLargest && R().Base != nullptr;
 }
 
-Region Reserve(std::size_t size) {
+Region Reserve(std::size_t size, const char* tag) {
     Region out;
     if (!Enabled() || size == 0 || size > kLargest || !EnsureRing()) return out;
     Ring& r = R();
@@ -170,7 +171,7 @@ Region Reserve(std::size_t size) {
     };
     const std::size_t at = fit(); // full: the caller waits a frame for old spans to age out
     if (at == ~std::size_t(0)) return out;
-    r.Spans.push_back({at, at + size});
+    r.Spans.push_back({at, at + size, 0, false, tag});
     r.Head = at + size;
     out.Offset = at;
     out.Size = size;
