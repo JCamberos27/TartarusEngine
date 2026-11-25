@@ -6,11 +6,13 @@
 #include "Texture.h"
 #include "TimeService.h"
 #include "gl.h"
+#include <GLFW/glfw3.h>
 
 #include <algorithm>
 #include <cstring>
 #include <iterator>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 
@@ -165,6 +167,17 @@ void PerfBench::ReportHalves(const std::string& sceneFile, const char* label) {
     m_UnmappedCpu.clear();
 }
 
+const PerfBench::Pacing& PerfBench::Paced() {
+    static const Pacing p = [] {
+        Pacing out;
+        const std::string v = Env::Str(Env::Var::PerfPaced);
+        if (v == "vsync") out.VSync = true;
+        else if (!v.empty()) out.Fps = std::clamp(std::atoi(v.c_str()), 0, 1000);
+        return out;
+    }();
+    return p;
+}
+
 PerfBench::PerfBench()
     : m_Warmup(std::max(0, Env::Int(Env::Var::PerfWarmup, 100))), m_LastFrameEnd(std::chrono::steady_clock::now()) {
     // The asset cost table wants every load, the first scene's own included (TakeFrameMs only turns the log on at
@@ -276,6 +289,27 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
     Stats after2s;
     if (m_FrameTimes.size() > 240) after2s = StatsOf(std::vector<double>(m_FrameTimes.begin() + 120, m_FrameTimes.end()));
     print(" after 2 s", after2s);
+    // TARTARUS_PERF_PACED: how even the paced frames came (the frame time here is end of frame to end of frame, after
+    // the present and the cap, so it is the cadence the player sees, up to the driver's own queueing).
+    if (const Pacing& paced = Paced(); paced.On()) {
+        const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+        const int hz = mode ? mode->refreshRate : 60;
+        const double target = 1000.0 / (paced.VSync ? (double)std::max(hz, 1) : (double)paced.Fps);
+        const std::vector<double> t = m_FrameTimes.size() > 240
+                                          ? std::vector<double>(m_FrameTimes.begin() + 120, m_FrameTimes.end())
+                                          : m_FrameTimes;
+        const Stats s = StatsOf(t);
+        int late = 0, run = 0, longest = 0;
+        for (double ms : t) {
+            if (ms > 1.5 * target) { ++late; longest = std::max(longest, ++run); }
+            else run = 0;
+        }
+        char how[32];
+        if (paced.VSync) std::snprintf(how, sizeof(how), "vsync %d Hz", hz);
+        else std::snprintf(how, sizeof(how), "cap %d fps", paced.Fps);
+        std::printf("[PerfBench] %s paced (%s): target %.2f ms  p50=%.2f p99=%.2f max=%.2f  p99/p50=%.2f  late(>1.5x target)=%d of %zu  longest late run=%d\n",
+                    label, how, target, s.P50, s.P99, s.Max, s.P50 > 0.0 ? s.P99 / s.P50 : 0.0, late, s.N, longest);
+    }
     // What else ran during the phase: hitches in a CONTENDED phase are likely other processes, not this one.
     const int cores = MachineLoad::Cores();
     const std::string machine = MachineLoad::Describe(MachineLoad::Between(m_LoadStart, MachineLoad::Take(), cores), cores);

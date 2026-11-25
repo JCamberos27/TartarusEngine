@@ -1326,8 +1326,12 @@ bool AppSession::Frame() {
     // A hidden run (KeepsWindowHidden) has no display to wait for: with the screen asleep, a synced swap held each frame
     // for half a second and an NPC test crawled at 2 fps. (Harness runs step a fixed 1/60 s, so only the speed changes.)
     // TARTARUS_UNLOCKED_FPS: the same for a visible test run, so it goes as fast as the machine allows.
+    // TARTARUS_PERF_PACED=vsync: a visible --perf-bench measures with VSync on (PerfBench::Paced).
     static const bool unlockedFps = Env::Flag(Env::Var::UnlockedFps);
-    if (const int wantVSync = opt.perfBenchMode || hiddenRun || unlockedFps ? 0 : playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
+    if (const int wantVSync = hiddenRun || unlockedFps ? 0
+                              : opt.perfBenchMode ? (PerfBench::Paced().VSync ? 1 : 0)
+                              : playerMode        ? (playerCfg.VSync ? 1 : 0)
+                                                  : EditorSettings::Get().VSyncMode;
         wantVSync != appliedVSyncMode) {
         appliedVSyncMode = wantVSync;
         window.SetVSync(appliedVSyncMode);
@@ -2746,7 +2750,8 @@ bool AppSession::Frame() {
     // #143: in the background and not playing, hold to the (lower) Background FPS too.
     // TARTARUS_UNLOCKED_FPS: no cap at all, the background one included.
     static const bool uncapped = Env::Flag(Env::Var::UnlockedFps);
-    int fpsCap = opt.perfBenchMode || uncapped ? 0 : EditorSettings::Get().FpsLimit;
+    // TARTARUS_PERF_PACED=<fps>: a --perf-bench measures under that cap (PerfBench::Paced); otherwise it runs uncapped.
+    int fpsCap = uncapped ? 0 : opt.perfBenchMode ? PerfBench::Paced().Fps : EditorSettings::Get().FpsLimit;
     const int bgCap = uncapped ? 0 : EditorSettings::Get().UnfocusedFpsLimit;
     if (bgCap > 0 && !playing && !headless && !glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED))
         fpsCap = fpsCap > 0 ? std::min(fpsCap, bgCap) : bgCap;
