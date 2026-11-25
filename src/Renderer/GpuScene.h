@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ReflectionProbeArray.h"
 #include <glm/glm.hpp>
 #include <cstdint>
 #include <string>
@@ -56,6 +57,39 @@ public:
     unsigned BoundsBuffer() const { return m_Bounds; }
     const std::vector<glm::mat4>& XformMirror() const { return m_XformCpu; } // 2 per slot
     const std::vector<glm::vec4>& BoundsMirror() const { return m_BoundsCpu; } // 2 per slot
+
+    // G-MB: each slot's per-object shading state for the opaque multi-draw, so copies in different rooms share a batch
+    // instead of splitting it on their probes and GI volumes (ModelFragment.glsl SlotStateBlock, binding 38). 80 bytes,
+    // std430: Head = GI volume mask low/high bits, probe count, 0; Probe[2j] = probe j's centre + layer,
+    // Probe[2j + 1] = its half size + blend weight (the values GIVolumes::SetMask and ReflectionProbeArray::Bind set).
+    // Written by the view that draws the slot (SceneRenderer::ViewPass::BuildBatches), never by Sync: a slot's state
+    // is only read by the draws of the view that just wrote it.
+    struct ObjectState {
+        std::uint32_t Head[4] = {0, 0, 0, 0};
+        glm::vec4 Probe[4] = {glm::vec4(0.0f), glm::vec4(0.0f), glm::vec4(0.0f), glm::vec4(0.0f)};
+    };
+    static constexpr unsigned kObjectStateBinding = 38;
+    // The model fragment program's full variant (decals + local lights) has 9 SSBO blocks with SlotStateBlock, and
+    // GL 4.3 only promises 8 per fragment stage (GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS). On a GPU below 9 the run
+    // compiles every program without the block (_NO_SLOT_STATE, a ShaderLibrary global define) and the multi-draw keeps
+    // binding probes and GI masks per batch, as TARTARUS_NO_SLOT_STATE does.
+    static constexpr int kSlotStateFragmentBlocks = 9;
+    static bool SlotStateFits(int maxFragmentBlocks) { return maxFragmentBlocks >= kSlotStateFragmentBlocks; }
+    // GL, once at startup after ShaderLibrary::Init and before the model programs compile: reads the limit and, below
+    // kSlotStateFragmentBlocks, sets the define. Never called (unit tests): supported.
+    static void InitSlotStateSupport();
+    static bool SlotStateSupported();
+    static int MaxFragmentBlocks(); // the queried limit (0 before InitSlotStateSupport)
+    // GL: how many SSBO blocks `program`'s fragment stage references (the startup log and its check).
+    static int FragmentBlocks(unsigned program);
+    static ObjectState MakeObjectState(std::uint64_t giMask, const ReflectionProbeArray::Selection& probes);
+    // The mirror's entry for `slot` (< Count()) becomes `s`; a change goes up with the next UploadObjectState.
+    void SetObjectState(std::uint32_t slot, const ObjectState& s);
+    // GL: uploads the changed states and binds the buffer at kObjectStateBinding. False: no buffer.
+    bool UploadObjectState();
+    const std::vector<ObjectState>& ObjectStateMirror() const { return m_StateCpu; }
+    // Slots changed since the last UploadObjectState (unit tests).
+    std::uint32_t PendingObjectStates() const { return (std::uint32_t)m_StateDirty.size(); }
 
     struct SyncStats {
         bool Full = false;           // every slot written
@@ -117,4 +151,10 @@ private:
     const World* m_LogWorld = nullptr;
     ChangeLog m_Log;
     std::vector<std::uint64_t> m_Pose; // by slot (0: no bones)
+    // G-MB object state: the mirror (by slot), the slots changed since the last upload, and its GL buffer.
+    std::vector<ObjectState> m_StateCpu;
+    std::vector<std::uint32_t> m_StateDirty;
+    std::vector<Run> m_StateRuns;
+    unsigned m_StateBuffer = 0;
+    std::uint32_t m_StateCapacity = 0;
 };

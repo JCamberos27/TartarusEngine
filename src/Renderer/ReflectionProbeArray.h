@@ -34,6 +34,16 @@ public:
     // bind the same probes with blends within 1/128 of each other, so copies of a model can go out as one instanced
     // draw under the first copy's probe uniforms (SceneRenderer) instead of one draw each.
     std::uint32_t SelectionKey(const glm::vec3& centre) const;
+    // What Bind(shader, centre) uploads, as data (G-MB per-slot state, GpuScene::ObjectState): the same values,
+    // bit for bit, for Count probes (0-2).
+    struct Selection {
+        int Count = 0;
+        glm::vec3 Center[kMaxDraw] = {glm::vec3(0.0f), glm::vec3(0.0f)};
+        glm::vec3 HalfSize[kMaxDraw] = {glm::vec3(0.0f), glm::vec3(0.0f)};
+        float Blend[kMaxDraw] = {0.0f, 0.0f};
+        int Layer[kMaxDraw] = {-1, -1};
+    };
+    Selection Resolve(const glm::vec3& centre) const;
 
     int Count() const { return (int)m_Probes.size(); }
 

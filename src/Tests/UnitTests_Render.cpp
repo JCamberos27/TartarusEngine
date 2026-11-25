@@ -13,6 +13,7 @@
 #include "../Renderer/GpuCull.h"
 #include "../Physics/Frustum.h"
 #include "../Renderer/GpuScene.h"
+#include "../Renderer/ShaderLibrary.h"
 #include "../Renderer/SceneViewPass.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/TextureCache.h"
@@ -537,6 +538,83 @@ void GpuSceneSyncOnceKey() {
     a.RebuildWorldTransformCache();
     CHECK(!scene.UpToDateFor(a));
     ForgetGatherCandidates(); // no cache left pointing at these worlds
+}
+
+// G-MB: a multi-draw copy's slot state holds what the per-draw hook would bind for it (ReflectionProbeArray::Bind's
+// probes and blends, GIVolumes::SetMask's mask), probes picked like SelectionKey; the mirror marks only real changes.
+void GpuSceneObjectState() {
+    World world;
+    const glm::vec3 probeAt[3] = {{0, 0, 0}, {10, 0, 0}, {0, 0, 10}};
+    for (const glm::vec3& at : probeAt) {
+        const entt::entity e = world.Registry.create();
+        world.Registry.emplace<TransformComponent>(e).Position = at;
+        world.Registry.emplace<ReflectionProbeComponent>(e).Size = glm::vec3(4.0f, 2.0f, 6.0f);
+    }
+    world.RebuildWorldTransformCache();
+    ReflectionProbeArray probes;
+    probes.Update(world);
+    CHECK(probes.Count() == 3);
+    const glm::vec3 centre(3.0f, 0.0f, 1.0f); // nearest probe 0, then 1
+    const std::uint32_t key = probes.SelectionKey(centre);
+    const ReflectionProbeArray::Selection sel = probes.Resolve(centre);
+    CHECK(sel.Count == 2 && (int)(key >> 30) == 2);
+    CHECK(sel.Center[0] == probes.Volume((key >> 20) & 0x3FF).Center && sel.Center[1] == probes.Volume((key >> 10) & 0x3FF).Center);
+    CHECK(sel.Center[0] == probeAt[0] && sel.Center[1] == probeAt[1]); // the nearest two, in order
+    CHECK(sel.HalfSize[0] == glm::vec3(2.0f, 1.0f, 3.0f) && sel.Layer[0] == -1 && sel.Layer[1] == -1); // no cube array
+    CHECK(std::abs(sel.Blend[0] + sel.Blend[1] - 1.0f) < 1e-6f && sel.Blend[0] > sel.Blend[1]);
+    CHECK((std::uint32_t)std::lround(sel.Blend[0] * 64.0f) == (key & 0x7F));
+
+    const std::uint64_t mask = 0x8000000100000003ull;
+    const GpuScene::ObjectState s = GpuScene::MakeObjectState(mask, sel);
+    CHECK(s.Head[0] == 3u && s.Head[1] == 0x80000001u && s.Head[2] == 2u && s.Head[3] == 0u);
+    CHECK(s.Probe[0] == glm::vec4(sel.Center[0], -1.0f) && s.Probe[1] == glm::vec4(sel.HalfSize[0], sel.Blend[0]));
+    CHECK(s.Probe[2] == glm::vec4(sel.Center[1], -1.0f) && s.Probe[3] == glm::vec4(sel.HalfSize[1], sel.Blend[1]));
+    const GpuScene::ObjectState none = GpuScene::MakeObjectState(0, ReflectionProbeArray().Resolve(centre));
+    CHECK(none.Head[2] == 0u && none.Probe[0] == glm::vec4(0.0f)); // no probes: count 0 (the sky, as uProbeCount 0)
+
+    // The mirror: slots past the synced count are ignored; a write that changes nothing is not uploaded again.
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path) || !GpuScene::Enabled()) return;
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    for (int i = 0; i < 3; ++i) world.CreateModelEntity(model, glm::vec3((float)i, 0.0f, 0.0f), glm::vec3(0), glm::vec3(1), "M");
+    world.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    scene.Sync(world, false);
+    CHECK(scene.Count() >= 3 && scene.ObjectStateMirror().size() == scene.Count());
+    scene.SetObjectState(1, s);
+    scene.SetObjectState(scene.Count(), s); // out of range: ignored
+    CHECK(scene.PendingObjectStates() == 1);
+    CHECK(std::memcmp(&scene.ObjectStateMirror()[1], &s, sizeof s) == 0);
+    scene.SetObjectState(1, s); // unchanged
+    CHECK(scene.PendingObjectStates() == 1);
+    scene.SetObjectState(0, none); // the mirror starts zeroed: nothing changed
+    CHECK(scene.PendingObjectStates() == 1);
+    ForgetGatherCandidates();
+}
+
+// G-MB: the slot state needs a 9th fragment SSBO block, past GL 4.3's minimum of 8; below it the run compiles without
+// it (a global define every top-level source carries right after #version, ahead of the first #line).
+void GpuSceneSlotStateBlockBudget() {
+    CHECK(GpuScene::kSlotStateFragmentBlocks == 9);
+    CHECK(!GpuScene::SlotStateFits(8) && GpuScene::SlotStateFits(9) && GpuScene::SlotStateFits(16));
+    CHECK(GpuScene::SlotStateSupported()); // InitSlotStateSupport never ran: on
+
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / UnitTestSupport::TempName("tartarus_defines", ".glsl");
+    { std::ofstream(path) << "// lead comment\n#version 430 core\nvoid main() {}\n"; }
+    const std::string saved = ShaderLibrary::GlobalDefines();
+    ShaderLibrary::SetGlobalDefines("#define _NO_SLOT_STATE 1\n");
+    const std::string withDefine = ShaderLibrary::ReadFileAt(path.string());
+    ShaderLibrary::SetGlobalDefines(saved);
+    const std::string without = ShaderLibrary::ReadFileAt(path.string());
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+    const std::size_t version = withDefine.find("#version 430 core\n"), define = withDefine.find("#define _NO_SLOT_STATE 1\n");
+    CHECK(version != std::string::npos && define == version + 18);
+    CHECK(withDefine.find("#line", define) != std::string::npos); // the file's numbering still starts after it
+    CHECK(without.find("_NO_SLOT_STATE") == std::string::npos);
 }
 
 // G4-c: the GPU scene's change log for the cached local shadows. Over random frames (moves, Cast Shadows writes,
@@ -3341,6 +3419,8 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GpuScene: the mirror matches the candidate list slot by slot, frame after frame", GpuSceneMirror});
     tests.push_back({"GpuScene: in-place render settings reach the slots (reported: next sync; unreported: within a sweep lap)", GpuSceneLiveEpoch});
     tests.push_back({"GpuScene: SyncOnce's key follows every Sync (another world in between syncs again)", GpuSceneSyncOnceKey});
+    tests.push_back({"GpuScene: slot object state = what the per-draw hook binds (probes, blends, GI mask)", GpuSceneObjectState});
+    tests.push_back({"GpuScene: slot state needs 9 fragment SSBO blocks; below that a global _NO_SLOT_STATE define", GpuSceneSlotStateBlockBudget});
     tests.push_back({"GpuScene: the change log lists every changed slot with where it was and is (300 random frames)", GpuSceneChangeLog});
     tests.push_back({"Local shadows (G4-c): a frame's changes wake the quiet lights they reach, and only those", LocalShadowQuietWake});
     tests.push_back({"Local shadows (G4-c): a LOD level change wakes the lights around the renderers it swapped", LocalShadowLodToggles});
