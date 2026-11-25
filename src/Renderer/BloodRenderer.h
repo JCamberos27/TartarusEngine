@@ -1,5 +1,7 @@
 #pragma once
 #include "BloodPalette.h"
+#include <atomic>
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
@@ -40,7 +42,12 @@ public:
 
     // Reads project/assets/Effects/Blood/*.bvat once (needs the GL context). False when the data
     // isn't there (the import hasn't been run) - blood then stays off without errors past one log line.
-    bool Load();
+    // `files`: ReadFiles' result (P-56's Play assets warm-up read them on a worker), so only the upload is left.
+    struct FileData;
+    bool Load(const FileData* files = nullptr);
+    // Load's file half: every .bvat read and parsed, no GL (any thread); `cancel` stops it between files.
+    static std::shared_ptr<FileData> ReadFiles(const std::atomic<bool>* cancel = nullptr);
+    static std::size_t Bytes(const FileData& files); // the texel data it holds
     bool Loaded() const { return m_Loaded; }
     int SimIndex(const std::string& name) const; // -1 if unknown
     const SimInfo* Sim(int index) const { return index >= 0 && index < (int)m_Sims.size() ? &m_Sims[index] : nullptr; }

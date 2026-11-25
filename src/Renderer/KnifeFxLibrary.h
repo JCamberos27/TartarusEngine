@@ -1,6 +1,9 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <atomic>
+#include <cstddef>
+#include <memory>
 
 #include "../Assets/KnifeFxImport.h"
 
@@ -23,7 +26,12 @@ public:
 
     // Reads the libraries once (needs the GL context). False when none is there (the import hasn't been
     // run): every Find then returns -1 and the effects that need them stay off, past one log line.
-    bool Load();
+    // `files`: ReadFiles' result (P-56's Play assets warm-up read them on a worker), so only the upload is left.
+    struct FileData;
+    bool Load(const FileData* files = nullptr);
+    // Load's file half: every library read and parsed, no GL (any thread); `cancel` stops it between files.
+    static std::shared_ptr<FileData> ReadFiles(const std::atomic<bool>* cancel = nullptr);
+    static std::size_t Bytes(const FileData& files); // the texture data it holds
     bool Loaded() const { return m_Loaded; }
     int Find(const std::string& name) const; // -1 if unknown
     const Entry* At(int id) const { return id >= 0 && id < (int)m_Entries.size() ? &m_Entries[id] : nullptr; }
