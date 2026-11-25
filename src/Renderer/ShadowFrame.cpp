@@ -26,6 +26,7 @@
 #include "TimeService.h"
 #include "gl.h"
 #include "LightGather.h"
+#include "MaterialAsset.h"
 #include "Model.h"
 #include "Profiler.h"
 #include "RenderSettingsEpoch.h"
