@@ -32,5 +32,6 @@ private:
     std::vector<const char*> m_Views;
     int m_Frame = 0;
     int m_Written = 0;  // views written to disk
+    bool m_ViewLit = true; // the last BeforeUi saw the views Shaded and lit (HarnessView)
     int m_Failures = 0; // a PNG that could not be written, or the recoil preview that did not load
 };
