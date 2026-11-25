@@ -18,6 +18,7 @@
 #include "EditorLayer.h"
 #include "EditorSettings.h"
 #include "FKeyRow.h"
+#include "Tests/HarnessView.h"
 #include "FirstPersonPresentation.h"
 #include "Framebuffer.h"
 #include "GIVolumes.h"
@@ -275,6 +276,16 @@ void SmokeHarness::MemSnapshot(const std::string& label) const {
 void SmokeHarness::LoadScene() {
     World& world = m_Ctx.world;
     const std::string& path = m_ScenePaths[m_SceneIndex];
+    // Every scene draws Shaded and lit whatever the prefs say (HarnessView.h); EndFrame checks it stays so.
+    m_ViewNotLit.clear();
+    // smoke_min: the guard's own check. Plant what an Unlit + F5 Albedo prefs file would leave (the scratch prefs are
+    // a copy of the user's), then force and check the scene draws lit (frame 15 below, and every frame in EndFrame).
+    m_ViewPlanted = path.find("smoke_min") != std::string::npos;
+    if (m_ViewPlanted) {
+        m_Ctx.editor.SetShadingModeIndex(2);
+        EditorSettings::Get().FRowLightDebug = FKeyRow::LightAlbedo;
+    }
+    if (!HarnessView::Force(m_Ctx.editor, "SmokeTest")) m_ViewNotLit = HarnessView::Describe(HarnessView::Current(m_Ctx.editor));
     // Baseline BEFORE the load, so an asset error logged *during* Load() (a
     // missing model/texture) counts against this scene instead of being folded
     // into the baseline and ignored (audit #356).
@@ -378,6 +389,13 @@ void SmokeHarness::BeginFrame() {
         std::string why;
         if (GpuScene::Get().SelfTest(world, why)) std::cout << "[SmokeTest]   GPU scene matches the candidate list" << std::endl;
         else Log::Error("[SmokeTest] GPU scene: " + why);
+    }
+
+    // smoke_min: the view guard (HarnessView) undid the planted Unlit + F5 Albedo.
+    if (m_SceneActive && m_FramesRendered == 15 && m_ViewPlanted) {
+        const HarnessView::Mode view = HarnessView::Current(m_Ctx.editor);
+        if (HarnessView::Lit(view)) std::cout << "[SmokeTest]   view guard: planted Unlit + F5 Albedo, drawing Shaded and lit" << std::endl;
+        else Log::Error("[SmokeTest] view guard: the planted prefs were not undone: " + HarnessView::Describe(view));
     }
 
     // smoke_min: GPU culling's stage A + ordered compaction (G-2) against GatherVisible: a camera query and one inside
@@ -870,6 +888,8 @@ void SmokeHarness::PerfFrame() {
             m_Perf.ReportCombat(std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string(),
                                 m_Ctx.editor.GetRenderStats().DrawCalls, m_Ctx.editor.GetRenderStats().Triangles,
                                 m_Ctx.window.GetWidth(), m_Ctx.window.GetHeight());
+            std::cout << "[PerfBench] view (combat): " << (m_ViewNotLit.empty() ? "Shaded, lit" : "NOT LIT: " + m_ViewNotLit)
+                      << std::endl;
         }
     } else if (opt.perfBenchMode) {
         const double frameMs = m_Perf.TakeFrameMs();
@@ -905,6 +925,9 @@ void SmokeHarness::PerfFrame() {
             m_Perf.ReportPhase(std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string(), phase.c_str(),
                                m_Ctx.editor.GetRenderStats().DrawCalls, m_Ctx.editor.GetRenderStats().Triangles,
                                m_Ctx.window.GetWidth(), m_Ctx.window.GetHeight(), opt.perfSample);
+            // Its own prefix: scripts that parse "[PerfBench] <scene> (<phase>)" rows for numbers don't catch it.
+            std::cout << "[PerfBench] view (" << phase << ") " << std::filesystem::path(m_ScenePaths[m_SceneIndex]).filename().string()
+                      << ": " << (m_ViewNotLit.empty() ? "Shaded, lit" : "NOT LIT: " + m_ViewNotLit) << std::endl;
             if (m_FramesRendered < m_FrameBudget) {
                 if (!playing) m_Ctx.togglePlay();
                 else if (!playMaximized) m_Ctx.setMaximized(true);
@@ -932,6 +955,7 @@ void SmokeHarness::ScoreScene() {
     cause += m_SetupError;
     m_SetupError.clear(); // counted once, against the first scene
     if (!clipOk)             cause += "cinematic clip incomplete; ";
+    if (!m_ViewNotLit.empty()) cause += "view not Shaded and lit (" + m_ViewNotLit + "); ";
     if (newLogErrors > 0)    cause += std::to_string(newLogErrors) + " new log error(s); ";
     if (npcTest) {
         if (!npcTest->Done()) cause += "npc test didn't finish; ";
@@ -969,6 +993,7 @@ void SmokeHarness::ScoreScene() {
               << " newGlErrors=" << newErrors
               << " newLogErrors=" << newLogErrors
               << " drawCalls=" << drawCalls
+              << " view=" << (m_ViewNotLit.empty() ? "Shaded-lit" : "NOT-LIT")
               << (m_PlayScene ? ("  playCycles=" + std::to_string(m_PlayCycles)) : "")
               << (variants.empty() ? "" : ("  variants:" + variants))
               << (pass ? "" : ("  cause: " + cause)) << std::endl;
@@ -986,6 +1011,17 @@ void SmokeHarness::EndFrame() {
     Camera& editorCamera = m_Ctx.editorCamera;
     ++m_FramesRendered;
     ++m_WallFrames;
+    // A frame drawn with anything but the normal look (a key press in a visible run, a script) fails the scene: its
+    // numbers and pictures would be wrong.
+    if (m_ViewNotLit.empty()) {
+        HarnessView::Mode view = HarnessView::Current(m_Ctx.editor);
+        if (opt.giTourMode) view.LightView = FKeyRow::LightOff; // the GI tour picks its own F5 view (gi / full shots)
+        if (!HarnessView::Lit(view)) {
+            m_ViewNotLit = HarnessView::Describe(view);
+            Log::Error("[SmokeTest] frame " + std::to_string(m_FramesRendered) + " drew with " + m_ViewNotLit +
+                       ", not Shaded and lit: this scene fails");
+        }
+    }
     if (glfwGetWindowAttrib(m_Ctx.window.Handle(), GLFW_FOCUSED) == 0) ++m_UnfocusedFrames;
     if (opt.giTourMode) {
         GiTourFrame();
