@@ -443,7 +443,6 @@ void SceneRenderer::ViewPass::CullGpuView(const VisibilityQuery& framed) {
     if (GpuCull::VerifyEnabled()) {
         std::uint64_t checked = 0, missing = 0;
         SceneSlot s;
-        static std::vector<std::uint32_t> runs;
         for (std::size_t g = 0; g < groups; ++g) {
             if (t.GroupSeen[g]) continue;
             const GpuCull::Group& grp = t.StageGroups[g];
