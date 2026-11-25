@@ -86,6 +86,15 @@ std::uint64_t LocalCasterHash(std::uint32_t id, const Model* model, const std::v
     h = HashWord(h, (std::uint64_t)(std::uintptr_t)model);
     h = HashWord(h, (std::uint64_t)materials.size());
     for (const auto& m : materials) h = HashWord(h, (std::uint64_t)(std::uintptr_t)m.get());
+    // ...and what each mesh's depth draw reads from its material (queue, cull, cutout, sway: DepthMeshState), so an
+    // edit written into the same MaterialAsset (a cutoff slider, a texture swap, a reload) redraws the light.
+    if (model)
+        for (int i = 0; i < model->MeshCount(); ++i) {
+            int cull = 0;
+            std::uint64_t stateKey = 0;
+            const bool casts = model->DepthMeshState(i, materials, cull, stateKey);
+            h = HashWord(h, casts ? stateKey ^ ((std::uint64_t)(std::uint32_t)cull << 40) : ~0ull);
+        }
     std::uint64_t xw[8];
     std::memcpy(xw, &xform, sizeof xw);
     for (const std::uint64_t w : xw) h = HashWord(h, w);

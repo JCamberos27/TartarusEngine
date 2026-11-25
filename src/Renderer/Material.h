@@ -178,7 +178,20 @@ struct Material {
         if (m_HashCache.Frame == s_HashFrame) return m_HashCache.Value;
         m_HashCache.Value = ComputeHash();
         m_HashCache.Frame = s_HashFrame;
+        WatchDepthFields();
         return m_HashCache.Value;
+    }
+    // What the depth-only draws (shadow maps, the depth pre-pass) read from a material: the cutout (AlphaClip,
+    // AlphaCutoff, the albedo map and its UV tiling/offset), the foliage sway, Double Sided and vertex colour.
+    std::uint64_t DepthKey() const {
+        const float scalars[] = {AlphaCutoff, UVTiling.x, UVTiling.y, UVOffset.x, UVOffset.y,
+                                 WindStrength, WindFrequency, WindFlutter, WindHeight};
+        std::uint64_t h = 0xcbf29ce484222325ull;
+        const auto mix = [&h](std::uint64_t w) { h = (h ^ w) * 0x100000001b3ull; h ^= h >> 29; };
+        for (const float f : scalars) { std::uint32_t w; std::memcpy(&w, &f, 4); mix(w); }
+        mix((std::uint64_t)(std::uintptr_t)AlbedoMap.get());
+        mix((AlphaClip ? 1u : 0u) | (Foliage ? 2u : 0u) | (DoubleSided ? 4u : 0u) | (UseVertexColor ? 8u : 0u));
+        return h;
     }
     // A new frame: every material's Hash() is worked out again on first use (values may have been edited since).
     static void NextHashFrame() {
@@ -303,6 +316,20 @@ private:
     mutable HashCache m_HashCache;
     mutable HashCache m_ExtraHashCache;
     mutable HashCache m_VariantCache; // a copy drops it (HashCache), so the owner below needs no reset
+    // Static spot/point shadow maps stay valid while nothing reports a change (RenderSettingsEpoch.h), but most
+    // material edits write the fields in place: the Inspector's sliders, a texture swap, AssetLibrary::ReloadMaterial's
+    // copy into the same object. So the first Hash() of each frame also checks DepthKey() against the one this object
+    // last saw and reports a change itself. A copy starts unseen (it is a new object: a new pointer in any caster
+    // signature); assigning INTO an object keeps what it saw, so an in-place reload is caught like an edit.
+    struct DepthWatch {
+        std::uint64_t Key = 0;
+        bool Seen = false;
+        DepthWatch() = default;
+        DepthWatch(const DepthWatch&) {}
+        DepthWatch& operator=(const DepthWatch&) { return *this; }
+    };
+    mutable DepthWatch m_DepthWatch;
+    TARTARUS_CORE_API void WatchDepthFields() const;
     mutable const void* m_VariantOwner = nullptr;
     // Defined in Material.cpp, not inline here: with the core built as TartarusCore.dll an inline static gets one
     // copy per module that reads it, so the frame stamp and the wind would differ between the DLL and the exe.

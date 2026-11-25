@@ -1961,6 +1961,54 @@ void TestLocalCasterHashSlots() {
     CHECK(LocalCasterHash(7, nullptr, before, glm::translate(xf, glm::vec3(0, 0.01f, 0)), 0, false) != h0);
 }
 
+// Material edits written into the same MaterialAsset (the Inspector's Alpha Cutoff slider, Double Sided, a reload's
+// copy into the same object) keep every slot pointer, so the signature must also read what the depth draw reads, and
+// the edit must report itself (RenderSettingsEpoch) so a quiet light wakes to look.
+void TestLocalCasterHashMaterialContent() {
+    auto model = Model::CreatePrimitive("terrain", "w2_caster_content.fbx"); // CPU-only stand-in: no GL in unit tests
+    CHECK(model && model->MeshCount() >= 1);
+    if (!model || model->MeshCount() < 1) return;
+    auto leaf = std::make_shared<MaterialAsset>();
+    leaf->Mat.Foliage = true; // the depth draw binds this material's own values (sway, cutoff)
+    const std::vector<std::shared_ptr<MaterialAsset>> slots{leaf};
+    const glm::mat4 xf(1.0f);
+    const auto sig = [&]() { Material::NextHashFrame(); return LocalCasterHash(7, model.get(), slots, xf, 0, false); };
+
+    const std::uint64_t h0 = sig();
+    const std::uint32_t e0 = RenderSettingsEpoch();
+    CHECK(sig() == h0);                      // stable across frames
+    CHECK(RenderSettingsEpoch() == e0);      // and no change reported
+    leaf->Mat.AlphaCutoff = 0.8f;            // the Inspector slider: in place, no call
+    const std::uint64_t h1 = sig();
+    CHECK(h1 != h0);
+    CHECK(RenderSettingsEpoch() != e0);      // the hash's depth watch reported it
+    const std::uint32_t e1 = RenderSettingsEpoch();
+    leaf->Mat.BaseColor = glm::vec3(0.2f);   // colour only: not a depth field, nothing reported
+    sig();
+    CHECK(RenderSettingsEpoch() == e1);
+    leaf->Mat.BaseColor = glm::vec3(1.0f);
+    CHECK(sig() == h1);
+
+    leaf->Mat.DoubleSided = true;            // the depth draw's cull
+    CHECK(sig() != h1);
+    leaf->Mat.DoubleSided = false;
+    CHECK(sig() == h1);
+
+    MaterialAsset fresh = *leaf;             // a reload: a new object copied INTO the old one
+    fresh.Mat.AlphaCutoff = 0.3f;
+    const std::uint32_t e2 = RenderSettingsEpoch();
+    fresh.Mat.Hash();                        // a copy starts unseen: hashing it reports nothing
+    CHECK(RenderSettingsEpoch() == e2);
+    *leaf = fresh;
+    CHECK(sig() != h1);
+    CHECK(RenderSettingsEpoch() != e2);
+
+    leaf->RenderQueue = MaterialAsset::Queue::Transparent; // casts nothing now
+    const std::uint64_t ht = sig();
+    leaf->RenderQueue = MaterialAsset::Queue::Opaque;
+    CHECK(sig() != ht);
+}
+
 // GI Phase 1 (W2): room-aware, stable shadow slots that fade instead of popping (ShadowSlotScoring).
 void TestShadowSlotScoring() {
     namespace S = ShadowSlotScoring;
@@ -3250,5 +3298,6 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"CameraRoll", TestCameraRoll});
     tests.push_back({"OpaqueBatchKey", TestOpaqueBatchKey});
     tests.push_back({"LocalCasterHashSlots", TestLocalCasterHashSlots});
+    tests.push_back({"LocalCasterHashMaterialContent", TestLocalCasterHashMaterialContent});
     tests.push_back({"ShadowSlotScoring", TestShadowSlotScoring});
 }
