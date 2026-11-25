@@ -35,7 +35,7 @@ public:
 
     // Builds the pyramid from `depthTex` (single sample, w x h) and culls `groups` against it, rewriting the
     // instanceCount of the commands in `indirectBuffer` (`cmdList` holds each group's command indices). Restores
-    // nothing but the program (false: it did not run, draw unculled): the caller re-binds what its next draws need (texture unit 40, images 0 and 1, storage buffers 22-24 and 29).
+    // nothing but the program (false: it did not run, draw unculled): the caller re-binds what its next draws need (texture unit 40, images 0 and 1, storage buffers 22-25 and 29).
     // `sceneSlots`: the caller bound one uint per instance slot at storage buffer 25 (its GPU scene slot, GpuScene.h),
     // and the remap gets those instead of the instance slots - the draws then read the GPU scene's transforms.
     static bool Cull(unsigned depthTex, int w, int h, const glm::vec4& viewport, const glm::mat4& viewProj,

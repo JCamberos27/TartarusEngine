@@ -41,6 +41,9 @@ public:
     // cache stamp and renderable count: the list's own fast path). For passes that draw from the scene many times a
     // frame (every shadow map). Returns Ready().
     bool SyncOnce(World& world);
+    // SyncOnce's fast path: the last Sync (any caller's) was for this world, and its transform cache stamp and
+    // renderable count haven't moved since. No GL: the unit tests check it directly.
+    bool UpToDateFor(World& world) const;
     void Release(); // GL buffers freed (the mirror kept); the next Sync re-creates and fills them
 
     std::uint32_t Count() const { return m_Count; }
@@ -87,7 +90,7 @@ private:
     std::vector<std::uint32_t> m_Sorted;
     std::vector<Run> m_Runs;
     SyncStats m_Last;
-    const World* m_OnceWorld = nullptr; // SyncOnce's last key
+    const World* m_OnceWorld = nullptr; // the last Sync's world and what it saw (UpToDateFor)
     std::uint64_t m_OnceStamp = 0;
     std::size_t m_OnceRenderables = 0;
 };

@@ -55,6 +55,11 @@ void GpuScene::WriteSlot(std::uint32_t slot, const SceneSlot& s) {
 void GpuScene::Sync(World& world, bool upload) {
     m_Last = {};
     if (!Enabled()) return;
+    // Every Sync keys SyncOnce, so a Sync for another world in between (a bake, a preview) makes the next SyncOnce
+    // for this one sync again instead of reading the other world's transforms.
+    m_OnceWorld = &world;
+    m_OnceStamp = world.TransformCacheStamp();
+    m_OnceRenderables = world.Registry.storage<RenderableComponent>().size();
     static SceneSlotChanges changes;
     TakeSceneSlotChanges(world, changes);
     m_Count = changes.Count;
@@ -96,14 +101,15 @@ void GpuScene::Sync(World& world, bool upload) {
 
 bool GpuScene::SyncOnce(World& world) {
     if (!Enabled()) return false;
-    const std::uint64_t stamp = world.TransformCacheStamp();
-    const std::size_t renderables = world.Registry.storage<RenderableComponent>().size();
-    if (Ready() && stamp != 0 && m_OnceWorld == &world && m_OnceStamp == stamp && m_OnceRenderables == renderables) return true;
+    if (Ready() && UpToDateFor(world)) return true;
     Sync(world);
-    m_OnceWorld = &world;
-    m_OnceStamp = stamp;
-    m_OnceRenderables = renderables;
     return Ready();
+}
+
+bool GpuScene::UpToDateFor(World& world) const {
+    const std::uint64_t stamp = world.TransformCacheStamp();
+    return stamp != 0 && m_OnceWorld == &world && m_OnceStamp == stamp &&
+           m_OnceRenderables == world.Registry.storage<RenderableComponent>().size();
 }
 
 bool GpuScene::EnsureCapacity(std::uint32_t count) {
