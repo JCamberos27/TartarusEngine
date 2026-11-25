@@ -132,6 +132,12 @@ uniform vec4 uWithinMin, uWithinMax, uSizeEye;
 uniform uint uRejectFlags, uLayerMask, uBits, uGroupOffset;
 uniform float uMinScreenHeight;
 shared uint sScan[64];
+// The GPU's float rounding (fused multiply-adds, sqrt) can land a hair either side of the CPU's. These keep its
+// misses on the "draw more" side: a box within 1 mm of a plane (distances are metres: the planes are normalised),
+// or within 1e-5 of the size threshold, is kept. Verify mode reports what that adds as "extra".
+const float kPlaneSlack = 1e-3;
+const float kSizeSlackDist = 1.00001;
+const float kSizeSlackHeight = 0.99999;
 
 bool Visible(uint slot) {
     vec4 mn = uBounds[slot * 2u], mx = uBounds[slot * 2u + 1u];
@@ -145,7 +151,7 @@ bool Visible(uint slot) {
         for (int i = 0; i < 6; ++i) {
             vec4 pl = uPlanes[i];
             vec3 p = vec3(pl.x >= 0.0 ? mx.x : mn.x, pl.y >= 0.0 ? mx.y : mn.y, pl.z >= 0.0 ? mx.z : mn.z);
-            if (dot(pl.xyz, p) + pl.w < 0.0) return false;
+            if (dot(pl.xyz, p) + pl.w < -kPlaneSlack) return false;
         }
     }
     if ((uBits & 2u) != 0u && !(all(lessThanEqual(uWithinMin.xyz, mx.xyz)) && all(greaterThanEqual(uWithinMax.xyz, mn.xyz))))
@@ -154,7 +160,7 @@ bool Visible(uint slot) {
         vec3 centre = (mn.xyz + mx.xyz) * 0.5;
         float radius = length(mx.xyz - mn.xyz) * 0.5;
         float dist = length(centre - uSizeEye.xyz);
-        if (dist > radius && radius * uSizeEye.w / dist < uMinScreenHeight) return false;
+        if (dist > radius * kSizeSlackDist && radius * uSizeEye.w / dist < uMinScreenHeight * kSizeSlackHeight) return false;
     }
     return true;
 }
