@@ -8,6 +8,7 @@
 
 #include "Camera.h"
 #include "Components.h"
+#include "Core/Env.h"
 #include "GameModuleAPI.h"
 #include "IK.h"
 #include "Log.h"
@@ -170,13 +171,14 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         const glm::vec3 own = foot + glm::vec3(0.0f, legOffset[s] * m_FootWeight / scale, 0.0f); // the clip's foot on the ground
         m_Lock.Overreach(s, lockSet, glm::length(own + yawInverse * lockShift[s] / scale - hip) / leg, glm::length(own - hip) / leg);
     }
-    for (const auto& mp : m_Models) {
-        Model& m = *mp;
+    // The legs' solve on one piece; `solved[s]` says which legs it re-posed.
+    auto solveLegs = [&](Model& m, bool (&solved)[2]) {
+        solved[0] = solved[1] = false;
         thread_local IK::Pose pose;
         pose = m.AppliedLocalPose();
-        if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
+        if (pose.empty() || (int)pose.size() != m.NodeCount()) return;
         const int pelvis = m.NodeIndex(Bone(FPBody::kBonePelvis));
-        if (pelvis < 0) continue;
+        if (pelvis < 0) return;
         parents.resize(pose.size());
         for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
         IK::ComputeGlobals(pose, parents, globals);
@@ -205,7 +207,42 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
             // Flat ground and nothing pinned: leave the clip's own pose alone.
             if (glm::length(target - IK::Position(globals[foot])) < 5e-4f && angle < 1e-3f) continue;
             IK::SolveTwoBone(pose, parents, globals, thigh, calf, foot, target, &footRot, 1.0f);
+            solved[s] = true;
         }
         m.ApplyLocalPose(pose);
+    };
+    // TARTARUS_FP_PIECE_DEDUPE: solved once, on the driver, and its legs' bones copied to the other pieces - every piece
+    // carries the driver's pose (they agree to ~0.08 degrees going in), so each re-solving it got the same legs again.
+    // Off: every piece solves its own, as before.
+    static const bool dedupe = Env::Flag(Env::Var::FpPieceDedupe);
+    size_t driver = m_Models.size();
+    if (dedupe)
+        for (size_t k = 0; k < m_Models.size() && k < m_Pieces.size(); ++k)
+            if (m_Pieces[k] == m_Driver && m_Models[k]) driver = k;
+    bool solved[2];
+    if (driver == m_Models.size()) {
+        for (const auto& mp : m_Models) solveLegs(*mp, solved);
+        return;
+    }
+    const Model& src = *m_Models[driver];
+    solveLegs(*m_Models[driver], solved);
+    if (!solved[0] && !solved[1]) return; // the clip's own legs: nothing for the others either
+    const IK::Pose& from = src.AppliedLocalPose();
+    for (size_t k = 0; k < m_Models.size(); ++k) {
+        if (k == driver || !m_Models[k]) continue;
+        Model& m = *m_Models[k];
+        thread_local IK::Pose pose;
+        pose = m.AppliedLocalPose();
+        if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
+        bool changed = false;
+        for (int s = 0; s < 2; ++s) {
+            if (!solved[s]) continue;
+            for (const char* b : kLegs[s])
+                if (const int i = src.NodeIndex(Bone(b)), o = m.NodeIndex(Bone(b)); i >= 0 && o >= 0) {
+                    pose[(size_t)o] = from[(size_t)i];
+                    changed = true;
+                }
+        }
+        if (changed) m.ApplyLocalPose(pose);
     }
 }
