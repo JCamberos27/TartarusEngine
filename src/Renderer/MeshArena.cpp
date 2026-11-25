@@ -4,6 +4,7 @@
 #include "gl.h"
 #include "Core/Env.h"
 #include "Core/Log.h"
+#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <memory>
@@ -253,17 +254,20 @@ unsigned TakeVao() {
     return v;
 }
 
-void WarmSkinned(float minFreePages) {
-    if (!SkinEnabled()) return;
-    if (g_SpareVaos.size() < kVaoBatch / 4) RefillVaos();
+float SkinnedFreePages() {
     std::uint32_t freeVerts = 0, freeIndices = 0;
     for (const auto& p : g_Skin.Pages()) {
         if (p->Dedicated || !p->Vbo) continue;
         freeVerts += p->Verts.FreeUnits();
         freeIndices += p->Indices.FreeUnits();
     }
-    if (freeVerts < kPageVertices * minFreePages || freeIndices < kPageIndices * minFreePages)
-        g_Skin.NewPage(kPageVertices, kPageIndices, false);
+    return std::min((float)freeVerts / (float)kPageVertices, (float)freeIndices / (float)kPageIndices);
+}
+
+void WarmSkinned(float minFreePages) {
+    if (!SkinEnabled()) return;
+    if (g_SpareVaos.size() < kVaoBatch / 4) RefillVaos();
+    if (SkinnedFreePages() < minFreePages) g_Skin.NewPage(kPageVertices, kPageIndices, false);
 }
 
 bool AllocateSkinned(const ModelVertex* vertices, std::uint32_t vertexCount, const std::uint32_t* indices, std::uint32_t indexCount,

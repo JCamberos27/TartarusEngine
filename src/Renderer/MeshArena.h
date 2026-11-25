@@ -68,9 +68,11 @@ unsigned SkinPageVbo(std::uint32_t page);
 unsigned SkinPageEbo(std::uint32_t page);
 // Makes sure a skinned page with room is ready before anything asks for one (a new page is the one big allocation
 // left): called once per asset pump, it creates the first page, and the next one when less than `minFreePages` of a
-// page is free (a quarter by default). Play start asks for half a page, so the outfits that load during Play fit
+// page is free (a quarter by default). Play start asks for a whole page, so the outfits that load during Play fit
 // without a new page mid-frame (5-7 ms).
 void WarmSkinned(float minFreePages = 0.25f);
+// Free room across the shared skinned pages, in pages (the scarcer of vertices and indices).
+float SkinnedFreePages();
 // A vertex array for a skinned mesh's own VAO, from a batch made ahead of time with the ModelVertex layout already
 // set (the caller binds its buffers: glVertexArrayVertexBuffer / glVertexArrayElementBuffer). glCreateVertexArrays
 // returns a name, and a vertex array's first use builds it, so with the driver's threaded optimization each waited

@@ -405,7 +405,9 @@ int AssetLibrary::PumpAsync(double budgetMs) {
         }
     };
     warm("staging ring", [] { UploadStaging::Warm(); });      // the ring exists before anything loads in Play
-    warm("skinned page", [] { MeshArena::WarmSkinned(); });   // and a skinned page with room (a new one is the one big allocation)
+    const float skinFree = PumpTrace() ? MeshArena::SkinnedFreePages() : 0.0f;
+    warm(PumpTrace() && skinFree < 0.25f ? "skinned page (free below a quarter page)" : "skinned page",
+         [] { MeshArena::WarmSkinned(); });   // and a skinned page with room (a new one is the one big allocation)
     warm("texture names", [] { Texture::WarmNames(); });      // and texture names (glCreateTextures waits on the driver thread)
     if (!m_Async) return 0;
     AsyncLoader& a = *m_Async;
@@ -557,8 +559,13 @@ void AssetLibrary::BeginPlayScope() {
     m = PlayMark{};
     m.Active = true;
     m.Gen = ++m_LoadGen;
-    // Play start already pauses to load; make the skinned page that Play's outfit loads would otherwise make mid-frame.
-    MeshArena::WarmSkinned(0.5f);
+    // Play start already pauses to load: room for a whole skinned page now, so Play's outfit loads (more than a quarter
+    // page) don't make one mid-frame (5-7 ms). Half a page wasn't enough: the pump still made one during Play.
+    const float skinFreeBefore = MeshArena::SkinnedFreePages();
+    MeshArena::WarmSkinned(1.0f);
+    if (PumpTrace())
+        std::printf("[PumpTrace] play start: skinned free %.2f -> %.2f pages
+", skinFreeBefore, MeshArena::SkinnedFreePages());
     for (const auto& [k, v] : m_ModelCache) m.Models.insert(k);
     for (const auto& [k, v] : m_TextureCache) m.Textures.insert(k);
     for (const auto& [k, v] : m_MaterialCache) m.Materials.insert(k);
