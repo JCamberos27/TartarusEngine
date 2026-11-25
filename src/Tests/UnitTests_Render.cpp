@@ -457,6 +457,20 @@ void GpuSceneLiveEpoch() {
     w.Registry.get<RenderableComponent>(all[2500]).CastShadows = RenderableComponent::ShadowCasting::Off;
     NoteRenderSettingsChanged();
     CHECK(syncsUntilSeen(1) == 1);
+    // The first material swapped to a Transparent one on a still entity (the Inspector's slot writes report it).
+    auto glass = std::make_shared<MaterialAsset>();
+    glass->RenderQueue = MaterialAsset::Queue::Transparent;
+    {
+        auto& r = w.Registry.get<RenderableComponent>(all[1200]);
+        if (r.Materials.empty()) r.Materials.resize(1);
+        r.Materials[0] = glass;
+        NoteRenderSettingsChanged();
+        CHECK(syncsUntilSeen(1) == 1);
+    }
+    // The asset's own queue edited (Inspector Render Mode): no renderable write, its users change.
+    glass->RenderQueue = MaterialAsset::Queue::Opaque;
+    NoteRenderSettingsChanged();
+    CHECK(syncsUntilSeen(1) == 1);
     // Not reported: within one lap, wherever the sweep stands.
     for (int k : {10, 2600, 4999}) {
         w.Registry.get<RenderableComponent>(all[k]).CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
