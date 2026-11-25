@@ -746,6 +746,10 @@ void LocalShadowLodToggles() {
     w.ClearLod(); // its untags count too
     look();
     CHECK(!log.All && log.Changes.size() == 1);
+    lod(1.0f); // LOD 1 out again, then destroyed before the look: nothing to wake (its slot going is GpuScene's log)
+    w.Registry.destroy(lv[1]);
+    look();
+    CHECK(!log.All && log.Changes.empty());
     World other; // another world: everything
     wake.Append(other, log);
     CHECK(log.All);

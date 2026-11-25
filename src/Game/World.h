@@ -159,7 +159,8 @@ public:
     // The renderers whose LodCulledTag flipped since the last call (either way, maybe more than once; ClearLod's untags
     // too), for the cached local shadows: a level change swaps which renderers a light gathers without moving any.
     // `all`: anything may have flipped (the first call, or more than kMaxLodToggles since the last). Nothing is kept
-    // until the first call, and past the cap only the flag.
+    // until the first call, and past the cap only the flag: a taker that stops asking (local shadows off, no local
+    // lights) lets the list grow to the cap (~1 MB) at most, then gets one `all` when it asks again.
     void TakeLodToggles(std::vector<entt::entity>& out, bool& all);
     static constexpr size_t kMaxLodToggles = size_t(1) << 18;
     // #201 - derives InactiveTag (activeInHierarchy == false) from DeactivatedTag on the entity
