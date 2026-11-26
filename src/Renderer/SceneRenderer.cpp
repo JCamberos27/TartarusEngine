@@ -161,6 +161,20 @@ struct CandidateCache {
     std::uint32_t PatchCell = ~0u;
     size_t Dead = 0;
     std::uint64_t FullBuilds = 0;
+    std::uint64_t Edits = 0; // GatherCandidateEdits
+    // TakeStaticCandidateMoves' list: off (and All) until first asked.
+    std::vector<AABB> StaticMoves;
+    bool StaticMovesAll = true, StaticMovesOn = false;
+    static constexpr size_t kMaxStaticMoves = 1u << 16;
+    void NoteStaticMove(const VisibleRenderable& before, const VisibleRenderable& after) {
+        if (!StaticMovesOn || StaticMovesAll) return;
+        if (!before.Bounded || !after.Bounded || StaticMoves.size() >= kMaxStaticMoves) {
+            StaticMovesAll = true;
+            StaticMoves.clear();
+            return;
+        }
+        StaticMoves.push_back(AABB{glm::min(before.WorldMin, after.WorldMin), glm::max(before.WorldMax, after.WorldMax)});
+    }
     bool Forget = false; // tests: the next call rebuilds in full
     // G-1 (GpuScene): the List indices patched since the last TakeSceneSlotChanges, each once (DirtyMark), and whether
     // the list was rebuilt in full since (every index then means another renderable). Kept only once someone asks.
@@ -269,13 +283,16 @@ void PatchMovedCandidates(World& world, CandidateCache& cache) {
         if (slot >= cache.Index.size() || cache.Index[slot] == kNoCandidate) continue;
         Candidate& c = cache.List[cache.Index[slot]];
         if (c.Entity != e || !c.Renderable) continue;
+        const VisibleRenderable before = c.V;
         c.V.Xform = world.GetCachedWorldTransform(e);
         c.V.Normal = NormalMatrix(c.V.Xform);
         FillBounds(c.V, *c.Renderable);
         cache.MarkSlot(cache.Index[slot]);
         CandidateCell& cell = cache.Cells[c.Cell];
         if (!cell.Always) {
+            cache.NoteStaticMove(before, c.V);
             if (!c.V.Bounded) {
+                ++cache.Edits;
                 cell.Always = true; // lost its bounds: the cell is tested member by member now
             } else {
                 cell.Min = glm::min(cell.Min, c.V.WorldMin);
@@ -293,6 +310,7 @@ void PatchMovedCandidates(World& world, CandidateCache& cache) {
 // when only the full build can tell: the renderable count isn't what that explains (a renderer added in place, or one
 // that had no transform or model given one).
 bool RefreshCandidates(World& world, CandidateCache& cache) {
+    ++cache.Edits; // flags, models or the set: anything a kept static gather holds may be stale
     auto& reg = world.Registry;
     auto& renderPool = reg.storage<RenderableComponent>();
     const auto& transformPool = reg.storage<TransformComponent>();
@@ -476,6 +494,7 @@ const CandidateCache& Candidates(World& world) {
         return cache;
     }
     ++cache.FullBuilds;
+    ++cache.Edits;
     cache.SlotsRebuilt = true; // every slot is another renderable now: GpuScene re-reads them all
     cache.DirtySlots.clear();
     cache.DirtyMark.clear();
@@ -670,6 +689,16 @@ bool ReadSceneSlot(std::uint32_t slot, SceneSlot& out) {
     return true;
 }
 std::uint64_t GatherCandidateFullBuilds() { return CandidateStore().FullBuilds; }
+std::uint64_t GatherCandidateEdits() { return CandidateStore().Edits; }
+void SyncGatherCandidates(World& world) { Candidates(world); }
+void TakeStaticCandidateMoves(std::vector<AABB>& out, bool& all) {
+    CandidateCache& cache = CandidateStore();
+    out.swap(cache.StaticMoves);
+    cache.StaticMoves.clear();
+    all = cache.StaticMovesAll;
+    cache.StaticMovesAll = false;
+    cache.StaticMovesOn = true;
+}
 
 bool RenderableBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) {
     const CandidateCache& cache = Candidates(world);
@@ -756,9 +785,11 @@ void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRe
     for (std::uint32_t ci = 0; ci < (std::uint32_t)cache.Cells.size(); ++ci) {
         const CandidateCell& cell = cache.Cells[ci];
         if (cell.Always) {
+            if (q.Part == VisibilityQuery::Cells::Static) continue;
             for (std::uint32_t i = cell.First, end = cell.First + cell.Count; i < end; ++i) consider(i, out);
             continue;
         }
+        if (q.Part == VisibilityQuery::Cells::Always) continue;
         const AABB box{cell.Min, cell.Max}; // the whole square is out of view
         if (q.Cull && !q.Cull->Intersects(box)) continue;
         if (q.CellCullCount > 0) {

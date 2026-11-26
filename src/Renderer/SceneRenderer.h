@@ -50,6 +50,10 @@ struct VisibilityQuery {
     // in a cell, so they always come through.
     const Frustum* CellCull = nullptr;
     int CellCullCount = 0;
+    // Which cells to read: all of them, only the static (ground-plan) cells, or only the Always cells (animated,
+    // unbounded, view-model and player-body renderables). Static + Always together give what All gives.
+    enum class Cells : std::uint8_t { All, Static, Always };
+    Cells Part = Cells::All;
 };
 struct VisibleRenderable {
     entt::entity Entity;
@@ -76,6 +80,15 @@ void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRe
 // Tests: the next GatherVisible reads every renderable again (a from-scratch reference), and how many times it has.
 void ForgetGatherCandidates();
 std::uint64_t GatherCandidateFullBuilds();
+// For a caller that keeps a static-cell gather across frames (ShadowFrame's sun): a count that moves whenever any
+// candidate's flags, layer, model or component changed, one came or left, a static cell turned Always, or the list was
+// rebuilt - anything that can change what the static cells give besides a move.
+std::uint64_t GatherCandidateEdits();
+// Brings the candidate list up to date with `world` now (what GatherVisible does first), so the two above are current.
+void SyncGatherCandidates(World& world);
+// ...and the static-cell candidates moved since the last call: each one's box before and after, joined. `all`: anything
+// may have moved (the first call, one without bounds, or past the cap). Nothing is kept until the first call.
+void TakeStaticCandidateMoves(std::vector<AABB>& out, bool& all);
 
 // G-1 (GpuScene.h): GatherVisible's candidate list as stable slots. A slot is a list index: it keeps meaning the same
 // renderable until the list is rebuilt in full (a renderable that leaves keeps its slot, flagged inactive; new ones are
