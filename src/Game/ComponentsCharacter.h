@@ -69,8 +69,8 @@ struct FirstPersonControllerComponent {
     float CoyoteTime = 0.10f;     // a jump pressed this long after stepping off an edge still counts
     // Seconds (time constants) the move takes to reach the input's speed on the ground, to slow down,
     // and to steer in the air. 0 = instant.
-    float GroundAccelTime = 0.0f;
-    float GroundDecelTime = 0.0f;
+    float GroundAccelTime = 0.08f;
+    float GroundDecelTime = 0.10f;
     float AirAccelTime = 0.0f;
     // Clipping a doorway's jamb while walking mostly into it eases the capsule sideways past it (0..1 of its radius;
     // 0 = off), when the jamb is met within this many degrees of head on.
