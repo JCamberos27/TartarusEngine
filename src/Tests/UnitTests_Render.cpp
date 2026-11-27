@@ -95,6 +95,41 @@ void LightBoundsFaceFade() {
     CHECK(lb.FaceFadeOfLast(true) == glm::vec3(1e-3f, 0.05f, 0.05f));
 }
 
+// LightBuffer::BoxWorldBounds (CPU mirror of ClusterCull.comp.glsl's light box): under a sheared parent the box rows
+// aren't orthogonal; the bounds still centre on the box and hold every corner, tight on each axis.
+void LightBoundsShearedBox() {
+    // As LightGather::BoundLight packs a parent whose Y column leans into X: the normalised columns are the axes.
+    const glm::mat3 axes(glm::vec3(1, 0, 0), glm::normalize(glm::vec3(1, 1, 0)), glm::vec3(0, 0, 1));
+    const glm::vec3 centre(5.0f, 2.0f, -3.0f), half(1.0f, 2.0f, 0.5f);
+    LightBuffer lb;
+    lb.AddPoint(centre, glm::vec3(1.0f), 1.0f, 50.0f);
+    lb.BoundLast(axes, centre, half, 0.05f);
+    glm::vec4 rx(0.0f), ry(0.0f), rz(0.0f);
+    lb.BoxRowsOfLast(rx, ry, rz);
+    glm::vec3 c(0.0f), e(0.0f);
+    CHECK(LightBuffer::BoxWorldBounds(rx, ry, rz, half, c, e));
+    CHECK(glm::length(c - centre) < 1e-4f);
+    // The orthonormal-only rebuild (-(rows^T w)) lands well off the centre here: what this replaces.
+    const glm::vec3 old = -(glm::vec3(rx) * rx.w + glm::vec3(ry) * ry.w + glm::vec3(rz) * rz.w);
+    CHECK(glm::length(old - centre) > 0.5f);
+    // The corners (q = +-half on every row) are inside the bounds, and each axis is touched by one of them.
+    const glm::mat3 a = glm::transpose(glm::mat3(glm::vec3(rx), glm::vec3(ry), glm::vec3(rz)));
+    const glm::mat3 m = glm::inverse(a);
+    glm::vec3 reach(0.0f);
+    for (int k = 0; k < 8; ++k) {
+        const glm::vec3 q((k & 1) ? half.x : -half.x, (k & 2) ? half.y : -half.y, (k & 4) ? half.z : -half.z);
+        const glm::vec3 p = centre + m * q;
+        const glm::vec3 qq(glm::dot(glm::vec3(rx), p) + rx.w, glm::dot(glm::vec3(ry), p) + ry.w, glm::dot(glm::vec3(rz), p) + rz.w);
+        CHECK(glm::length(qq - q) < 1e-3f); // really a corner of the shaded box
+        const glm::vec3 d = glm::abs(p - c);
+        CHECK(d.x <= e.x + 1e-4f && d.y <= e.y + 1e-4f && d.z <= e.z + 1e-4f);
+        reach = glm::max(reach, d);
+    }
+    CHECK(glm::length(reach - e) < 1e-3f);
+    // Degenerate rows (two the same): no bounds, so the cull keeps the light.
+    CHECK(!LightBuffer::BoxWorldBounds(rx, rx, rz, half, c, e));
+}
+
 // LightBuffer::DistanceFade: full strength near and inside the range sphere, a smooth monotonic fall by projected
 // size, nothing once the sphere is a few pixels; the same at any distance for the same size.
 void LightDistanceFade() {
@@ -3988,6 +4023,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Small-object cull: projected bounding-sphere height", SmallObjectCull});
     tests.push_back({"Light distance fade: by projected size, smooth, then dropped", LightDistanceFade});
     tests.push_back({"Light bounds: per-face fade (Bounds Fade - / +), uniform = the old single fade", LightBoundsFaceFade});
+    tests.push_back({"Light bounds: sheared box world bounds (cluster cull mirror)", LightBoundsShearedBox});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
     tests.push_back({"GpuScene: the mirror matches the candidate list slot by slot, frame after frame", GpuSceneMirror});
     tests.push_back({"GpuScene: in-place render settings reach the slots (reported: next sync; unreported: within a sweep lap)", GpuSceneLiveEpoch});

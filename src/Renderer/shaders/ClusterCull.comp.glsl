@@ -116,13 +116,18 @@ void main() {
             vec4 h = uLights[i].BoxHalf;
             sBoxE[lid] = vec4(0.0, 0.0, 0.0, -1.0);
             if (h.w >= 0.0) {
-                // World box: the rows are its unit axes (w = -axis . centre); then its view-space bounding box.
-                vec3 ax = uLights[i].BoxX.xyz, ay = uLights[i].BoxY.xyz, az = uLights[i].BoxZ.xyz;
-                vec3 c = -(ax * uLights[i].BoxX.w + ay * uLights[i].BoxY.w + az * uLights[i].BoxZ.w);
-                vec3 e = abs(ax) * h.x + abs(ay) * h.y + abs(az) * h.z; // world half extents
-                mat3 v = mat3(uView);
-                sBoxC[lid] = vec4((uView * vec4(c, 1.0)).xyz, 0.0);
-                sBoxE[lid] = vec4(abs(v[0]) * e.x + abs(v[1]) * e.y + abs(v[2]) * e.z, 0.0);
+                // World box: q = A p + w, A's rows the unit axes (not orthogonal under a sheared parent), so
+                // p = inverse(A) (q - w): centre at q = 0, world half extents |inverse(A)| h. Then its view-space
+                // bounding box. LightBuffer::BoxWorldBounds is the CPU mirror. Degenerate axes: left unbounded.
+                mat3 a = transpose(mat3(uLights[i].BoxX.xyz, uLights[i].BoxY.xyz, uLights[i].BoxZ.xyz));
+                if (abs(determinant(a)) > 1e-6) {
+                    mat3 m = inverse(a);
+                    vec3 c = -(m * vec3(uLights[i].BoxX.w, uLights[i].BoxY.w, uLights[i].BoxZ.w));
+                    vec3 e = abs(m[0]) * h.x + abs(m[1]) * h.y + abs(m[2]) * h.z;
+                    mat3 v = mat3(uView);
+                    sBoxC[lid] = vec4((uView * vec4(c, 1.0)).xyz, 0.0);
+                    sBoxE[lid] = vec4(abs(v[0]) * e.x + abs(v[1]) * e.y + abs(v[2]) * e.z, 0.0);
+                }
             }
         }
         barrier();

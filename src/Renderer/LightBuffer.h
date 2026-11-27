@@ -63,6 +63,16 @@ public:
     // The bounds weight at box coordinate q (the point projected on the box axes, centre at 0): the CPU mirror of
     // LightBuffer.glsl LightBoxFade. 1 well inside, 0 at and past a face, linear over that face's own fade.
     static float BoxWeight(const glm::vec3& q, const glm::vec3& half, const glm::vec3& fadeNeg, const glm::vec3& fadePos);
+    // The world bounds of a box given as BoundLast's rows (q = A p + w): its centre and axis-aligned half extents,
+    // right for non-orthogonal axes too (a sheared parent). False when the axes are degenerate. The CPU mirror of
+    // ClusterCull.comp.glsl's light box.
+    static bool BoxWorldBounds(const glm::vec4& rowX, const glm::vec4& rowY, const glm::vec4& rowZ, const glm::vec3& half,
+                               glm::vec3& centre, glm::vec3& extent);
+    // The box rows BoundLast stored on the last light, for tests.
+    void BoxRowsOfLast(glm::vec4& x, glm::vec4& y, glm::vec4& z) const {
+        if (m_Lights.empty()) return;
+        x = m_Lights.back().BoxX, y = m_Lights.back().BoxY, z = m_Lights.back().BoxZ;
+    }
     // The per-face fades BoundLast stored on the last light (+faces when `pos`), for tests.
     glm::vec3 FaceFadeOfLast(bool pos) const {
         return m_Lights.empty() ? glm::vec3(0.0f) : glm::vec3(pos ? m_Lights.back().BoxFadePos : m_Lights.back().BoxFadeNeg);
