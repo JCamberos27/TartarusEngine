@@ -234,9 +234,10 @@ The pack doesn't have these. They are not faked:
 
 Measured failures (all in `src/Game/AI/NpcTest_Testbed.cpp` unless noted). Three legs are locked in `lockedJumps` at their
 measured jump rate + ~10 % instead of the relative limit; each lock is debt that comes off when its fix lands:
-`M jog` locked 3.0 (measured 2.7; comes off when the jog gets a long looped straight), `M crouch strafe right` locked 2.8
-(measured 2.5; comes off when the crouch strafes are baked mirrored), `M walk looking about` locked 7.5 (measured 6.8; comes
-off when turns can be stepped while moving, or per-gait search weights bring it under). Still red and not locked: `A jog`
+`M jog` locked 3.0 (measured 2.7; comes off when the jog gets a long looped straight), `M crouch strafe right`
+locked 2.8 (measured 2.5; comes off when the crouch strafes are baked mirrored), `M walk looking about` locked 7.5
+(measured 6.8; comes off when turns can be stepped while moving, or per-gait search weights bring it under). Still red and
+not locked: `A jog`
 (2.6 vs 2.3) and `M jog looking about`. No other limit has been loosened.
 - **`A jog` jumps a second (2.6, limit 2.3).** Every hop is voluntary, as the playing take's continuation drifts near the end of
   its straight stretch (the pack's longest steady jog is 1.4 s). Three lighter trajectory-weight variants were measured on
