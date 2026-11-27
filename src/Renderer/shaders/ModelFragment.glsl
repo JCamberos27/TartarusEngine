@@ -648,11 +648,13 @@ void main() {
         vec3 specW = F * ab.x + ab.y;
         // Room-cube specular only (roomSpecW is 0 on the sky's share): a floor of the local diffuse radiance, and Lagarde's specular
         // occlusion from the material AO, so a corner or under-bed metal does not mirror the lit room at full strength.
+        // Both act on the blended prefiltered by the room-cube weight: exact at k = 0 / 1, approximate in the blend zone.
         float roomSpecK = clamp(roomSpecW, 0.0, 1.0);
         if (roomSpecK > 0.0) {
             prefiltered = mix(prefiltered, max(prefiltered, irradiance * kRoomSpecFloor), roomSpecK);
             float specAO = clamp(pow(NdotV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao, 0.0, 1.0);
-            prefiltered *= mix(1.0, specAO, roomSpecK);
+            // Lagarde's term REPLACES the material ao for this share (ambient multiplies everything by ao below).
+            prefiltered *= mix(1.0, specAO / max(ao, 1e-3), roomSpecK);
         }
         vec3 specularIBL = uNoGlossyReflections == 1 ? vec3(0.0) : prefiltered * specW;
 
