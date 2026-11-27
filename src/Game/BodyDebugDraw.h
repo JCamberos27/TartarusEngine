@@ -31,8 +31,8 @@ struct Snapshot {
     float ArmDownAimDeg = 0.0f, ArmDownDeg = 0.0f;
     // Posture (Phase 4, the owner's play test 2), from the bones' orientations against the bind pose, body frame:
     // the chest's pitch (spine_05's up off the vertical, deg, + = forward) as the clip has it, before the aim at
-    // the view (the "Stable" value; Spine Stability is legacy-only now) and as drawn; its roll (+ = toward the body's left); the head's pitch against the
-    // chest (+ = chin down, - = thrown back).
+    // the view (the "Stable" value) and as drawn; its roll (+ = toward the body's left); the head's pitch against the chest
+    // (+ = chin down, - = thrown back).
     float ChestPitchClipDeg = 0.0f, ChestPitchStableDeg = 0.0f, ChestPitchDeg = 0.0f, ChestRollDeg = 0.0f, HeadPitchDeg = 0.0f;
     float HeadWorldPitchDeg = 0.0f; // the head's own pitch off the bind pose, body frame (+ = chin down)
     // The trunk's motion (deg, body frame, off the bind pose; FirstPersonBody::TrunkAngles): the pelvis's yaw / roll / pitch,

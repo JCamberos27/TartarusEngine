@@ -426,8 +426,8 @@ struct NpcTest::TestbedRun {
         float ViewOffMax = 0.0f;             // the body's heading off the view, at most (deg), the steady part
         std::vector<float> Bend, ClipBend, Pitch; // the torso's bend as drawn and as posed, the view's pitch (deg), steady
         std::vector<float> ArmAim, Arm;            // the upper arms off straight down: as the aim left them, as drawn (deg)
-        // Posture (BodyDebug, the steady part): the chest's pitch as the clip has it, before the aim ("Stable"; Spine Stability is legacy-only) and drawn; its
-        // roll; the head's pitch against the chest; the higher hand over its shoulder (m); frames with a hand in the view,
+        // Posture (BodyDebug, the steady part): the chest's pitch as the clip has it, before the aim ("Stable") and drawn;
+        // its roll; the head's pitch against the chest; the higher hand over its shoulder (m); frames with a hand in the view,
         // with a hand over its shoulder, with the feet crossed; the narrowest feet gap (m); the body's yaw rate (deg/s).
         std::vector<float> ChestClip, ChestStable, Chest, ChestRoll, Head, HeadWorld, HandOver, HandEye, YawRate, Pelvis, PelvisClip;
         int HandPushFrames = 0; float HandPushMax = 0.0f; // KeepHandsFromEye: frames it moved a hand, the most (m)
@@ -1469,9 +1469,9 @@ void NpcTest::MmPlayerChecks() {
     // limit, and they read fine): locked at the measured rate + ~10 %, so they still catch a regression. Others: 0.
     const auto lockedJumps = [](const char* leg) {
         const struct { const char* Leg; float Max; } kLocked[] = {
-            {"M jog", 3.0f},                // measured 2.7 jumps a second; debt, comes off with F1 (jog loop)
-            {"M crouch strafe right", 2.8f}, // 2.5; debt, comes off with F4 (mirror the crouch strafes)
-            {"M walk looking about", 7.5f},  // 6.8; debt, comes off with F2 (step-turn) / F10
+            {"M jog", 3.0f},                // measured 2.7 jumps a second; debt: off when the jog gets a long looped straight
+            {"M crouch strafe right", 2.8f}, // 2.5; debt: off when the crouch strafes are baked mirrored
+            {"M walk looking about", 7.5f},  // 6.8; debt: off when turns can be stepped while moving (or per-gait search weights fix it)
         };
         for (const auto& l : kLocked)
             if (std::strcmp(l.Leg, leg) == 0) return l.Max;
