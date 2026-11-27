@@ -18,6 +18,10 @@
 //   rootSynth { default {posSigma, yawSigma, hipsWeight}, byTag { tag: {...} } }, labels {...},
 //   budgets { poseMB, featureMB, loadSeconds } (load: MotionDatabase::Load, as the runtime loads it),
 //   validation { facingP95Deg, yawJitter, reconstructCm, rigLengthPct } (warnings: the takes over them are listed)
+//   featureNorm { groupScale { footPos, footVel, pelvisVel, trajPos, trajDir }, mean [27] }: the search's normalization,
+//                 frozen (MotionDatabase.h). Written once from a database (FeatureNormJson) and changed only on purpose;
+//                 the bake stores it in the .mmdb and reports what its own takes would derive against it. Missing: the
+//                 bake stores its own derivation and prints the block to freeze it with.
 
 #include "MotionFeatures.h"
 #include "RootSynth.h"
@@ -44,6 +48,9 @@ struct MotionBakeConfig {
     MotionFeatureConfig Labels;
     float BudgetPoseMB = 150.0f, BudgetFeatureMB = 40.0f, BudgetLoadSeconds = 2.0f;
     float FacingP95Deg = 20.0f, YawJitterMax = 400.0f, RigLengthPct = 2.0f, ReconstructCm = 1.0f;
+    // "featureNorm", per dimension (kDims each; the group scale repeated over its dimensions). Empty: not frozen.
+    std::vector<float> FeatureNormMean, FeatureNormScale;
+    bool HasFeatureNorm() const { return !FeatureNormMean.empty(); }
 
     bool Load(const std::string& path, std::string& error);
     RootSynthParams ParamsFor(const std::vector<std::string>& tags) const;
@@ -73,6 +80,10 @@ namespace MotionBake {
 std::string SourceDir();
 
 bool ReadTakes(const std::string& csvPath, std::vector<MotionTake>& out, std::string& error);
+
+// The .mmconfig "featureNorm" block for a normalization (kDims means and scales, one scale per group), every float written
+// so it reads back to the same bits.
+std::string FeatureNormJson(const std::vector<float>& mean, const std::vector<float>& scale);
 
 // Rest pose and bone length diff of two rigs over `bones`, in each rig's `root` frame.
 struct BoneDiff {

@@ -91,8 +91,10 @@ scenario runs on a light test scene; none runs in the apartment scene.
 - **Running jumps:** every jump starts from standing.
 - **Prone:** only the transitions to and from it.
 
-The open measurements that still fail are in the handoff's open issues. They're reported there; their limits haven't been
-loosened.
+The open measurements that still fail are in the handoff's open issues. Three legs are locked at their measured jump
+rate (+ ~10 %) instead of the relative limit, and each lock is debt, not an accepted result: `M jog` (limit 3.0, measured
+2.7), `M crouch strafe right` (2.8, measured 2.5) and `M walk looking about` (7.5, measured 6.8). Two legs are still red and
+not locked: `A jog` (2.6 against 2.3) and `M jog looking about`. No limit has been loosened beyond those three locks.
 
 ## Where things are
 
