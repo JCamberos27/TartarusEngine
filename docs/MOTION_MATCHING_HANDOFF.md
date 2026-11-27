@@ -180,7 +180,9 @@ The pack doesn't have these. They are not faked:
   - `canonical`: every leg starts from the fresh body (stopped and started again: nothing carried over), placed where its
     part's last placement leg puts it and standing 1.5 s, then plays the one leg before it unmeasured (a stop needs its
     move), unless that leg is a placement. A leg's numbers then depend only on that leg and the one before it. About 2.5x
-    the course's length.
+    the course's length. The strafes checked left against right (`kTbAlikePairs`: the jog's and the stroll's) both play
+    the left one's lead-in, so they enter alike; on the plain course, where the right one enters from the left one, that
+    check is skipped.
   - `leg=from;...`: only those legs run (`*` wildcards), each from the fresh, settled body and then `from`, unmeasured:
     course legs joined by `+` (`M stroll strafe left=M stroll`), or `state:<gait>[,move=x/y][,view=deg][,secs=s]` - the
     gait (`idle stroll walk jog sprint crouch crouchidle`) held `secs` (default 2.5) with the stick at `move` (default
@@ -193,7 +195,7 @@ The pack doesn't have these. They are not faked:
     body.
 - **Tuning without a rebuild:** `TARTARUS_MM_TUNE="Key=value,..."` overrides at startup (`MmTune` in
   `FirstPersonBodyMotion.cpp`, logged `[MmTune]`). Keys include `MinWarp MaxWarp SimFacingHalflife CharacterFacingHalflife
-  MaxFacingOffset TransitionCost MinRunway ForcedPoseWeight SprintCharacterFacingHalflife BlendTime DecayHalflife IdleEntryBlendTime` and
+  MaxFacingOffset TransitionCost MinRunway ForcedPoseWeight SprintCharacterFacingHalflife SprintTrajPosWeight BlendTime DecayHalflife IdleEntryBlendTime` and
   `FootLock.{Height,Lift,Speed,Reach,MaxDrift,Release,StepHeight,StepMax,RestFloor}`. A new knob is one more
   `MmTune("Key", default)` call in a .cpp.
 - **Code experiments side by side:** `tools\mm_exp.ps1 -Name <exp>` copies the runnable build to `work\exp\<exp>\`.

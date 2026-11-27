@@ -20,6 +20,22 @@ void TrajectoryPredictor::SpringCharacter(glm::vec3& x, glm::vec3& v, glm::vec3&
     a = eydt * (a - j1 * y * dt);
 }
 
+void TrajectoryPredictor::CapsuleCharacter(glm::vec3& x, glm::vec3& v, glm::vec3& a, const glm::vec3& goal, const TrajectoryParams& p,
+                                           float dt) {
+    const float frame = p.FrameDt > 1e-4f ? p.FrameDt : 1.0f / 60.0f;
+    for (float left = dt; left > 1e-6f;) {
+        const float f = std::min(left, frame);
+        const float t = glm::dot(goal, goal) >= glm::dot(v, v) ? p.AccelTime : p.DecelTime;
+        glm::vec3 nv = t > 0.0f ? goal + (v - goal) * std::exp(-f / t) : goal;
+        if (glm::length(goal - nv) < p.SnapToGoal) nv = goal;
+        if (glm::length(nv) < p.SnapToStop) nv = glm::vec3(0.0f);
+        a = (nv - v) / f;
+        v = nv;
+        x += v * f;
+        left -= f;
+    }
+}
+
 void TrajectoryPredictor::SpringScalar(float& x, float& v, float goal, float halflife, float dt) {
     const float y = HalflifeToDamping(halflife) / 2.0f;
     const float j0 = x - goal;
@@ -39,7 +55,8 @@ void TrajectoryPredictor::Reset(const glm::vec3& position, float yaw) {
 void TrajectoryPredictor::Step(TrajectoryState& s, glm::vec3& goal, float goalYaw, float dt, int* hits) const {
     const glm::vec3 from = s.Position;
     glm::vec3 x = s.Position;
-    SpringCharacter(x, s.Velocity, s.Acceleration, goal, Params.VelocityHalflife, dt);
+    if (Params.CapsuleLaw) CapsuleCharacter(x, s.Velocity, s.Acceleration, goal, Params, dt);
+    else SpringCharacter(x, s.Velocity, s.Acceleration, goal, Params.VelocityHalflife, dt);
     x.y = from.y;
     s.Velocity.y = s.Acceleration.y = 0.0f;
     glm::vec3 stop, n;
