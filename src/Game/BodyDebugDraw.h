@@ -30,16 +30,16 @@ struct Snapshot {
     // and as drawn (unarmed, Arm Hang turns them back to hang).
     float ArmDownAimDeg = 0.0f, ArmDownDeg = 0.0f;
     // Posture (Phase 4, the owner's play test 2), from the bones' orientations against the bind pose, body frame:
-    // the chest's pitch (spine_05's up off the vertical, deg, + = forward) as the clip has it, after Spine Stability
-    // (before the aim at the view) and as drawn; its roll (+ = toward the body's left); the head's pitch against the
-    // chest (+ = chin down, - = thrown back).
+    // the chest's pitch (spine_05's up off the vertical, deg, + = forward) as the clip has it, before the aim at
+    // the view (the "Stable" value) and as drawn; its roll (+ = toward the body's left); the head's pitch against
+    // the chest (+ = chin down, - = thrown back).
     float ChestPitchClipDeg = 0.0f, ChestPitchStableDeg = 0.0f, ChestPitchDeg = 0.0f, ChestRollDeg = 0.0f, HeadPitchDeg = 0.0f;
     float HeadWorldPitchDeg = 0.0f; // the head's own pitch off the bind pose, body frame (+ = chin down)
     // The trunk's motion (deg, body frame, off the bind pose; FirstPersonBody::TrunkAngles): the pelvis's yaw / roll / pitch,
-    // the chest's (spine_05), and the chest's against the pelvis - as the clip poses it (before Spine Stability) and as drawn.
+    // the chest's (spine_05), and the chest's against the pelvis - as the clip poses it (before the aim and layers) and as drawn.
     float TrunkClipDeg[9] = {}, TrunkDeg[9] = {};
     // Under motion matching, per stream bone: how far the drawn local rotation is off the matcher's (deg) - what everything
-    // after the pose (Spine Stability, the aim, the arms' layers, foot IK) did to it. Names in LayerBones (the stream's).
+    // after the pose (the aim, the arms' layers, foot IK) did to it. Names in LayerBones (the stream's).
     std::vector<float> LayerDeg;
     const std::vector<std::string>* LayerBones = nullptr;
     // Each hand (l, r): its height over its shoulder (upper arm bone, m, + = above), its distance to the camera (m), and
