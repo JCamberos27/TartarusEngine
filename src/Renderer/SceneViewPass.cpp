@@ -45,6 +45,9 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
+#include <map>
+#include <set>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -1051,6 +1054,85 @@ void SceneRenderer::ViewPass::DrawOpaque() {
             m_Stats.Vertices += member.Verts;
         }
     };
+    // ---- DIAG ONLY (W2 Opaque census, never merged): TARTARUS_OPC=1 counts, 2 GPU scope per program run, 4 per
+    // program+material run (prepassed batches; the rest go under "OpC: rest"). Counts print every 250th frame.
+    static const int opc = [] { const char* v = std::getenv("TARTARUS_OPC"); return v ? std::atoi(v) : 0; }();
+    static std::set<std::string> opcNames;
+    static std::uint64_t opcFrame = 0;
+    const auto opcMat = [&](const SceneOpaqueTag& t) -> const MaterialAsset* {
+        const DrawItem& ld = drawList[groups.Order[groups.Groups[t.Group].First]];
+        return t.Mesh < ld.Slots->size() ? (*ld.Slots)[t.Mesh].get() : nullptr;
+    };
+    const auto opcProgName = [&](const SceneOpaqueTag& t) {
+        const MaterialAsset* ma = opcMat(t);
+        std::string s = ma && ma->Shader ? ma->ShaderPath : std::string("builtin");
+        const std::size_t sl = s.find_last_of("/\\");
+        if (sl != std::string::npos) s = s.substr(sl + 1);
+        char buf[32];
+        std::snprintf(buf, sizeof buf, "#%llx", (unsigned long long)(std::uintptr_t)t.Prog & 0xffff);
+        return s + buf;
+    };
+    const auto opcIntern = [&](const std::string& s) { return opcNames.insert(s).first->c_str(); };
+    if (opc & 1) {
+        ++opcFrame;
+        if (opcFrame % 250 == 0) {
+            struct Row { std::uint32_t Batches = 0, Cmds = 0, Pre = 0; std::uint64_t Inst = 0, Tris = 0; };
+            std::map<std::string, Row> byProg, byMat;
+            Row all;
+            for (const IndirectBatch& b : batches) {
+                const SceneOpaqueTag& t = tags[b.Tag];
+                const MaterialAsset* ma = opcMat(t);
+                std::uint64_t inst = 0, tris = 0;
+                for (std::uint32_t c = 0; c < b.Count; ++c) {
+                    const IndirectCommand& cmd = m_S.OpaqueCommands[b.First + c];
+                    inst += cmd.InstanceCount;
+                    tris += (std::uint64_t)(cmd.Count / 3) * cmd.InstanceCount;
+                }
+                const bool cut = ma && (ma->Mat.AlphaClip || ma->RenderQueue == MaterialAsset::Queue::AlphaTest);
+                const std::string pn = opcProgName(t);
+                const std::string mn = pn + " | " + (ma ? ma->Name : std::string("(mesh mat)")) + (cut ? " [cut]" : "") +
+                                       (t.Prepassed ? "" : " [nopre]");
+                for (Row* r : {&byProg[pn], &byMat[mn], &all}) {
+                    ++r->Batches; r->Cmds += b.Count; r->Inst += inst; r->Tris += tris; r->Pre += t.Prepassed ? 1 : 0;
+                }
+            }
+            std::uint32_t direct = 0, directItems = 0;
+            for (std::size_t g = 0; g < groups.Groups.size(); ++g)
+                if (!m_S.GroupIndirect[g]) { ++direct; directItems += groups.Groups[g].Count; }
+            std::printf("[OPC] frame %llu: batches=%u (prepassed %u) cmds=%u inst=%llu tris=%llu | direct groups=%u items=%u\n",
+                        (unsigned long long)opcFrame, all.Batches, all.Pre, all.Cmds, (unsigned long long)all.Inst,
+                        (unsigned long long)all.Tris, direct, directItems);
+            for (const auto& [k, r] : byProg)
+                std::printf("[OPC]   prog %-40s batches=%4u cmds=%5u inst=%7llu tris=%9llu\n", k.c_str(), r.Batches, r.Cmds,
+                            (unsigned long long)r.Inst, (unsigned long long)r.Tris);
+            std::vector<std::pair<std::uint64_t, std::string>> top;
+            for (const auto& [k, r] : byMat) {
+                char line[512];
+                std::snprintf(line, sizeof line, "%-70s batches=%3u cmds=%4u inst=%6llu tris=%9llu", k.c_str(), r.Batches,
+                              r.Cmds, (unsigned long long)r.Inst, (unsigned long long)r.Tris);
+                top.push_back({r.Tris, line});
+            }
+            std::sort(top.begin(), top.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+            for (std::size_t i = 0; i < top.size() && i < 30; ++i) std::printf("[OPC]   mat %s\n", top[i].second.c_str());
+            std::fflush(stdout);
+        }
+    }
+    std::optional<Profiler::GpuScopeTimer> opcScope;
+    std::string opcCur;
+    const auto drawBatchTimed = [&](const IndirectBatch& b) {
+        if (opc & 6) {
+            const SceneOpaqueTag& t = tags[b.Tag];
+            std::string key = "OpC: ";
+            if (!t.Prepassed) key += "rest";
+            else {
+                key += opcProgName(t);
+                if (opc & 4) { const MaterialAsset* ma = opcMat(t); key += " | " + (ma ? ma->Name : std::string("(mesh mat)")); }
+            }
+            if (key != opcCur) { opcScope.reset(); opcCur = key; opcScope.emplace(opcIntern(key)); }
+        }
+        drawBatch(b);
+    };
+    // ---- end DIAG
     bool prepassedDrawn = false;
     std::uint32_t nextBatch = 0; // the other batches draw in order, each at the first group it holds
     for (std::size_t g = 0; g < groups.Groups.size(); ++g) {
@@ -1058,14 +1140,15 @@ void SceneRenderer::ViewPass::DrawOpaque() {
         const DrawItem& it = drawList[groups.Order[grp.First]];
         if (m_S.GroupIndirect[g]) {
             if (!prepassedDrawn) {
-                for (std::uint32_t i : prepassedBatches) drawBatch(batches[i]);
+                for (std::uint32_t i : prepassedBatches) drawBatchTimed(batches[i]);
                 prepassedDrawn = true;
             }
             for (; nextBatch < batches.size() && tags[batches[nextBatch].Tag].Group == g; ++nextBatch)
-                if (!tags[batches[nextBatch].Tag].Prepassed) drawBatch(batches[nextBatch]);
+                if (!tags[batches[nextBatch].Tag].Prepassed) drawBatchTimed(batches[nextBatch]);
             countGroup(grp);
             continue;
         }
+        if ((opc & 6) && opcCur != "OpC: direct") { opcScope.reset(); opcCur = "OpC: direct"; opcScope.emplace(opcIntern(opcCur)); }
         const GLboolean wantWrites = Prepassed(it) ? GL_FALSE : GL_TRUE;
         if (wantWrites != depthWrites) {
             glDepthMask(depthWrites = wantWrites);
@@ -1080,6 +1163,7 @@ void SceneRenderer::ViewPass::DrawOpaque() {
         m_Stats.DrawCalls += it.Meshes;
         countGroup(grp);
     }
+    opcScope.reset(); // DIAG
     // The programs stay shared: a later draw that skips the per-draw hook must not read slot state. A uniform write
     // goes to the bound program, so each is bound for it, and the one bound before comes back.
     if (!m_SlotStatePrograms.empty()) {
