@@ -148,6 +148,18 @@ vec3 BloodSplatCover() {
     return acc;
 }
 
+// Captured room cubes (ReflectionProbeCapture) hold the room's UNCLAMPED HDR radiance: a bare lamp or its glare is hundreds of times a
+// lit wall. Reflected by a smooth metal that is a blown-out, wrongly coloured glow (the red room's bed frame and closet hardware),
+// so the room cube's specular is capped per pixel at kRoomSpecClamp (HDR, scene units), colour kept.
+const float kRoomSpecClamp = 4.0;
+// ...and a metal in a lit room never reflects darker than this fraction of the room's own diffuse radiance at that spot (the box-projected
+// cube of a whole floor can show a dark far wall to a sink basin in a lit kitchen: near-black chrome). Scaled by the room-cube weight.
+const float kRoomSpecFloor = 0.4;
+vec3 ClampRoomSpec(vec3 c) {
+    float m = max(c.r, max(c.g, c.b));
+    return m > kRoomSpecClamp ? c * (kRoomSpecClamp / m) : c;
+}
+
 void main() {
     // uTaaVelocity 1: the vertex stage carried both clip positions (w 0 = a stage that can't, e.g. the blood VAT).
     // 0: the view-model sub-pass (it moves with the camera: no motion) or TAA off (discarded anyway).
@@ -597,7 +609,7 @@ void main() {
                 }
                 vec3 probeSpec = textureLod(uPrefilteredMap, correctedR, roughness * uIBLSpecularMaxLod).rgb;
                 if (roomFace > 0.0)
-                    probeSpec = mix(probeSpec, textureLod(uProbeCubes, vec4(correctedR, float(probeLayer[pi])), roughness * uIBLSpecularMaxLod).rgb, roomFace);
+                    probeSpec = mix(probeSpec, ClampRoomSpec(textureLod(uProbeCubes, vec4(correctedR, float(probeLayer[pi])), roughness * uIBLSpecularMaxLod).rgb), roomFace);
                 blendedPrefilter += probeSpec * probeBlend[pi];
                 roomSpecW += probeBlend[pi] * roomFace;
                 // Room diffuse (a stand-in for baked GI): the captured room's widest GGX mip along N is close to its
@@ -634,6 +646,16 @@ void main() {
         }
         vec2 ab = texture(uBrdfLut, vec2(NdotV, roughness)).rg;
         vec3 specW = F * ab.x + ab.y;
+        // Room-cube specular only (roomSpecW is 0 on the sky's share): a floor of the local diffuse radiance, and Lagarde's specular
+        // occlusion from the material AO, so a corner or under-bed metal does not mirror the lit room at full strength.
+        // Both act on the blended prefiltered by the room-cube weight: exact at k = 0 / 1, approximate in the blend zone.
+        float roomSpecK = clamp(roomSpecW, 0.0, 1.0);
+        if (roomSpecK > 0.0) {
+            prefiltered = mix(prefiltered, max(prefiltered, irradiance * kRoomSpecFloor), roomSpecK);
+            float specAO = clamp(pow(NdotV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao, 0.0, 1.0);
+            // Lagarde's term REPLACES the material ao for this share (ambient multiplies everything by ao below).
+            prefiltered *= mix(1.0, specAO / max(ao, 1e-3), roomSpecK);
+        }
         vec3 specularIBL = uNoGlossyReflections == 1 ? vec3(0.0) : prefiltered * specW;
 
         vec3 diffuseIBL = irradiance * albedo; // already in Ambient-intensity terms (see above)
