@@ -317,17 +317,15 @@ void main() {
     // This fragment's froxel, once: the decal list and the light loop below both read it.
     bool clustered = uClusterEnabled == 1;
     uint cluster = clustered ? clusterIndex() : 0u;
-    uint grungeSub;
-    SubstrateSample grungeSS;
-#ifdef _ENGINE_NO_GRUNGE // ShaderVariant.h: Grunge Strength 0, where ApplyGrunge returns at once
-    grungeSub = 0u; // nothing cached: ApplyDecals samples its own substrate, but Mesa warns on an uninitialised copy
-    grungeSS = SubstrateSample(vec3(0.0), vec3(0.0, 0.0, 1.0), 0.0, 0.0, 0.0, vec3(0.0), vec3(0.0), vec3(0.0));
-#else
-    ApplyGrunge(albedo, N, roughness, metallic, ao, geoN, grungeSub, grungeSS);
+    // The surface's footprint, here in uniform control flow: Grunge's substrate and every decal's gradients use it
+    // inside branches and the per-fragment decal loop, where implicit derivatives are undefined.
+    vec3 dpx = dFdx(vWorldPos), dpy = dFdy(vWorldPos);
+#ifndef _ENGINE_NO_GRUNGE // ShaderVariant.h: Grunge Strength 0, where ApplyGrunge returns at once
+    ApplyGrunge(albedo, N, roughness, metallic, ao, geoN, dpx, dpy);
 #endif
     vec3 decalEmissive = vec3(0.0);
 #ifndef _ENGINE_NO_DECALS // ShaderVariant.h: no clustered decal in this view
-    ApplyDecals(albedo, N, roughness, metallic, ao, decalEmissive, geoN, cluster, grungeSub, grungeSS);
+    ApplyDecals(albedo, N, roughness, metallic, ao, decalEmissive, geoN, cluster, dpx, dpy);
 #endif
     if (uBloodSplatCount > 0) {
         // Soaked in: fabric and skin take the blood's colour, darker where it pooled, glossy while wet.
