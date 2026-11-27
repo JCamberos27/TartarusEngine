@@ -1414,8 +1414,8 @@
       "Outfit Piece": {
         "Flags": 1,
         "Item": {
-          "path": "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
-          "pathGuid": "19bbef7e387a5ef4"
+          "path": "assets/Characters/Quantum/Models/European/Quantum_Hands.fbx",
+          "pathGuid": "d00075b82bb2bfad"
         },
         "Slot": "Arms"
       },
@@ -1429,8 +1429,8 @@
       "name": "Arms",
       "order": 18,
       "parentId": 14,
-      "path": "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
-      "pathGuid": "19bbef7e387a5ef4",
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Hands.fbx",
+      "pathGuid": "d00075b82bb2bfad",
       "position": [
         0.0,
         0.0,
