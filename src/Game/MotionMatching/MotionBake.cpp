@@ -1237,6 +1237,8 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
                         "with any take. Freeze it by adding to the config:\n  %s\n", cfg.Path.c_str(),
                         FeatureNormJson(freshMean, freshScale).c_str());
         report["featureNorm"] = nj;
+        // Stored either way: without a config block this is the bake's own derivation (what an unfrozen load would derive
+        // anyway), so "stored" in the .mmdb means frozen only when the report says "frozen": true.
         features.SetNormalization(normMean, normScale);
     }
     // The 16-bit features' worst error per group, in the group's normalization units (MotionDatabase's scale).
