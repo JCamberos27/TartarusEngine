@@ -511,10 +511,11 @@ unsigned ShadowFrame::FillSunCasters(const SunListIn& in) {
 
     if (sameRun) {
         // The keyed path: the set changed, nothing else did. By slot: a caster the list held there - the same set entry
-        // (slot, entity, renderable), not in this frame's change log, not skinned or outfit-hidden - holds exactly what
-        // the full loop would refill it to (nothing unlogged changes a caster's fields), and its motion check would
-        // find it unchanged, so it is copied. The list holds no per-cascade data: a moved camera or cascade only
-        // matters through TrackSunMotion, which acts on a changed caster alone. The rest: filled and checked as below.
+        // (slot, entity, renderable), not in this frame's change log, not skinned, outfit-hidden or outfit-visible -
+        // holds exactly what the full loop would refill it to (nothing unlogged changes a caster's fields), and its
+        // motion check would find it unchanged, so it is copied. The list holds no per-cascade data: a moved camera or
+        // cascade only matters through TrackSunMotion, which acts on a changed caster alone. The rest: filled and
+        // checked as below.
         if (m_SunSlotLogged.size() < m_SunSlotIndex.size()) m_SunSlotLogged.resize(m_SunSlotIndex.size(), 0);
         for (const GpuScene::SlotChange& c : in.log->Changes)
             if (c.Slot < m_SunSlotLogged.size()) m_SunSlotLogged[c.Slot] = 1;
