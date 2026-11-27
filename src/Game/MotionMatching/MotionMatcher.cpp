@@ -126,9 +126,10 @@ void MotionMatcher::Update(float dt, const Input& in) {
             const C c = Schedule.LastCause;
             if (c == C::First) cause = CauseStart;
             else if (outOfFrames)
-                cause = m_Frame >= db.ClipEnd(m_Frame)          ? CauseTakeEnd
+                // (Excluded first: the same frames ForcedByExcluded counts.)
+                cause = (flags & MotionLabel::Excluded) != 0   ? CauseExcluded
+                        : m_Frame >= db.ClipEnd(m_Frame)       ? CauseTakeEnd
                         : (flags & MotionLabel::NoSearch) != 0 ? CauseNoSearch
-                        : (flags & MotionLabel::Excluded) != 0 ? CauseExcluded
                                                                : CauseRefused;
             else if (refit) cause = CauseIdleRefit;
             else if (c == C::Velocity) cause = CauseVelocity;

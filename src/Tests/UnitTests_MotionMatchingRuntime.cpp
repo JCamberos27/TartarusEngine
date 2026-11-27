@@ -665,6 +665,21 @@ void TestMatcherEndToEnd() {
     CHECK(bySearch == m.Searches && byJump == m.Jumps);
     CHECK(m.SearchesBy[MotionMatcher::CauseStart] == 1);
     CHECK(m.SearchesBy[MotionMatcher::CauseTimer] > 0);
+    // Played into a take's NoSearch tail: that search's cause is "nosearch".
+    {
+        MotionMatcher e;
+        const auto& w = db.Clip(db.Stream().FindClip("Walk_Straight"));
+        std::uint32_t tail = w.First;
+        while (tail < w.First + w.Count && !(db.Flags(tail) & MotionLabel::NoSearch)) ++tail;
+        e.Reset(&db, tail - 2);
+        e.SearchParams.Forbid = MotionLabel::Airborne | MotionLabel::Crouch;
+        e.SearchParams.TransitionCost = 1e9f; // the start search keeps the playing frame (it passes); the tail's must leave it
+        MotionMatcher::Input still;
+        for (int i = 0; i < 4; ++i) e.Update(dt, still);
+        std::printf("[MotionMatching] matcher causes into a NoSearch tail: start %d, nosearch %d, searches %d\n",
+                    e.SearchesBy[MotionMatcher::CauseStart], e.SearchesBy[MotionMatcher::CauseNoSearch], e.Searches);
+        CHECK(e.SearchesBy[MotionMatcher::CauseStart] == 1 && e.SearchesBy[MotionMatcher::CauseNoSearch] >= 1);
+    }
 }
 
 // Phase 4's hooks: the matcher's play rate (speed warping), its locked playback with a hold frame and a forced jump (the
