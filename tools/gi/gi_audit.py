@@ -312,7 +312,7 @@ def parse_bake_log(text):
 
 
 def bake_inner_invalid(probes, invalid, dims):
-    """-> (shell, inner, inner_invalid) for one volume from the baker's counts (Atlas's method, house-polish atlas.md
+    """-> (shell, inner, inner_invalid) for one volume from the baker's counts (the house-polish coverage method,
     gap 2). The grid's outer shell sits in the walls by design, so every shell probe is taken as invalid and the rest
     of the count as inner: a lower bound on the inner probes the room's air samples."""
     inner = max(0, dims[0] - 2) * max(0, dims[1] - 2) * max(0, dims[2] - 2)

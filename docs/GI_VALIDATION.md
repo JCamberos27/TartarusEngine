@@ -176,7 +176,7 @@ Phase 1 (Nov 23) changes the direct light and the tooling, not the bake. Rollup 
 | #1190 (merged, PARTIAL) | `--bake-gi` pins every clock a capture sees | Repeatability NOT achieved: the clocks were not the main noise; state carried over between runs is (open issue #1204) | The bake-noise caveat stays at the measured 2.8-6.6% until #1204 is fixed. |
 | #1188 (merged) | SSAO-off sampler clash fix (impostor draws) | Smoke 22/22, 0 sampler clashes; SSAO A/B walk on 3 routes / 34 waypoints | Cause #8 only. |
 | #1202 (merged; replaced #1193) | Kitchen vestibule lit by Ceiling Kitchen 35588 (Bounds only, 2 lines) | "After" evidence = the fresh-bake shots; Range 9.5 variant dropped unless the vestibule reads too dim at sign-off | Kitchen doorway rows (doors before/in/after). |
-| #1200 (merged) | GPU-driven batches split on GI volumes and the full probe key | 5 launches + 1 no-MDI launch: 0 of 66 waypoints flip, hold means identical to 4 decimals (artifacts `gi-p1/talos/proof1200/`) | GI-only pairs are a valid bake-unchanged check again. |
+| #1200 (merged) | GPU-driven batches split on GI volumes and the full probe key | 5 launches + 1 no-MDI launch: 0 of 66 waypoints flip, hold means identical to 4 decimals | GI-only pairs are a valid bake-unchanged check again. |
 
 **Finding (found in the #1192 review, Nov 23): runtime GI values were BISTABLE run to run.** The GI-only view of the SAME
 inputs (same exe, same `.gi`, same lamp set; `slot_hash` equal on 66/66 waypoints) differed between runs: P0 vs the

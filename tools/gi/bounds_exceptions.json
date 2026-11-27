@@ -682,7 +682,7 @@
    ],
    "face": "-z",
    "status": "OVER",
-   "reason": "fix4 fam4_south (422f7a81): -z 20.3 -> 20.05 + inward fade 0.5 past the south window wall, shadowed spot; 'expected OVER, list at merge'"
+   "reason": "house fix 4 (fam4 south, 422f7a81): -z 20.3 -> 20.05 + inward fade 0.5 past the south window wall, shadowed spot; 'expected OVER, list at merge'"
   },
   {
    "name": "Stairwell Stairs",
@@ -693,7 +693,7 @@
    ],
    "face": "-z",
    "status": "OVER",
-   "reason": "fix4 fam3_35604 (5e3ba4c2): -z 26.992 -> 26.742 + fade 0.5, 0.25 past the bedroom-hall wall, shadowed; 'expected OVER, list at merge'"
+   "reason": "house fix 4 (fam3 35604, 5e3ba4c2): -z 26.992 -> 26.742 + fade 0.5, 0.25 past the bedroom-hall wall, shadowed; 'expected OVER, list at merge'"
   },
   {
    "name": "Lamp_stand Lamp_stand 17 (master)",
@@ -704,7 +704,7 @@
    ],
    "face": "+x",
    "status": "OVER",
-   "reason": "fix4 master_ceiling (approved 35611 trim + unshadowed copy): +x = the lamp's own +x at -6.663 (jambs family D passage far plane, listed for the lamp too); the audit's ray starts inside the door wall because the lamp sits west of the copy's box"
+   "reason": "house fix 4 (master ceiling, approved 35611 trim + unshadowed copy): +x = the lamp's own +x at -6.663 (jambs family D passage far plane, listed for the lamp too); the audit's ray starts inside the door wall because the lamp sits west of the copy's box"
   },
   {
    "name": "Lamp_stand Lamp_stand 17 (master)",
@@ -715,7 +715,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "fix4 master_ceiling (approved): -x at -11.222 = the door-wall far plane, so the box can't reach the room behind Wall_Interior_3x (4)"
+   "reason": "house fix 4 (master ceiling, approved): -x at -11.222 = the door-wall far plane, so the box can't reach the room behind Wall_Interior_3x (4)"
   },
   {
    "name": "Lamp_stand Lamp_stand 17 (master)",
@@ -726,7 +726,7 @@
    ],
    "face": "-z",
    "status": "OPEN",
-   "reason": "fix4 master_ceiling (approved): -z at 25.887 = the 0.19 crossfade seam with the trimmed lamp (+z 26.077); sums to 1 in open room air"
+   "reason": "house fix 4 (master ceiling, approved): -z at 25.887 = the 0.19 crossfade seam with the trimmed lamp (+z 26.077); sums to 1 in open room air"
   }
  ]
 }
