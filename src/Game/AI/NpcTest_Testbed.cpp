@@ -614,6 +614,10 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
     npcs.NoLod = true;
     npcs.FootIKEverywhere = true;
     const float dt = R.PrevNow >= 0.0f ? std::max(0.0f, now - R.PrevNow) : 0.0f;
+    // A frame the game didn't step (Play's first frames while it loads: drawn, but no simulation or body update) leaves
+    // every snapshot as the last update wrote it. Counted again, the last update's jump read as dozens of jumps back onto
+    // the frame just shown (the reselect check at A settle). Only stepped frames count.
+    const bool stepped = R.PrevNow < 0.0f || now > R.PrevNow;
     R.PrevNow = now;
     const int leg = R.Leg;
     const TbLeg& L = kTb[leg];
@@ -648,7 +652,7 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
     const float procY = weapon ? weapon->ProceduralPose().CameraOffset.y : 0.0f;
     const std::string weaponState = weapon ? weapon->CurrentState() : std::string();
 
-    if (L.Of != TbPart::Watch) {
+    if (L.Of != TbPart::Watch && stepped) {
         TestbedRun::LegStats& s = R.Legs[leg];
         if (s.Frames == 0) s.FootYStart = foot[1];
         s.FootYEnd = foot[1];
