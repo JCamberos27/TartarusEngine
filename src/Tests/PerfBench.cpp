@@ -292,6 +292,14 @@ void PerfBench::Settle(bool haveScopes) {
 
 void PerfBench::RecordFrame(double frameMs, int frame) {
     Settle(true);
+    // The frame before's Pace Wait (a hidden run's fence wait, Application.cpp): its scopes arrive one call late, as a
+    // worst frame's do (Settle), so m_PaceWaits[i] belongs to m_FrameTimes[i] and runs one frame behind it.
+    if (m_PaceWaits.size() < m_FrameTimes.size()) {
+        double wait = 0.0;
+        for (const Profiler::Entry& e : Profiler::GetLastFrame())
+            if (e.Name == "Pace Wait") wait += e.Milliseconds;
+        m_PaceWaits.push_back(wait);
+    }
     m_FrameTimes.push_back(frameMs);
     m_Pending = Worst{};
     m_Pending.Ms = frameMs;
@@ -325,6 +333,22 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
     Stats after2s;
     if (m_FrameTimes.size() > 240) after2s = StatsOf(std::vector<double>(m_FrameTimes.begin() + 120, m_FrameTimes.end()));
     print(" after 2 s", after2s);
+    // A hidden run paces on a fence two frames back (Application.cpp, kHiddenFramesAhead) instead of a present: in a
+    // balanced, uncapped pipeline any GPU-side delay lands as a CPU wait on a frame that did a median frame's work.
+    // The same frames with that wait taken out, after the first 2 s: the frame's own work. Printed only when it waited.
+    if (m_PaceWaits.size() > 240) {
+        std::vector<double> own;
+        double waited = 0.0;
+        for (std::size_t i = 120; i < m_PaceWaits.size(); ++i) {
+            own.push_back(std::max(0.0, m_FrameTimes[i] - m_PaceWaits[i]));
+            waited += m_PaceWaits[i];
+        }
+        if (waited > 0.0) {
+            const Stats s = StatsOf(own);
+            std::printf("[PerfBench] %s after 2 s frame minus Pace Wait ms: p50=%.2f p95=%.2f p99=%.2f max=%.2f  p99/p50=%.2f  (Pace Wait avg %.2f ms) of %zu\n",
+                        label, s.P50, s.P95, s.P99, s.Max, s.P50 > 0.0 ? s.P99 / s.P50 : 0.0, waited / (double)own.size(), s.N);
+        }
+    }
     // TARTARUS_PERF_PACED: how even the paced frames came (the frame time here is end of frame to end of frame, after
     // the present and the cap, so it is the cadence the player sees, up to the driver's own queueing).
     if (const Pacing& paced = Paced(); paced.On()) {
@@ -400,6 +424,7 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
     }
     AppendCsv(sceneFile, label, all, after2s);
     m_FrameTimes.clear();
+    m_PaceWaits.clear();
     m_Worst.clear();
 }
 

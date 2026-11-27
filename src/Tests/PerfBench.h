@@ -100,6 +100,7 @@ private:
     Accum m_Frame;
     std::chrono::steady_clock::time_point m_LastFrameEnd;
     std::vector<double> m_FrameTimes;
+    std::vector<double> m_PaceWaits; // each recorded frame's Pace Wait (filled one frame late: the last one has none yet)
     std::vector<Worst> m_Worst;
     Worst m_Pending;
     std::vector<FrameLoads::Event> m_Loads; // the frame's loads, from TakeFrameMs
