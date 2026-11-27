@@ -327,6 +327,10 @@ private:
     glm::vec3 m_CamPos{0.0f};
     float m_CamYaw = 0.0f, m_CamPitch = 0.0f;
     bool m_HaveCam = false;
+    // The follow camera on the player's legs: it orbits a smoothed point at the player's feet (angle smoothed, not position).
+    glm::vec3 m_CamCenter{0.0f};
+    float m_CamAzimuth = 0.0f;
+    bool m_CamOrbit = false;
     void LookAt(const glm::vec3& target); // the Scene view at m_CamPos, turned to `target` (m_CamYaw / m_CamPitch, m_HaveCam)
     std::string m_RecordDir, m_TraceDir;
     bool m_Firing = false;
