@@ -27,6 +27,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -230,6 +231,93 @@ void TestSearchMatchesBruteForce() {
                 (double)scoredBox / 400.0, (double)scoredBrute / 400.0);
     CHECK(mismatches == 0);
     CHECK(scoredBox * 2 < scoredBrute); // the boxes prune
+}
+
+// The frozen normalization (MotionDatabase.h): a feature set carrying its own database's derivation, frozen and round-tripped
+// through a .mmdb, builds the very same normalization (bit for bit) and every search gives the same frame at the same cost;
+// and a bake change (a take more) under a frozen normalization keeps the frozen scales, where a fresh derivation moves them.
+void TestFrozenNormalization() {
+    MotionDatabase derived;
+    CHECK(Adopt(derived, Build(StandardTakes())));
+    CHECK(!derived.NormalizationFrozen());
+    SynthDb src = Build(StandardTakes());
+    std::vector<float> mean, scale;
+    MotionDatabase::DeriveNormalization(src.Feat, mean, scale);
+    src.Feat.SetNormalization(mean, scale);
+    const std::string path = (std::filesystem::temp_directory_path() / "TartarusFrozenNorm.mmdb").string();
+    std::string err;
+    CHECK(src.Feat.Save(path, &err));
+    MotionFeatureSet loaded;
+    CHECK(loaded.Load(path, &err));
+    CHECK(loaded.HasNormalization());
+    MotionDatabase frozen;
+    CHECK(frozen.Adopt(std::move(src.Stream), std::move(loaded), &err));
+    CHECK(frozen.NormalizationFrozen() && frozen.FrameCount() == derived.FrameCount());
+    if (!frozen.Loaded() || !derived.Loaded()) return;
+    const auto bits = [](float v) {
+        std::uint32_t u;
+        std::memcpy(&u, &v, 4);
+        return u;
+    };
+    int differ = 0;
+    for (int d = 0; d < MotionDatabase::kDims; ++d)
+        differ += bits(frozen.Mean(d)) != bits(derived.Mean(d)) || bits(frozen.Scale(d)) != bits(derived.Scale(d)) ||
+                  bits(frozen.QA(d)) != bits(derived.QA(d)) || bits(frozen.QB(d)) != bits(derived.QB(d));
+    CHECK(differ == 0);
+    std::mt19937 rng(4321);
+    std::uniform_int_distribution<std::uint32_t> frame(0, derived.FrameCount() - 1);
+    std::normal_distribution<float> noise(0.0f, 0.3f);
+    int mismatches = 0;
+    for (int k = 0; k < 200; ++k) {
+        float raw[27], qa[27], qb[27];
+        const auto r = derived.Raw(frame(rng));
+        for (int d = 0; d < 27; ++d) raw[d] = r[(size_t)d] + noise(rng);
+        derived.Normalize(raw, qa);
+        frozen.Normalize(raw, qb);
+        MotionSearchParams p;
+        if (k % 3 == 1) p.Forbid |= MotionLabel::Crouch;
+        if (k % 3 == 2) p.DesiredGait = MotionLabel::Walk;
+        const std::int64_t current = k % 2 ? (std::int64_t)frame(rng) : -1;
+        const MotionSearchResult a = MotionSearch::Search(derived, qa, p, current);
+        const MotionSearchResult b = MotionSearch::Search(frozen, qb, p, current);
+        if (a.Frame != b.Frame || bits(a.Cost) != bits(b.Cost) || bits(a.CurrentCost) != bits(b.CurrentCost)) ++mismatches;
+        for (std::uint32_t f = (std::uint32_t)k; f < derived.FrameCount(); f += 997)
+            if (bits(MotionSearch::Cost(derived, qa, f, p)) != bits(MotionSearch::Cost(frozen, qb, f, p))) ++mismatches;
+    }
+    std::printf("[MotionMatching] frozen normalization: %d dims differ, %d search/cost mismatches\n", differ, mismatches);
+    CHECK(mismatches == 0);
+
+    // A take more: a fresh derivation moves the scales, the frozen one holds.
+    std::vector<TakeSpec> more = StandardTakes();
+    TakeSpec fast;
+    fast.Name = "Extra_Fast";
+    fast.Tags = "run";
+    fast.Speed = 4.5f;
+    fast.YawRate = 0.8f;
+    more.push_back(fast);
+    SynthDb grown = Build(more);
+    std::vector<float> grownMean, grownScale;
+    MotionDatabase::DeriveNormalization(grown.Feat, grownMean, grownScale);
+    grown.Feat.SetNormalization(mean, scale);
+    MotionDatabase held;
+    CHECK(Adopt(held, std::move(grown)));
+    if (!held.Loaded()) return;
+    bool same = true, moved = false;
+    for (int d = 0; d < MotionDatabase::kDims; ++d) {
+        same = same && held.Scale(d) == derived.Scale(d) && held.Mean(d) == derived.Mean(d);
+        moved = moved || grownScale[(size_t)d] != scale[(size_t)d];
+    }
+    CHECK(same && moved);
+    // A corrupt frozen scale is refused at load.
+    SynthDb bad = Build(StandardTakes());
+    std::vector<float> zero = scale;
+    zero[3] = 0.0f;
+    bad.Feat.SetNormalization(mean, zero);
+    CHECK(bad.Feat.Save(path, &err));
+    MotionFeatureSet refused;
+    CHECK(!refused.Load(path, &err));
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
 }
 
 // The 16-bit features: the search on them finds the float features' best frame, or one whose float cost is within the
@@ -1419,6 +1507,7 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: shared database prefetch ahead of Play", TestSharedDatabasePrefetch});
     tests.push_back({"Motion matching: shared database prefetch measured on the driver rig", TestSharedDatabasePrefetchRig});
     tests.push_back({"Motion matching: database build and boxes", TestDatabaseBuild});
+    tests.push_back({"Motion matching: frozen normalization", TestFrozenNormalization});
     tests.push_back({"Motion matching: search matches brute force", TestSearchMatchesBruteForce});
     tests.push_back({"Motion matching: search filters and ties", TestSearchFiltersAndTies});
     tests.push_back({"Motion matching: 16-bit features against float", TestQuantizedSearch});

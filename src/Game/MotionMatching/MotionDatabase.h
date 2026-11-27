@@ -6,6 +6,9 @@
 //   - the 27 features normalized per group: (x - mean[d]) / groupStd, where groupStd is the mean of the group's
 //     per-feature standard deviations (a group's dimensions keep their relative scale, and no one group outweighs
 //     another just by having more dimensions or bigger units). The group weights are applied at search time.
+//     Frozen when the .mmdb carries a normalization (MotionFeatureSet::SetNormalization, from Manny.mmconfig's
+//     "featureNorm"): then those means and scales, not this bake's statistics, so a bake change (a mirrored take) moves
+//     only the costs of the frames it changed. Unfrozen (a version 2 file): derived here (DeriveNormalization).
 //     The features stay as the file's 16-bit integers (MotionFeatureSet): normalized = q * QA(d) + QB(d), one affine map
 //     per dimension, so nothing is re-quantized and only the 16-bit copy is held. MotionSearch searches the integers.
 //   - the AABBs of the features (16-bit) over blocks of 16 and of 64 frames (Holden's "bounding volume hierarchy" for
@@ -116,6 +119,11 @@ public:
     void Normalize(const float* raw, float* out) const;
     float Mean(int d) const { return m_Mean[(size_t)d]; }
     float Scale(int d) const { return m_Scale[(size_t)d]; } // the group's std that dimension d is divided by
+    bool NormalizationFrozen() const { return m_Feat.HasNormalization(); }
+    // The normalization as derived from a feature set's own statistics (kDims each): the mean per dimension, and per group the
+    // mean of its dimensions' standard deviations (at least 1e-4). What Build uses when the set has no frozen one; what the
+    // bake reports a frozen one against.
+    static void DeriveNormalization(const MotionFeatureSet& features, std::vector<float>& mean, std::vector<float>& scale);
     // The 16-bit features (kDims per frame) and their map to the normalized space: normalized = q * QA(d) + QB(d).
     const std::int16_t* Quantized(std::uint32_t frame) const { return m_Feat.Quantized(frame); }
     float QA(int d) const { return m_QA[(size_t)d]; }

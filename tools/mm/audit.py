@@ -101,6 +101,8 @@ def read_mmdb(path):
         mean[d], std[d] = r.get('ff')
         if version >= 2:
             qs[d], qo[d] = r.get('ff')
+    if version >= 3 and r.get('B'):  # the frozen normalization (MotionFeatures.h): dims x (mean, scale), not used here
+        r.o += dims * 8
     for _ in range(clips):
         r.str()
         r.get('II')

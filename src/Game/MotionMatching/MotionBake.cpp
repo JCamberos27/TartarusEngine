@@ -134,6 +134,34 @@ bool MotionBakeConfig::Load(const std::string& path, std::string& error) {
         RigLengthPct = v.value("rigLengthPct", RigLengthPct);
         ReconstructCm = v.value("reconstructCm", ReconstructCm);
     }
+    if (j.contains("featureNorm")) {
+        // All or nothing: a half-read normalization would quietly unfreeze the costs.
+        const json& n = j["featureNorm"];
+        const int dims = MotionFeatureSet::kDims;
+        bool ok = n.is_object() && n.contains("mean") && n["mean"].is_array() && n["mean"].size() == (size_t)dims &&
+                  n.contains("groupScale") && n["groupScale"].is_object();
+        std::vector<float> mean(dims, 0.0f), scale(dims, 1.0f);
+        for (int d = 0; ok && d < dims; ++d) {
+            ok = n["mean"][(size_t)d].is_number();
+            if (ok) mean[(size_t)d] = n["mean"][(size_t)d].get<float>();
+            ok = ok && std::isfinite(mean[(size_t)d]);
+        }
+        for (int g = 0; ok && g < MotionFeature::GroupCount; ++g) {
+            const json& gs = n["groupScale"];
+            const char* name = MotionFeature::GroupName(g);
+            ok = gs.contains(name) && gs[name].is_number();
+            const float s = ok ? gs[name].get<float>() : 0.0f;
+            ok = ok && std::isfinite(s) && s > 0.0f;
+            for (int d = MotionFeature::kGroupFirst[g]; ok && d < MotionFeature::kGroupFirst[g + 1]; ++d) scale[(size_t)d] = s;
+        }
+        if (!ok) {
+            error = path + ": featureNorm needs \"mean\" (" + std::to_string(dims) +
+                    " numbers) and \"groupScale\" (a positive number per group: footPos, footVel, pelvisVel, trajPos, trajDir)";
+            return false;
+        }
+        FeatureNormMean = std::move(mean);
+        FeatureNormScale = std::move(scale);
+    }
     if (Bones.empty() || Output.empty() || TargetRig.empty()) {
         error = path + ": needs bones, output and targetRig";
         return false;
@@ -165,6 +193,24 @@ std::string SourceDir() {
     const std::string dir = Env::Str(Env::Var::MmSource);
     std::error_code ec;
     return !dir.empty() && fs::is_directory(dir, ec) ? dir : std::string();
+}
+
+std::string FeatureNormJson(const std::vector<float>& mean, const std::vector<float>& scale) {
+    // %.9g: a float's 9 significant digits read back (as a double, then cast) to the same float.
+    const auto num = [](float v) {
+        char b[32];
+        std::snprintf(b, sizeof b, "%.9g", (double)v);
+        return std::string(b);
+    };
+    std::string s = "\"featureNorm\": {\n    \"groupScale\": {";
+    for (int g = 0; g < MotionFeature::GroupCount; ++g) {
+        const size_t d = (size_t)MotionFeature::kGroupFirst[g];
+        s += std::string(g ? ", " : " ") + "\"" + MotionFeature::GroupName(g) + "\": " + (d < scale.size() ? num(scale[d]) : "1");
+    }
+    s += " },\n    \"mean\": [";
+    for (size_t d = 0; d < mean.size(); ++d) s += (d ? (d % 6 ? ", " : ",\n      ") : "") + num(mean[d]);
+    s += "]\n  }";
+    return s;
 }
 
 bool ReadTakes(const std::string& csvPath, std::vector<MotionTake>& out, std::string& error) {
@@ -1164,15 +1210,45 @@ int Run(const std::string& configPath, const std::string& match, const std::stri
     }
     features.Finish();
     report["takes"] = takesJ;
+    // The search's normalization: the config's frozen one (stored in the .mmdb), reported against what these takes would
+    // derive - a fresh derivation moves every cost whenever any take changes.
+    std::vector<float> normMean, normScale;
+    {
+        std::vector<float> freshMean, freshScale;
+        MotionDatabase::DeriveNormalization(features, freshMean, freshScale);
+        const bool frozen = cfg.HasFeatureNorm();
+        normMean = frozen ? cfg.FeatureNormMean : freshMean;
+        normScale = frozen ? cfg.FeatureNormScale : freshScale;
+        json nj = {{"frozen", frozen}};
+        if (frozen) std::printf("[MotionBake] feature normalization FROZEN (config featureNorm), per group frozen scale / fresh "
+                                "derivation (ratio), worst mean shift in frozen scales:\n");
+        for (int gi = 0; gi < MotionFeature::GroupCount; ++gi) {
+            const int a = MotionFeature::kGroupFirst[gi], b = MotionFeature::kGroupFirst[gi + 1];
+            float shift = 0.0f;
+            for (int d = a; d < b; ++d) shift = std::max(shift, std::fabs(freshMean[(size_t)d] - normMean[(size_t)d]) / normScale[(size_t)d]);
+            const float fz = normScale[(size_t)a], fr = freshScale[(size_t)a];
+            nj["groups"][MotionFeature::GroupName(gi)] = {{"frozenScale", fz}, {"freshScale", fr}, {"meanShift", shift}};
+            if (frozen)
+                std::printf("[MotionBake]   %-9s %.6g / %.6g (%.4f), mean shift %.4f\n", MotionFeature::GroupName(gi), fz, fr,
+                            fr / fz, shift);
+        }
+        if (!frozen)
+            std::printf("[MotionBake] WARNING: no featureNorm in %s: this bake's own normalization is stored, so every cost moves "
+                        "with any take. Freeze it by adding to the config:\n  %s\n", cfg.Path.c_str(),
+                        FeatureNormJson(freshMean, freshScale).c_str());
+        report["featureNorm"] = nj;
+        // Stored either way: without a config block this is the bake's own derivation (what an unfrozen load would derive
+        // anyway), so "stored" in the .mmdb means frozen only when the report says "frozen": true.
+        features.SetNormalization(normMean, normScale);
+    }
     // The 16-bit features' worst error per group, in the group's normalization units (MotionDatabase's scale).
     {
         json qj = json::object();
         std::printf("[MotionBake] feature quantization, worst error per group (normalized):");
         for (int gi = 0; gi < MotionFeature::GroupCount; ++gi) {
             const int a = MotionFeature::kGroupFirst[gi], b = MotionFeature::kGroupFirst[gi + 1];
-            float scale = 0.0f, worst = 0.0f;
-            for (int d = a; d < b; ++d) scale += features.Std()[(size_t)d];
-            scale = std::max(1e-4f, scale / (float)(b - a));
+            const float scale = normScale[(size_t)a];
+            float worst = 0.0f;
             for (int d = a; d < b; ++d) worst = std::max(worst, features.QError()[(size_t)d] / scale);
             qj[MotionFeature::GroupName(gi)] = worst;
             std::printf(" %s %.2e", MotionFeature::GroupName(gi), worst);
