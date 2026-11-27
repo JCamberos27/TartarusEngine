@@ -150,7 +150,7 @@ public:
         // ... and the sprint search weighs where the root goes this many times over (like a strafe): with no curved runs, a turning
         // sprint's trajectory runs off the facing, and at weight 1 the pose kept it out of the diagonal loops once it played anything
         // else - after a flick 180 the turning sprint stitched turning starts (begun from standing) at 3.3 m/s, the planted feet
-        // sliding 17.3 cm.
+        // sliding 17.3 cm. (A sprint strafe keeps the strafe's own weight and ignores this one.)
         float SprintTrajPosWeight = 2.0f;
         float MaxFacingOffset = 1.5708f;       // rad (90 deg): the character facing at most this far off the simulation's
         float TakeoffSeconds = 0.12f;          // a jump's segment starts this far before its first airborne frame
@@ -182,6 +182,11 @@ public:
         float TurnThreshold = 0.0f; // radians: standing still, the heading holds within this of the view (0: always faces it)
         float TurnEndAngle = 0.0f;  // radians: a turn on the spot ends this close to the view
         float VelocityHalflife = 0.2f; // s: how the capsule's speed follows the wish (the predictor's spring)
+        // The capsule's own law, when it has one (TrajectoryParams::CapsuleLaw): the predictor eases the velocity as the
+        // capsule does - time constants up to speed / down from it (s; 0 = at once), the arrive and stop snaps (m/s), each
+        // frame of Dt - in place of the spring. CapsuleLaw false: the spring.
+        bool CapsuleLaw = false;
+        float AccelTime = 0.0f, DecelTime = 0.0f, SnapToGoal = 0.0f, SnapToStop = 0.0f;
         TrajectoryPredictor::SweepFn Sweep; // the capsule's cast (empty: none)
         // A route to follow (Phase 5, the NPCs: the navmesh path's corners, world): moving, the trajectory is predicted along
         // it at the wish's speed, facing the travel (TrajectoryPredictor::PredictAlong), not straight down the wish. Empty: the wish.

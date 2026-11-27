@@ -1442,6 +1442,76 @@ void TestPredictAlong() {
     CHECK(glm::length(out[2].Position - there.Position) < 0.02f);
 }
 
+// The predicted trajectory against the capsule it predicts (TrajectoryParams::CapsuleLaw): the player's (PlayerApproachVelocity,
+// then the move by the new velocity each frame) and an NPC's (the director's pace: the same ease along its way, a speed under
+// 2 cm/s a stop). Predicted from the capsule's state, the path is the capsule's at every horizon - 0.1 s (where a stop's frames
+// are chosen) and the query's 1/3, 2/3, 1 s - for a start, a stop, a reversal and a slower move: within 1 mm and 1 cm/s (the same
+// law over the same frames; what's left is float rounding). The velocity spring with the acceleration halflife (the prediction
+// before) is printed beside it: a 5 m/s stop ran 5-6 cm ahead of the capsule at 0.1 s and ended 10-15 cm short of it.
+void TestPredictMatchesCapsule() {
+    const float hz = 60.0f, dt = 1.0f / hz;
+    const int frames[4] = {6, 20, 40, 60};
+    float times[4];
+    for (int k = 0; k < 4; ++k) times[k] = (float)frames[k] / hz;
+    struct Case { const char* Name; glm::vec3 From, To; bool Npc; };
+    const glm::vec3 run(0.0f, 0.0f, 5.0f), walk(0.0f, 0.0f, 1.5f);
+    const Case cases[] = {
+        {"player start", glm::vec3(0.0f), run, false}, {"player stop", run, glm::vec3(0.0f), false},
+        {"player reverse", run, -run, false},          {"player run to walk", run, walk, false},
+        {"npc start", glm::vec3(0.0f), run, true},     {"npc stop", run, glm::vec3(0.0f), true},
+    };
+    for (const Case& c : cases) {
+        const float accel = c.Npc ? 0.12f : 0.08f, decel = c.Npc ? 0.15f : 0.10f; // the NPCs' kStartTime / kStopTime, the player's pair
+        glm::vec3 cp[4], cv[4];
+        {
+            glm::vec3 x(0.0f), v = c.From;
+            for (int i = 1, k = 0; k < 4; ++i) {
+                if (c.Npc) { // NpcDirector: the pace (its speed along the way) eased, under 2 cm/s a stop
+                    const float cur = glm::length(v), target = glm::length(c.To);
+                    const float pace = target + (cur - target) * std::exp(-dt / (target > cur ? accel : decel));
+                    v = glm::vec3(0.0f, 0.0f, pace < 0.02f ? 0.0f : pace);
+                } else {
+                    v = PlayerApproachVelocity(v, c.To, dt, accel, decel);
+                }
+                x += v * dt;
+                if (i == frames[k]) { cp[k] = x; cv[k] = v; ++k; }
+            }
+        }
+        TrajectoryState start;
+        start.Velocity = c.From;
+        TrajectoryPredictor tp;
+        tp.Params.CapsuleLaw = true;
+        tp.Params.AccelTime = accel;
+        tp.Params.DecelTime = decel;
+        tp.Params.FrameDt = dt;
+        tp.Params.SnapToGoal = c.Npc ? 0.0f : 0.01f;
+        tp.Params.SnapToStop = c.Npc ? 0.02f : 0.0f;
+        tp.SetState(start);
+        TrajectoryState pr[4], spring[4];
+        tp.Predict(c.To, 0.0f, times, 4, pr);
+        TrajectoryPredictor old;
+        old.Params.VelocityHalflife = accel * 0.6931f;
+        old.SetState(start);
+        old.Predict(c.To, 0.0f, times, 4, spring);
+        for (int k = 0; k < 4; ++k) {
+            std::printf("[PredictCapsule] %-18s t %.2f: at %.3f m (capsule %.3f, spring before %.3f), %.3f m/s (capsule %.3f, spring %.3f)\n",
+                        c.Name, times[k], pr[k].Position.z, cp[k].z, spring[k].Position.z, pr[k].Velocity.z, cv[k].z, spring[k].Velocity.z);
+            CHECK(glm::length(pr[k].Position - cp[k]) < 0.001f);
+            CHECK(glm::length(pr[k].Velocity - cv[k]) < 0.01f);
+        }
+    }
+    // 0 = at once (the player's default before the tested pair): the move is the goal from the first frame.
+    TrajectoryPredictor tp;
+    tp.Params.CapsuleLaw = true;
+    tp.Params.FrameDt = dt;
+    TrajectoryState start;
+    start.Velocity = run;
+    tp.SetState(start);
+    TrajectoryState pr[4];
+    tp.Predict(glm::vec3(0.0f), 0.0f, times, 4, pr);
+    CHECK(glm::length(pr[0].Position) < 1e-5f && glm::length(pr[3].Velocity) < 1e-5f);
+}
+
 // The first Play's database read ahead (Prefetch): Get takes the prefetched load (never a second read), loads itself while
 // the prefetch is still queued (the job then does nothing), waits on a running one, and reads afresh after an Invalidate
 // or a rewrite since the prefetch was queued; a cancelled or dropped prefetch never runs.
@@ -1769,6 +1839,7 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: dead blending", TestInertialization});
     tests.push_back({"Motion matching: trajectory springs and collision", TestTrajectoryPredictor});
     tests.push_back({"Motion matching: trajectory along a route (NPCs)", TestPredictAlong});
+    tests.push_back({"Motion matching: the predicted trajectory is the capsule's (start, stop, reverse)", TestPredictMatchesCapsule});
     tests.push_back({"Motion matching: gait speed table", TestGaitTable});
     tests.push_back({"Motion matching: query root space", TestQueryConvention});
     tests.push_back({"Motion matching: matcher end to end", TestMatcherEndToEnd});

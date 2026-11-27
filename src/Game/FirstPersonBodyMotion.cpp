@@ -800,6 +800,12 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     now.Yaw = m_SimYaw;
     now.YawRate = m_SimYawRate;
     m_Predictor.Params.VelocityHalflife = std::max(in.VelocityHalflife, 0.02f);
+    m_Predictor.Params.CapsuleLaw = in.CapsuleLaw;
+    m_Predictor.Params.AccelTime = std::max(in.AccelTime, 0.0f);
+    m_Predictor.Params.DecelTime = std::max(in.DecelTime, 0.0f);
+    m_Predictor.Params.FrameDt = in.Dt;
+    m_Predictor.Params.SnapToGoal = in.SnapToGoal;
+    m_Predictor.Params.SnapToStop = in.SnapToStop;
     m_Predictor.Params.FacingHalflife = Config.SimFacingHalflife;
     m_Predictor.Sweep = in.Sweep;
     m_Predictor.SetState(now);
