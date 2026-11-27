@@ -89,6 +89,10 @@ public:
     // into a refused frame at once, forcing another search (MotionSearchParams::MinRunway).
     static constexpr std::uint8_t kRunwayMask = 1 | 4 | 8 | 16; // MotionLabel::Crouch | Airborne | Excluded | NoSearch
     std::uint16_t Runway(std::uint32_t frame) const { return m_Runway[frame]; }
+    // How many frames from `frame` on (itself included, at most 65535) its take stays in the Idle gait: 0 when `frame` is not
+    // Idle. The runway above doesn't see the gait, so an idle candidate with a long runway can still play straight into a
+    // step (MotionSearchParams::MinIdleRunway).
+    std::uint16_t IdleRunway(std::uint32_t frame) const { return m_IdleRunway[frame]; }
     // Glitches in the capture: a frame where a stream bone turns more than kGlitchDegrees to the next (at 60 fps; the pack's
     // fastest real motion, its runs' p99.9, is ~30) - twist flips up to 180 degrees on the thighs and feet, a forearm
     // swinging 60 degrees in a frame. Build marks them and kGlitchPad frames either side Excluded: never matched, and
@@ -153,7 +157,7 @@ private:
     MotionFeatureSet m_Feat;
     std::uint32_t m_Frames = 0;
     std::vector<int> m_ClipOf;
-    std::vector<std::uint16_t> m_Runway;
+    std::vector<std::uint16_t> m_Runway, m_IdleRunway;
     std::uint32_t m_Glitches = 0, m_ProneApproach = 0;
     std::vector<float> m_Mean, m_Scale, m_QA, m_QB;
     std::vector<Box> m_Small, m_Large;

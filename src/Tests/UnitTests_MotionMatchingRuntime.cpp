@@ -1060,6 +1060,47 @@ void TestSearchableDataReportSynthetic() {
     CheckSearchableReport(db, 0);
 }
 
+// The idle runway (frames until the gait leaves Idle) and the idle-take check, on takes made for it (runs on CI).
+void TestIdleRunway() {
+    std::vector<TakeSpec> takes;
+    takes.push_back({"Stand_Idle", "stand;idle", 400, 0.0f});
+    TakeSpec step{"Stand_Idle_Then_Step", "stand;idle", 500, 0.0f}; // an idle take that speeds up to a walk by its end
+    step.SpeedEnd = 1.3f;
+    takes.push_back(step);
+    MotionDatabase db;
+    CHECK(Adopt(db, Build(takes)));
+    const auto& still = db.Clip(0);
+    const auto& walking = db.Clip(1);
+    // A take that stays Idle: the runway counts down to its last frame.
+    bool countsDown = true;
+    for (std::uint32_t k = 0; k < still.Count; ++k)
+        countsDown = countsDown && db.Gait(still.First + k) == MotionLabel::Idle && db.IdleRunway(still.First + k) == still.Count - k;
+    CHECK(countsDown);
+    // A take that leaves Idle: its frames before the step count to the step, the others have none.
+    bool toStep = true, none = true;
+    std::uint32_t firstMoving = walking.Count;
+    for (std::uint32_t k = 0; k < walking.Count; ++k)
+        if (db.Gait(walking.First + k) != MotionLabel::Idle) { firstMoving = k; break; }
+    CHECK(firstMoving > 0 && firstMoving < walking.Count);
+    for (std::uint32_t k = 0; k < walking.Count; ++k) {
+        const std::uint16_t r = db.IdleRunway(walking.First + k);
+        if (db.Gait(walking.First + k) == MotionLabel::Idle) toStep = toStep && k < firstMoving && r == firstMoving - k;
+        else none = none && r == 0;
+    }
+    CHECK(toStep && none);
+    // The search honours it: with MinIdleRunway no candidate is a frame that steps off within that many frames.
+    MotionSearchParams p;
+    p.Require = MotionLabel::IdleTake;
+    p.MinIdleRunway = 150;
+    float q[27];
+    FrameQuery(db, walking.First + 10, q);
+    const MotionSearchResult a = MotionSearch::Search(db, q, p), b = MotionSearch::SearchBrute(db, q, p);
+    CHECK(a.Frame >= 0 && a.Frame == b.Frame && db.IdleRunway((std::uint32_t)a.Frame) >= 150);
+    // The idle-take check: no candidate of either take leads into motion; the take that never stays idle long has none left.
+    const auto checks = MotionDataReport::CheckIdleTakes(db, 8, 150);
+    CHECK(checks.size() == 2 && checks[0].Candidates > 0 && checks[0].Bad == 0 && checks[1].Bad == 0);
+}
+
 void TestSearchableDataReport() {
     const char* name = "Motion matching: searchable data report";
     const std::string base = ProjectPaths::Resolve("assets/Animations/MotionMatching/Manny");
@@ -1096,8 +1137,7 @@ void TestSearchableDataReport() {
                     c.Failed() ? "  FAILS" : "");
         if (c.Bad) std::printf("[MotionMatching]     bad candidates at frames %u-%u (%.1f-%.1f s), the first runs into the %s gait\n", c.FirstBad, c.LastBad,
                                c.FirstBad / db.Fps(), c.LastBad / db.Fps(), MotionLabel::GaitName(c.LeadsInto));
-        // Known debt (found by this check): a crouch idle that runs into a step from some of its candidates. Off the list when fixed.
-        if (c.Failed() && c.Name != "Crouch_Idles_Take001") ++failed;
+        failed += c.Failed();
     }
     CHECK(!checks.empty());
     CHECK(failed == 0);
@@ -1605,6 +1645,7 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: reselect history and the idle hold", TestReselectAndIdleHold});
     tests.push_back({"Motion matching: cooked database search", TestCookedDatabaseSearch});
     tests.push_back({"Motion matching: searchable data report (synthetic)", TestSearchableDataReportSynthetic});
+    tests.push_back({"Motion matching: idle runway", TestIdleRunway});
     tests.push_back({"Motion matching: searchable data report", TestSearchableDataReport});
     tests.push_back({"Motion matching: glitch scan (|dot| test == angle test)", TestGlitchScanMatchesAngle});
 }

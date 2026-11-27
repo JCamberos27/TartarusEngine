@@ -190,11 +190,19 @@ void MotionDatabase::Index() {
     const std::uint32_t n = m_Frames;
     // The runway: back from each take's end, how long the filterable labels stay as they are.
     m_Runway.assign(n, 1);
+    m_IdleRunway.assign(n, 0);
     for (const auto& clip : m_Stream.Clips())
         for (std::uint32_t k = clip.Count; k-- > 1;) {
             const std::uint32_t i = clip.First + k - 1;
             if ((m_Feat.Flags(i) & kRunwayMask) == (m_Feat.Flags(i + 1) & kRunwayMask))
                 m_Runway[i] = (std::uint16_t)std::min<int>(65535, m_Runway[i + 1] + 1);
+        }
+    // The idle runway: back from each take's end, how long the gait stays Idle.
+    for (const auto& clip : m_Stream.Clips())
+        for (std::uint32_t k = clip.Count; k-- > 0;) {
+            const std::uint32_t i = clip.First + k;
+            if (Gait(i) != MotionLabel::Idle) continue;
+            m_IdleRunway[i] = (std::uint16_t)(k + 1 < clip.Count ? std::min<int>(65535, m_IdleRunway[i + 1] + 1) : 1);
         }
 
 
@@ -299,5 +307,5 @@ std::array<float, MotionDatabase::kDims> MotionDatabase::Normalized(std::uint32_
 
 size_t MotionDatabase::FeatureBytes() const {
     return m_Feat.Bytes() + (m_Small.size() + m_Large.size()) * sizeof(Box) + m_ClipOf.size() * sizeof(int) +
-           m_Runway.size() * sizeof(std::uint16_t);
+           (m_Runway.size() + m_IdleRunway.size()) * sizeof(std::uint16_t);
 }

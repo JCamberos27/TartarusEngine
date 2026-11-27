@@ -124,7 +124,7 @@ std::vector<IdleTakeCheck> CheckIdleTakes(const MotionDatabase& db, int minRunwa
         c.Frames = clip.Count;
         for (std::uint32_t k = 0; k < clip.Count; ++k) {
             const std::uint32_t f = clip.First + k;
-            if (!MotionSearch::Passes(db.Flags(f), p) || db.Runway(f) < need) continue;
+            if (!MotionSearch::Passes(db.Flags(f), p) || db.Runway(f) < need || db.IdleRunway(f) < idleRunway) continue;
             ++c.Candidates;
             // The next idleRunway frames (the take may end sooner: the runway already stops at its end).
             const std::uint32_t last = std::min<std::uint32_t>(clip.Count, k + (std::uint32_t)std::max(1, idleRunway));
