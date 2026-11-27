@@ -82,6 +82,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     lockSet.Release = MmTune("FootLock.Release", lockSet.Release);
     lockSet.StepHeight = MmTune("FootLock.StepHeight", lockSet.StepHeight);
     lockSet.StepMax = MmTune("FootLock.StepMax", lockSet.StepMax);
+    lockSet.LiftFirst = MmTune("FootLock.LiftFirst", lockSet.LiftFirst);
     const bool pivot = true; // (motion matching: a planted foot pivots with the body's turn)
     lockSet.StepForTravel = pivot;
     lockSet.RestFloor = MmTune("FootLock.RestFloor", 1.0f) > 0.0f; // (a foot at rest near the ground is down: IK::FootLockSettings)
