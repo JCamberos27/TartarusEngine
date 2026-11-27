@@ -405,6 +405,9 @@ int AssetLibrary::PrefetchMaterialTextures(const std::vector<std::string>& mater
         }
     }
     if (jobs.empty()) return 0;
+    // The BCn formats the decode encodes to depend on the driver: known before any worker asks (main thread). On a cold
+    // cache the scene's first batch ran before any texture upload had asked, so its maps were stored uncompressed.
+    Texture::InitGpuCaps();
     // Workers: decode only (disk cache read, or PNG decode + BCn encode + cache store). No GL.
     const unsigned hw = std::max(2u, std::thread::hardware_concurrency());
     const unsigned workers = std::min<unsigned>((unsigned)jobs.size(), std::min(hw - 1, 16u));
