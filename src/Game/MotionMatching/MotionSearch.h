@@ -95,6 +95,9 @@ struct MotionSearchSchedule {
     void Reset() { m_First = true; }
     float SinceLast() const { return m_Timer; }
     int Searches = 0, ForcedByInput = 0, ForcedByEnd = 0;
+    // Why the last search that Tick allowed was due. The first input change it sees wins: velocity, then facing, then the filter.
+    enum class Cause : std::uint8_t { None, First, Timer, End, Velocity, Facing, Filter };
+    Cause LastCause = Cause::None;
 
 private:
     bool m_First = true;

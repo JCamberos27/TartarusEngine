@@ -81,6 +81,15 @@ public:
     int Searches = 0, Jumps = 0;
     int IdleRefits = 0; // idle searches because the continuation stopped fitting
     int ForcedByExcluded = 0; // searches forced because the playing frame is Excluded (it played into an excluded stretch)
+    // Searches and jumps by why the search ran (Update; print-only): the first update after a Reset or the lock, the timer,
+    // an input change (the desired velocity, the facing, the filter: MotionSearchSchedule's thresholds), the playing frame
+    // unable to go on (its take's last frame, its NoSearch tail, an Excluded stretch, or other flags the filter refuses:
+    // crouch, airborne), and the idle refit. A search that runs while the frame can't go on counts as that end cause even
+    // when the timer was due too. Jumps also count ForceFrame's (the airborne segment's entry and exit) as Forced.
+    enum Cause { CauseStart, CauseTimer, CauseVelocity, CauseFacing, CauseFilter, CauseTakeEnd, CauseNoSearch, CauseExcluded,
+                 CauseRefused, CauseIdleRefit, CauseForced, CauseCount };
+    static const char* CauseName(int cause);
+    std::array<int, CauseCount> SearchesBy{}, JumpsBy{};
     double SearchMsTotal = 0.0, SearchMsMax = 0.0;
     // The latest kSearchSamples search times (ms; a ring once full, so a long Play doesn't grow it ~10 a second forever).
     static constexpr size_t kSearchSamples = 4096;

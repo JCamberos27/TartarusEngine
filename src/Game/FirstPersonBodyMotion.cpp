@@ -920,6 +920,8 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     d.Jumps = m.Jumps;
     d.ForcedByInput = m.Schedule.ForcedByInput;
     d.ForcedByEnd = m.Schedule.ForcedByEnd;
+    d.SearchesBy = m.SearchesBy;
+    d.JumpsBy = m.JumpsBy;
     d.LastCost = m.LastResult().Cost;
     d.PlayingCost = m.LastResult().CurrentCost;
     d.SearchMsAvg = m.Searches > 0 ? m.SearchMsTotal / m.Searches : 0.0;
