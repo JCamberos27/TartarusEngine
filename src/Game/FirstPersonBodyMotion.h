@@ -65,6 +65,7 @@ struct SharedMotionDatabase {
     float TurnInPlaceRate = 0.0f; // rad/s: the turn-on-the-spot frames' p75 root yaw rate
     std::uint32_t StartFrame = 0; // the frame the matcher starts on: the first searchable standing idle-take frame
     std::uint32_t HandsUpFrames = 0;   // frames excluded for a hand over its shoulder (HandsUpMargin), pads included
+    std::uint32_t CutFrames = 0;       // frames excluded by the hand-cut stretches (Measure's kCuts)
     // A frame (not airborne) with either hand more than this (m) over its shoulder is excluded, kHandsUpPad frames either
     // side: the pack's idles catching breath after a run (hands on the head), stretches, pivots with the arms flung up
     // - in the first-person view the hands came up into the camera (the owner's play test 2, Phase 4).
