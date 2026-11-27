@@ -22,6 +22,7 @@
 
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -811,6 +812,131 @@ void TestReselectAndIdleHold() {
     CHECK(timer == 1); // released: the timer again (0.1 s)
 }
 
+// The glitch scan before the |dot| test (MotionMath::QuatAngle per bone): what ScanGlitches must reproduce exactly.
+std::vector<char> GlitchScanReference(const MotionClipStream& s, float limit) {
+    const std::uint32_t n = s.FrameCount();
+    const int nb = (int)s.Bones().size();
+    std::vector<char> bad(n, 0);
+    std::vector<glm::quat> prev((size_t)nb), cur((size_t)nb);
+    for (const auto& clip : s.Clips()) {
+        if (clip.Count == 0) continue;
+        for (int b = 0; b < nb; ++b) prev[(size_t)b] = s.Rotation(clip.First, b);
+        for (std::uint32_t k = 1; k < clip.Count; ++k) {
+            const std::uint32_t i = clip.First + k;
+            bool glitch = false;
+            for (int b = 0; b < nb; ++b) {
+                cur[(size_t)b] = s.Rotation(i, b);
+                glitch = glitch || MotionMath::QuatAngle(prev[(size_t)b], cur[(size_t)b]) > limit;
+            }
+            std::swap(prev, cur);
+            if (!glitch) continue;
+            const int pad = MotionDatabase::kGlitchPad;
+            const std::uint32_t from = (std::uint32_t)std::max<std::int64_t>(clip.First, (std::int64_t)i - 1 - pad);
+            const std::uint32_t to = std::min<std::uint32_t>(clip.First + clip.Count - 1, i + (std::uint32_t)pad);
+            for (std::uint32_t j = from; j <= to; ++j) bad[j] = 1;
+        }
+    }
+    return bad;
+}
+
+// ScanGlitches' |dot| < cos(L/2) test excludes exactly the frames the QuatAngle scan did: on turns just over and just
+// under the limit (as stored, after the 48-bit packing) and on the cooked Manny bake when present.
+void TestGlitchScanMatchesAngle() {
+    const float limit = MotionDatabase::GlitchLimit(60.0f);
+    // Synthetic: one bone, a clip per sample: rest, then a turn about a random axis; kept only when the stored (packed)
+    // turn lands 0.5e-4..1.5e-4 rad over or under the limit.
+    MotionClipStream s;
+    s.Reset(60.0f, {"bone"});
+    std::mt19937 rng(1234);
+    std::uniform_real_distribution<float> u(-1.0f, 1.0f), side(0.0f, 1.0f);
+    int over = 0, under = 0, tries = 0;
+    std::vector<char> expectOver;
+    while ((over < 200 || under < 200) && ++tries < 200000) {
+        glm::vec3 axis(u(rng), u(rng), u(rng));
+        if (glm::length(axis) < 0.1f) continue;
+        axis = glm::normalize(axis);
+        const glm::quat base = glm::normalize(glm::quat(u(rng), u(rng), u(rng), u(rng)));
+        const bool wantOver = side(rng) < 0.5f;
+        const float target = limit + (wantOver ? 1e-4f : -1e-4f);
+        const glm::quat a = MotionMath::UnpackQuat(MotionMath::PackQuat(base));
+        const glm::quat b = MotionMath::UnpackQuat(MotionMath::PackQuat(base * glm::angleAxis(target, axis)));
+        const float d = MotionMath::QuatAngle(a, b) - limit;
+        if (std::fabs(d) < 0.5e-4f || std::fabs(d) > 1.5e-4f) continue;
+        if (d > 0.0f ? over >= 200 : under >= 200) continue;
+        (d > 0.0f ? over : under)++;
+        const std::vector<glm::quat> rot = {base, base * glm::angleAxis(target, axis)};
+        const std::vector<MotionClipStream::RootSample> root(2);
+        const std::vector<glm::vec3> pelvis(2, glm::vec3(0.0f));
+        s.AddClip({"t" + std::to_string(over + under), "", 0, 0, 0.0f}, root, pelvis, rot);
+        expectOver.push_back(d > 0.0f ? 1 : 0);
+    }
+    CHECK(over == 200 && under == 200);
+    std::vector<char> fast;
+    CHECK(MotionDatabase::ScanGlitches(s, limit, fast));
+    const std::vector<char> ref = GlitchScanReference(s, limit);
+    CHECK(fast == ref);
+    int wrong = 0;
+    for (size_t c = 0; c < s.Clips().size(); ++c)
+        wrong += ref[s.Clips()[c].First + 1] != expectOver[c]; // the reference itself splits over / under as stored
+    CHECK(wrong == 0);
+    // Low frame rates: the limit passes pi under ~11.7 fps (10 fps: 210 degrees; 1 fps: 2100). No turn is bigger than pi, so
+    // nothing is flagged; cos(limit / 2) alone wraps and would flag big turns. Takes turning 30..179 degrees in a frame.
+    {
+        MotionClipStream big;
+        big.Reset(1.0f, {"bone"});
+        for (int k = 0; k < 16; ++k) {
+            const float turn = glm::radians(30.0f + 149.0f * (float)k / 15.0f);
+            const glm::quat a = glm::normalize(glm::quat(u(rng), u(rng), u(rng), u(rng)));
+            const std::vector<glm::quat> rot = {a, a * glm::angleAxis(turn, glm::normalize(glm::vec3(0.3f, 1.0f, -0.2f)))};
+            big.AddClip({"b" + std::to_string(k), "", 0, 0, 0.0f}, std::vector<MotionClipStream::RootSample>(2),
+                        std::vector<glm::vec3>(2, glm::vec3(0.0f)), rot);
+        }
+        for (const float fps : {10.0f, 1.0f}) {
+            const float l = MotionDatabase::GlitchLimit(fps);
+            CHECK(l > MotionMath::kPi);
+            std::vector<char> f;
+            CHECK(MotionDatabase::ScanGlitches(big, l, f));
+            CHECK(f == GlitchScanReference(big, l));
+            CHECK(std::count(f.begin(), f.end(), (char)1) == 0);
+        }
+    }
+    // Cancelling stops it.
+    std::vector<char> none;
+    CHECK(!MotionDatabase::ScanGlitches(s, limit, none, [] { return false; }));
+
+    // The cooked bake: the Excluded bitset (the glitch part) identical, and the timings.
+    const std::string base = ProjectPaths::Resolve("assets/Animations/MotionMatching/Manny");
+    if (!std::filesystem::exists(base + ".mmanim") || !std::filesystem::exists(base + ".mmdb")) {
+        std::printf("[MotionMatching] glitch scan: Manny not baked, synthetic only\n");
+        return;
+    }
+    MotionDatabase db;
+    std::string err;
+    CHECK(db.Load(base, &err));
+    if (!db.Loaded()) return;
+    const float l = MotionDatabase::GlitchLimit(db.Fps());
+    const auto t0 = std::chrono::steady_clock::now();
+    const std::vector<char> oldBad = GlitchScanReference(db.Stream(), l);
+    const auto t1 = std::chrono::steady_clock::now();
+    std::vector<char> newBad;
+    CHECK(MotionDatabase::ScanGlitches(db.Stream(), l, newBad));
+    const auto t2 = std::chrono::steady_clock::now();
+    size_t diff = 0, marked = 0;
+    for (size_t i = 0; i < oldBad.size() && i < newBad.size(); ++i) {
+        diff += oldBad[i] != newBad[i];
+        marked += oldBad[i] != 0;
+    }
+    CHECK(oldBad.size() == newBad.size());
+    CHECK(diff == 0);
+    const double oldMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    const double newMs = std::chrono::duration<double, std::milli>(t2 - t1).count();
+    const double buildMs = (db.LoadSeconds() - db.ReadSeconds()) * 1000.0;
+    std::printf("[MotionMatching] glitch scan: %u frames x %zu bones, %zu marked, %zu differ; scan old %.1f ms, new %.1f ms; "
+                "Build %.1f ms (its scan %.1f ms; with the old scan ~%.1f ms)\n",
+                db.FrameCount(), db.Stream().Bones().size(), marked, diff, oldMs, newMs, buildMs, db.ScanSeconds() * 1000.0,
+                buildMs - db.ScanSeconds() * 1000.0 + oldMs);
+}
+
 // The cooked Manny database: the boxes agree with brute force and search fast. SKIPs without a bake.
 void TestCookedDatabaseSearch() {
     const char* name = "Motion matching: cooked database search";
@@ -1311,4 +1437,5 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: the facing model (simulation and character)", TestFacingModel});
     tests.push_back({"Motion matching: reselect history and the idle hold", TestReselectAndIdleHold});
     tests.push_back({"Motion matching: cooked database search", TestCookedDatabaseSearch});
+    tests.push_back({"Motion matching: glitch scan (|dot| test == angle test)", TestGlitchScanMatchesAngle});
 }
