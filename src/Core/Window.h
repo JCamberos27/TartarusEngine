@@ -21,11 +21,19 @@ public:
     int GetHeight() const { return m_Height; }
     GLFWwindow* Handle() const { return m_Handle; }
 
+    // Locked = the mouse is a look device (pointer hidden, held in the window, raw motion). In a hidden run
+    // (KeepHidden) only the state changes: the run's logic reads the same, but the person's mouse stays free.
     void SetCursorLocked(bool locked);
     bool IsCursorLocked() const { return m_CursorLocked; }
 
+    // A harness run's window (KeepsWindowHidden): never shown, never activated, never takes the mouse, so a
+    // test running in the background can't grab the desktop someone is using. Call once, before anything shows it.
+    void KeepHidden() { m_KeepHidden = true; }
+
     void SetTitle(const std::string& title);
     void Maximize();
+    // Un-maximizes / un-minimizes to the normal rect. A KeepHidden window stays hidden and inactive.
+    void Restore();
 
     // #174 - replaces the window/taskbar icon with a PNG at runtime, for a built game whose
     // product icon is not the one compiled into the exe's resources. Returns false (leaving
@@ -111,6 +119,7 @@ private:
     bool m_TimerPeriodRaised = false; // timeBeginPeriod(1) is active and needs its timeEndPeriod
     int m_Width, m_Height;
     bool m_CursorLocked = false;
+    bool m_KeepHidden = false;
     bool m_TitleBarDragActive = false; // updated per-frame by the editor; read by the Win32 WndProc
 
     int m_VSyncMode = 1;

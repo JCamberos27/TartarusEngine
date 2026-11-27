@@ -388,6 +388,9 @@ private:
         Input::SetIgnoreDevices(opt.smokeTestMode); // smoke / npc / perf: focus coming and going changes nothing
     }};
     Step step14{[&] {
+        // A hidden run never shows, takes the focus or grabs the mouse of whoever is using the desktop.
+        if (hiddenRun) window.KeepHidden();
+        Input::SetIgnoreMouseMotion(hiddenRun);
         window.SetCursorLocked(true);
     }};
     // Placement (last session's rect, or maximized) is applied once EditorSettings has
@@ -783,7 +786,7 @@ private:
             placement.Maximized = es.WindowMaximized;
             if (!playerMode && !window.ApplyPlacement(placement)) window.Maximize();
             if (opt.perfBenchMode && opt.perfResW > 0) {
-                glfwRestoreWindow(window.Handle());
+                window.Restore();
                 glfwSetWindowSize(window.Handle(), opt.perfResW, opt.perfResH);
             } else if (!opt.editorShotDir.empty() || opt.editorTestsMode) {
                 // TARTARUS_EDITOR_TEST_SIZE=WxH sizes the test window alone (e.g. 1044x788, CI's runner).
@@ -792,7 +795,7 @@ private:
                     int w = 0, h = 0;
                     if (sscanf_s(size.c_str(), "%dx%d", &w, &h) == 2 && w > 0 && h > 0) { testW = w; testH = h; }
                 }
-                glfwRestoreWindow(window.Handle());
+                window.Restore();
                 glfwSetWindowSize(window.Handle(), testW, testH);
                 // GLFW adds the OS frame to reach that client size, but the custom frame makes the
                 // whole window client (Window.cpp, WM_NCCALCSIZE), so the editor came out a frame
