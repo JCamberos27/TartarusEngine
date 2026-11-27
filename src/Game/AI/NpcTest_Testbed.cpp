@@ -423,14 +423,17 @@ struct NpcTest::TestbedRun {
         int AirFrames = 0, AirLocked = 0, AirFlagged = 0;
         int Jumps = 0;                       // the matcher's jumps in the leg
         int Searches0 = -1, ByInput0 = 0, ByEnd0 = 0, Searches = 0, ByInput = 0, ByEnd = 0; // the schedule over the leg
+        // Searches where nothing passed and the filter was relaxed (MotionMatcher): the reselect history, MinRunway, the
+        // style; and nothing even then. [0..3] over the leg, Relax0 the counts at its start.
+        int Relax0[4] = {-1, 0, 0, 0}, Relax[4] = {};
         std::vector<float> PoseStep;         // the output pose's worst bone turn per frame (deg), the steady part
         std::vector<float> TrajErr;          // per search: the matched frame's root 1 s on off the wanted one (m)
         float ViewOffMax = 0.0f;             // the body's heading off the view, at most (deg), the steady part
         std::vector<float> Bend, ClipBend, Pitch; // the torso's bend as drawn and as posed, the view's pitch (deg), steady
         std::vector<float> ArmAim, Arm;            // the upper arms off straight down: as the aim left them, as drawn (deg)
-        // Posture (BodyDebug, the steady part): the chest's pitch as the clip has it, after Spine Stability and drawn; its
-        // roll; the head's pitch against the chest; the higher hand over its shoulder (m); frames with a hand in the view,
-        // with a hand over its shoulder, with the feet crossed; the narrowest feet gap (m); the body's yaw rate (deg/s).
+        // Posture (BodyDebug, the steady part): the chest's pitch as the clip has it, before the aim ("Stable") and drawn;
+        // its roll; the head's pitch against the chest; the higher hand over its shoulder (m); frames with a hand in the
+        // view, with a hand over its shoulder, with the feet crossed; the narrowest feet gap (m); the body's yaw rate (deg/s).
         std::vector<float> ChestClip, ChestStable, Chest, ChestRoll, Head, HeadWorld, HandOver, HandEye, YawRate, Pelvis, PelvisClip;
         int HandPushFrames = 0; float HandPushMax = 0.0f; // KeepHandsFromEye: frames it moved a hand, the most (m)
         std::vector<float> TrunkClip[9], Trunk[9]; // BodyDebug's trunk angles (pelvis, chest, chest vs pelvis), clip and drawn
@@ -1279,6 +1282,11 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
     q.Searches = mm.Searches - q.Searches0;
     q.ByInput = mm.ForcedByInput - q.ByInput0;
     q.ByEnd = mm.ForcedByEnd - q.ByEnd0;
+    {
+        const int now[4] = {mm.RelaxedAvoid, mm.RelaxedRunway, mm.RelaxedStyle, mm.SearchFailed};
+        if (q.Relax0[0] < 0) std::copy(now, now + 4, q.Relax0);
+        for (int k = 0; k < 4; ++k) q.Relax[k] = now[k] - q.Relax0[k];
+    }
     // The first jumps of each leg, for the log: where to, why (a search forced by the input or by the frame running out).
     if (mm.Jumped && q.Jumps <= 4 && std::string(kTb[leg].Name).find("crouch") != std::string::npos) {
         auto row = [](const float* f) {
@@ -1487,9 +1495,10 @@ void NpcTest::MmPlayerChecks() {
     // limit, and they read fine): locked at the measured rate + ~10 %, so they still catch a regression. Others: 0.
     const auto lockedJumps = [](const char* leg) {
         const struct { const char* Leg; float Max; } kLocked[] = {
-            {"M jog", 3.0f},                // measured 2.7 jumps a second
-            {"M crouch strafe right", 2.8f}, // 2.5
-            {"M walk looking about", 7.5f},  // 6.8
+            // Each is debt: measured jumps a second, and what takes the lock off.
+            {"M jog", 3.0f},                 // 2.7: the jog gets a long looped straight
+            {"M crouch strafe right", 2.8f}, // 2.5: the crouch strafes are baked mirrored
+            {"M walk looking about", 7.5f},  // 6.8: turns can be stepped while moving (or per-gait search weights fix it)
         };
         for (const auto& l : kLocked)
             if (std::strcmp(l.Leg, leg) == 0) return l.Max;
@@ -1572,6 +1581,21 @@ void NpcTest::MmPlayerChecks() {
                     NpcTestCommon::Percentile(q.PoseStep, 0.5f), NpcTestCommon::Percentile(q.PoseStep, 0.99f), NpcTestCommon::Percentile(q.PoseStep, 1.0f), q.ViewOffMax, q.Searches, q.ByInput, q.ByEnd,
                     NpcTestCommon::Percentile(q.TrajErr, 0.5f));
     }
+    // Searches where nothing passed the filter and the matcher relaxed it: which stage landed, and none landing.
+    // Print-only; a normal course has none.
+    {
+        int legs = 0, total = 0;
+        for (int i = 0; i < kWatchLeg; ++i) {
+            if (!TbLegOn(i)) continue;
+            const TestbedRun::MmStats& q = R.Mm[i];
+            const int sum = q.Relax[0] + q.Relax[1] + q.Relax[2] + q.Relax[3];
+            total += sum;
+            if (sum == 0) continue;
+            ++legs;
+            std::printf("[MmRelax] %-26s avoid %d, runway %d, style %d, none %d\n", kTb[i].Name, q.Relax[0], q.Relax[1], q.Relax[2], q.Relax[3]);
+        }
+        std::printf("[MmRelax] relaxed searches: %d over %d legs\n", total, legs);
+    }
     for (const auto& pair : {std::make_pair("M walk looking about", TbPartOn('A') ? "A walk" : "M crouch walk"),
                              std::make_pair("M jog looking about", "M jog")}) {
         const TestbedRun::MmStats& q = R.Mm[legIndex(pair.first)];
@@ -1594,7 +1618,7 @@ void NpcTest::MmPlayerChecks() {
                     NpcTestCommon::Percentile(q.Bend, 1.0f), NpcTestCommon::Percentile(q.ArmAim, 0.5f), NpcTestCommon::Percentile(q.Arm, 0.5f), NpcTestCommon::Percentile(q.Arm, 1.0f));
     }
     // Looking 60 degrees down the torso bends no further than on the locomotion controller (measured 2026-11-17: legacy
-    // median 16-27, worst 27 degrees; motion matching before Spine Stability took it, running 46 and 61): the bend the view
+    // median 16-27, worst 27 degrees; motion matching without a stability stage, running 46 and 61): the bend the view
     // adds over the gait's own (as posed, before the aim) - the sprint keeps its lean on purpose (Phase 4, play test 2).
     for (const char* name : {"M look down standing", "M walk looking down", "M jog looking down"}) {
         const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
