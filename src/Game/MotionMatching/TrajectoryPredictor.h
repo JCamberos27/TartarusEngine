@@ -3,10 +3,10 @@
 // TrajectoryPredictor: where the character will be over the next second, for the motion matching query
 // (docs/MOTION_MATCHING_HANDOFF.md, Phase 3). Spring-based and collision-aware.
 //
-//   - Velocity follows the desired velocity through a critically damped spring (VelocityHalflife speeding up,
-//     VelocityDecelHalflife slowing down, picked each step), integrated exactly
+//   - Velocity follows the desired velocity through a critically damped spring (VelocityHalflife), integrated exactly
 //     (position, velocity and acceleration in closed form - Holden's "simple spring damper"), so the prediction and
-//     the simulated character agree at any time step.
+//     the simulated character agree at any time step. Or, for a host whose capsule has its own law (CapsuleLaw: the
+//     player, the NPCs), that law frame by frame, so the predicted path is the capsule's at every horizon.
 //   - Facing follows the desired yaw through a critically damped spring (FacingHalflife), the goal unwrapped to the
 //     nearest turn.
 //   - Collision: the path is swept in SubSteps per second through `Sweep` (the host's sphere or capsule cast); at a hit
@@ -23,10 +23,16 @@
 #include <functional>
 
 struct TrajectoryParams {
-    float VelocityHalflife = 0.20f; // s: speeding up (the goal's speed at least the velocity's)
-    // s: slowing down (the goal slower than the velocity: a stop, a slower move); <= 0: VelocityHalflife. Picked each step as
-    // the capsule picks its acceleration / deceleration time (PlayerApproachVelocity, the NPC director's pace).
-    float VelocityDecelHalflife = 0.0f;
+    float VelocityHalflife = 0.20f; // s
+    // The capsule's own law in place of the velocity spring: each frame (FrameDt) the velocity eases toward the goal as an
+    // exponential, time constant AccelTime when the goal is at least as fast as the velocity and DecelTime when it is slower
+    // (0: at once), then the position moves by the new velocity x the frame - PlayerApproachVelocity and the player's move,
+    // the NPC director's pace and its move. A velocity within SnapToGoal of the goal takes it (the player's arrive); a speed
+    // under SnapToStop is a stop (the director's).
+    bool CapsuleLaw = false;
+    float AccelTime = 0.0f, DecelTime = 0.0f; // s
+    float FrameDt = 1.0f / 60.0f;             // s: the host's frame
+    float SnapToGoal = 0.0f, SnapToStop = 0.0f; // m/s
     float FacingHalflife = 0.15f;   // s
     int SubSteps = 20;              // sweep steps per predicted second
 };
@@ -73,6 +79,8 @@ public:
     static float HalflifeToDamping(float halflife);
     // Velocity spring with position: x, v, a advanced by dt toward the goal velocity `goal`.
     static void SpringCharacter(glm::vec3& x, glm::vec3& v, glm::vec3& a, const glm::vec3& goal, float halflife, float dt);
+    // The capsule's law (TrajectoryParams::CapsuleLaw): x, v (and a, the last frame's change) advanced by dt, frame by frame.
+    static void CapsuleCharacter(glm::vec3& x, glm::vec3& v, glm::vec3& a, const glm::vec3& goal, const TrajectoryParams& p, float dt);
     // A critically damped spring on a scalar: x, v toward `goal`.
     static void SpringScalar(float& x, float& v, float goal, float halflife, float dt);
 

@@ -707,10 +707,14 @@ void FirstPersonBody::TickMotionMatching(World& world, const Player& player, con
     in.Gravity = player.Gravity;
     in.TurnThreshold = glm::radians(std::max(cfg.TurnThreshold, 0.0f));
     in.TurnEndAngle = glm::radians(std::max(cfg.TurnEndAngle, 0.0f));
-    // The capsule's approach (an exponential, time constant GroundAccelTime speeding up, GroundDecelTime slowing down:
-    // PlayerApproachVelocity) as the predictor's spring, the same halflife each way (0 = instant: the spring's quickest).
-    in.VelocityHalflife = player.GroundAccelTime > 0.0f ? player.GroundAccelTime * 0.6931f : 0.05f;
-    in.VelocityDecelHalflife = player.GroundDecelTime > 0.0f ? player.GroundDecelTime * 0.6931f : 0.05f;
+    // The predicted trajectory moves as the capsule does: PlayerApproachVelocity's ease (time constant GroundAccelTime
+    // speeding up, GroundDecelTime slowing down; in the air AirAccelTime both ways) and its arrive, then the move by the new
+    // velocity each frame. (A spring with the same halflife ends the same, but on the way a stop ran up to 5 cm ahead of
+    // the capsule's at 0.1 s, just where the stop's frames are chosen.)
+    in.CapsuleLaw = true;
+    in.AccelTime = player.Grounded ? player.GroundAccelTime : player.AirAccelTime;
+    in.DecelTime = player.Grounded ? player.GroundDecelTime : player.AirAccelTime;
+    in.SnapToGoal = 0.01f; // PlayerApproachVelocity's arrive
     const float radius = std::max(0.05f, player.Size.x * 0.5f);
     in.Sweep = [radius](const glm::vec3& from, const glm::vec3& to, glm::vec3& stopAt, glm::vec3& normal) {
         glm::vec3 d = to - from;

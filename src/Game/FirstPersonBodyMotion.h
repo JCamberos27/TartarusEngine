@@ -173,8 +173,12 @@ public:
         float JumpSpeed = 5.5f, Gravity = -18.0f;
         float TurnThreshold = 0.0f; // radians: standing still, the heading holds within this of the view (0: always faces it)
         float TurnEndAngle = 0.0f;  // radians: a turn on the spot ends this close to the view
-        float VelocityHalflife = 0.2f; // s: how the capsule's speed follows the wish speeding up (the predictor's spring)
-        float VelocityDecelHalflife = 0.0f; // s: ... slowing down (a stop); <= 0: VelocityHalflife
+        float VelocityHalflife = 0.2f; // s: how the capsule's speed follows the wish (the predictor's spring)
+        // The capsule's own law, when it has one (TrajectoryParams::CapsuleLaw): the predictor eases the velocity as the
+        // capsule does - time constants up to speed / down from it (s; 0 = at once), the arrive and stop snaps (m/s), each
+        // frame of Dt - in place of the spring. CapsuleLaw false: the spring.
+        bool CapsuleLaw = false;
+        float AccelTime = 0.0f, DecelTime = 0.0f, SnapToGoal = 0.0f, SnapToStop = 0.0f;
         TrajectoryPredictor::SweepFn Sweep; // the capsule's cast (empty: none)
         // A route to follow (Phase 5, the NPCs: the navmesh path's corners, world): moving, the trajectory is predicted along
         // it at the wish's speed, facing the travel (TrajectoryPredictor::PredictAlong), not straight down the wish. Empty: the wish.
