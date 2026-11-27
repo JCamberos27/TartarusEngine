@@ -6,6 +6,7 @@
 
 #include "../Game/MotionMatching/Inertialization.h"
 #include "../Game/MotionMatching/MotionDatabase.h"
+#include "../Game/MotionMatching/MotionDataReport.h"
 #include "../Game/MotionMatching/MotionGait.h"
 #include "../Game/MotionMatching/MotionMatcher.h"
 #include "../Game/MotionMatching/MotionMath.h"
@@ -27,6 +28,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -232,6 +234,93 @@ void TestSearchMatchesBruteForce() {
     CHECK(scoredBox * 2 < scoredBrute); // the boxes prune
 }
 
+// The frozen normalization (MotionDatabase.h): a feature set carrying its own database's derivation, frozen and round-tripped
+// through a .mmdb, builds the very same normalization (bit for bit) and every search gives the same frame at the same cost;
+// and a bake change (a take more) under a frozen normalization keeps the frozen scales, where a fresh derivation moves them.
+void TestFrozenNormalization() {
+    MotionDatabase derived;
+    CHECK(Adopt(derived, Build(StandardTakes())));
+    CHECK(!derived.NormalizationFrozen());
+    SynthDb src = Build(StandardTakes());
+    std::vector<float> mean, scale;
+    MotionDatabase::DeriveNormalization(src.Feat, mean, scale);
+    src.Feat.SetNormalization(mean, scale);
+    const std::string path = (std::filesystem::temp_directory_path() / "TartarusFrozenNorm.mmdb").string();
+    std::string err;
+    CHECK(src.Feat.Save(path, &err));
+    MotionFeatureSet loaded;
+    CHECK(loaded.Load(path, &err));
+    CHECK(loaded.HasNormalization());
+    MotionDatabase frozen;
+    CHECK(frozen.Adopt(std::move(src.Stream), std::move(loaded), &err));
+    CHECK(frozen.NormalizationFrozen() && frozen.FrameCount() == derived.FrameCount());
+    if (!frozen.Loaded() || !derived.Loaded()) return;
+    const auto bits = [](float v) {
+        std::uint32_t u;
+        std::memcpy(&u, &v, 4);
+        return u;
+    };
+    int differ = 0;
+    for (int d = 0; d < MotionDatabase::kDims; ++d)
+        differ += bits(frozen.Mean(d)) != bits(derived.Mean(d)) || bits(frozen.Scale(d)) != bits(derived.Scale(d)) ||
+                  bits(frozen.QA(d)) != bits(derived.QA(d)) || bits(frozen.QB(d)) != bits(derived.QB(d));
+    CHECK(differ == 0);
+    std::mt19937 rng(4321);
+    std::uniform_int_distribution<std::uint32_t> frame(0, derived.FrameCount() - 1);
+    std::normal_distribution<float> noise(0.0f, 0.3f);
+    int mismatches = 0;
+    for (int k = 0; k < 200; ++k) {
+        float raw[27], qa[27], qb[27];
+        const auto r = derived.Raw(frame(rng));
+        for (int d = 0; d < 27; ++d) raw[d] = r[(size_t)d] + noise(rng);
+        derived.Normalize(raw, qa);
+        frozen.Normalize(raw, qb);
+        MotionSearchParams p;
+        if (k % 3 == 1) p.Forbid |= MotionLabel::Crouch;
+        if (k % 3 == 2) p.DesiredGait = MotionLabel::Walk;
+        const std::int64_t current = k % 2 ? (std::int64_t)frame(rng) : -1;
+        const MotionSearchResult a = MotionSearch::Search(derived, qa, p, current);
+        const MotionSearchResult b = MotionSearch::Search(frozen, qb, p, current);
+        if (a.Frame != b.Frame || bits(a.Cost) != bits(b.Cost) || bits(a.CurrentCost) != bits(b.CurrentCost)) ++mismatches;
+        for (std::uint32_t f = (std::uint32_t)k; f < derived.FrameCount(); f += 997)
+            if (bits(MotionSearch::Cost(derived, qa, f, p)) != bits(MotionSearch::Cost(frozen, qb, f, p))) ++mismatches;
+    }
+    std::printf("[MotionMatching] frozen normalization: %d dims differ, %d search/cost mismatches\n", differ, mismatches);
+    CHECK(mismatches == 0);
+
+    // A take more: a fresh derivation moves the scales, the frozen one holds.
+    std::vector<TakeSpec> more = StandardTakes();
+    TakeSpec fast;
+    fast.Name = "Extra_Fast";
+    fast.Tags = "run";
+    fast.Speed = 4.5f;
+    fast.YawRate = 0.8f;
+    more.push_back(fast);
+    SynthDb grown = Build(more);
+    std::vector<float> grownMean, grownScale;
+    MotionDatabase::DeriveNormalization(grown.Feat, grownMean, grownScale);
+    grown.Feat.SetNormalization(mean, scale);
+    MotionDatabase held;
+    CHECK(Adopt(held, std::move(grown)));
+    if (!held.Loaded()) return;
+    bool same = true, moved = false;
+    for (int d = 0; d < MotionDatabase::kDims; ++d) {
+        same = same && held.Scale(d) == derived.Scale(d) && held.Mean(d) == derived.Mean(d);
+        moved = moved || grownScale[(size_t)d] != scale[(size_t)d];
+    }
+    CHECK(same && moved);
+    // A corrupt frozen scale is refused at load.
+    SynthDb bad = Build(StandardTakes());
+    std::vector<float> zero = scale;
+    zero[3] = 0.0f;
+    bad.Feat.SetNormalization(mean, zero);
+    CHECK(bad.Feat.Save(path, &err));
+    MotionFeatureSet refused;
+    CHECK(!refused.Load(path, &err));
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+}
+
 // The 16-bit features: the search on them finds the float features' best frame, or one whose float cost is within the
 // quantization's reach of it.
 void TestQuantizedSearch() {
@@ -396,13 +485,19 @@ void TestSearchSchedule() {
     int searches = 0;
     for (int i = 0; i < 600; ++i) searches += s.Tick(dt, v, 0.0f, 7, false) ? 1 : 0;
     CHECK(searches >= 99 && searches <= 101); // every 0.1 s (6 frames) for 10 s, plus the first
+    using C = MotionSearchSchedule::Cause;
+    CHECK(s.LastCause == C::Timer);
     CHECK(s.ForcedByInput == 0 && s.ForcedByEnd == 0);
     s.Tick(dt, v, 0.0f, 7, false);
     CHECK(s.Tick(dt, glm::vec3(0.0f, 0.0f, 2.0f), 0.0f, 7, false));          // the input changed: at once
+    CHECK(s.LastCause == C::Velocity);
     CHECK(!s.Tick(dt, glm::vec3(0.0f, 0.0f, 2.1f), 0.0f, 7, false));         // a small change: wait
     CHECK(s.Tick(dt, glm::vec3(0.0f, 0.0f, 2.1f), 0.6f, 7, false));          // facing 34 degrees: at once
+    CHECK(s.LastCause == C::Facing);
     CHECK(s.Tick(dt, glm::vec3(0.0f, 0.0f, 2.1f), 0.6f, 8, false));          // the filter changed
+    CHECK(s.LastCause == C::Filter);
     CHECK(s.Tick(dt, glm::vec3(0.0f, 0.0f, 2.1f), 0.6f, 8, true));           // out of frames
+    CHECK(s.LastCause == C::End);
     CHECK(s.ForcedByInput == 3 && s.ForcedByEnd == 1);
 }
 
@@ -646,6 +741,35 @@ void TestMatcherEndToEnd() {
     CHECK(m.Jumps >= 1);
     CHECK(leftFrames > 90 && straightFrames > 40);
     CHECK(worstStep < 0.25f); // the jumps are blended (the synthetic legs swing 0.4 rad each way)
+    // Every search and jump has one cause; the first update's is the start.
+    int bySearch = 0, byJump = 0;
+    for (int k = 0; k < MotionMatcher::CauseCount; ++k) {
+        bySearch += m.SearchesBy[(size_t)k];
+        byJump += m.JumpsBy[(size_t)k];
+    }
+    std::printf("[MotionMatching] matcher causes: start %d, timer %d, velocity %d, facing %d, take end/nosearch %d/%d; jumps on timer %d\n",
+                m.SearchesBy[MotionMatcher::CauseStart], m.SearchesBy[MotionMatcher::CauseTimer], m.SearchesBy[MotionMatcher::CauseVelocity],
+                m.SearchesBy[MotionMatcher::CauseFacing], m.SearchesBy[MotionMatcher::CauseTakeEnd], m.SearchesBy[MotionMatcher::CauseNoSearch],
+                m.JumpsBy[MotionMatcher::CauseTimer]);
+    CHECK(bySearch == m.Searches && byJump == m.Jumps);
+    CHECK(m.SearchesBy[MotionMatcher::CauseStart] == 1);
+    CHECK(m.SearchesBy[MotionMatcher::CauseTimer] > 0);
+    // Played into a take's NoSearch tail: that search's cause is "nosearch".
+    {
+        MotionMatcher e;
+        const auto& w = db.Clip(db.Stream().FindClip("Walk_Straight"));
+        std::uint32_t tail = w.First;
+        while (tail < w.First + w.Count && !(db.Flags(tail) & MotionLabel::NoSearch)) ++tail;
+        e.Reset(&db, tail - 2);
+        e.SearchParams.Forbid = MotionLabel::Airborne | MotionLabel::Crouch;
+        e.SearchParams.TransitionCost = 1e9f; // the start search keeps the playing frame (it passes); the tail's must leave it
+        MotionMatcher::Input still;
+        for (int i = 0; i < 4; ++i) e.Update(dt, still);
+        std::printf("[MotionMatching] matcher causes into a NoSearch tail: start %d, nosearch %d, searches %d\n",
+                    e.SearchesBy[MotionMatcher::CauseStart], e.SearchesBy[MotionMatcher::CauseNoSearch], e.Searches);
+        CHECK(e.SearchesBy[MotionMatcher::CauseStart] == 1 && e.SearchesBy[MotionMatcher::CauseNoSearch] >= 1);
+    }
+    CHECK(m.RelaxedAvoid + m.RelaxedRunway + m.RelaxedStyle + m.SearchFailed == 0); // a normal course never relaxes the filter
 }
 
 // Phase 4's hooks: the matcher's play rate (speed warping), its locked playback with a hold frame and a forced jump (the
@@ -812,6 +936,105 @@ void TestReselectAndIdleHold() {
     CHECK(timer == 1); // released: the timer again (0.1 s)
 }
 
+// When no frame passes the filter (the playing one included), the matcher relaxes it in stages - the reselect history,
+// then MinRunway, then the style - instead of staying on a frame its own filter refuses and searching again every update.
+// The flags (Excluded, NoSearch, airborne, crouch) always hold.
+void TestMatcherRelaxedSearch() {
+    MotionDatabase db;
+    CHECK(Adopt(db, Build(StandardTakes())));
+    const float dt = 1.0f / 60.0f;
+    // Walking straight on at 1 m/s (the root faces +x at yaw 0 here, as MotionMath::YawDir).
+    auto input = [&](float time) {
+        MotionMatcher::Input in;
+        in.Position = MotionMath::YawDir(0.0f) * time;
+        in.DesiredVelocity = MotionMath::YawDir(0.0f);
+        const auto ts = db.TrajSeconds();
+        for (int k = 0; k < 3; ++k) in.FuturePosition[(size_t)k] = in.Position + MotionMath::YawDir(0.0f) * ts[(size_t)k];
+        return in;
+    };
+    auto relaxed = [](const MotionMatcher& m) { return m.RelaxedAvoid + m.RelaxedRunway + m.RelaxedStyle + m.SearchFailed; };
+    const auto& walk = db.Clip(db.Stream().FindClip("Walk_Straight"));
+    const std::uint32_t walkEnd = walk.First + walk.Count - 10; // in the take's NoSearch tail: the playing frame fails
+    CHECK((db.Flags(walkEnd) & MotionLabel::NoSearch) != 0);
+
+    // (1) The reselect history: crouching, the only crouch take is the one playing, and a long history covers all of it.
+    // Played into its NoSearch tail, nothing passes until the history is dropped.
+    {
+        MotionMatcher m;
+        const auto& crouch = db.Clip(db.Stream().FindClip("Crouch_Walk"));
+        m.Reset(&db, crouch.First + 5);
+        m.ReselectSeconds = 100.0f;
+        m.SearchParams.Require = MotionLabel::Crouch;
+        m.SearchParams.Forbid = MotionLabel::Airborne;
+        m.SearchParams.DesiredGait = MotionLabel::Walk;
+        int legal = 0;
+        const int n = (int)crouch.Count + 60;
+        for (int i = 0; i < n; ++i) {
+            m.Update(dt, input((float)i * dt));
+            legal += MotionSearch::Passes(db.Flags(m.Frame()), m.SearchParams) ? 1 : 0;
+        }
+        std::printf("[MotionMatching] relaxed: crouch take played out with a 100 s history: %d searches, %d jumps, relaxed avoid %d "
+                    "runway %d style %d, none %d; %d / %d frames legal\n",
+                    m.Searches, m.Jumps, m.RelaxedAvoid, m.RelaxedRunway, m.RelaxedStyle, m.SearchFailed, legal, n);
+        CHECK(m.RelaxedAvoid >= 1 && m.RelaxedRunway == 0 && m.RelaxedStyle == 0 && m.SearchFailed == 0);
+        CHECK(legal == n);                         // never on a refused frame
+        CHECK(m.Searches <= n / 6 + 10);           // the timer's ~10 a second, not one every update
+        CHECK(db.ClipOf(m.Frame()) == db.Stream().FindClip("Crouch_Walk")); // still crouching
+    }
+    // One search from the NoSearch tail of the walk, under `p`; the matcher afterwards.
+    auto once = [&](const MotionSearchParams& p) {
+        MotionMatcher m;
+        m.Reset(&db, walkEnd);
+        m.SearchParams = p;
+        m.Update(dt, input(0.0f));
+        return m;
+    };
+    MotionSearchParams standing;
+    standing.Forbid = MotionLabel::Airborne | MotionLabel::Crouch;
+    standing.DesiredGait = MotionLabel::Walk;
+    // (2) MinRunway beyond any take: lands once it's dropped.
+    {
+        MotionSearchParams p = standing;
+        p.MinRunway = 100000;
+        const MotionMatcher m = once(p);
+        CHECK(m.RelaxedAvoid == 0 && m.RelaxedRunway == 1 && m.RelaxedStyle == 0 && m.SearchFailed == 0);
+        CHECK(m.Frame() != walkEnd && MotionSearch::Passes(db.Flags(m.Frame()), p));
+    }
+    // (2b) MinIdleRunway beyond any take: the same stage drops it, so the matcher still moves.
+    {
+        MotionSearchParams p = standing;
+        p.MinIdleRunway = 100000;
+        const MotionMatcher m = once(p);
+        CHECK(m.RelaxedAvoid == 0 && m.RelaxedRunway == 1 && m.RelaxedStyle == 0 && m.SearchFailed == 0);
+        CHECK(m.Frame() != walkEnd);
+    }
+    // (3) A style the database doesn't have (no sprint takes here): lands once the style is dropped, still standing and grounded.
+    {
+        MotionSearchParams p = standing;
+        p.DesiredStyle = MotionLabel::StyleSprint;
+        const MotionMatcher m = once(p);
+        CHECK(m.RelaxedAvoid == 0 && m.RelaxedRunway == 0 && m.RelaxedStyle == 1 && m.SearchFailed == 0);
+        CHECK(m.Frame() != walkEnd && MotionSearch::Passes(db.Flags(m.Frame()), p));
+    }
+    // (4) All three at once: the last stage counts.
+    {
+        MotionSearchParams p = standing;
+        p.MinRunway = 100000;
+        p.DesiredStyle = MotionLabel::StyleSprint;
+        const MotionMatcher m = once(p);
+        CHECK(m.RelaxedStyle == 1 && relaxed(m) == 1);
+        CHECK(MotionSearch::Passes(db.Flags(m.Frame()), p));
+    }
+    // (5) Flags no frame has (a crouched strafe: none here) are never relaxed: nothing lands, the frame stays.
+    {
+        MotionSearchParams p = standing;
+        p.Require = MotionLabel::Crouch | MotionLabel::Strafe;
+        p.Forbid = MotionLabel::Airborne;
+        const MotionMatcher m = once(p);
+        CHECK(m.SearchFailed == 1 && relaxed(m) == 1 && m.Frame() == walkEnd && m.Jumps == 0);
+    }
+}
+
 // The glitch scan before the |dot| test (MotionMath::QuatAngle per bone): what ScanGlitches must reproduce exactly.
 std::vector<char> GlitchScanReference(const MotionClipStream& s, float limit) {
     const std::uint32_t n = s.FrameCount();
@@ -935,6 +1158,123 @@ void TestGlitchScanMatchesAngle() {
                 "Build %.1f ms (its scan %.1f ms; with the old scan ~%.1f ms)\n",
                 db.FrameCount(), db.Stream().Bones().size(), marked, diff, oldMs, newMs, buildMs, db.ScanSeconds() * 1000.0,
                 buildMs - db.ScanSeconds() * 1000.0 + oldMs);
+}
+
+// The searchable-data report counts what MotionSearch::Passes and the runway filter let through, frame for frame.
+void CheckSearchableReport(const MotionDatabase& db, int runway) {
+    const MotionDataReport::Report r = MotionDataReport::Build(db, runway);
+    MotionSearchParams p;
+    p.MinRunway = runway;
+    std::uint32_t brute = 0;
+    for (std::uint32_t f = 0; f < db.FrameCount(); ++f)
+        if (MotionSearch::Passes(db.Flags(f), p) && db.Runway(f) >= runway) ++brute;
+    std::uint32_t cellFrames = 0, cellSearchable = 0, cellLost = 0;
+    for (const auto& style : r.Cells)
+        for (const auto& gait : style)
+            for (const MotionDataReport::Cell& c : gait) {
+                cellFrames += c.Frames;
+                cellSearchable += c.Searchable;
+                cellLost += c.Excluded + c.NoSearch + c.Airborne + c.ShortRunway;
+                CHECK(c.Searchable + c.Excluded + c.NoSearch + c.Airborne + c.ShortRunway == c.Frames);
+                CHECK(c.Longest <= c.Searchable);
+            }
+    std::printf("[MotionMatching] searchable data: %u of %u frames (%.1f of %.1f s), longest run in one cell %.2f s\n", r.Total.Searchable,
+                db.FrameCount(), r.Total.Searchable / db.Fps(), db.FrameCount() / db.Fps(), r.Total.Longest / db.Fps());
+    CHECK(cellFrames == db.FrameCount() && r.Total.Frames == db.FrameCount());
+    CHECK(cellSearchable == brute && r.Total.Searchable == brute);
+    CHECK(cellLost + brute == db.FrameCount());
+    CHECK(brute > 0 && brute < db.FrameCount());
+}
+
+// ... on the synthetic database (runs on CI, which has no cooked bake).
+void TestSearchableDataReportSynthetic() {
+    MotionDatabase db;
+    CHECK(Adopt(db, Build(StandardTakes())));
+    CheckSearchableReport(db, 8);
+    CheckSearchableReport(db, 0);
+}
+
+// The idle runway (frames until the gait leaves Idle) and the idle-take check, on takes made for it (runs on CI).
+void TestIdleRunway() {
+    std::vector<TakeSpec> takes;
+    takes.push_back({"Stand_Idle", "stand;idle", 400, 0.0f});
+    TakeSpec step{"Stand_Idle_Then_Step", "stand;idle", 500, 0.0f}; // an idle take that speeds up to a walk by its end
+    step.SpeedEnd = 1.3f;
+    takes.push_back(step);
+    MotionDatabase db;
+    CHECK(Adopt(db, Build(takes)));
+    const auto& still = db.Clip(0);
+    const auto& walking = db.Clip(1);
+    // A take that stays Idle: the runway counts down to its last frame.
+    bool countsDown = true;
+    for (std::uint32_t k = 0; k < still.Count; ++k)
+        countsDown = countsDown && db.Gait(still.First + k) == MotionLabel::Idle && db.IdleRunway(still.First + k) == still.Count - k;
+    CHECK(countsDown);
+    // A take that leaves Idle: its frames before the step count to the step, the others have none.
+    bool toStep = true, none = true;
+    std::uint32_t firstMoving = walking.Count;
+    for (std::uint32_t k = 0; k < walking.Count; ++k)
+        if (db.Gait(walking.First + k) != MotionLabel::Idle) { firstMoving = k; break; }
+    CHECK(firstMoving > 0 && firstMoving < walking.Count);
+    for (std::uint32_t k = 0; k < walking.Count; ++k) {
+        const std::uint16_t r = db.IdleRunway(walking.First + k);
+        if (db.Gait(walking.First + k) == MotionLabel::Idle) toStep = toStep && k < firstMoving && r == firstMoving - k;
+        else none = none && r == 0;
+    }
+    CHECK(toStep && none);
+    // The search honours it: with MinIdleRunway no candidate is a frame that steps off within that many frames.
+    MotionSearchParams p;
+    p.Require = MotionLabel::IdleTake;
+    p.MinIdleRunway = 150;
+    float q[27];
+    FrameQuery(db, walking.First + 10, q);
+    const MotionSearchResult a = MotionSearch::Search(db, q, p), b = MotionSearch::SearchBrute(db, q, p);
+    CHECK(a.Frame >= 0 && a.Frame == b.Frame && db.IdleRunway((std::uint32_t)a.Frame) >= 150);
+    // The idle-take check: no candidate of either take leads into motion; the take that never stays idle long has none left.
+    const auto checks = MotionDataReport::CheckIdleTakes(db, 8, 150);
+    CHECK(checks.size() == 2 && checks[0].Candidates > 0 && checks[0].Bad == 0 && checks[1].Bad == 0);
+}
+
+void TestSearchableDataReport() {
+    const char* name = "Motion matching: searchable data report";
+    const std::string base = ProjectPaths::Resolve("assets/Animations/MotionMatching/Manny");
+    if (!std::filesystem::exists(base + ".mmanim") || !std::filesystem::exists(base + ".mmdb"))
+        return Skip(name, "Manny.mmanim / .mmdb not baked");
+    MotionDatabase db;
+    std::string err;
+    CHECK(db.Load(base, &err));
+    if (!db.Loaded()) return;
+    const int runway = 8;
+    CheckSearchableReport(db, runway);
+    // The direction's sign: the takes named "...Left" / "...Right" travel to that side (+x of the root is the body's left).
+    {
+        int left[2] = {0, 0}, right[2] = {0, 0}; // [takes named Left / takes named Right]
+        for (const auto& clip : db.Stream().Clips()) {
+            const bool isLeft = clip.Name.find("Left") != std::string::npos, isRight = clip.Name.find("Right") != std::string::npos;
+            if (isLeft == isRight) continue;
+            for (std::uint32_t k = 0; k < clip.Count; ++k) {
+                const int d = MotionDataReport::DirOf(db, clip.First + k);
+                if (d == MotionDataReport::DirLeft) ++left[isRight];
+                if (d == MotionDataReport::DirRight) ++right[isRight];
+            }
+        }
+        std::printf("[MotionMatching] direction sign: Left-named takes: %d left / %d right frames; Right-named: %d left / %d right\n", left[0], right[0], left[1], right[1]);
+        CHECK(left[0] > right[0] && right[1] > left[1]);
+    }
+    const MotionDataReport::IdleReport idle = MotionDataReport::BuildIdle(db, runway, 180);
+    CHECK(idle.WithRunway <= idle.Searchable && idle.Searchable <= idle.Idle && idle.Idle <= idle.TakeFrames);
+    // Every idle take stays standing wherever the idle search can pick it.
+    const auto checks = MotionDataReport::CheckIdleTakes(db, FirstPersonBodyMotion::Settings{}.MinRunway, FirstPersonBodyMotion::Settings{}.IdleRunway);
+    int failed = 0;
+    for (const auto& c : checks) {
+        std::printf("[MotionMatching] idle take %-40s %6u frames, %6u candidates, %6u lead into motion%s\n", c.Name.c_str(), c.Frames, c.Candidates, c.Bad,
+                    c.Failed() ? "  FAILS" : "");
+        if (c.Bad) std::printf("[MotionMatching]     bad candidates at frames %u-%u (%.1f-%.1f s), the first runs into the %s gait\n", c.FirstBad, c.LastBad,
+                               c.FirstBad / db.Fps(), c.LastBad / db.Fps(), MotionLabel::GaitName(c.LeadsInto));
+        failed += c.Failed();
+    }
+    CHECK(!checks.empty());
+    CHECK(failed == 0);
 }
 
 // The cooked Manny database: the boxes agree with brute force and search fast. SKIPs without a bake.
@@ -1489,6 +1829,7 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: shared database prefetch ahead of Play", TestSharedDatabasePrefetch});
     tests.push_back({"Motion matching: shared database prefetch measured on the driver rig", TestSharedDatabasePrefetchRig});
     tests.push_back({"Motion matching: database build and boxes", TestDatabaseBuild});
+    tests.push_back({"Motion matching: frozen normalization", TestFrozenNormalization});
     tests.push_back({"Motion matching: search matches brute force", TestSearchMatchesBruteForce});
     tests.push_back({"Motion matching: search filters and ties", TestSearchFiltersAndTies});
     tests.push_back({"Motion matching: 16-bit features against float", TestQuantizedSearch});
@@ -1507,6 +1848,10 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: dead blend across a frame-time change", TestDeadBlendFrameTime});
     tests.push_back({"Motion matching: the facing model (simulation and character)", TestFacingModel});
     tests.push_back({"Motion matching: reselect history and the idle hold", TestReselectAndIdleHold});
+    tests.push_back({"Motion matching: a filter nothing passes is relaxed in stages", TestMatcherRelaxedSearch});
     tests.push_back({"Motion matching: cooked database search", TestCookedDatabaseSearch});
+    tests.push_back({"Motion matching: searchable data report (synthetic)", TestSearchableDataReportSynthetic});
+    tests.push_back({"Motion matching: idle runway", TestIdleRunway});
+    tests.push_back({"Motion matching: searchable data report", TestSearchableDataReport});
     tests.push_back({"Motion matching: glitch scan (|dot| test == angle test)", TestGlitchScanMatchesAngle});
 }

@@ -40,6 +40,7 @@ struct MotionSearchParams {
     float TransitionCost = 0.0f; // added to every candidate but the frame playing
     int IgnoreNear = 20;         // frames of the playing clip within this many of the playing frame are not candidates
     int MinRunway = 0;           // candidates (not the playing frame) need this many frames under the same labels (Runway)
+    int MinIdleRunway = 0;       // ... and this many frames of the Idle gait from there on (IdleRunway; the standing idle search)
     std::uint8_t Require = 0;
     std::uint8_t Forbid = MotionLabel::Airborne;
     int DesiredGait = -1; // -1: no gait cost
@@ -95,6 +96,9 @@ struct MotionSearchSchedule {
     void Reset() { m_First = true; }
     float SinceLast() const { return m_Timer; }
     int Searches = 0, ForcedByInput = 0, ForcedByEnd = 0;
+    // Why the last search that Tick allowed was due. The first input change it sees wins: velocity, then facing, then the filter.
+    enum class Cause : std::uint8_t { None, First, Timer, End, Velocity, Facing, Filter };
+    Cause LastCause = Cause::None;
 
 private:
     bool m_First = true;

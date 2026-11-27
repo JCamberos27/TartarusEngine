@@ -13,9 +13,13 @@ Crouch_Loop_Take001,,Crouch,Crouch_Loop,1,105.433,6326,1,1.000,104.433,0,crouch;
 Crouch_Repositions_Star_Take001,,Crouch,Crouch_Repositions_Star,1,52.833,3170,1,1.000,51.833,0,crouch;reposition,
 Crouch_Snakes_Take001,,Crouch,Crouch_Snakes,1,78.183,4691,1,1.000,77.183,0,crouch;snakes;forward,
 Crouch_Strafe_Diamond_Take001,,Crouch,Crouch_Strafe_Diamond,1,47.600,2856,1,1.000,46.600,0,crouch;strafe,
+Crouch_Strafe_Diamond_Take001_Mirror,Crouch_Strafe_Diamond_Take001,Crouch,Crouch_Strafe_Diamond,1,47.600,2856,1,1.000,46.600,0,crouch;strafe;mirrored,mirrored: the crouch strafes matched poorly to the right
 Crouch_Strafe_Square_Take001,,Crouch,Crouch_Strafe_Square,1,43.467,2608,1,1.000,42.467,0,crouch;strafe,
+Crouch_Strafe_Square_Take001_Mirror,Crouch_Strafe_Square_Take001,Crouch,Crouch_Strafe_Square,1,43.467,2608,1,1.000,42.467,0,crouch;strafe;mirrored,mirrored: the crouch strafes matched poorly to the right
 Crouch_Strafe_Star_Take001,,Crouch,Crouch_Strafe_Star,1,30.200,1812,1,1.000,29.200,0,crouch;strafe,info sheet: "Pattern incomplete"
+Crouch_Strafe_Star_Take001_Mirror,Crouch_Strafe_Star_Take001,Crouch,Crouch_Strafe_Star,1,30.200,1812,1,1.000,29.200,0,crouch;strafe;mirrored,mirrored: the crouch strafes matched poorly to the right
 Crouch_Strafe_Star_Take002,,Crouch,Crouch_Strafe_Star,2,90.417,5425,1,1.000,89.417,0,crouch;strafe,
+Crouch_Strafe_Star_Take002_Mirror,Crouch_Strafe_Star_Take002,Crouch,Crouch_Strafe_Star,2,90.417,5425,1,1.000,89.417,0,crouch;strafe;mirrored,mirrored: the crouch strafes matched poorly to the right
 Crouch_to_CrouchWalk_Interrupted_360_Take001,,Crouch,Crouch_to_CrouchWalk_Interrupted_360,1,88.183,5291,1,1.000,87.183,0,crouch;start;interrupted,
 Crouch_to_CrouchWalk_Interrupted_360_Take002,,Crouch,Crouch_to_CrouchWalk_Interrupted_360,2,50.433,3026,1,1.000,49.433,0,crouch;start;interrupted,
 Jog_Card_noStops_Take001,,Jog,Jog_Card_noStops,1,33.267,1996,1,1.000,32.267,0,jog;card,

@@ -30,10 +30,13 @@
 // Storage: each feature as a 16-bit integer, x = q * qScale[d] + qOffset[d] (the dimension's range over the database in
 // 65534 steps: under 0.0001 of its standard deviation), on disk and in memory - MotionDatabase searches them as they are.
 //
-// File layout (little endian), version 2:
+// File layout (little endian), version 3:
 //   char[4] "TMMD", u32 version, u32 frames, u32 dims, u32 clips, u32 trajFrames[3],
-//   dims x { str name, f32 mean, f32 std, f32 qScale, f32 qOffset }, clips x { str name, u32 first, u32 count },
+//   dims x { str name, f32 mean, f32 std, f32 qScale, f32 qOffset },
+//   u8 frozen, then when 1: dims x { f32 normMean, f32 normScale } (the frozen normalization, SetNormalization),
+//   clips x { str name, u32 first, u32 count },
 //   frames x dims x i16, frames x u8 gait, frames x u8 flags, frames x u8 style
+// Version 2 (no frozen block) still loads: MotionDatabase then derives the normalization from mean and std.
 
 #include <glm/glm.hpp>
 
@@ -106,7 +109,7 @@ struct MotionClipFrames {
 
 class MotionFeatureSet {
 public:
-    static constexpr std::uint32_t kVersion = 2;
+    static constexpr std::uint32_t kVersion = 3;
     static constexpr int kDims = 27;
     static const char* const* Names(); // kDims names
 
@@ -141,6 +144,17 @@ public:
     const std::vector<Clip>& Clips() const { return m_Clips; }
     const std::vector<float>& Mean() const { return m_Mean; }
     const std::vector<float>& Std() const { return m_Std; }
+    // The normalization MotionDatabase searches with, frozen: per dimension the mean subtracted and the scale divided by
+    // (kDims each; the bake writes Manny.mmconfig's "featureNorm"). Frozen, a bake change no longer moves every cost through
+    // the database-wide statistics (Mean/Std above stay this bake's own, for the bake's report). Unset (a version 2 file,
+    // the tests' synthetic sets): MotionDatabase derives it from Mean/Std.
+    void SetNormalization(std::vector<float> mean, std::vector<float> scale) {
+        m_NormMean = std::move(mean);
+        m_NormScale = std::move(scale);
+    }
+    bool HasNormalization() const { return m_NormMean.size() == (size_t)kDims && m_NormScale.size() == (size_t)kDims; }
+    const std::vector<float>& NormMean() const { return m_NormMean; }
+    const std::vector<float>& NormScale() const { return m_NormScale; }
     size_t Bytes() const {
         return m_Data.size() * sizeof(float) + m_Q.size() * sizeof(std::int16_t) + m_Gait.size() + m_Flags.size() + m_Style.size();
     }
@@ -149,6 +163,7 @@ public:
 private:
     std::vector<Clip> m_Clips;
     std::vector<float> m_Data, m_Mean, m_Std, m_QScale, m_QOffset, m_QError;
+    std::vector<float> m_NormMean, m_NormScale; // the frozen normalization (empty: not frozen)
     std::vector<std::int16_t> m_Q;
     std::vector<std::uint8_t> m_Gait, m_Flags, m_Style;
 };

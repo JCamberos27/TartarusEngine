@@ -35,5 +35,14 @@
     "styleWindowSeconds": 1.0
   },
   "budgets": { "poseMB": 200, "featureMB": 40, "loadSeconds": 2.0 },
-  "validation": { "facingP95Deg": 20, "yawJitter": 300, "rigLengthPct": 2.0, "reconstructCm": 1.0 }
+  "validation": { "facingP95Deg": 20, "yawJitter": 300, "rigLengthPct": 2.0, "reconstructCm": 1.0 },
+  "featureNorm": {
+    "_doc": "The search's normalization, frozen (MotionDatabase.h): written once from the 2026-11-18 bake, changed only on purpose. The bake reports its own derivation against it.",
+    "groupScale": { "footPos": 0.110309906, "footVel": 0.788174152, "pelvisVel": 0.523941576, "trajPos": 0.421040565, "trajDir": 0.322142631 },
+    "mean": [0.104753748, 0.128082529, -0.0284092296, -0.0871080309, 0.12942338, -0.0477823094,
+      0.0114184972, 0.000229121404, 0.481724292, -0.00532392086, 0.000373788382, 0.48152101,
+      0.00201841677, -0.000624023785, 0.451285243, 0.00140192499, 0.149845213, 0.004172849,
+      0.286955863, 0.00838008896, 0.397280961, 0.00530418102, 0.960611463, 0.0106353899,
+      0.871345162, 0.0164461508, 0.774115682]
+  }
 }

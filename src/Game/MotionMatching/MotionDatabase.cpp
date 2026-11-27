@@ -113,15 +113,13 @@ bool MotionDatabase::Build(std::string* error) {
         if (idle)
             for (std::uint32_t k = 0; k < clip.Count; ++k) m_Feat.AddFlags(clip.First + k, MotionLabel::IdleTake);
     }
-    // Per-group scale: the mean of the group's standard deviations.
-    m_Mean.assign(m_Feat.Mean().begin(), m_Feat.Mean().end());
-    m_Scale.assign(kDims, 1.0f);
-    for (int g = 0; g < MotionFeature::GroupCount; ++g) {
-        const int a = MotionFeature::kGroupFirst[g], b = MotionFeature::kGroupFirst[g + 1];
-        float s = 0.0f;
-        for (int d = a; d < b; ++d) s += m_Feat.Std()[(size_t)d];
-        s = std::max(1e-4f, s / (float)(b - a));
-        for (int d = a; d < b; ++d) m_Scale[(size_t)d] = s;
+    // The normalization: the frozen one the file carries, else this bake's own (per-group scale: the mean of the group's
+    // standard deviations).
+    if (m_Feat.HasNormalization()) {
+        m_Mean = m_Feat.NormMean();
+        m_Scale = m_Feat.NormScale();
+    } else {
+        DeriveNormalization(m_Feat, m_Mean, m_Scale);
     }
     m_QA.assign(kDims, 1.0f);
     m_QB.assign(kDims, 0.0f);
@@ -134,6 +132,20 @@ bool MotionDatabase::Build(std::string* error) {
     m_Frames = n;
     Index();
     return true;
+}
+
+void MotionDatabase::DeriveNormalization(const MotionFeatureSet& features, std::vector<float>& mean, std::vector<float>& scale) {
+    mean.assign(features.Mean().begin(), features.Mean().end());
+    mean.resize(kDims, 0.0f);
+    scale.assign(kDims, 1.0f);
+    if (features.Std().size() != (size_t)kDims) return;
+    for (int g = 0; g < MotionFeature::GroupCount; ++g) {
+        const int a = MotionFeature::kGroupFirst[g], b = MotionFeature::kGroupFirst[g + 1];
+        float s = 0.0f;
+        for (int d = a; d < b; ++d) s += features.Std()[(size_t)d];
+        s = std::max(1e-4f, s / (float)(b - a));
+        for (int d = a; d < b; ++d) scale[(size_t)d] = s;
+    }
 }
 
 float MotionDatabase::GlitchLimit(float fps) {
@@ -178,11 +190,19 @@ void MotionDatabase::Index() {
     const std::uint32_t n = m_Frames;
     // The runway: back from each take's end, how long the filterable labels stay as they are.
     m_Runway.assign(n, 1);
+    m_IdleRunway.assign(n, 0);
     for (const auto& clip : m_Stream.Clips())
         for (std::uint32_t k = clip.Count; k-- > 1;) {
             const std::uint32_t i = clip.First + k - 1;
             if ((m_Feat.Flags(i) & kRunwayMask) == (m_Feat.Flags(i + 1) & kRunwayMask))
                 m_Runway[i] = (std::uint16_t)std::min<int>(65535, m_Runway[i + 1] + 1);
+        }
+    // The idle runway: back from each take's end, how long the gait stays Idle.
+    for (const auto& clip : m_Stream.Clips())
+        for (std::uint32_t k = clip.Count; k-- > 0;) {
+            const std::uint32_t i = clip.First + k;
+            if (Gait(i) != MotionLabel::Idle) continue;
+            m_IdleRunway[i] = (std::uint16_t)(k + 1 < clip.Count ? std::min<int>(65535, m_IdleRunway[i + 1] + 1) : 1);
         }
 
 
@@ -287,5 +307,5 @@ std::array<float, MotionDatabase::kDims> MotionDatabase::Normalized(std::uint32_
 
 size_t MotionDatabase::FeatureBytes() const {
     return m_Feat.Bytes() + (m_Small.size() + m_Large.size()) * sizeof(Box) + m_ClipOf.size() * sizeof(int) +
-           m_Runway.size() * sizeof(std::uint16_t);
+           (m_Runway.size() + m_IdleRunway.size()) * sizeof(std::uint16_t);
 }

@@ -271,9 +271,11 @@ struct Snapshot {
     bool Crouch = false, Sprint = false, Airborne = false, Locked = false, Still = false, Turning = false;
     bool Searched = false, Jumped = false;
     int Searches = 0, Jumps = 0, ForcedByInput = 0, ForcedByEnd = 0;
+    std::array<int, MotionMatcher::CauseCount> SearchesBy{}, JumpsBy{}; // MotionMatcher's, by cause (since Start)
     bool Idle = false;   // MotionMatcher::Idle this update
     int IdleRefits = 0;  // idle searches because the continuation stopped fitting (since Start)
     int ForcedByExcluded = 0; // searches forced because the playing frame ran into an excluded one (since Start)
+    int RelaxedAvoid = 0, RelaxedRunway = 0, RelaxedStyle = 0, SearchFailed = 0; // MotionMatcher's relaxed searches (since Start)
     int IdleGestureCuts = -1; // SharedMotionDatabase::IdleGestureCuts
     float LastCost = 0.0f, PlayingCost = 0.0f; // the last search: the winner's cost, the playing frame's (-1: it didn't pass)
     double SearchMsAvg = 0.0, SearchMsMax = 0.0;
