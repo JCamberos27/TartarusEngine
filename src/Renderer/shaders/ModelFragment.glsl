@@ -153,6 +153,11 @@ vec3 BloodSplatCover() {
 #ifndef DIAG_STRIP
 #define DIAG_STRIP 0
 #endif
+// 128 local shadows off, 256 local loop without the BRDF, 512 grunge only, 1024 decals only, 2048 wetness only,
+// 4096 probe loop only, 8192 SampleGI only, 16384 count looped/dropped local lights per pixel (SceneViewPass reads it).
+#if (DIAG_STRIP & 16384) != 0
+layout(std430, binding = 39) coherent buffer DiagCounts { uint uDiagCounts[]; }; // px, looped, range, box, cone, shadow, max
+#endif
 #if (DIAG_STRIP & 32) != 0
 #define texture(s, c) textureLod(s, c, 6.0)
 #endif
@@ -330,14 +335,14 @@ void main() {
     uint cluster = clustered ? clusterIndex() : 0u;
     uint grungeSub;
     SubstrateSample grungeSS;
-#if defined(_ENGINE_NO_GRUNGE) || (DIAG_STRIP & 8) != 0 // ShaderVariant.h: Grunge Strength 0, where ApplyGrunge returns at once
+#if defined(_ENGINE_NO_GRUNGE) || (DIAG_STRIP & (8 | 512)) != 0 // ShaderVariant.h: Grunge Strength 0, where ApplyGrunge returns at once
     grungeSub = 0u; // nothing cached: ApplyDecals samples its own substrate, but Mesa warns on an uninitialised copy
     grungeSS = SubstrateSample(vec3(0.0), vec3(0.0, 0.0, 1.0), 0.0, 0.0, 0.0, vec3(0.0), vec3(0.0), vec3(0.0));
 #else
     ApplyGrunge(albedo, N, roughness, metallic, ao, geoN, grungeSub, grungeSS);
 #endif
     vec3 decalEmissive = vec3(0.0);
-#if !defined(_ENGINE_NO_DECALS) && (DIAG_STRIP & 8) == 0 // ShaderVariant.h: no clustered decal in this view
+#if !defined(_ENGINE_NO_DECALS) && (DIAG_STRIP & (8 | 1024)) == 0 // ShaderVariant.h: no clustered decal in this view
     ApplyDecals(albedo, N, roughness, metallic, ao, decalEmissive, geoN, cluster, grungeSub, grungeSS);
 #endif
     if (uBloodSplatCount > 0) {
@@ -351,7 +356,7 @@ void main() {
         }
     }
 
-    if ((DIAG_STRIP & 8) == 0) ApplyWetness(albedo, N, roughness, metallic, geoN, ao); // after decals and blood: the rain is on top of them
+    if ((DIAG_STRIP & (8 | 2048)) == 0) ApplyWetness(albedo, N, roughness, metallic, geoN, ao); // after decals and blood: the rain is on top of them
 
     // --- Debug draw modes (#236 R2; 4-7 the F7 light views) ---
 #ifndef _ENGINE_NO_DEBUG_VIEW // ShaderVariant.h: the view draws no debug mode
@@ -498,12 +503,16 @@ void main() {
         lightCount = uClusterRange[cluster].count;
     }
     if ((DIAG_STRIP & 2) != 0) lightCount = 0u;
+    uint diagN[5] = uint[5](0u, 0u, 0u, 0u, 0u); // looped, range, box, cone/atten, shadow
     for (uint j = 0u; j < lightCount; ++j) {
         uint li = clustered ? uClusterLightIndices[lightOffset + j] : j;
         if (!clustered && int(uLights[li].PositionType.w) == 0) continue; // the sun is shaded above
         if (!LightAffects(li)) continue; // #203
         vec3 L, radiance;
-        if (!PointSpotLight(li, N, geoN, L, radiance)) continue;
+        diagN[0]++;
+        gDiagReject = 0u;
+        if (!PointSpotLight(li, N, geoN, L, radiance)) { diagN[min(gDiagReject, 4u)]++; continue; }
+        if ((DIAG_STRIP & 256) != 0) { Lo += radiance * 1e-20; continue; } // loop + falloff + shadow, no BRDF
 #ifdef _ANISO
         Lo += ShadeLightAniso(N, V, L, radiance, albedo, F0, metallic, roughness, anisoT, anisoB);
 #else
@@ -519,6 +528,14 @@ void main() {
         LoSSS += SubsurfaceTransmission(N, L, radiance, sssThickness);
 #endif
     }
+#if (DIAG_STRIP & 16384) != 0
+    if (!gl_HelperInvocation) {
+        atomicAdd(uDiagCounts[0], 1u);
+        atomicAdd(uDiagCounts[1], diagN[0]); atomicAdd(uDiagCounts[2], diagN[1]); atomicAdd(uDiagCounts[3], diagN[2]);
+        atomicAdd(uDiagCounts[4], diagN[3]); atomicAdd(uDiagCounts[5], diagN[4]);
+        atomicMax(uDiagCounts[6], diagN[0]);
+    }
+#endif
 #endif
 
 
@@ -563,14 +580,14 @@ void main() {
         // the sky specular cube with the corrected direction, then blend by weight.
         // Zero probes → uProbeCount == 0 → falls through to the sky sample above.
         // This draw's probes: the uniforms, or the copy's own (G-MB slot state, the same values).
-        int probeCount = (DIAG_STRIP & 4) != 0 ? 0 : uProbeCount;
+        int probeCount = (DIAG_STRIP & (4 | 4096)) != 0 ? 0 : uProbeCount;
         vec3 probeCenter[2] = vec3[2](uProbeCenter[0], uProbeCenter[1]);
         vec3 probeHalfSize[2] = vec3[2](uProbeHalfSize[0], uProbeHalfSize[1]);
         float probeBlend[2] = float[2](uProbeBlend[0], uProbeBlend[1]);
         int probeLayer[2] = int[2](uProbeLayer[0], uProbeLayer[1]);
 #ifndef _NO_SLOT_STATE
         if (uSlotState == 1) {
-            probeCount = (DIAG_STRIP & 4) != 0 ? 0 : int(uSlotStates[vSlot].Head.z);
+            probeCount = (DIAG_STRIP & (4 | 4096)) != 0 ? 0 : int(uSlotStates[vSlot].Head.z);
             for (int pj = 0; pj < 2; ++pj) {
                 vec4 a = uSlotStates[vSlot].Probe[2 * pj], b = uSlotStates[vSlot].Probe[2 * pj + 1];
                 probeCenter[pj] = a.xyz;
@@ -638,7 +655,7 @@ void main() {
         {
             float giFade, giSky;
             vec3 gi = vec3(0.0); giFade = 0.0; giSky = 0.0;
-            if ((DIAG_STRIP & 4) == 0) gi = SampleGI(vWorldPos, N, giFade, giSky);
+            if ((DIAG_STRIP & (4 | 8192)) == 0) gi = SampleGI(vWorldPos, N, giFade, giSky);
             if (giFade > 0.0) irradiance = mix(irradiance, skyIrradiance * (1.0 - giSky) + gi, giFade);
 #ifndef _ENGINE_NO_DEBUG_VIEW
             if (uDebugView == 8) { // GI only: the baked bounce on flat grey, with its SSAO

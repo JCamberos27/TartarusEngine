@@ -1074,6 +1074,17 @@ void SceneRenderer::ViewPass::DrawOpaque() {
         return s + buf;
     };
     const auto opcIntern = [&](const std::string& s) { return opcNames.insert(s).first->c_str(); };
+    // TARTARUS_OPC=8 (+ TARTARUS_OPC_STRIP 16384): ModelFragment counts its local-light loop into binding 39 per pass.
+    static GLuint opcCountBuf = 0;
+    static std::uint64_t opcCountCalls = 0;
+    if (opc & 8) {
+        if (!opcCountBuf) {
+            glCreateBuffers(1, &opcCountBuf);
+            glNamedBufferStorage(opcCountBuf, 8 * sizeof(GLuint), nullptr, GL_DYNAMIC_STORAGE_BIT);
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 39, opcCountBuf);
+        }
+        glClearNamedBufferSubData(opcCountBuf, GL_R32UI, 0, 8 * sizeof(GLuint), GL_RED_INTEGER, GL_UNSIGNED_INT, nullptr);
+    }
     if (opc & 1) {
         ++opcFrame;
         if (opcFrame % 250 == 0) {
@@ -1165,6 +1176,18 @@ void SceneRenderer::ViewPass::DrawOpaque() {
         countGroup(grp);
     }
     opcScope.reset(); // DIAG
+    if ((opc & 8) && ++opcCountCalls % 250 == 0) {
+        glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+        GLuint c[8] = {};
+        glGetNamedBufferSubData(opcCountBuf, 0, 8 * sizeof(GLuint), c);
+        GLint vp[4] = {};
+        glGetIntegerv(GL_VIEWPORT, vp);
+        const double px = c[0] ? (double)c[0] : 1.0;
+        std::printf("[OPCL] call %llu vp %dx%d: px=%u looped/px=%.2f range/px=%.2f box/px=%.2f cone/px=%.2f shadow/px=%.2f "
+                    "lit/px=%.2f max=%u\n", (unsigned long long)opcCountCalls, vp[2], vp[3], c[0], c[1] / px, c[2] / px,
+                    c[3] / px, c[4] / px, c[5] / px, (c[1] - c[2] - c[3] - c[4] - c[5]) / px, c[6]);
+        std::fflush(stdout);
+    }
     // The programs stay shared: a later draw that skips the per-draw hook must not read slot state. A uniform write
     // goes to the bound program, so each is bound for it, and the one bound before comes back.
     if (!m_SlotStatePrograms.empty()) {

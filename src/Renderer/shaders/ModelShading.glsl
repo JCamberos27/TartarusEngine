@@ -746,6 +746,11 @@ vec3 ShadeLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, vec3 F0,
 // range / outside the cone / shadowed); otherwise L and the radiance that reaches here. Every lobe a
 // material shades (base, clear coat, sheen, subsurface) takes these, so the falloff and the shadow
 // fetch happen once per light, not once per lobe.
+// DIAG ONLY (W2 Opaque sub-split, never merged): 128 local shadows off; 16384 counts why a looped light is dropped.
+#ifndef DIAG_STRIP
+#define DIAG_STRIP 0
+#endif
+uint gDiagReject = 0u; // 1 range, 2 box, 3 cone/atten, 4 shadow
 bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance) {
     Light lt = uLights[i];
     int type = int(lt.PositionType.w);
@@ -755,9 +760,9 @@ bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance) {
     vec3 toLight = lt.PositionType.xyz - vWorldPos;
     float range = lt.ColorRange.a;
     float dist2 = dot(toLight, toLight);
-    if (dist2 > range * range) return false; // out of reach: before the square root
+    if (dist2 > range * range) { gDiagReject = 1u; return false; } // out of reach: before the square root
     float boxFade = LightBoxFade(i, vWorldPos); // outside its room: before the shadow fetch
-    if (boxFade <= 0.0) return false;
+    if (boxFade <= 0.0) { gDiagReject = 2u; return false; }
     float dist = sqrt(dist2);
     L = toLight / max(dist, 1e-4);
 
@@ -765,18 +770,18 @@ bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance) {
 
     if (type == 2) {
         float cone = SpotConeAtten(i, L);
-        if (cone <= 0.0) return false;
+        if (cone <= 0.0) { gDiagReject = 3u; return false; }
         atten *= cone;
         // Early-out before the shadow-map sample, not just before shading (#191) — a fragment at
         // the far edge of the cone/range falloff is already at atten==0 here, so this skips a
         // full shadow-array texture fetch that would just get multiplied away.
-        if (atten <= 0.0) return false;
-        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N, geoN); // #119
+        if (atten <= 0.0) { gDiagReject = 3u; return false; }
+        if ((DIAG_STRIP & 128) == 0) atten *= SpotShadow(int(lt.Params.y), vWorldPos, N, geoN); // #119
     } else {
-        if (atten <= 0.0) return false;
-        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N, geoN); // #119
+        if (atten <= 0.0) { gDiagReject = 3u; return false; }
+        if ((DIAG_STRIP & 128) == 0) atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N, geoN); // #119
     }
-    if (atten <= 0.0) return false;
+    if (atten <= 0.0) { gDiagReject = 4u; return false; }
     radiance = lt.ColorRange.rgb * atten;
     return true;
 }
