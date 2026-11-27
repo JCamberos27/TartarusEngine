@@ -39,8 +39,9 @@ void UsePrivateClipboardForInstance();
 // (the Asset Browser's folder list on any folder create/rename/delete or undo, the Project Settings widgets) and
 // project/layers.json. This keeps their bytes from the start of the run and writes them back: when the summary prints,
 // before the editor-test watchdog ends the process (it calls Restore through EditorUiTests::SetRunEndHook), and when
-// the guard is destroyed. A real crash (CrashHandler) is not covered. Construct it after EnginePaths::Init (the
-// project root is found from the exe's folder).
+// the guard is destroyed. A run that never gets there (a hard crash, killed from outside) leaves its copy of the bytes in
+// Library/EditorTestsOriginal, and the next run's guard puts the files back from it before taking its own. Construct it
+// after EnginePaths::Init (the project root is found from the exe's folder).
 class ProjectFilesGuard {
 public:
     ProjectFilesGuard();

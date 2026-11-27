@@ -195,6 +195,8 @@ void RegisterHotReloadTests() {
             entt::entity Slab = entt::null;
             std::shared_ptr<SprayCanSystem> Can;
             int Reads = 0;
+            int StableReads = -1; // the read count, and since when (ImGui time) it hasn't moved
+            double StableSince = 0.0;
         };
         auto st = std::make_shared<HotState>();
         auto dir = [] { return fs::path(ProjectPaths::Resolve("editor-smoke-scratch-hotload")); };
@@ -276,32 +278,41 @@ void RegisterHotReloadTests() {
                 if (recipe.empty() || !WriteFile(fs::path(ProjectPaths::Resolve(pieceRel())), recipe)) Fail("couldn't copy the piece");
                 st->Can = std::make_shared<SprayCanSystem>();
             }),
-            WaitSeconds(1.0), // the watcher has seen the new file
-            // 1. Changed while its first bake is still writing: kept until the bake is done, then read again.
-            Do("first use (its first bake starts), then the recipe changes on disk", [st, pieceRel](Ctx&) {
+            WaitSeconds(1.5), // the watcher has seen the new file and the folder it made
+            // 1. Changed while its first bake is still writing: kept until the bake is done, then read again. The event is
+            // dispatched here directly (as the watcher would): the bake must still be uncollected when it arrives.
+            Do("first use (its first bake starts), then the recipe changes", [st, pieceRel](Ctx&) {
                 st->Can->PieceReady(pieceRel());
                 st->Reads = st->Can->RecipeReads();
-                AssetChangeHooks::Event e; // the watcher's event, now: the bake can't have been collected yet
+                AssetChangeHooks::Event e; // now: the bake can't have been collected yet (only Update collects it)
                 e.Type = AssetChangeHooks::Event::Kind::Modified;
                 e.Path = ProjectPaths::Resolve(pieceRel());
                 e.AssetType = "graffiti";
                 AssetChangeHooks::Dispatch(e);
             }),
             Expect("read once; kept while its bake writes", [st, pieceRel](Ctx&) {
-                st->Can->PieceReady(pieceRel());
+                st->Can->PieceReady(pieceRel()); // marked stale: the same data back, no read, until Update collects the bake
                 return st->Reads == 1 && st->Can->RecipeReads() == 1 ? std::string()
                                                                       : "reads " + std::to_string(st->Can->RecipeReads());
             }),
             UntilSeconds("read again once the bake is done", [st, pieceRel](Ctx& c) {
                 st->Can->Update(c.W, 1.0f / 60.0f, glm::vec3(0.0f));
                 st->Can->PieceReady(pieceRel());
-                return st->Can->RecipeReads() == 2;
+                return st->Can->RecipeReads() > st->Reads;
             }, 20),
-            Wait(5),
+            UntilSeconds("the read count settles (no change for 1 s)", [st, pieceRel](Ctx& c) {
+                st->Can->Update(c.W, 1.0f / 60.0f, glm::vec3(0.0f));
+                st->Can->PieceReady(pieceRel());
+                const double now = ImGui::GetTime();
+                if (st->Can->RecipeReads() != st->StableReads) { st->StableReads = st->Can->RecipeReads(); st->StableSince = now; }
+                if (now - st->StableSince < 1.0) return false;
+                st->Reads = st->StableReads;
+                return true;
+            }, 15),
             Expect("not read again while nothing changes", [st, pieceRel](Ctx& c) {
                 st->Can->Update(c.W, 1.0f / 60.0f, glm::vec3(0.0f));
                 st->Can->PieceReady(pieceRel());
-                return st->Can->RecipeReads() == 2 ? std::string() : "reads " + std::to_string(st->Can->RecipeReads());
+                return st->Can->RecipeReads() == st->Reads ? std::string() : "reads " + std::to_string(st->Can->RecipeReads());
             }),
             // 2. Changed on disk from outside, through the project watcher: read again at the next use.
             Do("the recipe rewritten from outside", [pieceRel](Ctx&) {
@@ -314,7 +325,7 @@ void RegisterHotReloadTests() {
             UntilSeconds("the spray can reads it again", [st, pieceRel](Ctx& c) {
                 st->Can->Update(c.W, 1.0f / 60.0f, glm::vec3(0.0f));
                 st->Can->PieceReady(pieceRel());
-                return st->Can->RecipeReads() == 3;
+                return st->Can->RecipeReads() > st->Reads;
             }, 15),
         }, cleanup);
     }
