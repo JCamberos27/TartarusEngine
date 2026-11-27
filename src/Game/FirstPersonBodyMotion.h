@@ -150,7 +150,7 @@ public:
         // ... and the sprint search weighs where the root goes this many times over (like a strafe): with no curved runs, a turning
         // sprint's trajectory runs off the facing, and at weight 1 the pose kept it out of the diagonal loops once it played anything
         // else - after a flick 180 the turning sprint stitched turning starts (begun from standing) at 3.3 m/s, the planted feet
-        // sliding 17.3 cm.
+        // sliding 17.3 cm. (A sprint strafe keeps the strafe's own weight and ignores this one.)
         float SprintTrajPosWeight = 2.0f;
         float MaxFacingOffset = 1.5708f;       // rad (90 deg): the character facing at most this far off the simulation's
         float TakeoffSeconds = 0.12f;          // a jump's segment starts this far before its first airborne frame
