@@ -1,19 +1,28 @@
 #include "UnitTestSupport.h"
+#include <limits>
 #include <random>
+#include <cstring>
 #include "../Renderer/SceneRenderer.h"
+#include "../Renderer/RenderSettingsEpoch.h"
 #include "../Renderer/Model.h"
 #include "../Renderer/InstanceBatch.h"
 #include "../Renderer/OpaqueBatchKey.h"
 #include "../Renderer/UploadStaging.h"
 #include "../Renderer/MeshArena.h"
 #include "../Renderer/HiZCuller.h"
+#include "../Renderer/GpuCull.h"
+#include "../Physics/Frustum.h"
+#include "../Renderer/GpuScene.h"
+#include "../Renderer/ShaderLibrary.h"
+#include "../Renderer/SceneViewPass.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/TextureCache.h"
 #include "../Renderer/Texture.h"
+#include "../Core/PngWrite.h"
 #include "../Renderer/ImpostorLibrary.h"
 #include "../Renderer/AssetCost.h"
-#include "../Renderer/SceneViewPass.h"
 #include "../Renderer/SkyAtmosphere.h"
+#include "../Renderer/ProgramBinaryCache.h"
 #include "../Renderer/Material.h"
 #include "../Renderer/RenderFrameContext.h"
 #include "../Core/TimeService.h"
@@ -27,6 +36,7 @@
 #include "../Renderer/PointShadowMap.h"
 #include "../Renderer/SpotShadowMap.h"
 #include "../Renderer/ShadowFrame.h"
+#include "../Game/ComponentsCharacter.h"
 #include "../Renderer/DecalTypes.h"
 #include "../Renderer/ClusterGrid.h"
 #include "../Renderer/TemporalAA.h"
@@ -39,6 +49,7 @@
 #include "../Game/TimeOfDay.h"
 #include "AssetLibrary.h"
 #include "AsyncTicketCount.h"
+#include "StepPending.h"
 #include "../Game/World.h"
 #include "../Game/Components.h"
 #include "../Physics/Frustum.h"
@@ -82,6 +93,41 @@ void LightBoundsFaceFade() {
     lb.BoundLast(glm::mat3(1.0f), glm::vec3(0.0f), half, 0.05f, glm::vec3(-1.0f, 0.3f, -1.0f), glm::vec3(0.0f, -1.0f, -1.0f));
     CHECK(lb.FaceFadeOfLast(false) == glm::vec3(0.05f, 0.3f, 0.05f));
     CHECK(lb.FaceFadeOfLast(true) == glm::vec3(1e-3f, 0.05f, 0.05f));
+}
+
+// LightBuffer::BoxWorldBounds (CPU mirror of ClusterCull.comp.glsl's light box): under a sheared parent the box rows
+// aren't orthogonal; the bounds still centre on the box and hold every corner, tight on each axis.
+void LightBoundsShearedBox() {
+    // As LightGather::BoundLight packs a parent whose Y column leans into X: the normalised columns are the axes.
+    const glm::mat3 axes(glm::vec3(1, 0, 0), glm::normalize(glm::vec3(1, 1, 0)), glm::vec3(0, 0, 1));
+    const glm::vec3 centre(5.0f, 2.0f, -3.0f), half(1.0f, 2.0f, 0.5f);
+    LightBuffer lb;
+    lb.AddPoint(centre, glm::vec3(1.0f), 1.0f, 50.0f);
+    lb.BoundLast(axes, centre, half, 0.05f);
+    glm::vec4 rx(0.0f), ry(0.0f), rz(0.0f);
+    lb.BoxRowsOfLast(rx, ry, rz);
+    glm::vec3 c(0.0f), e(0.0f);
+    CHECK(LightBuffer::BoxWorldBounds(rx, ry, rz, half, c, e));
+    CHECK(glm::length(c - centre) < 1e-4f);
+    // The orthonormal-only rebuild (-(rows^T w)) lands well off the centre here: what this replaces.
+    const glm::vec3 old = -(glm::vec3(rx) * rx.w + glm::vec3(ry) * ry.w + glm::vec3(rz) * rz.w);
+    CHECK(glm::length(old - centre) > 0.5f);
+    // The corners (q = +-half on every row) are inside the bounds, and each axis is touched by one of them.
+    const glm::mat3 a = glm::transpose(glm::mat3(glm::vec3(rx), glm::vec3(ry), glm::vec3(rz)));
+    const glm::mat3 m = glm::inverse(a);
+    glm::vec3 reach(0.0f);
+    for (int k = 0; k < 8; ++k) {
+        const glm::vec3 q((k & 1) ? half.x : -half.x, (k & 2) ? half.y : -half.y, (k & 4) ? half.z : -half.z);
+        const glm::vec3 p = centre + m * q;
+        const glm::vec3 qq(glm::dot(glm::vec3(rx), p) + rx.w, glm::dot(glm::vec3(ry), p) + ry.w, glm::dot(glm::vec3(rz), p) + rz.w);
+        CHECK(glm::length(qq - q) < 1e-3f); // really a corner of the shaded box
+        const glm::vec3 d = glm::abs(p - c);
+        CHECK(d.x <= e.x + 1e-4f && d.y <= e.y + 1e-4f && d.z <= e.z + 1e-4f);
+        reach = glm::max(reach, d);
+    }
+    CHECK(glm::length(reach - e) < 1e-3f);
+    // Degenerate rows (two the same): no bounds, so the cull keeps the light.
+    CHECK(!LightBuffer::BoxWorldBounds(rx, rx, rz, half, c, e));
 }
 
 // LightBuffer::DistanceFade: full strength near and inside the range sphere, a smooth monotonic fall by projected
@@ -273,6 +319,1229 @@ void GatherPatch() {
     CHECK(patched * 2 > frames);
 }
 
+// GpuScene (G-1): after every frame of random changes (spawn, destroy, re-parent, model swap or none, tags, layers,
+// moves), its mirror of the GPU buffers holds exactly what the candidate list says for every slot, though most frames
+// write only the slots that changed. The GL buffers themselves are compared with the list by the smoke run
+// (GpuScene::SelfTest, smoke_min).
+void GpuSceneMirror() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    const auto modelA = Model::ImportDeferred(path, ModelImportSettings{});
+    const auto modelB = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(modelA && modelB);
+    if (!modelA || !modelB) return;
+    World w;
+    std::mt19937 rng(1125);
+    auto pick = [&](size_t n) { return (size_t)std::uniform_int_distribution<size_t>(0, n - 1)(rng); };
+    auto at = [&]() { return glm::vec3((float)pick(200) - 100.0f, 0.0f, (float)pick(200) - 100.0f); };
+    std::vector<entt::entity> live;
+    auto spawn = [&]() {
+        const entt::entity e = w.CreateModelEntity(pick(2) ? modelA : modelB, at(), glm::vec3(0), glm::vec3(1), "R");
+        if (!live.empty() && pick(3) == 0) w.SetParent(e, live[pick(live.size())]);
+        live.push_back(e);
+    };
+    for (int i = 0; i < 300; ++i) spawn();
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    // Every slot of the mirror against the list; false with the first that differs.
+    auto matches = [&](int frame) {
+        if (scene.XformMirror().size() != (size_t)scene.Count() * 2 || scene.BoundsMirror().size() != (size_t)scene.Count() * 2)
+            return false;
+        SceneSlot s;
+        glm::mat4 xf[2];
+        glm::vec4 b[2];
+        for (std::uint32_t i = 0; i < scene.Count(); ++i) {
+            if (!ReadSceneSlot(i, s)) return false;
+            GpuScene::Pack(s, xf, b);
+            const bool same = std::memcmp(&scene.XformMirror()[(size_t)i * 2], xf, sizeof xf) == 0 &&
+                              std::memcmp(&scene.BoundsMirror()[(size_t)i * 2], b, sizeof b) == 0;
+            if (!same) {
+                std::printf("[GpuSceneMirror] frame %d: slot %u of %u differs\n", frame, i, scene.Count());
+                return false;
+            }
+        }
+        return true;
+    };
+    // G1-b: what GatherVisible hands out points at its slot - the matrices the batched draws read from the scene are
+    // the ones the item itself carries.
+    std::vector<VisibleRenderable> vis;
+    std::uint64_t slotChecks = 0;
+    auto slotsPoint = [&](int frame) {
+        GatherVisible(w, VisibilityQuery{}, vis);
+        for (const VisibleRenderable& v : vis) {
+            const bool ok = v.Slot < scene.Count() &&
+                            std::memcmp(&scene.XformMirror()[(size_t)v.Slot * 2], &v.Xform, sizeof(glm::mat4)) == 0 &&
+                            scene.XformMirror()[(size_t)v.Slot * 2 + 1] == glm::mat4(v.Normal);
+            if (!ok) {
+                std::printf("[GpuSceneMirror] frame %d: gathered slot %u of %u doesn't hold its item\n", frame, v.Slot, scene.Count());
+                return false;
+            }
+            ++slotChecks;
+        }
+        return true;
+    };
+    scene.Sync(w, false);
+    CHECK(scene.LastSync().Full && scene.Count() == 300);
+    CHECK(matches(-1));
+    CHECK(slotsPoint(-1));
+    // A full sync uploads every slot in one span (it once planned just the first and the last).
+    CHECK(scene.LastRuns().size() == 1 && scene.LastRuns()[0] == GpuScene::Run(0u, 299u));
+    // Nothing changed: nothing written.
+    w.RebuildWorldTransformCache();
+    scene.Sync(w, false);
+    CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 0);
+    // Fields written in place with nothing told (G2-DIRTY): Cast Shadows and the first material's queue. A frame that
+    // changes only one of them, with nothing moved, must still bring that slot up to date.
+    auto glass = std::make_shared<MaterialAsset>();
+    glass->RenderQueue = MaterialAsset::Queue::Transparent;
+    auto castNext = [](RenderableComponent& r) {
+        r.CastShadows = (RenderableComponent::ShadowCasting)(((int)r.CastShadows + 1) % 4);
+    };
+    {
+        auto& r = w.Registry.get<RenderableComponent>(live[0]);
+        r.CastShadows = RenderableComponent::ShadowCasting::Off;
+        scene.Sync(w, false); // transforms untouched: no rebuild, no patch
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+        CHECK(matches(-2));
+        if (r.Materials.empty()) r.Materials.resize(1);
+        r.Materials[0] = glass;
+        scene.Sync(w, false);
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+        CHECK(matches(-3));
+        glass->RenderQueue = MaterialAsset::Queue::Opaque; // the asset edited (Inspector): its users change too
+        scene.Sync(w, false);
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+        CHECK(matches(-4));
+        glass->RenderQueue = MaterialAsset::Queue::Transparent;
+    }
+    int incremental = 0, frames = 0;
+    std::uint64_t written = 0, total = 0;
+    for (int frame = 0; frame < 300; ++frame) {
+        live.erase(std::remove_if(live.begin(), live.end(), [&](entt::entity e) { return !w.Registry.valid(e); }), live.end());
+        const int ops = 1 + (int)pick(4);
+        for (int op = 0; op < ops && !live.empty(); ++op) {
+            live.erase(std::remove_if(live.begin(), live.end(), [&](entt::entity e) { return !w.Registry.valid(e); }), live.end());
+            if (live.empty()) break;
+            const entt::entity e = live[pick(live.size())];
+            switch (pick(13)) {
+            case 0: case 1: spawn(); break;
+            case 2: w.DestroyEntityAndChildren(e); break;
+            case 3: w.Registry.destroy(e); break;
+            case 4: w.SetParent(e, pick(3) == 0 ? entt::entity{entt::null} : live[pick(live.size())]); break;
+            case 5: { auto& r = w.Registry.get<RenderableComponent>(e); r.ModelRef = r.ModelRef == modelA ? modelB : modelA; break; }
+            case 6: if (w.Registry.all_of<DeactivatedTag>(e)) w.Registry.remove<DeactivatedTag>(e); else w.Registry.emplace<DeactivatedTag>(e); break;
+            case 7: if (w.Registry.all_of<HiddenInSceneTag>(e)) w.Registry.remove<HiddenInSceneTag>(e); else w.Registry.emplace<HiddenInSceneTag>(e); break;
+            case 8: w.Registry.emplace_or_replace<LayerComponent>(e).Layer = (int)pick(7) - 2; break; // negatives too
+            case 9: { auto& r = w.Registry.get<RenderableComponent>(e); r.ModelRef = r.ModelRef ? nullptr : modelA; break; }
+            case 10: castNext(w.Registry.get<RenderableComponent>(e)); break;
+            case 11: {
+                auto& r = w.Registry.get<RenderableComponent>(e);
+                if (r.Materials.empty()) r.Materials.resize(1);
+                r.Materials[0] = r.Materials[0] ? nullptr : glass;
+                break;
+            }
+            default: w.Registry.get<TransformComponent>(e).Position = at(); break;
+            }
+        }
+        w.RebuildWorldTransformCache();
+        scene.Sync(w, false);
+        ++frames;
+        // Without an upload the GL buffers are stale, so every sync plans the whole list.
+        CHECK(scene.Count() == 0 || (scene.LastRuns().size() == 1 && scene.LastRuns()[0] == GpuScene::Run(0u, scene.Count() - 1)));
+        if (!scene.LastSync().Full) {
+            ++incremental;
+            written += scene.LastSync().Slots;
+            total += scene.Count();
+        }
+        const bool same = matches(frame) && slotsPoint(frame);
+        CHECK(same);
+        if (!same) break;
+    }
+    CHECK(slotChecks > 0);
+    std::printf("[GpuSceneMirror] %d of %d frames incremental, %llu of %llu slots written on them\n", incremental, frames,
+                (unsigned long long)written, (unsigned long long)total);
+    CHECK(incremental * 2 > frames);
+    CHECK(written * 10 < total); // a few changes a frame: a few slots, not the list
+}
+
+// G2-DIRTY at scale: past one sweep slice, an in-place write that reports itself (NoteRenderSettingsChanged) reaches
+// the next sync; one that doesn't is still caught by the sweep within a lap (slots / 1024 syncs), and a quiet frame
+// sends nothing.
+void GpuSceneLiveEpoch() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    constexpr int kCount = 5000; // 5 sweep slices of 1024
+    std::vector<entt::entity> all;
+    for (int i = 0; i < kCount; ++i)
+        all.push_back(w.CreateModelEntity(model, glm::vec3((float)(i % 100), 0.0f, (float)(i / 100)), glm::vec3(0), glm::vec3(1), "R"));
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    scene.Sync(w, false);
+    CHECK(scene.LastSync().Full);
+    for (int i = 0; i < 6; ++i) { // a full lap of the sweep with nothing changed
+        scene.Sync(w, false);
+        CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 0);
+    }
+    auto syncsUntilSeen = [&](int limit) {
+        for (int n = 1; n <= limit; ++n) {
+            scene.Sync(w, false);
+            if (scene.LastSync().Slots > 0) {
+                CHECK(!scene.LastSync().Full && scene.LastSync().Slots == 1);
+                return n;
+            }
+        }
+        return limit + 1;
+    };
+    // Reported: the next sync.
+    w.Registry.get<RenderableComponent>(all[2500]).CastShadows = RenderableComponent::ShadowCasting::Off;
+    NoteRenderSettingsChanged();
+    CHECK(syncsUntilSeen(1) == 1);
+    // The first material swapped to a Transparent one on a still entity (the Inspector's slot writes report it).
+    auto glass = std::make_shared<MaterialAsset>();
+    glass->RenderQueue = MaterialAsset::Queue::Transparent;
+    {
+        auto& r = w.Registry.get<RenderableComponent>(all[1200]);
+        if (r.Materials.empty()) r.Materials.resize(1);
+        r.Materials[0] = glass;
+        NoteRenderSettingsChanged();
+        CHECK(syncsUntilSeen(1) == 1);
+    }
+    // The asset's own queue edited (Inspector Render Mode): no renderable write, its users change.
+    glass->RenderQueue = MaterialAsset::Queue::Opaque;
+    NoteRenderSettingsChanged();
+    CHECK(syncsUntilSeen(1) == 1);
+    // Not reported: within one lap, wherever the sweep stands.
+    for (int k : {10, 2600, 4999}) {
+        w.Registry.get<RenderableComponent>(all[k]).CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
+        CHECK(syncsUntilSeen(5) <= 5);
+    }
+}
+
+// Every Sync keys SyncOnce: SyncOnce(A), a Sync for another world (a bake, a preview), then SyncOnce(A) must sync A
+// again, or A's depth casters read B's transforms until something in A moves.
+void GpuSceneSyncOnceKey() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World a, b;
+    entt::entity first = entt::null;
+    for (int i = 0; i < 3; ++i) {
+        const entt::entity e = a.CreateModelEntity(model, glm::vec3((float)i, 0.0f, 0.0f), glm::vec3(0), glm::vec3(1), "A");
+        if (i == 0) first = e;
+    }
+    for (int i = 0; i < 5; ++i) b.CreateModelEntity(model, glm::vec3(0.0f, 0.0f, (float)i), glm::vec3(0), glm::vec3(1), "B");
+    a.RebuildWorldTransformCache();
+    b.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    scene.Sync(a, false);
+    const std::uint32_t countA = scene.Count();
+    CHECK(scene.UpToDateFor(a) && !scene.UpToDateFor(b));
+    scene.Sync(b, false); // another world in between
+    CHECK(scene.Count() != countA);
+    CHECK(!scene.UpToDateFor(a) && scene.UpToDateFor(b));
+    scene.Sync(a, false); // what SyncOnce(A) now does
+    CHECK(scene.LastSync().Full && scene.Count() == countA && scene.UpToDateFor(a));
+    a.Registry.get<TransformComponent>(first).Position.y = 2.0f; // A itself moves
+    a.RebuildWorldTransformCache();
+    CHECK(!scene.UpToDateFor(a));
+    ForgetGatherCandidates(); // no cache left pointing at these worlds
+}
+
+// The sun casters' cached grouping + commands (DepthCasterCache) are reused only for the same caster list - caster for
+// caster - under the same epochs, only after a build, and never once the build is kMaxAgeFrames old.
+void DepthCasterCacheInvalidation() {
+    std::vector<std::shared_ptr<MaterialAsset>> slotsA{std::make_shared<MaterialAsset>()};
+    std::vector<std::shared_ptr<MaterialAsset>> slotsB{std::make_shared<MaterialAsset>(), std::make_shared<MaterialAsset>()};
+    const glm::mat4 xf(1.0f);
+    auto caster = [&](std::vector<std::shared_ptr<MaterialAsset>>* slots, std::uint32_t slot, int first, int layers) {
+        DepthCaster c{nullptr, slots, nullptr, &xf};
+        c.Slot = slot;
+        c.LayerFirst = first;
+        c.Layers = layers;
+        return c;
+    };
+    std::vector<DepthCaster> list;
+    for (std::uint32_t i = 0; i < 40; ++i) list.push_back(caster(i % 3 ? &slotsA : &slotsB, i, (int)(i % 2), 2));
+    const DepthCasterCache::Epochs ep{7, 100};
+    DepthCasterCache cache;
+    std::uint64_t frame = 1000; // one call a frame
+    auto reuse = [&](const std::vector<DepthCaster>& l, const DepthCasterCache::Epochs& e) { return cache.Reuse(l, e, ++frame); };
+    auto settle = [&](const std::vector<DepthCaster>& l, const DepthCasterCache::Epochs& e) { // a miss, then built
+        const bool hit = cache.Reuse(l, e, ++frame);
+        if (!hit) cache.Built(frame);
+        return hit;
+    };
+
+    CHECK(!settle(list, ep)); // first sight: build
+    CHECK(reuse(list, ep));   // the same list: reuse
+    CHECK(reuse(list, ep));
+
+    std::vector<DepthCaster> added = list;
+    added.push_back(caster(&slotsA, 40, 0, 1));
+    CHECK(!settle(added, ep)); // a caster added
+    CHECK(!settle(list, ep));  // ...and removed again
+    std::vector<DepthCaster> moved = list;
+    moved[4].LayerFirst = 1; // its cascade run moved (the fit slid it into the next cascades)
+    CHECK(!settle(moved, ep));
+    std::vector<DepthCaster> held = moved;
+    held[7].Layers = 1; // a held far cascade: the caster's run now stops a cascade short
+    CHECK(!settle(held, ep));
+    std::vector<DepthCaster> swapped = held;
+    std::swap(swapped[0], swapped[1]); // same casters, another order: the commands' copy order differs
+    CHECK(!settle(swapped, ep));
+    CHECK(reuse(swapped, ep));
+
+    const std::shared_ptr<MaterialAsset> was = slotsA[0];
+    slotsA[0] = std::make_shared<MaterialAsset>(); // a material swapped into the same slot list, in place
+    CHECK(!settle(swapped, ep));
+    slotsA[0] = was;
+    CHECK(!settle(swapped, ep));
+    std::vector<DepthCaster> sided = swapped;
+    sided[3].TwoSided = !sided[3].TwoSided; // Cast Shadows: Two Sided turned on
+    CHECK(!settle(sided, ep));
+    VisibleIndexBuffer* const fakeMask = reinterpret_cast<VisibleIndexBuffer*>(&slotsB); // only its address is read
+    std::vector<DepthCaster> masked = sided;
+    masked[4].Visible = fakeMask; // an outfit piece partly hidden: it draws directly now
+    CHECK(!settle(masked, ep));
+    std::vector<DepthCaster> reslotted = masked;
+    reslotted[9].Slot = 77; // a new GPU scene slot
+    CHECK(!settle(reslotted, ep));
+
+    CHECK(!settle(reslotted, {8, 100})); // the render settings epoch moved (a material's depth fields, a queue)
+    CHECK(!settle(reslotted, {8, 101})); // the GPU scene grew (the slotless test reads its count)
+    const DepthCasterCache::Epochs ep2{8, 101};
+
+    // A build is reused for kMaxAgeFrames - 1 frames after it, then rebuilt (what nothing reports is picked up). The
+    // sun keeps one cache per cascade set, so a cache sees only some frames: the age is in frames, not calls.
+    const std::uint64_t built = frame;
+    for (std::uint64_t k = 1; k < DepthCasterCache::kMaxAgeFrames; k += 3) CHECK(cache.Reuse(reslotted, ep2, built + k));
+    CHECK(!cache.Reuse(reslotted, ep2, built + DepthCasterCache::kMaxAgeFrames));
+    cache.Built(built + DepthCasterCache::kMaxAgeFrames);
+    frame = built + DepthCasterCache::kMaxAgeFrames;
+    CHECK(reuse(reslotted, ep2));
+    CHECK(!cache.Reuse(reslotted, ep2, built + DepthCasterCache::kMaxAgeFrames - 1)); // before its build: rebuild
+    cache.Built(frame);
+
+    // A miss that wasn't followed by a build (the caller drew without the cache) is never reused.
+    cache.Invalidate();
+    CHECK(!reuse(reslotted, ep2));
+    CHECK(!reuse(reslotted, ep2)); // still not built
+    cache.Built(frame);
+    CHECK(reuse(reslotted, ep2));
+    CHECK(cache.Reused() > 0 && cache.Rebuilt() > 0);
+    const DepthCasterCache::Totals all = DepthCasterCache::AllTotals();
+    CHECK(all.Reused >= cache.Reused() && all.Rebuilt >= cache.Rebuilt());
+
+    std::vector<DepthCaster> empty;
+    CHECK(!settle(empty, ep2));
+    CHECK(reuse(empty, ep2));
+}
+
+// G-MB: a multi-draw copy's slot state holds what the per-draw hook would bind for it (ReflectionProbeArray::Bind's
+// probes and blends, GIVolumes::SetMask's mask), probes picked like SelectionKey; the mirror marks only real changes.
+void GpuSceneObjectState() {
+    World world;
+    const glm::vec3 probeAt[3] = {{0, 0, 0}, {10, 0, 0}, {0, 0, 10}};
+    for (const glm::vec3& at : probeAt) {
+        const entt::entity e = world.Registry.create();
+        world.Registry.emplace<TransformComponent>(e).Position = at;
+        world.Registry.emplace<ReflectionProbeComponent>(e).Size = glm::vec3(4.0f, 2.0f, 6.0f);
+    }
+    world.RebuildWorldTransformCache();
+    ReflectionProbeArray probes;
+    probes.Update(world);
+    CHECK(probes.Count() == 3);
+    const glm::vec3 centre(3.0f, 0.0f, 1.0f); // nearest probe 0, then 1
+    const std::uint32_t key = probes.SelectionKey(centre);
+    const ReflectionProbeArray::Selection sel = probes.Resolve(centre);
+    CHECK(sel.Count == 2 && (int)(key >> 30) == 2);
+    CHECK(sel.Center[0] == probes.Volume((key >> 20) & 0x3FF).Center && sel.Center[1] == probes.Volume((key >> 10) & 0x3FF).Center);
+    CHECK(sel.Center[0] == probeAt[0] && sel.Center[1] == probeAt[1]); // the nearest two, in order
+    CHECK(sel.HalfSize[0] == glm::vec3(2.0f, 1.0f, 3.0f) && sel.Layer[0] == -1 && sel.Layer[1] == -1); // no cube array
+    CHECK(std::abs(sel.Blend[0] + sel.Blend[1] - 1.0f) < 1e-6f && sel.Blend[0] > sel.Blend[1]);
+    CHECK((std::uint32_t)std::lround(sel.Blend[0] * 64.0f) == (key & 0x7F));
+
+    const std::uint64_t mask = 0x8000000100000003ull;
+    const GpuScene::ObjectState s = GpuScene::MakeObjectState(mask, sel);
+    CHECK(s.Head[0] == 3u && s.Head[1] == 0x80000001u && s.Head[2] == 2u && s.Head[3] == 0u);
+    CHECK(s.Probe[0] == glm::vec4(sel.Center[0], -1.0f) && s.Probe[1] == glm::vec4(sel.HalfSize[0], sel.Blend[0]));
+    CHECK(s.Probe[2] == glm::vec4(sel.Center[1], -1.0f) && s.Probe[3] == glm::vec4(sel.HalfSize[1], sel.Blend[1]));
+    const GpuScene::ObjectState none = GpuScene::MakeObjectState(0, ReflectionProbeArray().Resolve(centre));
+    CHECK(none.Head[2] == 0u && none.Probe[0] == glm::vec4(0.0f)); // no probes: count 0 (the sky, as uProbeCount 0)
+
+    // The mirror: slots past the synced count are ignored; a write that changes nothing is not uploaded again.
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path) || !GpuScene::Enabled()) return;
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    for (int i = 0; i < 3; ++i) world.CreateModelEntity(model, glm::vec3((float)i, 0.0f, 0.0f), glm::vec3(0), glm::vec3(1), "M");
+    world.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    scene.Sync(world, false);
+    CHECK(scene.Count() >= 3 && scene.ObjectStateMirror().size() == scene.Count());
+    scene.SetObjectState(1, s);
+    scene.SetObjectState(scene.Count(), s); // out of range: ignored
+    CHECK(scene.PendingObjectStates() == 1);
+    CHECK(std::memcmp(&scene.ObjectStateMirror()[1], &s, sizeof s) == 0);
+    scene.SetObjectState(1, s); // unchanged
+    CHECK(scene.PendingObjectStates() == 1);
+    scene.SetObjectState(0, none); // the mirror starts zeroed: nothing changed
+    CHECK(scene.PendingObjectStates() == 1);
+    ForgetGatherCandidates();
+}
+
+// G-MB: the slot state needs a 9th fragment SSBO block, past GL 4.3's minimum of 8; below it the run compiles without
+// it (a global define every top-level source carries right after #version, ahead of the first #line).
+void GpuSceneSlotStateBlockBudget() {
+    CHECK(GpuScene::kSlotStateFragmentBlocks == 9);
+    CHECK(!GpuScene::SlotStateFits(8) && GpuScene::SlotStateFits(9) && GpuScene::SlotStateFits(16));
+    CHECK(GpuScene::SlotStateSupported()); // InitSlotStateSupport never ran: on
+
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / UnitTestSupport::TempName("tartarus_defines", ".glsl");
+    { std::ofstream(path) << "// lead comment\n#version 430 core\nvoid main() {}\n"; }
+    const std::string saved = ShaderLibrary::GlobalDefines();
+    ShaderLibrary::SetGlobalDefines("#define _NO_SLOT_STATE 1\n");
+    const std::string withDefine = ShaderLibrary::ReadFileAt(path.string());
+    ShaderLibrary::SetGlobalDefines(saved);
+    const std::string without = ShaderLibrary::ReadFileAt(path.string());
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+    const std::size_t version = withDefine.find("#version 430 core\n"), define = withDefine.find("#define _NO_SLOT_STATE 1\n");
+    CHECK(version != std::string::npos && define == version + 18);
+    CHECK(withDefine.find("#line", define) != std::string::npos); // the file's numbering still starts after it
+    CHECK(without.find("_NO_SLOT_STATE") == std::string::npos);
+}
+
+// The sun caster list's delta path (ShadowFrame::FillSunCasters) against the full loop, side by side: over random frames
+// of moves (a static caster moving once, then still), re-poses, a held far cascade turning, adds and removals, Cast
+// Shadows writes, outfit-hide tags coming, going and swapping their buffer, and frames whose change log wasn't taken,
+// both give the same casters field for field, the same G4-d motion table and the same forced cascades every frame.
+// Skinned casters stand in through a fake pose (no GL here: CPU-only primitives); both paths read the same probe.
+std::unordered_map<const Model*, std::uint64_t> g_FakeSunPose;
+bool FakeSunSkinned(const Model* m) { return g_FakeSunPose.count(m) != 0; }
+static std::uint64_t FakeSunPose(const Model* m) {
+    const auto it = g_FakeSunPose.find(m);
+    return it == g_FakeSunPose.end() ? 0 : it->second;
+}
+void SunCasterListDelta() {
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    auto prop = Model::CreatePrimitive("terrain", "w1_sun_delta_prop.fbx"); // CPU-only stand-ins: no GL in unit tests
+    CHECK(prop != nullptr);
+    if (!prop) return;
+    std::vector<std::shared_ptr<Model>> skins;
+    g_FakeSunPose.clear();
+    for (int i = 0; i < 3; ++i) {
+        skins.push_back(Model::CreatePrimitive("terrain", "w1_sun_delta_skin" + std::to_string(i) + ".fbx"));
+        g_FakeSunPose[skins.back().get()] = 1;
+    }
+    World w;
+    std::vector<entt::entity> props, chars;
+    for (int i = 0; i < 48; ++i)
+        props.push_back(w.CreateModelEntity(prop, glm::vec3((float)(i % 8) * 6.0f, 0.0f, (float)(i / 8) * 6.0f), glm::vec3(0), glm::vec3(1), "P"));
+    for (int i = 0; i < 3; ++i)
+        chars.push_back(w.CreateModelEntity(skins[(size_t)i], glm::vec3(3.0f + i, 0.0f, 3.0f), glm::vec3(0), glm::vec3(1), "C"));
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    GpuScene::ChangeLog log;
+
+    ShadowFrame withDelta, fullOnly;
+    ShadowFrame::SunListIn in;
+    in.world = &w;
+    in.cascadeCount = 4;
+    // A caster reaches far cascade c when its box starts within 12 m of the origin per cascade step: some do, some don't.
+    in.reaches = [](int c, const glm::vec3& lo, const glm::vec3&) { return lo.x + lo.z < 12.0f * (float)c; };
+    in.probe.Skinned = FakeSunSkinned;
+    in.probe.Pose = FakeSunPose;
+    std::mt19937 rng(1248);
+    std::uniform_int_distribution<int> roll(0, 99), pickProp(0, 47);
+    std::uniform_real_distribution<float> step(-3.0f, 3.0f);
+    std::uint64_t lastTake = ~0ull, prevTake = ~0ull;
+    int deltaFrames = 0, fullFrames = 0, untakenFrames = 0, movedOnceChecked = 0, forcedFrames = 0;
+    auto alive = [&](entt::entity e) { return w.Registry.valid(e); };
+    for (std::uint64_t frame = 100; frame < 500; ++frame) {
+        // Edits.
+        if (frame == 160 && alive(props[5])) // a static caster moves once, then stays: in the log this frame only
+            w.Registry.get<TransformComponent>(props[5]).Position += glm::vec3(1.5f, 0.0f, 0.0f);
+        if (roll(rng) < 35) { // a prop moves (then usually stays put)
+            const entt::entity e = props[(size_t)pickProp(rng)];
+            if (alive(e)) w.Registry.get<TransformComponent>(e).Position += glm::vec3(step(rng), 0.0f, step(rng));
+        }
+        for (const auto& s : skins)
+            if (roll(rng) < 80) ++g_FakeSunPose[s.get()]; // characters re-pose most frames
+        if (roll(rng) < 3) { // Cast Shadows written (reported, as the contract asks)
+            const entt::entity e = props[(size_t)pickProp(rng)];
+            if (alive(e)) {
+                auto& r = w.Registry.get<RenderableComponent>(e);
+                r.CastShadows = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided ? RenderableComponent::ShadowCasting::On
+                                                                                              : RenderableComponent::ShadowCasting::TwoSided;
+                NoteRenderSettingsChanged();
+            }
+        }
+        if (roll(rng) < 3) { // an outfit-hide tag comes or goes
+            const entt::entity e = chars[(size_t)(roll(rng) % 3)];
+            if (w.Registry.all_of<OutfitHideTag>(e)) w.Registry.remove<OutfitHideTag>(e);
+            else w.Registry.emplace<OutfitHideTag>(e);
+        }
+        if (roll(rng) < 10) { // a tagged one swaps its visible-triangle buffer (only the pointer is read here)
+            for (const entt::entity e : chars)
+                if (w.Registry.all_of<OutfitHideTag>(e)) {
+                    static int fakeBuffers[64];
+                    w.Registry.get<OutfitHideTag>(e).Visible = std::shared_ptr<VisibleIndexBuffer>(
+                        std::shared_ptr<void>(), reinterpret_cast<VisibleIndexBuffer*>(&fakeBuffers[frame % 64]));
+                    break;
+                }
+        }
+        if (frame % 97 == 13) { // one leaves
+            const entt::entity e = props[(size_t)pickProp(rng)];
+            if (alive(e)) w.Registry.destroy(e);
+        }
+        if (frame % 131 == 29) // one arrives
+            props.push_back(w.CreateModelEntity(prop, glm::vec3(step(rng), 0.0f, step(rng)), glm::vec3(0), glm::vec3(1), "N"));
+        if (frame % 53 == 41) { // a renderable on an unrelated entity: the pool may grow and move every Renderable*
+            const entt::entity e = w.Registry.create();
+            w.Registry.emplace<RenderableComponent>(e);
+        }
+
+        // The frame: transforms, the GPU scene's sync and (most frames) its change log, then the gather.
+        w.RebuildWorldTransformCache();
+        scene.Sync(w, false);
+        const bool taken = roll(rng) >= 8; // now and then RenderLocal took none (G4-c off that frame)
+        if (taken) {
+            scene.TakeChangeLog(w, log);
+            prevTake = lastTake;
+            lastTake = frame;
+        }
+        VisibilityQuery casts;
+        casts.ShadowCasters = true;
+        GatherVisible(w, casts, withDelta.CastingForTest());
+        fullOnly.CastingForTest() = withDelta.CastingForTest();
+        in.frame = frame;
+        const unsigned phase = (unsigned)(frame % 4); // the far cascades' turns: 2 on 0, 3 on 2, both held otherwise
+        in.held = phase == 0 ? 0x8u : phase == 2 ? 0x4u : 0xCu;
+        in.log = taken ? &log : nullptr;
+        in.logPrevFrame = prevTake;
+        in.allowDelta = true;
+        const unsigned forceDelta = withDelta.FillSunCasters(in);
+        in.allowDelta = false;
+        const unsigned forceFull = fullOnly.FillSunCasters(in);
+        CHECK(forceDelta == forceFull);
+        CHECK(withDelta.SameSunListAs(fullOnly));
+        if (forceDelta != forceFull || !withDelta.SameSunListAs(fullOnly)) {
+            std::printf("[SunCasterListDelta] mismatch on frame %llu (delta %d)\n", (unsigned long long)frame,
+                        withDelta.LastSunListWasDelta() ? 1 : 0);
+            break;
+        }
+        CHECK(!fullOnly.LastSunListWasDelta());
+        if (!taken) {
+            CHECK(!withDelta.LastSunListWasDelta()); // no change log this frame: the full loop
+            ++untakenFrames;
+        }
+        // Two views in one frame now and then (Scene + Game): a second list from another set, against the full loop.
+        if (frame % 7 == 3) {
+            std::vector<VisibleRenderable> second = withDelta.CastingForTest();
+            if (second.size() > 4) second.erase(second.begin() + 2); // the other view gathers a different set
+            withDelta.CastingForTest() = second;
+            fullOnly.CastingForTest() = second;
+            in.allowDelta = true;
+            const unsigned f2Delta = withDelta.FillSunCasters(in);
+            in.allowDelta = false;
+            const unsigned f2Full = fullOnly.FillSunCasters(in);
+            CHECK(f2Delta == f2Full);
+            CHECK(withDelta.SameSunListAs(fullOnly));
+            CHECK(!withDelta.LastSunListWasDelta()); // a second list the same frame is never a delta
+        }
+        if (frame == 160 && withDelta.LastSunListWasDelta()) ++movedOnceChecked;
+        if (frame == 161 && withDelta.LastSunListWasDelta()) ++movedOnceChecked; // still, and kept as moved
+        forcedFrames += forceDelta != 0;
+        (withDelta.LastSunListWasDelta() ? deltaFrames : fullFrames)++;
+    }
+    std::printf("[SunCasterListDelta] %d delta frames, %d full, %d without a change log, %d with a forced cascade, moved-once %d\n",
+                deltaFrames, fullFrames, untakenFrames, forcedFrames, movedOnceChecked);
+    CHECK(deltaFrames > 150 && fullFrames > 20 && untakenFrames > 10 && forcedFrames > 50);
+    g_FakeSunPose.clear();
+    ForgetGatherCandidates();
+}
+
+// The sun caster list's keyed path (ShadowFrame::FillSunCasters, the gathered set changed and nothing else) against the
+// full loop, side by side: over 400 seeded frames where the gathered set itself changes - casters dropping out and coming
+// back (as an LOD flip or a cascade edge does), the order shuffling, entities leaving and their slots reused, a caster
+// moving the same frame its index changes, skinned ones changing index - plus frames where only the camera / cascades
+// move (no entity in the log), both give the same casters field for field, the same G4-d motion table and the same forced
+// cascades every frame. It must actually take the keyed path on most set-change frames.
+void SunCasterListKeyed() {
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    auto prop = Model::CreatePrimitive("terrain", "w1_sun_keyed_prop.fbx"); // CPU-only stand-ins: no GL in unit tests
+    CHECK(prop != nullptr);
+    if (!prop) return;
+    std::vector<std::shared_ptr<Model>> skins;
+    g_FakeSunPose.clear();
+    for (int i = 0; i < 3; ++i) {
+        skins.push_back(Model::CreatePrimitive("terrain", "w1_sun_keyed_skin" + std::to_string(i) + ".fbx"));
+        g_FakeSunPose[skins.back().get()] = 1;
+    }
+    World w;
+    std::vector<entt::entity> props, chars;
+    for (int i = 0; i < 64; ++i)
+        props.push_back(w.CreateModelEntity(prop, glm::vec3((float)(i % 8) * 6.0f, 0.0f, (float)(i / 8) * 6.0f), glm::vec3(0), glm::vec3(1), "P"));
+    for (int i = 0; i < 3; ++i)
+        chars.push_back(w.CreateModelEntity(skins[(size_t)i], glm::vec3(3.0f + i, 0.0f, 3.0f), glm::vec3(0), glm::vec3(1), "C"));
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    GpuScene::ChangeLog log;
+
+    ShadowFrame keyed, fullOnly;
+    ShadowFrame::SunListIn in;
+    in.world = &w;
+    in.cascadeCount = 4;
+    // The cascades follow a camera: far cascade c reaches a caster whose box starts within its range of the camera.
+    float camX = 0.0f;
+    in.reaches = [&camX](int c, const glm::vec3& lo, const glm::vec3&) { return std::abs(lo.x - camX) + lo.z < 12.0f * (float)c; };
+    in.probe.Skinned = FakeSunSkinned;
+    in.probe.Pose = FakeSunPose;
+    std::mt19937 rng(1263);
+    std::uniform_int_distribution<int> roll(0, 99);
+    std::uniform_real_distribution<float> step(-3.0f, 3.0f);
+    std::uint64_t lastTake = ~0ull, prevTake = ~0ull;
+    int keyedFrames = 0, deltaFrames = 0, fullFrames = 0, camOnlyKeyed = 0, moveOnIndexChange = 0, reuseFrames = 0;
+    auto alive = [&](entt::entity e) { return w.Registry.valid(e); };
+    auto pick = [&](std::vector<entt::entity>& v) { return v[(size_t)(roll(rng) * (int)v.size() / 100)]; };
+    for (std::uint64_t frame = 100; frame < 500; ++frame) {
+        // Edits. Every ~5th frame only the camera (and so the cascades) moves: nothing in the log.
+        const bool camOnly = roll(rng) < 20;
+        if (camOnly) camX += step(rng) * 2.0f;
+        bool moved = false;
+        if (!camOnly) {
+            if (roll(rng) < 40) { // a prop moves
+                const entt::entity e = pick(props);
+                if (alive(e)) { w.Registry.get<TransformComponent>(e).Position += glm::vec3(step(rng), 0.0f, step(rng)); moved = true; }
+            }
+            for (const auto& sk : skins)
+                if (roll(rng) < 70) ++g_FakeSunPose[sk.get()];
+            if (roll(rng) < 6) { // one leaves and another arrives: the GPU scene may hand it the freed slot
+                const entt::entity e = pick(props);
+                if (alive(e)) {
+                    w.Registry.destroy(e);
+                    props.push_back(w.CreateModelEntity(prop, glm::vec3(step(rng) + 20.0f, 0.0f, step(rng)), glm::vec3(0), glm::vec3(1), "R"));
+                    ++reuseFrames;
+                }
+            }
+            if (frame % 61 == 17) { // a renderable on an unrelated entity: the pool may grow and move every Renderable*
+                const entt::entity e = w.Registry.create();
+                w.Registry.emplace<RenderableComponent>(e);
+            }
+            if (roll(rng) < 2) { // an outfit-hide tag comes or goes (a full refill)
+                const entt::entity e = chars[(size_t)(roll(rng) % 3)];
+                if (w.Registry.all_of<OutfitHideTag>(e)) w.Registry.remove<OutfitHideTag>(e);
+                else w.Registry.emplace<OutfitHideTag>(e);
+            }
+        }
+
+        w.RebuildWorldTransformCache();
+        scene.Sync(w, false);
+        const bool taken = roll(rng) >= 5;
+        if (taken) {
+            scene.TakeChangeLog(w, log);
+            prevTake = lastTake;
+            lastTake = frame;
+        }
+        VisibilityQuery casts;
+        casts.ShadowCasters = true;
+        std::vector<VisibleRenderable> set;
+        GatherVisible(w, casts, set);
+        // The gathered set changes as an LOD flip / cascade edge changes it: some casters drop out this frame (and come
+        // back later), and now and then the order shuffles (skinned ones included).
+        if (roll(rng) < 70) {
+            std::vector<VisibleRenderable> kept;
+            for (const VisibleRenderable& v : set)
+                if (roll(rng) >= 8) kept.push_back(v);
+            set.swap(kept);
+        }
+        if (roll(rng) < 25) std::shuffle(set.begin(), set.end(), rng);
+        keyed.CastingForTest() = set;
+        fullOnly.CastingForTest() = set;
+        in.frame = frame;
+        const unsigned phase = (unsigned)(frame % 4);
+        in.held = phase == 0 ? 0x8u : phase == 2 ? 0x4u : 0xCu;
+        in.log = taken ? &log : nullptr;
+        in.logPrevFrame = prevTake;
+        in.allowDelta = true;
+        const unsigned forceKeyed = keyed.FillSunCasters(in);
+        in.allowDelta = false;
+        const unsigned forceFull = fullOnly.FillSunCasters(in);
+        CHECK(forceKeyed == forceFull);
+        CHECK(keyed.SameSunListAs(fullOnly));
+        if (forceKeyed != forceFull || !keyed.SameSunListAs(fullOnly)) {
+            std::printf("[SunCasterListKeyed] mismatch on frame %llu (keyed %d, delta %d)\n", (unsigned long long)frame,
+                        keyed.LastSunListWasKeyed() ? 1 : 0, keyed.LastSunListWasDelta() ? 1 : 0);
+            break;
+        }
+        CHECK(!fullOnly.LastSunListWasKeyed() && !fullOnly.LastSunListWasDelta());
+        CHECK(keyed.SunSlotIndexConsistent()); // slots that left are unmapped (the delta path indexes the list by them)
+        if (keyed.LastSunListWasKeyed()) {
+            ++keyedFrames;
+            camOnlyKeyed += camOnly;
+            moveOnIndexChange += moved;
+        } else {
+            (keyed.LastSunListWasDelta() ? deltaFrames : fullFrames)++;
+        }
+    }
+    std::printf("[SunCasterListKeyed] %d keyed frames (%d camera-only, %d with a move), %d delta, %d full, %d slot-reuse frames\n",
+                keyedFrames, camOnlyKeyed, moveOnIndexChange, deltaFrames, fullFrames, reuseFrames);
+    CHECK(keyedFrames > 150 && camOnlyKeyed > 30 && moveOnIndexChange > 40 && fullFrames > 20 && reuseFrames > 10);
+    g_FakeSunPose.clear();
+    ForgetGatherCandidates();
+}
+
+// The sun's kept caster gather (ShadowFrame::GatherSunCasting) against a fresh gather, every frame: over random frames of
+// a camera walking and turning (four texel-snapped cascades following it), now and then a jump, a sun turn or a cascade
+// count change, with props moving, LOD groups switching levels as the camera passes, Cast Shadows writes, adds and removals and player-body pieces
+// (the Always cells) moving every frame, the kept list holds every caster a fresh gather holds whose own box touches a
+// cascade, field for field, and none it doesn't that does. It must actually keep the list on most quiet frames.
+void SunGatherReuse() {
+    auto prop = Model::CreatePrimitive("terrain", "w1_sun_reuse_prop.fbx"); // CPU-only stand-ins: no GL in unit tests
+    CHECK(prop != nullptr);
+    if (!prop) return;
+    World w;
+    std::vector<entt::entity> props, body;
+    for (int i = 0; i < 900; ++i) // 30 x 30 props, 9 m apart: ~9 ground cells a side
+        props.push_back(w.CreateModelEntity(prop, glm::vec3((float)(i % 30) * 9.0f - 130.0f, 0.0f, (float)(i / 30) * 9.0f - 130.0f),
+                                            glm::vec3(0), glm::vec3(1), "P"));
+    for (int i = 0; i < 3; ++i) {
+        body.push_back(w.CreateModelEntity(prop, glm::vec3(0.0f), glm::vec3(0), glm::vec3(0.3f), "B"));
+        w.Registry.emplace<PlayerBodyTag>(body.back());
+    }
+    for (int i = 0; i < 120; ++i) { // LOD groups among them: the walk flips their levels (ApplyLod), as trees do
+        const glm::vec3 at((float)(i % 12) * 20.0f - 115.0f, 0.0f, (float)(i / 12) * 20.0f - 115.0f);
+        const entt::entity group = w.CreateEmptyEntity(at, glm::vec3(0), glm::vec3(1), "G");
+        w.Registry.emplace<LODGroupComponent>(group).Size = 12.0f;
+        for (int l = 0; l < 2; ++l) CHECK(w.SetParent(w.CreateModelEntity(prop, at, glm::vec3(0), glm::vec3(1.0f - 0.2f * l), "L"), group));
+    }
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    const glm::mat4 camProj = glm::perspective(glm::radians(70.0f), 16.0f / 9.0f, 0.1f, 1000.0f);
+    constexpr int kRes = 1024;
+    std::mt19937 rng(9137);
+    std::uniform_int_distribution<int> roll(0, 999), pickProp(0, 899);
+    std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
+    glm::vec3 cam(0.0f, 1.7f, 0.0f), sun = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
+    float yaw = 0.0f;
+    int cascades = 4;
+    const float radius[4] = {6.0f, 15.0f, 40.0f, 90.0f};
+    auto fit = [&](glm::mat4* vp, Frustum* cells) {
+        const glm::vec3 fwd(std::cos(yaw), 0.0f, std::sin(yaw));
+        const glm::vec3 up = std::abs(sun.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
+        for (int c = 0; c < cascades; ++c) {
+            const float r = radius[c], pull = r + 50.0f;
+            const glm::vec3 centre = cam + fwd * r * 0.8f;
+            glm::mat4 proj = glm::ortho(-r, r, -r, r, 0.0f, pull + r);
+            const glm::mat4 view = glm::lookAt(centre - sun * pull, centre, up);
+            glm::vec4 o = proj * view * glm::vec4(0, 0, 0, 1);
+            o *= (float)kRes * 0.5f;
+            const glm::vec2 off = (glm::round(glm::vec2(o)) - glm::vec2(o)) * (2.0f / (float)kRes); // texel-snapped, as the map
+            proj[3][0] += off.x;
+            proj[3][1] += off.y;
+            vp[c] = proj * view;
+            cells[c] = Frustum::FromViewProj(vp[c]);
+        }
+    };
+    ShadowFrame sf;
+    std::vector<VisibleRenderable> fresh;
+    std::vector<std::int32_t> at;
+    int kept = 0, gathered = 0, bad = 0, cellOnly = 0;
+    auto alive = [&](entt::entity e) { return w.Registry.valid(e); };
+    for (std::uint64_t frame = 1000; frame < 1800; ++frame) {
+        // The view: walking (0.05-0.35 m a frame) and turning, now and then a jump.
+        yaw += 0.02f * unit(rng);
+        cam += glm::vec3(std::cos(yaw), 0.0f, std::sin(yaw)) * (0.2f + 0.15f * unit(rng));
+        if (roll(rng) < 4) cam = glm::vec3(60.0f * unit(rng), 1.7f, 60.0f * unit(rng));
+        if (std::abs(cam.x) > 120.0f || std::abs(cam.z) > 120.0f) yaw += 3.14159f;
+        if (roll(rng) < 3) sun = glm::normalize(sun + glm::vec3(0.02f * unit(rng), 0.0f, 0.02f * unit(rng))); // the sun turns
+        if (roll(rng) < 2) cascades = cascades == 4 ? 3 : 4;
+        // Edits.
+        if (roll(rng) < 60) { // a prop moves a little or far
+            const entt::entity e = props[(size_t)pickProp(rng)];
+            if (alive(e))
+                w.Registry.get<TransformComponent>(e).Position += glm::vec3(unit(rng), 0.0f, unit(rng)) * (roll(rng) < 500 ? 0.5f : 40.0f);
+        }
+        if (roll(rng) < 10) { // Cast Shadows written (reported)
+            const entt::entity e = props[(size_t)pickProp(rng)];
+            if (alive(e)) {
+                auto& r = w.Registry.get<RenderableComponent>(e);
+                r.CastShadows = r.CastShadows == RenderableComponent::ShadowCasting::Off ? RenderableComponent::ShadowCasting::On
+                                                                                         : RenderableComponent::ShadowCasting::Off;
+                NoteRenderSettingsChanged();
+            }
+        }
+        if (frame % 89 == 7) { // one leaves
+            const entt::entity e = props[(size_t)pickProp(rng)];
+            if (alive(e)) w.Registry.destroy(e);
+        }
+        if (frame % 113 == 50) // one arrives
+            props.push_back(w.CreateModelEntity(prop, glm::vec3(100.0f * unit(rng), 0.0f, 100.0f * unit(rng)), glm::vec3(0), glm::vec3(1), "N"));
+        for (const entt::entity e : body)
+            w.Registry.get<TransformComponent>(e).Position = cam + glm::vec3(0.1f * unit(rng), -1.0f, 0.1f * unit(rng));
+        w.RebuildWorldTransformCache();
+        w.ApplyLod(cam, camProj); // this view's levels (the sun casts what the view shows)
+
+        glm::mat4 vp[4];
+        Frustum cells[4];
+        fit(vp, cells);
+        const bool reused = sf.GatherSunCasting(w, vp, cascades, kRes, sun, cells, frame);
+        (reused ? kept : gathered)++;
+        VisibilityQuery q;
+        q.ShadowCasters = true;
+        q.CellCull = cells;
+        q.CellCullCount = cascades;
+        GatherVisible(w, q, fresh);
+        const std::vector<VisibleRenderable>& list = sf.CastingForTest();
+        at.assign(at.size(), -1);
+        for (std::size_t i = 0; i < list.size(); ++i) {
+            if (list[i].Slot >= at.size()) at.resize((std::size_t)list[i].Slot + 1, -1);
+            at[list[i].Slot] = (std::int32_t)i;
+        }
+        auto touches = [&](const VisibleRenderable& v) {
+            if (!v.Bounded) return true;
+            for (int c = 0; c < cascades; ++c)
+                if (cells[c].Intersects(AABB{v.WorldMin, v.WorldMax})) return true;
+            return false;
+        };
+        int frameBad = 0;
+        for (const VisibleRenderable& f : fresh) {
+            const std::int32_t i = f.Slot < at.size() ? at[f.Slot] : -1;
+            if (i < 0) {
+                if (touches(f)) ++frameBad;
+                else ++cellOnly;
+                continue;
+            }
+            const VisibleRenderable& k = list[(std::size_t)i];
+            // Held differently: an error if either box reaches a cascade. One that moved a little outside the padded
+            // cascades keeps its old fields, and draws nothing from either place.
+            if ((k.Entity != f.Entity || k.Renderable != f.Renderable || k.Xform != f.Xform || k.Bounded != f.Bounded ||
+                 k.WorldMin != f.WorldMin || k.WorldMax != f.WorldMax) &&
+                (k.Entity != f.Entity || k.Renderable != f.Renderable || touches(f) || touches(k)))
+                ++frameBad;
+            at[f.Slot] = -2;
+        }
+        for (const VisibleRenderable& k : list)
+            if (at[k.Slot] != -2 && touches(k)) ++frameBad; // an extra that draws
+        if (frameBad) {
+            std::printf("[SunGatherReuse] frame %llu (%s): %d caster(s) missing, stale or extra that draw\n",
+                        (unsigned long long)frame, reused ? "kept" : "gathered", frameBad);
+            ++bad;
+        }
+    }
+    std::printf("[SunGatherReuse] %d kept, %d gathered, %d bad frames, %d cell-only\n", kept, gathered, bad, cellOnly);
+    CHECK(bad == 0);
+    CHECK(kept > 250 && gathered > 50);
+    // The containment test itself: a cascade inside its padded self, nudged by half the pad (in) and by twice it (out).
+    glm::mat4 base[1] = {glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.0f, 50.0f)}, now[1];
+    now[0] = glm::translate(glm::mat4(1.0f), glm::vec3(0.05f, 0.0f, 0.0f)) * base[0];
+    CHECK(ShadowFrame::CascadesInside(base, base, 1, 0.0f));
+    CHECK(ShadowFrame::CascadesInside(base, now, 1, 0.1f));
+    CHECK(!ShadowFrame::CascadesInside(base, now, 1, 0.025f));
+    ForgetGatherCandidates();
+}
+
+// The sun's kept gather through LOD level flips (ShadowFrame::PatchSunLodToggles): with the cascade still, LOD groups
+// inside it, far outside it and one whose levels straddle the padded cascade's edge switch levels both ways, twice in
+// one frame now and then. Every frame keeps the list, and the kept list is exactly what a fresh static-cell gather
+// against the padded cascade holds: the same renderables, field for field.
+void SunGatherLodPatch() {
+    auto prop = Model::CreatePrimitive("terrain", "w1_sun_lod_patch_prop.fbx"); // CPU-only stand-in: no GL in unit tests
+    CHECK(prop != nullptr);
+    if (!prop) return;
+    constexpr int kRes = 1024;
+    const glm::vec3 sun = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
+    const float r = 20.0f;
+    const glm::mat4 vp = glm::ortho(-r, r, -r, r, 0.0f, 200.0f) * glm::lookAt(-sun * 100.0f, glm::vec3(0.0f), glm::vec3(0, 1, 0));
+    const Frustum cell = Frustum::FromViewProj(vp);
+    const float pad = 2.0f * ShadowFrame::kSunGatherPadTexels / (float)kRes;
+    const glm::mat4 padVp = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f / (1.0f + pad))) * vp;
+    const Frustum padded = Frustum::FromViewProj(padVp);
+    glm::vec3 lo, hi;
+    prop->PosedBounds(lo, hi);
+    // Where a level's box straddles the padded cascade's edge: walking out along +x, the first spot with corners on both
+    // sides of it.
+    auto straddles = [&](const glm::vec3& at, float scale) {
+        int in = 0, out = 0;
+        for (int i = 0; i < 8; ++i) {
+            const glm::vec3 p = at + scale * glm::vec3((i & 1) ? hi.x : lo.x, (i & 2) ? hi.y : lo.y, (i & 4) ? hi.z : lo.z);
+            glm::vec4 q = padVp * glm::vec4(p, 1.0f);
+            q /= q.w;
+            (std::abs(q.x) <= 1.0f && std::abs(q.y) <= 1.0f && q.z >= -1.0f && q.z <= 1.0f ? in : out)++;
+        }
+        return in > 0 && out > 0;
+    };
+    glm::vec3 edge(0.0f);
+    for (float x = 0.0f; x < 100.0f; x += 0.05f)
+        if (straddles(glm::vec3(x, 0.0f, 0.0f), 1.0f) && straddles(glm::vec3(x, 0.0f, 0.0f), 0.8f)) { edge = glm::vec3(x, 0.0f, 0.0f); break; }
+    CHECK(edge.x > 0.0f);
+    World w;
+    for (int i = 0; i < 25; ++i) // plain props around the cascade, some in it
+        w.CreateModelEntity(prop, glm::vec3((float)(i % 5) * 10.0f - 20.0f, 0.0f, (float)(i / 5) * 10.0f - 20.0f), glm::vec3(0), glm::vec3(1), "P");
+    const glm::vec3 groupsAt[] = {glm::vec3(-6.0f, 0.0f, 4.0f), glm::vec3(3.0f, 0.0f, -8.0f), edge, glm::vec3(300.0f, 0.0f, 300.0f)};
+    std::vector<entt::entity> levels;
+    for (const glm::vec3& at : groupsAt) {
+        const entt::entity group = w.CreateEmptyEntity(at, glm::vec3(0), glm::vec3(1), "G");
+        w.Registry.emplace<LODGroupComponent>(group).Size = 12.0f;
+        for (int l = 0; l < 2; ++l) {
+            levels.push_back(w.CreateModelEntity(prop, at, glm::vec3(0), glm::vec3(1.0f - 0.2f * l), "L"));
+            CHECK(w.SetParent(levels.back(), group));
+        }
+    }
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    const glm::mat4 camProj = glm::perspective(glm::radians(70.0f), 16.0f / 9.0f, 0.1f, 1000.0f);
+    // The LOD camera's spots: at the groups (level 0), out a way (level 1) and far off (culled).
+    const glm::vec3 views[] = {glm::vec3(0.0f, 1.7f, 0.0f), glm::vec3(0.0f, 1.7f, 60.0f), glm::vec3(0.0f, 1.7f, 600.0f)};
+    ShadowFrame sf;
+    std::vector<VisibleRenderable> fresh;
+    std::mt19937 rng(4411);
+    std::uniform_int_distribution<int> pick(0, 2), roll(0, 9);
+    const ShadowFrame::SunGatherTotals t0 = ShadowFrame::SunGatherTotalsSoFar();
+    int reused = 0, bad = 0, changed = 0, edgeIn = 0, edgeOut = 0;
+    std::vector<std::uint32_t> last;
+    for (std::uint64_t frame = 5000; frame < 5040; ++frame) { // < kSunGatherFullEvery: one gather, then all kept
+        if (roll(rng) < 3) w.ApplyLod(views[pick(rng)], camProj); // twice in a frame now and then
+        w.ApplyLod(views[pick(rng)], camProj);
+        const bool kept = sf.GatherSunCasting(w, &vp, 1, kRes, sun, &cell, frame);
+        if (frame > 5000) reused += kept;
+        VisibilityQuery q;
+        q.ShadowCasters = true;
+        q.CellCull = &padded;
+        q.CellCullCount = 1;
+        q.Part = VisibilityQuery::Cells::Static;
+        GatherVisible(w, q, fresh);
+        std::vector<VisibleRenderable> list = sf.CastingForTest(); // no Always cell here: all of it is the static part
+        auto bySlot = [](const VisibleRenderable& a, const VisibleRenderable& b) { return a.Slot < b.Slot; };
+        std::sort(list.begin(), list.end(), bySlot);
+        std::sort(fresh.begin(), fresh.end(), bySlot);
+        bool same = list.size() == fresh.size();
+        for (std::size_t i = 0; same && i < list.size(); ++i) {
+            const VisibleRenderable &a = list[i], &b = fresh[i];
+            same = a.Slot == b.Slot && a.Entity == b.Entity && a.Renderable == b.Renderable && a.Xform == b.Xform &&
+                   a.Bounded == b.Bounded && a.WorldMin == b.WorldMin && a.WorldMax == b.WorldMax;
+        }
+        if (!same) {
+            std::printf("[SunGatherLodPatch] frame %llu: kept %zu, fresh %zu, not the same\n", (unsigned long long)frame, list.size(), fresh.size());
+            ++bad;
+        }
+        std::vector<std::uint32_t> slots;
+        bool edgeHere = false;
+        for (const VisibleRenderable& v : list) {
+            slots.push_back(v.Slot);
+            edgeHere |= v.Entity == levels[4] || v.Entity == levels[5]; // the straddling group's levels
+        }
+        (edgeHere ? edgeIn : edgeOut)++;
+        changed += frame > 5000 && slots != last;
+        last = slots;
+    }
+    const ShadowFrame::SunGatherTotals t1 = ShadowFrame::SunGatherTotalsSoFar();
+    std::printf("[SunGatherLodPatch] %d of 39 kept, %d with a changed list, %llu patched, straddler in %d / out %d, %d bad\n", reused,
+                changed, (unsigned long long)(t1.Patched - t0.Patched), edgeIn, edgeOut, bad);
+    CHECK(bad == 0);
+    CHECK(reused == 39);
+    CHECK(changed >= 5 && t1.Patched - t0.Patched >= 5);
+    CHECK(edgeIn > 0 && edgeOut > 0);
+    ForgetGatherCandidates();
+}
+
+// G4-c: the GPU scene's change log for the cached local shadows. Over random frames (moves, Cast Shadows writes,
+// removals, a quiet frame now and then), every slot whose packed data changed is logged with a box holding where it was
+// and where it is, and a frame that changed nothing logs nothing.
+void GpuSceneChangeLog() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    std::vector<entt::entity> all;
+    for (int i = 0; i < 64; ++i)
+        all.push_back(w.CreateModelEntity(model, glm::vec3((float)(i % 8) * 3.0f, 0.0f, (float)(i / 8) * 3.0f), glm::vec3(0), glm::vec3(1), "L"));
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    GpuScene::ChangeLog log;
+    scene.TakeChangeLog(w, log);
+    CHECK(log.All); // the first take: nothing before it is known
+    scene.Sync(w, false);
+    scene.TakeChangeLog(w, log);
+    CHECK(log.All); // a full sync
+    scene.Sync(w, false);
+    scene.TakeChangeLog(w, log);
+    CHECK(!log.All && log.Changes.empty()); // nothing changed
+    std::mt19937 rng(4242);
+    std::uniform_int_distribution<int> pick(0, (int)all.size() - 1), what(0, 9);
+    std::uniform_real_distribution<float> step(-2.0f, 2.0f);
+    int checked = 0, quietFrames = 0;
+    for (int frame = 0; frame < 300; ++frame) {
+        const std::vector<glm::mat4> xfBefore = scene.XformMirror();
+        const std::vector<glm::vec4> boundsBefore = scene.BoundsMirror();
+        const int edits = what(rng) < 3 ? 0 : 1 + what(rng) % 3; // some frames change nothing
+        for (int k = 0; k < edits; ++k) {
+            const entt::entity e = all[(size_t)pick(rng)];
+            if (!w.Registry.valid(e)) continue;
+            const int kind = what(rng);
+            if (kind < 6) w.Registry.get<TransformComponent>(e).Position += glm::vec3(step(rng), 0.0f, step(rng));
+            else if (kind < 9) {
+                auto& r = w.Registry.get<RenderableComponent>(e);
+                r.CastShadows = (RenderableComponent::ShadowCasting)(((int)r.CastShadows + 1) % 4);
+            } else if (frame % 50 == 7) w.Registry.destroy(e); // now and then one leaves
+        }
+        w.RebuildWorldTransformCache();
+        scene.Sync(w, false);
+        scene.TakeChangeLog(w, log);
+        if (log.All) continue; // a rebuild: anything may have changed, nothing to check slot by slot
+        if (edits == 0) {
+            CHECK(log.Changes.empty());
+            ++quietFrames;
+        }
+        const std::vector<glm::mat4>& xf = scene.XformMirror();
+        const std::vector<glm::vec4>& bounds = scene.BoundsMirror();
+        const std::uint32_t had = (std::uint32_t)(boundsBefore.size() / 2);
+        for (std::uint32_t i = 0; i < scene.Count(); ++i) {
+            const bool changed = i >= had || std::memcmp(&xf[(size_t)i * 2], &xfBefore[(size_t)i * 2], 2 * sizeof(glm::mat4)) != 0 ||
+                                 std::memcmp(&bounds[(size_t)i * 2], &boundsBefore[(size_t)i * 2], 2 * sizeof(glm::vec4)) != 0;
+            const auto it = std::find_if(log.Changes.begin(), log.Changes.end(), [&](const GpuScene::SlotChange& c) { return c.Slot == i; });
+            if (!changed) continue;
+            ++checked;
+            CHECK(it != log.Changes.end());
+            if (it == log.Changes.end()) return;
+            const glm::vec3 lo(bounds[(size_t)i * 2]), hi(bounds[(size_t)i * 2 + 1]);
+            if (it->Bounded) { // holds where it is now and where it was
+                CHECK(glm::all(glm::lessThanEqual(it->Min, lo)) && glm::all(glm::greaterThanEqual(it->Max, hi)));
+                if (i < had) {
+                    const glm::vec3 oldLo(boundsBefore[(size_t)i * 2]), oldHi(boundsBefore[(size_t)i * 2 + 1]);
+                    CHECK(glm::all(glm::lessThanEqual(it->Min, oldLo)) && glm::all(glm::greaterThanEqual(it->Max, oldHi)));
+                }
+            }
+        }
+    }
+    std::printf("[GpuSceneChangeLog] %d changed slots checked, %d quiet frames\n", checked, quietFrames);
+    CHECK(checked > 50 && quietFrames > 10);
+    // Another world synced in between: the next take says All.
+    World other;
+    other.CreateModelEntity(model, glm::vec3(0.0f), glm::vec3(0), glm::vec3(1), "O");
+    other.RebuildWorldTransformCache();
+    scene.Sync(other, false);
+    scene.Sync(w, false);
+    scene.TakeChangeLog(w, log);
+    CHECK(log.All);
+    ForgetGatherCandidates();
+}
+
+// G4-c: which quiet local lights a frame's changes wake. One slot moving inside one spot's reach wakes that spot only;
+// moving out of a point's range (it was there) wakes the point; a light whose inputs moved, a dark light, a reported
+// render-settings write and an All log wake the rest.
+void LocalShadowQuietWake() {
+    LocalShadowQuiet q;
+    bool spotLive[2] = {true, true};
+    bool pointLive[1] = {true};
+    std::uint64_t spotKey[2] = {11, 12}, pointKey[1] = {21};
+    // Spot 0 looks down -Z from (0, 2, 0), spot 1 down -Z from (100, 2, 0); the point sits at (0, 2, 50), range 5.
+    const glm::mat4 proj = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 20.0f);
+    Frustum spotReach[2] = {Frustum::FromViewProj(proj * glm::lookAt(glm::vec3(0, 2, 0), glm::vec3(0, 2, -1), glm::vec3(0, 1, 0))),
+                            Frustum::FromViewProj(proj * glm::lookAt(glm::vec3(100, 2, 0), glm::vec3(100, 2, -1), glm::vec3(0, 1, 0)))};
+    AABB pointRange[1] = {AABB{glm::vec3(-5, -3, 45), glm::vec3(5, 7, 55)}};
+    LocalShadowQuiet::Lights lights;
+    lights.SpotCount = 2;
+    lights.SpotLive = spotLive;
+    lights.SpotKey = spotKey;
+    lights.SpotReach = spotReach;
+    lights.PointCount = 1;
+    lights.PointLive = pointLive;
+    lights.PointKey = pointKey;
+    lights.PointRange = pointRange;
+    GpuScene::ChangeLog none;
+    none.All = false;
+    auto quietAll = [&] {
+        q.Spots[0].Quiet = q.Spots[1].Quiet = q.Points[0].Quiet = true;
+    };
+    q.Wake(none, 7, lights); // the first wake takes the keys and the epoch: everything awake
+    CHECK(!q.Spots[0].Quiet && !q.Spots[1].Quiet && !q.Points[0].Quiet);
+    quietAll();
+    q.Wake(none, 7, lights);
+    CHECK(q.Spots[0].Quiet && q.Spots[1].Quiet && q.Points[0].Quiet); // nothing changed
+    GpuScene::ChangeLog moved;
+    moved.All = false;
+    moved.Changes.push_back({3, glm::vec3(-0.5f, 1.5f, -6.0f), glm::vec3(0.5f, 2.5f, -5.0f), true}); // in front of spot 0
+    q.Wake(moved, 7, lights);
+    CHECK(!q.Spots[0].Quiet && q.Spots[1].Quiet && q.Points[0].Quiet);
+    quietAll();
+    moved.Changes[0] = {4, glm::vec3(-1.0f, 0.0f, 30.0f), glm::vec3(1.0f, 1.0f, 46.0f), true}; // left the point's range
+    q.Wake(moved, 7, lights);
+    CHECK(q.Spots[0].Quiet && q.Spots[1].Quiet && !q.Points[0].Quiet);
+    quietAll();
+    moved.Changes[0] = {5, glm::vec3(0.0f), glm::vec3(0.0f), false}; // unbounded: reaches every light
+    q.Wake(moved, 7, lights);
+    CHECK(!q.Spots[0].Quiet && !q.Spots[1].Quiet && !q.Points[0].Quiet);
+    quietAll();
+    spotKey[1] = 13; // spot 1's light moved
+    q.Wake(none, 7, lights);
+    CHECK(q.Spots[0].Quiet && !q.Spots[1].Quiet && q.Points[0].Quiet);
+    quietAll();
+    spotLive[0] = false; // spot 0 went dark: awake when it comes back
+    q.Wake(none, 7, lights);
+    spotLive[0] = true;
+    q.Wake(none, 7, lights);
+    CHECK(!q.Spots[0].Quiet && q.Spots[1].Quiet && q.Points[0].Quiet);
+    quietAll();
+    q.Wake(none, 8, lights); // a reported render-settings write (a material edit)
+    CHECK(!q.Spots[0].Quiet && !q.Spots[1].Quiet && !q.Points[0].Quiet);
+    quietAll();
+    GpuScene::ChangeLog everything; // All: a rebuild, another world
+    q.Wake(everything, 8, lights);
+    CHECK(!q.Spots[0].Quiet && !q.Spots[1].Quiet && !q.Points[0].Quiet);
+}
+
+// G4-c: a LOD level change wakes the lights around the renderers it swapped (no slot moves), and a flip that is undone
+// before the next look (another view's levels in between) wakes nothing.
+void LocalShadowLodToggles() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        UnitTestSupport::Skip("no test model (assets/Test/UVTransform)");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    World w;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity group = w.CreateEmptyEntity(zero, zero, one, "Group");
+    w.Registry.emplace<LODGroupComponent>(group).Size = 2.0f;
+    entt::entity lv[2];
+    for (int i = 0; i < 2; ++i) {
+        lv[i] = w.CreateModelEntity(model, zero, zero, one, "LOD" + std::to_string(i));
+        CHECK(w.SetParent(lv[i], group));
+    }
+    w.RebuildWorldTransformCache();
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    auto lod = [&](float dist) { w.ApplyLod(glm::vec3(0.0f, 0.0f, dist), proj); }; // 1: LOD 0 shows, 2: LOD 1
+    LodToggleWake wake;
+    GpuScene::ChangeLog log;
+    auto look = [&] {
+        log.All = false;
+        log.Changes.clear();
+        wake.Append(w, log);
+    };
+    lod(1.0f);
+    CHECK(w.IsLodCulled(lv[1]) && !w.IsLodCulled(lv[0]));
+    look(); // the first look: everything
+    CHECK(log.All);
+    look(); // nothing flipped
+    CHECK(!log.All && log.Changes.empty());
+    lod(2.0f); // LOD 0 out, LOD 1 in: both renderers' boxes
+    look();
+    CHECK(!log.All && log.Changes.size() == 2);
+    for (const GpuScene::SlotChange& c : log.Changes)
+        CHECK(c.Bounded && glm::all(glm::lessThanEqual(c.Min, glm::vec3(0.01f))) && glm::all(glm::greaterThanEqual(c.Max, glm::vec3(-0.01f))));
+    lod(1.0f); // another view's levels, then this one's again before the next look
+    lod(2.0f);
+    look();
+    CHECK(!log.All && log.Changes.empty());
+    w.Registry.get<RenderableComponent>(lv[0]).CastShadows = RenderableComponent::ShadowCasting::Off;
+    lod(1.0f); // LOD 0 casts nothing: only LOD 1 going out counts
+    look();
+    CHECK(log.Changes.size() == 1);
+    w.ClearLod(); // its untags count too
+    look();
+    CHECK(!log.All && log.Changes.size() == 1);
+    lod(1.0f); // LOD 1 out again, then destroyed before the look: nothing to wake (its slot going is GpuScene's log)
+    w.Registry.destroy(lv[1]);
+    look();
+    CHECK(!log.All && log.Changes.empty());
+    World other; // another world: everything
+    wake.Append(other, log);
+    CHECK(log.All);
+}
+
+// GpuScene's upload plan and packing, without GL.
+void GpuSceneRuns() {
+    using Run = GpuScene::Run;
+    std::vector<Run> runs;
+    GpuScene::BuildRuns({}, runs);
+    CHECK(runs.empty());
+    GpuScene::BuildRuns({5}, runs);
+    CHECK(runs.size() == 1 && runs[0] == Run(5u, 5u));
+    // A gap of up to kMergeGap unchanged slots is uploaded with its neighbours; one more splits the run.
+    GpuScene::BuildRuns({0, 1 + GpuScene::kMergeGap}, runs);
+    CHECK(runs.size() == 1 && runs[0] == Run(0u, 1 + GpuScene::kMergeGap));
+    GpuScene::BuildRuns({0, 2 + GpuScene::kMergeGap, 2 + GpuScene::kMergeGap, 2 * GpuScene::kMergeGap + 3}, runs); // a repeat merges too
+    CHECK(runs.size() == 2 && runs[0] == Run(0u, 0u) && runs[1] == Run(2 + GpuScene::kMergeGap, 2 * GpuScene::kMergeGap + 3));
+    // Past kMaxRuns runs: one span over all of them.
+    std::vector<std::uint32_t> sparse;
+    for (std::uint32_t i = 0; i <= GpuScene::kMaxRuns; ++i) sparse.push_back(i * 100);
+    GpuScene::BuildRuns(sparse, runs);
+    CHECK(runs.size() == 1 && runs[0] == Run(0u, sparse.back()));
+    sparse.pop_back();
+    GpuScene::BuildRuns(sparse, runs);
+    CHECK(runs.size() == GpuScene::kMaxRuns);
+    // The layer goes in as its low 16 bits: a negative one is not folded into layer 0.
+    SceneSlot s;
+    s.Alive = true;
+    glm::mat4 xf[2];
+    glm::vec4 b[2];
+    auto layerBits = [&](int layer) {
+        s.Layer = layer;
+        GpuScene::Pack(s, xf, b);
+        std::uint32_t bits;
+        std::memcpy(&bits, &b[1].w, sizeof bits);
+        return bits >> 16;
+    };
+    CHECK(layerBits(3) == 3u);
+    CHECK(layerBits(0) == 0u);
+    CHECK(layerBits(-1) == 0xFFFFu);
+    CHECK(layerBits(-2) != layerBits(0));
+}
+
 // mergeByMaterial: the same geometry and bounds in fewer meshes. Needs the model library (Drive assets).
 void MergeByMaterial() {
     const char* rel = "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx";
@@ -366,6 +1635,232 @@ void MeshArenaFreeList() {
     CHECK(f.Take(100) == 0 && f.Take(1) == ~0u);
 }
 
+// P-56: Play entry's skinned VAO reserve: the first Play gets kFirstPlayVaos; a later one what the last took plus the
+// margin WarmSkinned refills under, never less than the first Play's.
+void MeshArenaPlayVaoReserve() {
+    CHECK(MeshArena::SkinnedPlayVaoReserve(0) == MeshArena::kFirstPlayVaos);
+    CHECK(MeshArena::SkinnedPlayVaoReserve(100) == MeshArena::kFirstPlayVaos);
+    CHECK(MeshArena::SkinnedPlayVaoReserve(365) == MeshArena::kFirstPlayVaos); // the measured first Play fits
+    CHECK(MeshArena::kFirstPlayVaos >= 365 + MeshArena::kPlayVaoMargin);
+    CHECK(MeshArena::SkinnedPlayVaoReserve(1000) == 1000 + MeshArena::kPlayVaoMargin);
+}
+
+// GpuCull (G-2): stage A's CPU reference gives GatherVisible's answer for every slot - the same flag tests, Frustum::
+// Intersects, the Within box and TooSmallOnScreen - over random boxes, flags, layers and queries (camera, owner view,
+// editor view with a layer mask, shadow casters with a Within box). Slots are packed by GpuScene::Pack, so the GPU
+// scene's layout is what is tested. The compute is held to this reference.
+void GpuCullStageAMatchesCpu() {
+    std::mt19937 rng(1225);
+    std::uniform_real_distribution<float> pos(-60.0f, 60.0f), size(0.001f, 6.0f), unit(0.0f, 1.0f);
+    const glm::mat4 proj = glm::perspective(glm::radians(70.0f), 16.0f / 9.0f, 0.1f, 200.0f);
+    const glm::vec3 eye(1.0f, 1.7f, 2.0f);
+    const glm::mat4 view = glm::lookAt(eye, eye + glm::vec3(0.3f, -0.1f, -1.0f), glm::vec3(0, 1, 0));
+    const Frustum frustum = Frustum::FromViewProj(proj * view);
+    const AABB within{glm::vec3(-20.0f, -5.0f, -20.0f), glm::vec3(20.0f, 10.0f, 20.0f)};
+    constexpr std::uint16_t kSettingBits[] = {kSlotFlagCastOff, kSlotFlagShadowsOnly, kSlotFlagTransparent};
+    int mismatches = 0, kept = 0, total = 0;
+    for (int qi = 0; qi < 4; ++qi) {
+        VisibilityQuery q;
+        q.Cull = &frustum;
+        if (qi == 0) { q.OwnerView = true; q.SizeCullEye = &eye; q.SizeCullProjScale = proj[1][1]; q.MinScreenHeight = 0.01f; }
+        if (qi == 1) { q.SkipViewModels = true; q.SkipPlayerBody = true; q.SkipTransparent = true; }
+        if (qi == 2) { q.EditorView = true; q.LayerVisibleMask = 0x0000FF0Fu; }
+        if (qi == 3) { q.ShadowCasters = true; q.Within = &within; q.Cull = nullptr; }
+        const GpuCull::ViewQuery gq = GpuCull::MakeQuery(q);
+        for (int i = 0; i < 6000; ++i) {
+            SceneSlot s;
+            const glm::vec3 c(pos(rng), pos(rng) * 0.2f, pos(rng)), h(size(rng), size(rng), size(rng));
+            s.WorldMin = c - h * 0.5f;
+            s.WorldMax = c + h * 0.5f;
+            s.Bounded = unit(rng) < 0.9f;
+            s.Alive = unit(rng) < 0.95f;
+            for (std::uint32_t bit = 0; bit < 8; ++bit)
+                if (unit(rng) < 0.06f) s.Flags |= (std::uint16_t)(1u << bit);
+            for (std::uint16_t bit : kSettingBits)
+                if (unit(rng) < 0.06f) s.Flags |= bit;
+            s.Layer = (int)(unit(rng) * 34.0f) - 1; // -1..32: out-of-range layers are never hidden
+            const bool lod = unit(rng) < 0.05f;
+            glm::mat4 xf[2];
+            glm::vec4 bounds[2];
+            GpuScene::Pack(s, xf, bounds);
+            // GatherVisible's consider(), restated on the slot.
+            bool cpu = s.Alive && !(s.Flags & (GpuCull::kSlotInactive | GpuCull::kSlotPoseSource)) && !lod;
+            if (cpu && (s.Flags & ((q.ShadowCasters || !q.OwnerView) ? GpuCull::kSlotOwnerViewOnly : GpuCull::kSlotHiddenFromOwner))) cpu = false;
+            if (cpu && q.SkipViewModels && (s.Flags & GpuCull::kSlotViewModel)) cpu = false;
+            if (cpu && q.SkipPlayerBody && (s.Flags & GpuCull::kSlotPlayerBody)) cpu = false;
+            if (cpu && q.EditorView && ((s.Flags & GpuCull::kSlotHiddenInScene) ||
+                                        (s.Layer >= 0 && s.Layer < 32 && !((q.LayerVisibleMask >> s.Layer) & 1u)))) cpu = false;
+            if (cpu && (s.Flags & (q.ShadowCasters ? kSlotFlagCastOff : kSlotFlagShadowsOnly))) cpu = false;
+            if (cpu && q.SkipTransparent && (s.Flags & kSlotFlagTransparent)) cpu = false;
+            if (cpu && s.Bounded) {
+                if (q.Cull && !q.Cull->Intersects(AABB{s.WorldMin, s.WorldMax})) cpu = false;
+                if (cpu && q.Within && !q.Within->Intersects(AABB{s.WorldMin, s.WorldMax})) cpu = false;
+                if (cpu && q.SizeCullEye && TooSmallOnScreen(s.WorldMin, s.WorldMax, *q.SizeCullEye, q.SizeCullProjScale, q.MinScreenHeight)) cpu = false;
+            }
+            const bool gpu = GpuCull::PassesStageA(bounds, gq, lod);
+            mismatches += cpu != gpu;
+            kept += gpu;
+            ++total;
+        }
+    }
+    CHECK(mismatches == 0);
+    CHECK(kept > total / 20 && kept < total); // the cases are mixed: some kept, some not
+}
+
+// G4-d: the far sun cascades render every FarRefresh() frames, staggered (never both in one frame), and are sampled
+// with the matrix they were rendered with while held; a sun turn or a camera jump past the hold margin renders them
+// now, ForceRender adds a layer (sampled with this frame's fit), and a second plan in one frame renders everything.
+void SunFarCascadesRefreshSchedule() {
+    CascadedShadowMap csm;
+    glm::vec3 sun = glm::normalize(glm::vec3(-0.4f, -0.8f, 0.3f));
+    const glm::mat4 proj = glm::perspective(glm::radians(70.0f), 16.0f / 9.0f, 0.05f, 500.0f);
+    const glm::vec3 casterMin(-300.0f, -5.0f, -300.0f), casterMax(300.0f, 40.0f, 300.0f);
+    auto fit = [&](const glm::vec3& eye, const glm::vec3& dir) {
+        csm.Update(glm::lookAt(eye, eye + glm::vec3(7.0f, -0.7f, 22.0f), glm::vec3(0, 1, 0)), proj, dir, 150.0f, &casterMin, &casterMax);
+    };
+    const std::uint64_t n = (std::uint64_t)CascadedShadowMap::FarRefresh();
+    CHECK(n >= 2 && n <= 8);
+    glm::vec3 eye(3.0f, 1.7f, -2.0f);
+    fit(eye, sun);
+    CHECK(csm.Count() == 4);
+    std::uint64_t f = 64;
+    csm.MarkRendered(csm.PlanRender(f), f); // the first plan renders everything (nothing held yet)
+    glm::mat4 rendered[4];
+    for (int c = 0; c < 4; ++c) rendered[c] = csm.LightViewProj(c);
+    int bothFar = 0, wrongTurn = 0, wrongSample = 0, renders2 = 0, renders3 = 0;
+    for (int i = 0; i < 32; ++i) {
+        ++f;
+        eye += glm::vec3(0.03f, 0.0f, 0.05f); // a slow walk: the fit shifts by whole texels, well inside the margin
+        fit(eye, sun);
+        const unsigned mask = csm.PlanRender(f);
+        CHECK((mask & 0b0011u) == 0b0011u);
+        if ((mask & 0b1100u) == 0b1100u) ++bothFar;
+        for (int c = 2; c < 4; ++c) {
+            const bool on = (mask >> c) & 1u;
+            const std::uint64_t phase = c == 2 ? 0 : n / 2;
+            if (on != ((f + n - phase) % n == 0)) ++wrongTurn;
+            if (on) {
+                (c == 2 ? renders2 : renders3)++;
+                rendered[c] = csm.LightViewProj(c);
+                if (csm.SampleViewProj(c) != csm.LightViewProj(c)) ++wrongSample;
+            } else if (csm.SampleViewProj(c) != rendered[c]) {
+                ++wrongSample; // held: sampled as rendered, not with this frame's fit
+            }
+        }
+        csm.MarkRendered(mask, f);
+    }
+    CHECK(bothFar == 0);
+    CHECK(wrongTurn == 0);
+    CHECK(wrongSample == 0);
+    CHECK(renders2 >= (int)(32 / n) && renders2 <= (int)(32 / n) + 1);
+    CHECK(renders3 >= (int)(32 / n) && renders3 <= (int)(32 / n) + 1);
+
+    // A held layer (not its turn) renders now when the sun turns...
+    auto heldFrame = [&](int c) { // the next frame cascade c is due to be held
+        for (;;) {
+            const std::uint64_t phase = c == 2 ? 0 : n / 2;
+            if ((f + 1 + n - phase) % n != 0) return;
+            ++f;
+            fit(eye, sun);
+            csm.MarkRendered(csm.PlanRender(f), f);
+        }
+    };
+    heldFrame(2);
+    ++f;
+    sun = glm::normalize(sun + glm::vec3(0.02f, 0.0f, 0.0f));
+    fit(eye, sun);
+    unsigned mask = csm.PlanRender(f);
+    CHECK((mask & 0b1100u) == 0b1100u);
+    csm.MarkRendered(mask, f);
+    // ...and when the camera jumps past the hold margin.
+    heldFrame(2);
+    ++f;
+    eye += glm::vec3(120.0f, 0.0f, 80.0f);
+    fit(eye, sun);
+    mask = csm.PlanRender(f);
+    CHECK((mask & 0b1100u) == 0b1100u);
+    csm.MarkRendered(mask, f);
+    // ForceRender: a held layer renders this frame and samples this frame's fit.
+    heldFrame(2);
+    ++f;
+    eye += glm::vec3(0.03f, 0.0f, 0.05f);
+    fit(eye, sun);
+    mask = csm.PlanRender(f);
+    CHECK(!(mask & 0b0100u));
+    mask = csm.ForceRender(mask, 0b0100u);
+    CHECK((mask & 0b0100u) && csm.SampleViewProj(2) == csm.LightViewProj(2));
+    csm.MarkRendered(mask, f);
+    // A second plan in the same frame (another view) renders every cascade.
+    CHECK(csm.PlanRender(f) == 0b1111u);
+}
+
+// GpuCull caster mode (G4-a): the per-cascade test's CPU twin gives ShadowFrame's castsInto answer for every slot and
+// cascade - the cascade's frustum (Frustum::Intersects) then CascadedShadowMap::CasterReachesSlice, gated by the
+// render mask - over a fitted 4-cascade map, a held cascade, unbounded slots and boxes along the cascades' reach. The
+// slice data goes through CasterSliceOf (what the compute reads), so the upload is what is tested; the compute is
+// held to this twin (plus its slack) by the verify mode and the smoke_min check.
+void GpuCullCasterCascadesMatchCpu() {
+    CascadedShadowMap csm;
+    const glm::vec3 eye(3.0f, 1.7f, -2.0f);
+    const glm::mat4 view = glm::lookAt(eye, glm::vec3(10.0f, 1.0f, 20.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::mat4 proj = glm::perspective(glm::radians(70.0f), 16.0f / 9.0f, 0.05f, 500.0f);
+    const glm::vec3 casterMin(-150.0f, -5.0f, -150.0f), casterMax(150.0f, 40.0f, 150.0f);
+    csm.Update(view, proj, glm::normalize(glm::vec3(-0.4f, -0.8f, 0.3f)), 150.0f, &casterMin, &casterMax);
+    CHECK(csm.Count() == 4);
+    Frustum cells[CascadedShadowMap::kMaxCascades];
+    for (int c = 0; c < csm.Count(); ++c) cells[c] = Frustum::FromViewProj(csm.LightViewProj(c));
+    std::mt19937 rng(4401);
+    std::uniform_real_distribution<float> along(-0.2f, 1.0f), side(-1.0f, 1.0f), size(0.02f, 8.0f), unit(0.0f, 1.0f);
+    const glm::vec3 fwd = glm::normalize(glm::vec3(7.0f, -0.7f, 22.0f)), right = glm::normalize(glm::cross(fwd, glm::vec3(0, 1, 0)));
+    int mismatches = 0, twinMismatches = 0, pairs = 0, total = 0;
+    unsigned seen = 0;
+    for (const unsigned renderMask : {0xFu, 0xBu, 0x7u}) { // all, cascade 2 held, cascade 3 held
+        for (const float kernel : {0.0f, 2.5f}) {
+            const float bias = kernel > 0.0f ? 1.0f : 0.0f;
+            const GpuCull::SunCasterBlock block = GpuCull::MakeSunCasterBlock(csm, cells, renderMask, kernel, bias);
+            for (int c = 0; c < csm.Count(); ++c) CHECK(((block.Info.x >> c) & 1u) == ((renderMask >> c) & 1u));
+            for (int i = 0; i < 4000; ++i) {
+                // Boxes spread along the view out past the shadow distance, near the slices and well off to the sides.
+                const float d = along(rng) * 200.0f;
+                const glm::vec3 c = eye + fwd * d + right * side(rng) * (10.0f + 0.8f * std::abs(d)) +
+                                    glm::vec3(0.0f, side(rng) * 15.0f, 0.0f);
+                const glm::vec3 h(size(rng), size(rng), size(rng));
+                SceneSlot s;
+                s.WorldMin = c - h * 0.5f;
+                s.WorldMax = c + h * 0.5f;
+                s.Bounded = unit(rng) < 0.97f;
+                s.Alive = true;
+                glm::mat4 xf[2];
+                glm::vec4 bounds[2];
+                GpuScene::Pack(s, xf, bounds);
+                // castsInto, restated on the slot.
+                unsigned cpu = 0;
+                for (int k = 0; k < csm.Count(); ++k) {
+                    if (!((renderMask >> k) & 1u)) continue;
+                    if (!s.Bounded || (cells[k].Intersects(AABB{s.WorldMin, s.WorldMax}) &&
+                                       csm.CasterReachesSlice(k, s.WorldMin, s.WorldMax, kernel, bias)))
+                        cpu |= 1u << k;
+                    // The flat slice alone, bit for bit what CasterReachesSlice answers.
+                    twinMismatches += CascadedShadowMap::ReachesSlice(block.Cascades[k].Slice, s.WorldMin, s.WorldMax) !=
+                                      csm.CasterReachesSlice(k, s.WorldMin, s.WorldMax, kernel, bias);
+                }
+                const unsigned gpu = GpuCull::CasterCascades(bounds, block);
+                mismatches += cpu != gpu;
+                for (unsigned m = gpu; m; m &= m - 1) ++pairs;
+                seen |= gpu;
+                ++total;
+            }
+        }
+    }
+    CHECK(mismatches == 0);
+    CHECK(twinMismatches == 0);
+    CHECK(seen == 0xFu);                          // every cascade gets casters
+    CHECK(pairs > total / 4 && pairs < total * 3); // and the cases are mixed: in some cascades, not all
+    // The remap word: a slot and its cascade share one uint.
+    CHECK(GpuCull::kSlotMask == 0x3FFFFFFFu);
+    CHECK(((7u | (3u << GpuCull::kCascadeShift)) & GpuCull::kSlotMask) == 7u);
+}
+
 // HiZCuller: the occlusion boxes are padded past the object, and swaying foliage pads them further.
 void HiZPieces() {
     glm::vec3 lo(0.0f), hi(1.0f);
@@ -417,6 +1912,37 @@ void AssetPumpWaitingTickets() {
     CHECK(CountWaitingTickets(tickets) == 1);
     loading->Ready = true;
     CHECK(CountWaitingTickets(tickets) == 0);
+}
+
+// A model's pending uploads share the staging ring. The first one waits for ring space that a later one holds (its copy
+// is done and only a step retires it): stepping just the first never frees it. Every pending item gets a step.
+void ModelUploadStepsFreeTheRing() {
+    struct Up { bool Pending = true, Holds = false, CopyDone = false; };
+    int freeSlots = 0; // the ring has room for one reservation, and the second upload holds it
+    std::vector<Up> ups(2);
+    ups[1].Holds = true;
+    ups[1].CopyDone = true;
+    const auto isPending = [](const Up& u) { return u.Pending; };
+    const auto step = [&](Up& u) {
+        if (u.Holds && u.CopyDone) { u.Pending = false; u.Holds = false; ++freeSlots; return true; } // upload + retire
+        if (!u.Holds) {
+            if (freeSlots == 0) return false;                  // the ring is full for now
+            --freeSlots; u.Holds = true; u.CopyDone = true;    // reserved; the worker's copy lands
+        }
+        return false;                                          // copy not in yet: waiting
+    };
+    CHECK(StepPending(ups, isPending, step) == PendingStep::Progress); // the later upload retires its span...
+    int steps = 1;
+    while (StepPending(ups, isPending, step) != PendingStep::None && steps < 10) ++steps;
+    CHECK(!ups[0].Pending && !ups[1].Pending);                         // ...so the first gets its space and finishes
+    CHECK(steps <= 4);
+    // Everything waiting is reported as waiting, nothing pending as none.
+    std::vector<Up> stuck(2);
+    int none = 0;
+    CHECK(StepPending(stuck, isPending, [&](Up&) { return none != 0; }) == PendingStep::Waiting);
+    std::vector<Up> done(2);
+    done[0].Pending = done[1].Pending = false;
+    CHECK(StepPending(done, isPending, step) == PendingStep::None);
 }
 
 // Material slots batch when they draw alike: the same asset, or separate copies with the same values; a different
@@ -1277,6 +2803,53 @@ void TestLocalCasterHashSlots() {
     CHECK(LocalCasterHash(7, nullptr, before, xf, 0, true) != h0);
     CHECK(LocalCasterHash(8, nullptr, before, xf, 0, false) != h0);
     CHECK(LocalCasterHash(7, nullptr, before, glm::translate(xf, glm::vec3(0, 0.01f, 0)), 0, false) != h0);
+}
+
+// Material edits written into the same MaterialAsset (the Inspector's Alpha Cutoff slider, Double Sided, a reload's
+// copy into the same object) keep every slot pointer, so the signature must also read what the depth draw reads, and
+// the edit must report itself (RenderSettingsEpoch) so a quiet light wakes to look.
+void TestLocalCasterHashMaterialContent() {
+    auto model = Model::CreatePrimitive("terrain", "w2_caster_content.fbx"); // CPU-only stand-in: no GL in unit tests
+    CHECK(model && model->MeshCount() >= 1);
+    if (!model || model->MeshCount() < 1) return;
+    auto leaf = std::make_shared<MaterialAsset>();
+    leaf->Mat.Foliage = true; // the depth draw binds this material's own values (sway, cutoff)
+    const std::vector<std::shared_ptr<MaterialAsset>> slots{leaf};
+    const glm::mat4 xf(1.0f);
+    const auto sig = [&]() { Material::NextHashFrame(); return LocalCasterHash(7, model.get(), slots, xf, 0, false); };
+
+    const std::uint64_t h0 = sig();
+    const std::uint32_t e0 = RenderSettingsEpoch();
+    CHECK(sig() == h0);                      // stable across frames
+    CHECK(RenderSettingsEpoch() == e0);      // and no change reported
+    leaf->Mat.AlphaCutoff = 0.8f;            // the Inspector slider: in place, no call
+    const std::uint64_t h1 = sig();
+    CHECK(h1 != h0);
+    CHECK(RenderSettingsEpoch() != e0);      // the hash's depth watch reported it
+    const std::uint32_t e1 = RenderSettingsEpoch();
+    leaf->Mat.BaseColor = glm::vec3(0.2f);   // colour only: not a depth field, nothing reported, no redraw
+    CHECK(sig() == h1);
+    CHECK(RenderSettingsEpoch() == e1);
+    leaf->Mat.BaseColor = glm::vec3(1.0f);
+
+    leaf->Mat.DoubleSided = true;            // the depth draw's cull
+    CHECK(sig() != h1);
+    leaf->Mat.DoubleSided = false;
+    CHECK(sig() == h1);
+
+    MaterialAsset fresh = *leaf;             // a reload: a new object copied INTO the old one
+    fresh.Mat.AlphaCutoff = 0.3f;
+    const std::uint32_t e2 = RenderSettingsEpoch();
+    fresh.Mat.Hash();                        // a copy starts unseen: hashing it reports nothing
+    CHECK(RenderSettingsEpoch() == e2);
+    *leaf = fresh;
+    CHECK(sig() != h1);
+    CHECK(RenderSettingsEpoch() != e2);
+
+    leaf->RenderQueue = MaterialAsset::Queue::Transparent; // casts nothing now
+    const std::uint64_t ht = sig();
+    leaf->RenderQueue = MaterialAsset::Queue::Opaque;
+    CHECK(sig() != ht);
 }
 
 // GI Phase 1 (W2): room-aware, stable shadow slots that fade instead of popping (ShadowSlotScoring).
@@ -2315,8 +3888,44 @@ void TestPhysicalSky() {
     CHECK(clamped.Render.Sky.CloudsEnabled); // a non-boolean is ignored, keeping the default
 }
 
-// --- TextureCache: one texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's)
-// keeps both entries - they used to share one and evict each other every session, re-decoding (and re-compressing) both.
+// --- TextureCache. P-53: the size cap never evicts this session's working set (loaded, stored or requested), grows with
+// it, and keeps 20 GB of disk free.
+void TestTextureCachePinEvict() {
+    constexpr uint64_t GiB = 1024ull * 1024 * 1024;
+    constexpr uint64_t unknownFree = std::numeric_limits<uint64_t>::max();
+    CHECK(TextureCache::CapBytes(0) == 8 * GiB);
+    CHECK(TextureCache::CapBytes(4 * GiB) == 8 * GiB);
+    CHECK(TextureCache::CapBytes(8 * GiB) == 10 * GiB);
+    using E = TextureCache::EntryInfo;
+    // The Forest case: a 4.47 GB working set fits the 8 GB floor, nothing goes.
+    std::vector<E> forest;
+    for (int i = 0; i < 45; ++i) forest.push_back({"f" + std::to_string(i), GiB / 10, i, false});
+    CHECK(TextureCache::ChooseEvictions(forest, unknownFree).empty());
+    // 12 GB on disk, 9 GB of it pinned (cap 11.25 GB): only unpinned, oldest first, until it fits.
+    std::vector<E> e = {{"old", 1 * GiB, 1, false}, {"pinOld", 9 * GiB, 0, true}, {"mid", 1 * GiB, 2, false},
+                        {"new", 1 * GiB, 3, false}};
+    std::vector<size_t> v = TextureCache::ChooseEvictions(e, unknownFree);
+    CHECK(v.size() == 1 && v[0] == 0);
+    // Disk nearly full: cap clamps to (total + free) - 20 GB, but pinned entries still stay.
+    v = TextureCache::ChooseEvictions(e, 10 * GiB); // room 22 GB -> cap 2 GB
+    CHECK(v.size() == 3);
+    for (size_t i : v) CHECK(!e[i].Pinned);
+    // Under the cap with plenty of disk: nothing.
+    CHECK(TextureCache::ChooseEvictions({{"a", GiB, 0, false}}, 500 * GiB).empty());
+    // Pinned at request time (the async loader, before its decode): Prune keeps it, and the pin check doesn't expect it
+    // on disk yet.
+    const std::string queued = (std::filesystem::temp_directory_path() / "tt_cache_pin_request_test.png").string();
+    TextureImportSettings s;
+    s.MaxTextureSize = 333; // a variant nothing else uses
+    const int missingBefore = TextureCache::SessionEntriesMissing();
+    CHECK(!TextureCache::Pinned(queued, s));
+    TextureCache::Pin(queued, s);
+    CHECK(TextureCache::Pinned(queued, s));
+    CHECK(TextureCache::SessionEntriesMissing() == missingBefore);
+}
+
+// One texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's) keeps both
+// entries - they used to share one and evict each other every session, re-decoding (and re-compressing) both.
 void TestTextureCacheVariants() {
     const std::string src = (std::filesystem::temp_directory_path() / "tt_cache_variant_test.png").string();
     {
@@ -2341,6 +3950,69 @@ void TestTextureCacheVariants() {
     CHECK(std::filesystem::remove(std::filesystem::path(pa), ec));
     CHECK(std::filesystem::remove(std::filesystem::path(pb), ec));
     std::filesystem::remove(src, ec);
+}
+
+// A decode that runs before the driver's compressed formats are known must not cache its raw fallback (the cache would
+// keep it raw for good), and a raw entry one left behind is re-encoded once the encoder would compress it - while one that
+// would come out raw again (no S3TC) stays a plain hit instead of being re-decoded on every load.
+void TestTextureCacheRawFallback() {
+    namespace fs = std::filesystem;
+    const int saved = Texture::SetS3tcForTest(-1);
+    const std::string rgb = (fs::temp_directory_path() / "tt_raw_fallback_rgb.png").string();
+    const std::string grey = (fs::temp_directory_path() / "tt_raw_fallback_grey.png").string();
+    std::vector<unsigned char> px(16 * 16 * 3);
+    for (size_t i = 0; i < px.size(); ++i) px[i] = (unsigned char)(i * 5);
+    CHECK(PngWrite::ToFile(fs::path(rgb).u8string(), 16, 16, 3, px.data(), 16 * 3));
+    CHECK(PngWrite::ToFile(fs::path(grey).u8string(), 16, 16, 1, px.data(), 16));
+    TextureImportSettings colour;
+    colour.CompressionMode = TextureImportSettings::Compression::Normal; // sRGB RGB: BC1, needs S3TC
+    TextureImportSettings data = colour;
+    data.IsSRGB = false; // 1-channel linear: BC4, core GL
+    const std::string colourEntry = TextureCache::EntryPath(rgb, colour), dataEntry = TextureCache::EntryPath(grey, data);
+    std::error_code ec;
+    fs::remove(colourEntry, ec);
+    fs::remove(dataEntry, ec);
+
+    // Formats unknown: uploads raw this session, caches nothing.
+    TextureCpuData d = Texture::DecodeFile(rgb, colour);
+    CHECK(d.Ok && d.GLFormat == 0);
+    CHECK(!fs::exists(colourEntry));
+
+    // A raw entry under the compressed settings, with marker pixels so a cache hit shows.
+    TextureCache::Image raw;
+    raw.SourceWidth = raw.Width = 16;
+    raw.SourceHeight = raw.Height = 16;
+    raw.Channels = 3;
+    raw.Pixels.assign(16 * 16 * 3, 123);
+    TextureCache::Store(rgb, colour, raw);
+    // No S3TC: the encoder would leave it raw, so it stays a hit, load after load.
+    Texture::SetS3tcForTest(0);
+    for (int i = 0; i < 2; ++i) {
+        d = Texture::DecodeFile(rgb, colour);
+        CHECK(d.Ok && d.GLFormat == 0 && !d.Pixels.empty() && d.Pixels[0] == 123);
+    }
+    // S3TC present: decoded again, encoded and stored over it; the next load is a compressed hit.
+    Texture::SetS3tcForTest(1);
+    d = Texture::DecodeFile(rgb, colour);
+    CHECK(d.Ok && d.GLFormat != 0 && !d.LevelSizes.empty());
+    TextureCache::Image back;
+    CHECK(TextureCache::Load(rgb, colour, back) && back.GLFormat == d.GLFormat);
+
+    // A 1-channel linear map needs no S3TC (BC4): its raw entry heals with S3TC absent too.
+    Texture::SetS3tcForTest(0);
+    raw.Channels = 1;
+    raw.Pixels.assign(16 * 16, 123);
+    TextureCache::Store(grey, data, raw);
+    d = Texture::DecodeFile(grey, data);
+    CHECK(d.Ok && d.GLFormat != 0);
+    CHECK(TextureCache::Load(grey, data, back) && back.GLFormat != 0);
+
+    Texture::SetS3tcForTest(saved);
+    // The entries land in the project's real Library/Textures: remove exactly the ones this test wrote.
+    fs::remove(colourEntry, ec);
+    fs::remove(dataEntry, ec);
+    fs::remove(rgb, ec);
+    fs::remove(grey, ec);
 }
 
 // --- TextureCache keys: pixel-affecting settings change the hash, sampler state doesn't ------
@@ -2418,7 +4090,66 @@ void TestMaterialRobustness() {
 
 } // namespace
 
+// A-2: the linked-program cache's key and entry file. A changed source, a stage boundary moved, another driver, a
+// corrupt or truncated file are all misses; a clean entry reads back byte-exact; Prune keeps a fresh entry.
+void ProgramBinaryCacheKeyAndEntry() {
+    namespace PBC = ProgramBinaryCache;
+    const PBC::Key a = PBC::MakeKeyFor({"#version 460\nvoid main(){}", "#version 460\nout vec4 c; void main(){c=vec4(1);}"});
+    CHECK(a.Valid);
+    CHECK(a.Source == PBC::MakeKeyFor({"#version 460\nvoid main(){}", "#version 460\nout vec4 c; void main(){c=vec4(1);}"}).Source);
+    // One character changed (a variant #define) -> a different key.
+    CHECK(a.Source != PBC::MakeKeyFor({"#version 460\nvoid main(){}", "#version 460\nout vec4 c; void main(){c=vec4(0);}"}).Source);
+    // The same text split differently between stages -> a different key.
+    CHECK(PBC::MakeKeyFor({"ab", "c"}).Source != PBC::MakeKeyFor({"a", "bc"}).Source);
+    // A compute program with the vertex stage's text is not the vertex+fragment program.
+    CHECK(PBC::MakeKeyFor({"x"}).Source != PBC::MakeKeyFor({"x", ""}).Source);
+    CHECK(a.SourceBytes == 26 + 48);
+
+    const std::string driver = "NVIDIA Corporation | GeForce Test | 4.6.0 NVIDIA 999.99";
+    std::string blob(4096, '\0');
+    for (size_t i = 0; i < blob.size(); ++i) blob[i] = (char)(i * 31 + 7);
+    std::uint32_t format = 0;
+    std::string out;
+
+    const std::string entry = PBC::EncodeEntry(a, driver, 0x8E21u, blob);
+    CHECK(PBC::DecodeEntry(entry, a, driver, format, out) && format == 0x8E21u && out == blob);
+    CHECK(!PBC::DecodeEntry(entry, a, driver + " (updated)", format, out)); // another driver
+    PBC::Key other = a;
+    other.Source ^= 1;
+    CHECK(!PBC::DecodeEntry(entry, other, driver, format, out)); // another program's entry
+    other = a;
+    other.SourceBytes += 1;
+    CHECK(!PBC::DecodeEntry(entry, other, driver, format, out)); // a hash collision with a different length
+    std::string corrupt = entry;
+    corrupt[corrupt.size() - 100] ^= 0x40;
+    CHECK(!PBC::DecodeEntry(corrupt, a, driver, format, out)); // a flipped bit in the binary
+    CHECK(!PBC::DecodeEntry(std::string_view(entry).substr(0, entry.size() - 1), a, driver, format, out)); // truncated
+    CHECK(!PBC::DecodeEntry(entry + "x", a, driver, format, out));                                        // trailing bytes
+    CHECK(!PBC::DecodeEntry({}, a, driver, format, out));
+    CHECK(!PBC::DecodeEntry(PBC::EncodeEntry(a, driver, 1, {}), a, driver, format, out)); // an empty binary
+
+    // Through the folder: write, read back, a miss for another driver, Prune keeps it, Clear removes it.
+    const std::filesystem::path dir = UnitTestSupport::TempDir("program_cache");
+    PBC::SetDirectoryForTests((dir / "ShaderCache").string());
+    struct Restore { ~Restore() { ProgramBinaryCache::SetDirectoryForTests(""); } } restore;
+    PBC::Clear();
+    CHECK(PBC::DiskUsage().Entries == 0);
+    CHECK(!PBC::ReadEntryForTests(a, driver, format, out)); // nothing stored yet
+    CHECK(PBC::WriteEntryForTests(a, driver, 0x8E21u, blob));
+    CHECK(PBC::DiskUsage().Entries == 1);
+    out.clear();
+    CHECK(PBC::ReadEntryForTests(a, driver, format, out) && out == blob);
+    CHECK(!PBC::ReadEntryForTests(a, "AMD | Radeon | 4.6", format, out));
+    CHECK(PBC::WriteEntryForTests(a, driver, 0x8E21u, blob + "more")); // a re-store replaces the entry in place
+    CHECK(PBC::DiskUsage().Entries == 1);
+    CHECK(PBC::ReadEntryForTests(a, driver, format, out) && out == blob + "more");
+    PBC::Prune();
+    CHECK(PBC::DiskUsage().Entries == 1);
+    CHECK(PBC::Clear() == 1 && PBC::DiskUsage().Entries == 0);
+}
+
 void RegisterRenderTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"Program binary cache: key, entry checks, folder round trip", ProgramBinaryCacheKeyAndEntry});
     tests.push_back({"GI: L1 SH projection of known environments", GISphericalHarmonics});
     tests.push_back({"GI: volume lookup, bake file, weights follow circuits", GIVolumeLookup});
     tests.push_back({"Shader constants match their C++ sources", ShaderConstantsMatch});
@@ -2426,7 +4157,22 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Small-object cull: projected bounding-sphere height", SmallObjectCull});
     tests.push_back({"Light distance fade: by projected size, smooth, then dropped", LightDistanceFade});
     tests.push_back({"Light bounds: per-face fade (Bounds Fade - / +), uniform = the old single fade", LightBoundsFaceFade});
+    tests.push_back({"Light bounds: sheared box world bounds (cluster cull mirror)", LightBoundsShearedBox});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
+    tests.push_back({"GpuScene: the mirror matches the candidate list slot by slot, frame after frame", GpuSceneMirror});
+    tests.push_back({"GpuScene: in-place render settings reach the slots (reported: next sync; unreported: within a sweep lap)", GpuSceneLiveEpoch});
+    tests.push_back({"GpuScene: SyncOnce's key follows every Sync (another world in between syncs again)", GpuSceneSyncOnceKey});
+    tests.push_back({"GpuScene: slot object state = what the per-draw hook binds (probes, blends, GI mask)", GpuSceneObjectState});
+    tests.push_back({"Depth casters: the sun's cached grouping is reused only for the same casters + epochs (and rebuilt every 16 frames)", DepthCasterCacheInvalidation});
+    tests.push_back({"GpuScene: slot state needs 9 fragment SSBO blocks; below that a global _NO_SLOT_STATE define", GpuSceneSlotStateBlockBudget});
+    tests.push_back({"GpuScene: the change log lists every changed slot with where it was and is (300 random frames)", GpuSceneChangeLog});
+    tests.push_back({"Sun caster list: the change-log delta path = the full loop, field for field, every frame (400 random frames)", SunCasterListDelta});
+    tests.push_back({"Sun caster list: the keyed path (the set changed) = the full loop, field for field, every frame (400 random frames)", SunCasterListKeyed});
+    tests.push_back({"Sun gather reuse: the kept list holds every caster a fresh gather draws, field for field (800 random frames)", SunGatherReuse});
+    tests.push_back({"Sun gather reuse: LOD level flips are patched into the kept list, which stays a fresh padded gather field for field", SunGatherLodPatch});
+    tests.push_back({"Local shadows (G4-c): a frame's changes wake the quiet lights they reach, and only those", LocalShadowQuietWake});
+    tests.push_back({"Local shadows (G4-c): a LOD level change wakes the lights around the renderers it swapped", LocalShadowLodToggles});
+    tests.push_back({"GpuScene: upload runs (merge, cap, whole list) and layer packing", GpuSceneRuns});
     tests.push_back({"GatherPatch", GatherPatch});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
     tests.push_back({"GPU instancing: grouping keeps first-appearance order, kNoBatch stands alone", InstanceGrouping});
@@ -2434,9 +4180,14 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Async uploads: staging ring placement wraps and never overlaps", UploadStagingRing});
     tests.push_back({"Async uploads: the pump budget follows the frame headroom in Play", AssetPumpBudget});
     tests.push_back({"Async uploads: a ticket the budget deferred still counts as in flight", AssetPumpWaitingTickets});
+    tests.push_back({"Async uploads: a model's later upload that holds ring space is stepped too", ModelUploadStepsFreeTheRing});
     tests.push_back({"GPU-driven draws: indirect batches by key, in first-appearance order", IndirectBuilder});
     tests.push_back({"GPU-driven draws: mesh arena free list is first-fit and coalesces", MeshArenaFreeList});
+    tests.push_back({"Mesh arena: Play entry's skinned VAO reserve (P-56)", MeshArenaPlayVaoReserve});
     tests.push_back({"GPU occlusion culling: box padding", HiZPieces});
+    tests.push_back({"GPU culling: stage A matches the CPU gather", GpuCullStageAMatchesCpu});
+    tests.push_back({"GPU culling: sun caster cascades match the CPU", GpuCullCasterCascadesMatchCpu});
+    tests.push_back({"Sun shadows: far cascades refresh every FarRefresh frames, staggered, held as rendered", SunFarCascadesRefreshSchedule});
     tests.push_back({"Scene wind: settings round-trip, old-scene defaults, one bearing convention", SceneWindSettings});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});
@@ -2457,10 +4208,13 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"MaterialRobustness", TestMaterialRobustness});
     tests.push_back({"MaterialTextureDefaults", TestMaterialTextureDefaults});
     tests.push_back({"TextureCacheVariants", TestTextureCacheVariants});
+    tests.push_back({"TextureCacheRawFallback", TestTextureCacheRawFallback});
+    tests.push_back({"TextureCachePinEvict", TestTextureCachePinEvict});
     tests.push_back({"TextureCacheHash", TestTextureCacheHash});
     tests.push_back({"CameraFrustumValidation", TestCameraFrustumValidation});
     tests.push_back({"CameraRoll", TestCameraRoll});
     tests.push_back({"OpaqueBatchKey", TestOpaqueBatchKey});
     tests.push_back({"LocalCasterHashSlots", TestLocalCasterHashSlots});
+    tests.push_back({"LocalCasterHashMaterialContent", TestLocalCasterHashMaterialContent});
     tests.push_back({"ShadowSlotScoring", TestShadowSlotScoring});
 }

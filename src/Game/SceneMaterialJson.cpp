@@ -1,4 +1,5 @@
 #include "SceneSerializerInternal.h"
+#include "RenderSettingsEpoch.h"
 
 namespace SceneDetail {
 

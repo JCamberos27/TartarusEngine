@@ -1,5 +1,6 @@
 #include "App/Application.h"
 #include "App/GameShellWiring.h"
+#include "App/OutfitWaitGate.h"
 #include "TerrainSystem.h"
 
 #include "Window.h"
@@ -46,6 +47,8 @@
 #include "TimeOfDay.h"
 #include "Material.h"
 #include "ShaderLibrary.h"
+#include "App/PlayAssetsWarmup.h"
+#include "GpuScene.h"
 #include "TintOverlayRenderer.h"
 #include "HdrTarget.h"
 #include "OpaqueColorCopy.h"
@@ -130,6 +133,7 @@
 #include "Log.h"
 #include "TextureCache.h"
 #include "ModelCache.h"
+#include "ProgramBinaryCache.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -148,6 +152,7 @@
 #include <optional>
 #pragma warning(disable: 4996) // stb_image_write.h's own sprintf() use, not this file's
 #include "Renderer/UploadStaging.h"
+#include "Renderer/GLRetire.h"
 #include <cstdio>
 #include <stb_image_write.h>
 #include <cstring>
@@ -294,9 +299,11 @@ private:
     void ShutdownEditor() {
         if (giBaker) giBaker->RestoreDoors(world); // a bake closed before Finish leaves no posed door behind
         editor.Shutdown();
+        SharedMotionDatabase::ReleaseKept(); // the motion database kept between Plays (and scenes) until now
         editorModule.Shutdown();
         AppAudioMuter::Shutdown();
         EditorSound::Shutdown();
+        GLRetire::Flush(); // anything a render target retired after the last frame, while the context still lives
     }
 
     const LaunchOptions& opt;
@@ -383,6 +390,9 @@ private:
         Input::SetIgnoreDevices(opt.smokeTestMode); // smoke / npc / perf: focus coming and going changes nothing
     }};
     Step step14{[&] {
+        // A hidden run never shows, takes the focus or grabs the mouse of whoever is using the desktop.
+        if (hiddenRun) window.KeepHidden();
+        Input::SetIgnoreMouseMotion(hiddenRun);
         window.SetCursorLocked(true);
     }};
     // Placement (last session's rect, or maximized) is applied once EditorSettings has
@@ -395,11 +405,18 @@ private:
     // declared before every local below, so it is destroyed after all of them (NPC ragdolls, the player and the world
     // may still release PhysX / audio objects in their own destructors).
     struct CoreShutdownGuard {
-        ~CoreShutdownGuard() { AudioEngine::Shutdown(); PhysicsWorld::Shutdown(); }
+        ~CoreShutdownGuard() { PlayAssetsWarmup::Get().Shutdown(); AudioEngine::Shutdown(); PhysicsWorld::Shutdown(); }
     } coreShutdownGuard;
+    Step stepPrefetchRunner{[&] {
+        // The first Play's motion database reads on the Play warm-up worker (FirstPersonPresentation::PrefetchPlayAssets).
+        SharedMotionDatabase::SetPrefetchRunner(
+            [](SharedMotionDatabase::PrefetchJob job) { PlayAssetsWarmup::Get().Enqueue(std::move(job)); },
+            [](bool waiting) { waiting ? PlayAssetsWarmup::Get().BeginWait() : PlayAssetsWarmup::Get().EndWait(); });
+    }};
 
     Step step16{[&] {
         ShaderLibrary::Init(EnginePaths::Resolve("assets/shaders"));
+        GpuScene::InitSlotStateSupport(); // before any model program compiles: may add _NO_SLOT_STATE
     }};
 
     // ReadFileRequired (not ReadFile) for the core programs: a missing shader directory
@@ -412,6 +429,13 @@ private:
                        ShaderLibrary::ReadFileRequired("ModelFragment.glsl"), "modelShader"};
     Step step17{[&] {
         modelShader.SetInstancing(true); // per-instance transforms (InstanceBatch.h); its fragment stage never reads uModel
+        // G-MB: the full model fragment's SSBO blocks against the GPU's limit (GpuScene::kSlotStateFragmentBlocks).
+        const int blocks = GpuScene::FragmentBlocks(modelShader.Program());
+        const std::string line = "modelShader: " + std::to_string(blocks) + " fragment SSBO blocks, limit " +
+                                 std::to_string(GpuScene::MaxFragmentBlocks()) + ", slot state " +
+                                 (GpuScene::SlotStateSupported() ? "on" : "off");
+        if (blocks > GpuScene::MaxFragmentBlocks()) Log::Error(line + " (over the limit)");
+        else Log::Info(line);
     }};
     Shader outlineModelShader{ShaderLibrary::ReadFileRequired("OutlineModel.vert.glsl"),
                               ShaderLibrary::ReadFileRequired("Outline.frag.glsl"), "outlineModelShader"};
@@ -764,7 +788,7 @@ private:
             placement.Maximized = es.WindowMaximized;
             if (!playerMode && !window.ApplyPlacement(placement)) window.Maximize();
             if (opt.perfBenchMode && opt.perfResW > 0) {
-                glfwRestoreWindow(window.Handle());
+                window.Restore();
                 glfwSetWindowSize(window.Handle(), opt.perfResW, opt.perfResH);
             } else if (!opt.editorShotDir.empty() || opt.editorTestsMode) {
                 // TARTARUS_EDITOR_TEST_SIZE=WxH sizes the test window alone (e.g. 1044x788, CI's runner).
@@ -773,7 +797,7 @@ private:
                     int w = 0, h = 0;
                     if (sscanf_s(size.c_str(), "%dx%d", &w, &h) == 2 && w > 0 && h > 0) { testW = w; testH = h; }
                 }
-                glfwRestoreWindow(window.Handle());
+                window.Restore();
                 glfwSetWindowSize(window.Handle(), testW, testH);
                 // GLFW adds the OS frame to reach that client size, but the custom frame makes the
                 // whole window client (Window.cpp, WM_NCCALCSIZE), so the editor came out a frame
@@ -881,6 +905,7 @@ private:
         }
         // The cooked model cache: entries unused for a month, crash leftovers, the size cap (Library/Models).
         ModelCache::Prune();
+        ProgramBinaryCache::Prune(); // the linked-program cache (Library/ShaderCache): same rules
         const ModelCache::Stats models = ModelCache::GetStats();
         if (models.Hits + models.Cooked > 0)
             Log::Info("Model cache: " + std::to_string(models.Hits) + " models read (" + std::to_string((int)models.HitMs) +
@@ -1292,7 +1317,10 @@ bool AppSession::Frame() {
     const float dt = Time::UnscaledDeltaTime();
     // --npc-test runs on a fixed step, so its timings don't depend on the machine.
     // (--npc-test ragdoll stops time for a few frames to shoot one moment from four sides.)
-    const float gameDt = opt.npcTestMode ? (playing && !(npcTest && npcTest->Frozen()) ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
+    // (Set late in the frame, read here on the next one: the first loading frame still advances 1/60 s and the first frame
+    // after the hold stays frozen. Deterministic either way.)
+    static bool outfitHold = false; // set below while an outfit change's loads are in flight (harness runs): time stands still
+    const float gameDt = opt.npcTestMode ? (playing && !(npcTest && npcTest->Frozen()) && !outfitHold ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
     if (!playing && sprayCans.Spraying() > 0) sprayCans.Stop(); // Play ended mid-spray: the hiss stops
 
     // #158 — shader hot reload (editor and development builds; the scan itself runs at 1 Hz). Engine
@@ -1323,8 +1351,12 @@ bool AppSession::Frame() {
     // A hidden run (KeepsWindowHidden) has no display to wait for: with the screen asleep, a synced swap held each frame
     // for half a second and an NPC test crawled at 2 fps. (Harness runs step a fixed 1/60 s, so only the speed changes.)
     // TARTARUS_UNLOCKED_FPS: the same for a visible test run, so it goes as fast as the machine allows.
+    // TARTARUS_PERF_PACED=vsync: a visible --perf-bench measures with VSync on (PerfBench::Paced).
     static const bool unlockedFps = Env::Flag(Env::Var::UnlockedFps);
-    if (const int wantVSync = opt.perfBenchMode || hiddenRun || unlockedFps ? 0 : playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
+    if (const int wantVSync = hiddenRun || unlockedFps ? 0
+                              : opt.perfBenchMode ? (PerfBench::Paced().VSync ? 1 : 0)
+                              : playerMode        ? (playerCfg.VSync ? 1 : 0)
+                                                  : EditorSettings::Get().VSyncMode;
         wantVSync != appliedVSyncMode) {
         appliedVSyncMode = wantVSync;
         window.SetVSync(appliedVSyncMode);
@@ -1364,7 +1396,7 @@ bool AppSession::Frame() {
         if (!editor.ExitPromptActive()) editor.OpenExitPrompt();
         // Closed from the taskbar while minimized: bring the window back so the prompt
         // is visible (a minimized editor doesn't render at all — #143).
-        if (glfwGetWindowAttrib(window.Handle(), GLFW_ICONIFIED)) glfwRestoreWindow(window.Handle());
+        if (glfwGetWindowAttrib(window.Handle(), GLFW_ICONIFIED)) window.Restore();
     }
 
     // Rebuilding this (filesystem::path parse + string concat) is wasted work on the
@@ -1628,6 +1660,8 @@ bool AppSession::Frame() {
     // Reap voices that have finished so repeated Play/Stop cycles don't accumulate
     // ma_sound objects and open file handles (#200).
     // #171 - game audio follows the editor's Pause / Error Pause (resumes mid-clip).
+    {
+    PROFILE_SCOPE("Audio Update");
     AudioEngine::SetPaused(playing && paused);
     if (playing && (playing && paused) != soundWasPaused)
         EditorSound::Play((playing && paused) ? EditorSound::Event::Pause : EditorSound::Event::Resume);
@@ -1648,6 +1682,9 @@ bool AppSession::Frame() {
     }
     EditorSound::Update(); // the notification sounds for what was logged this frame
     AudioEngine::Update();
+    // P-56: the first Play's sound decodes and effect-file reads, on a worker once a playable scene is open.
+    PlayAssetsWarmup::Get().Tick(world, assets.AsyncInFlight(), playing);
+    }
 
     // Whether gameplay actually advances this frame: playing and not paused, or a
     // single-frame Step was requested while paused (#236). Everything else about play mode
@@ -1728,40 +1765,32 @@ bool AppSession::Frame() {
     // --npc-test and the --perf-bench --smoke-shots picture: an outfit change in Play lands on the frame that asked for
     // it, not when the machine finishes loading it (the player's pieces, asked for in Play's first frames, landed 0.2-0.5 s
     // in and rebuilt the body - OutfitChanged - on a frame that followed the machine's load, so no two runs matched: the
-    // picture's view-model arm landed in one of two poses). It waits only while the loads progress: a change whose loads
-    // stall (5 s with none finishing - a file that never loads) stops the waiting until an outfit change lands again, and
-    // that change lands whenever it can, as in Play. Timed perf-bench runs (no pictures) don't wait.
-    if ((opt.npcTestMode || (opt.perfBenchMode && !opt.smokeShotsDir.empty())) && playing && OutfitSystem::AnyPending()) {
-        static unsigned s_stalledAt = ~0u; // the landed generation the last stall happened at
-        if (OutfitSystem::LandedGeneration() != s_stalledAt) {
-            // Progress: one more of the waiting changes' own loads done (not the library's in-flight count, which a
-            // load finishing while another queues leaves unchanged).
-            auto loadsDone = [&] {
-                int done = 0;
-                for (entt::entity root : world.Registry.view<const CharacterOutfitComponent>()) {
-                    int d = 0;
-                    if (OutfitSystem::IsPending(world, root, &d)) done += d;
-                }
-                return done;
-            };
-            auto lastProgress = std::chrono::steady_clock::now();
-            int done = loadsDone();
-            while (OutfitSystem::AnyPending() && !OutfitSystem::LandingDue(world) &&
-                   (assets.AsyncInFlight() > 0 || OutfitSystem::CoverageReading())) {
-                assets.PumpAsync(50.0);
-                UploadStaging::Finish(); // no frames end while this waits: free the staging ring by hand (as CliTools' drain)
-                std::this_thread::sleep_for(std::chrono::milliseconds(2));
-                if (const int now = loadsDone(); now != done) {
-                    done = now;
-                    lastProgress = std::chrono::steady_clock::now();
-                }
-                if (std::chrono::steady_clock::now() - lastProgress > std::chrono::seconds(5)) {
-                    s_stalledAt = OutfitSystem::LandedGeneration();
-                    std::printf("[NpcTest] an outfit change's loads stalled (none done in 5 s, %d in flight): no more waiting for it\n",
-                                assets.AsyncInFlight());
-                    break;
-                }
-            }
+    // picture's view-model arm landed in one of two poses). So while a change's loads are in flight the harness HOLDS:
+    // game time stands still (--npc-test) and the picture's frame count doesn't advance, across normal frames (the loads
+    // need a frame's GPU upload and retire steps to finish; a loop that only pumps never completes them). At
+    // OutfitWaitGate::kCapSeconds it logs, fails --npc-test, and stops holding until an outfit change lands again.
+    // Timed perf-bench runs (no pictures) don't hold.
+    outfitHold = false;
+    if (opt.npcTestMode || (opt.perfBenchMode && !opt.smokeShotsDir.empty())) {
+        static OutfitWaitGate s_gate; // a Stop mid-hold ends it (loading is false outside Play), so the next Play's clock starts fresh
+        static std::chrono::steady_clock::time_point s_t0 = std::chrono::steady_clock::now();
+        static unsigned s_gaveUpAt = ~0u; // the landed generation the last cap hit happened at
+        const bool loading = playing && OutfitSystem::AnyPending() && !OutfitSystem::LandingDue(world) &&
+                             (assets.AsyncInFlight() > 0 || OutfitSystem::CoverageReading()) &&
+                             OutfitSystem::LandedGeneration() != s_gaveUpAt;
+        const double nowSec = std::chrono::duration<double>(std::chrono::steady_clock::now() - s_t0).count();
+        switch (s_gate.Step(loading, nowSec)) {
+        case OutfitWaitGate::State::Done: s_gate = OutfitWaitGate(); break;
+        case OutfitWaitGate::State::Waiting: outfitHold = true; break;
+        case OutfitWaitGate::State::CapHit:
+            s_gaveUpAt = OutfitSystem::LandedGeneration();
+            s_gate = OutfitWaitGate();
+            std::printf("[NpcTest] an outfit change's loads were still in flight after %.0f s (%d in flight): no more holding for it%s\n",
+                        OutfitWaitGate::kCapSeconds, assets.AsyncInFlight(),
+                        npcTest ? "" : " (the _playmax picture may show a half-loaded outfit)");
+            if (npcTest) npcTest->Fail("the outfit change's loads finished within the hold cap (the picture would show a half-loaded outfit)");
+            else Log::Error("[SmokeTest] an outfit change's loads did not finish within the hold cap: the --smoke-shots picture may show a half-loaded outfit");
+            break;
         }
     }
     { PROFILE_SCOPE("Asset Pump"); assets.PumpAsync(AssetLibrary::PumpBudgetMs(playing, OutfitSystem::AnyPending(), lastFrameWorkMs)); }
@@ -2379,6 +2408,7 @@ bool AppSession::Frame() {
             perfMaxScene = smoke.CurrentPath();
             perfMaxFrames = 0;
         }
+        if (outfitHold) return; // an outfit change is still loading: not counted
         if (++perfMaxFrames != 400) return;
         std::vector<unsigned char> px = FrameCapture::GrabTopDown(fbo, w, h);
         for (size_t i = 3; i < px.size(); i += 4) px[i] = 255;
@@ -2614,6 +2644,7 @@ bool AppSession::Frame() {
         PROFILE_GPU_SCOPE("ImGui Render");
         MotionDemo::DrawCursor(); // the motion demo's drawn pointer
         editor.EndFrame(); // flushes the ImGui frame (empty when not in editor mode)
+        GLRetire::Flush(); // the textures render targets replaced this frame: ImGui has drawn with them now
     }
     // Dear ImGui's OpenGL3 backend just made its own raw glUseProgram/glBindTexture
     // calls inside EndFrame() above, bypassing GLStateCache entirely - without this,
@@ -2696,6 +2727,7 @@ bool AppSession::Frame() {
         MotionDemo::CaptureFrame(w, h);
     }
     lastFrameWorkMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frameWorkStart).count();
+    Profiler::EndGpuFrame(); // the frame's last GPU command before the present: the GPU half's end (G-0)
     {
         PROFILE_SCOPE("Swap Buffers");
         // A smoke-harness run (smoke, perf-bench, npc-test) in a window that never shows (KeepsWindowHidden):
@@ -2739,7 +2771,9 @@ bool AppSession::Frame() {
     // #143: in the background and not playing, hold to the (lower) Background FPS too.
     // TARTARUS_UNLOCKED_FPS: no cap at all, the background one included.
     static const bool uncapped = Env::Flag(Env::Var::UnlockedFps);
-    int fpsCap = opt.perfBenchMode || uncapped ? 0 : EditorSettings::Get().FpsLimit;
+    // TARTARUS_PERF_PACED=<fps>: a visible --perf-bench measures under that cap (PerfBench::Paced); a hidden one, like
+    // any other bench, runs uncapped (as it ignores VSync).
+    int fpsCap = uncapped ? 0 : opt.perfBenchMode ? (hiddenRun ? 0 : PerfBench::Paced().Fps) : EditorSettings::Get().FpsLimit;
     const int bgCap = uncapped ? 0 : EditorSettings::Get().UnfocusedFpsLimit;
     if (bgCap > 0 && !playing && !headless && !glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED))
         fpsCap = fpsCap > 0 ? std::min(fpsCap, bgCap) : bgCap;
@@ -2788,6 +2822,8 @@ bool AppSession::Frame() {
 
 // After the last frame: the test runs report, the editor saves its state, everything shuts down. The exit code.
 int AppSession::Finish() {
+    // How many programs this run read from Library/ShaderCache vs compiled (perf-bench / test logs read it).
+    if (const std::string programs = ProgramBinaryCache::Summary(); !programs.empty()) Log::Info(programs);
     if (opt.editorTestsMode) {
         // Like the smoke test: nothing from this run is saved back (the scene is in memory only).
         const int code = EditorUiTests::ExitCode();

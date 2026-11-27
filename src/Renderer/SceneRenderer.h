@@ -50,6 +50,10 @@ struct VisibilityQuery {
     // in a cell, so they always come through.
     const Frustum* CellCull = nullptr;
     int CellCullCount = 0;
+    // Which cells to read: all of them, only the static (ground-plan) cells, or only the Always cells (animated,
+    // unbounded, view-model and player-body renderables). Static + Always together give what All gives.
+    enum class Cells : std::uint8_t { All, Static, Always };
+    Cells Part = Cells::All;
 };
 struct VisibleRenderable {
     entt::entity Entity;
@@ -65,12 +69,66 @@ struct VisibleRenderable {
     // draw-list build needn't look them up again per view. Only set on what GatherVisible returns.
     std::uint16_t CandFlags = 0;
     int Layer = 0;
+    // Its slot in the GPU scene (SceneSlot below: the candidate list's index), where GpuScene holds Xform and Normal.
+    // Only set on what GatherVisible returns. Valid until another world's GatherVisible or GpuScene Sync (a world switch
+    // rebuilds the list, possibly in another order): a world's gather and the draws that read its slots stay together
+    // (one RenderScene; one ShadowFrame render).
+    std::uint32_t Slot = ~0u;
 };
 // Clears `out` and fills it with what passes `q`.
 void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRenderable>& out);
+// One static-cell renderable as GatherVisible(q) would give it now, for a caller that keeps a static-cell gather and
+// patches it (ShadowFrame's sun, on LOD level flips): -1 when `e` is no candidate in a static cell (slot unset), else
+// its slot, and 1 with `out` filled when q takes it (its cell's box passes q's cell test and it passes on its own),
+// 0 when not.
+int GatherStaticCandidate(World& world, const VisibilityQuery& q, entt::entity e, std::uint32_t& slot, VisibleRenderable& out);
 // Tests: the next GatherVisible reads every renderable again (a from-scratch reference), and how many times it has.
 void ForgetGatherCandidates();
 std::uint64_t GatherCandidateFullBuilds();
+// For a caller that keeps a static-cell gather across frames (ShadowFrame's sun): a count that moves whenever any
+// candidate's flags, layer, model or component changed, one came or left, a static cell turned Always, or the list was
+// rebuilt - anything that can change what the static cells give besides a move.
+std::uint64_t GatherCandidateEdits();
+// Brings the candidate list up to date with `world` now (what GatherVisible does first), so the two above are current.
+void SyncGatherCandidates(World& world);
+// ...and the static-cell candidates moved since the last call: each one's box before and after, joined. `all`: anything
+// may have moved (the first call, one without bounds, or past the cap). Nothing is kept until the first call.
+void TakeStaticCandidateMoves(std::vector<AABB>& out, bool& all);
+
+// G-1 (GpuScene.h): GatherVisible's candidate list as stable slots. A slot is a list index: it keeps meaning the same
+// renderable until the list is rebuilt in full (a renderable that leaves keeps its slot, flagged inactive; new ones are
+// appended), which is when Full comes back true.
+struct SceneSlot {
+    glm::mat4 Xform{1.0f};
+    glm::mat3 Normal{1.0f};       // transpose(inverse(mat3(Xform)))
+    glm::vec3 WorldMin{0.0f}, WorldMax{0.0f};
+    bool Bounded = false;
+    bool Alive = false;           // false: nothing to draw from it (left, lost its model, or inactive)
+    // The candidate's CandidateFlag bits (SceneViewPass.h, bits 0-7) and the renderable's own settings GatherVisible
+    // reads live (the kSlot* bits below).
+    std::uint16_t Flags = 0;
+    int Layer = 0;
+    entt::entity Entity{}; // who holds the slot; ReadSceneSlot sets it (entt::null when nobody does now). Not entt::null
+                           // here: this header only forward-declares entt::entity.
+    const RenderableComponent* Renderable = nullptr;  // its renderable (null: it left)
+};
+enum SceneSlotFlag : std::uint16_t {
+    kSlotFlagCastOff = 1 << 8,      // Cast Shadows: Off
+    kSlotFlagShadowsOnly = 1 << 9,  // Cast Shadows: Shadows Only
+    kSlotFlagTransparent = 1 << 10, // first material slot in the Transparent queue
+    kSlotFlagTwoSided = 1 << 11,    // Cast Shadows: Two Sided (a shadow cache's input: G4-c sees the slot change)
+};
+struct SceneSlotChanges {
+    bool Full = true;                  // every slot [0, Count) must be read again
+    std::uint32_t Count = 0;           // slots in the list now
+    std::vector<std::uint32_t> Slots;  // when not Full: the slots changed since the last call, each once (posed ones always)
+};
+// Brings the candidate list up to date for this frame (as GatherVisible would) and hands out what changed since the
+// last call. The first call turns the change tracking on (and is Full).
+void TakeSceneSlotChanges(World& world, SceneSlotChanges& out);
+// Slot `slot` as GatherVisible would read it now (posed bounds live). False past the list's end. Read after
+// TakeSceneSlotChanges in the same frame.
+bool ReadSceneSlot(std::uint32_t slot, SceneSlot& out);
 // A box holding every renderable GatherVisible knows (a superset of any query's result), cheaply: the sun's cascades
 // fit their near planes to it before the casters are gathered against them. False when there are none.
 bool RenderableBounds(World& world, glm::vec3& outMin, glm::vec3& outMax);

@@ -8,6 +8,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include "RenderSettingsEpoch.h"
 
 namespace TerrainSystem {
 
@@ -50,7 +51,7 @@ void Sync(World& world) {
                               std::to_string(t.ResZ) + ") - drawn flat.");
             }
         }
-        if (t.Built && rc.ModelRef != t.Built) rc.ModelRef = t.Built;
+        if (t.Built && rc.ModelRef != t.Built) { rc.ModelRef = t.Built; NoteRenderSettingsChanged(); }
     }
 }
 

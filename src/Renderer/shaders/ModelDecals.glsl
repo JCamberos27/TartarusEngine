@@ -145,19 +145,14 @@ float DecalNoise(vec2 p) {
 }
 
 // `geoN` is the geometric normal (facing the viewer on a back face), N the shading normal so far.
-// `cluster`: this fragment's froxel (clusterIndex(), shared with the light loop). `grungeSub` / `grungeSS`:
-// the material substrate ApplyGrunge already sampled (index + 1, 0 = none), so an Auto decal reuses it.
+// `cluster`: this fragment's froxel (clusterIndex(), shared with the light loop). `dpx` / `dpy`: dFdx / dFdy of
+// vWorldPos, taken once in main() in uniform control flow (the loop below skips decals per fragment, where implicit
+// derivatives are undefined): every decal's and substrate's uv gradient comes from them, and every sample is a textureGrad.
 void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout float metallic, inout float ao,
-                 inout vec3 emissive, vec3 geoN, uint cluster, uint grungeSub, SubstrateSample grungeSS) {
+                 inout vec3 emissive, vec3 geoN, uint cluster, vec3 dpx, vec3 dpy) {
     if (uDecalCount == 0 || uReceiveDecals == 0 || uClusterEnabled == 0) return;
-    // The loop skips decals per fragment, so implicit derivatives are undefined inside it: every
-    // decal's uv gradient comes from these, the surface's own footprint, taken out here.
-    vec3 dpx = dFdx(vWorldPos), dpy = dFdy(vWorldPos);
     DecalClusterRange range = uDecalRange[cluster];
     vec4 wp = vec4(vWorldPos, 1.0);
-    // The last substrate sampled: layered peels on one wall share it, so it's read once (Grunge's included).
-    uint cachedSub = grungeSub;
-    SubstrateSample ss = grungeSS;
     uint receiver = uDecalStatic == 1 ? DECAL_STATIC : DECAL_DYNAMIC;
     for (uint i = 0u; i < range.count; ++i) {
         uint di = uDecalIndex[range.offset + i];
@@ -250,12 +245,13 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
         // receiver's own on Auto when it has one, else the decal's. sw = how much it replaces the decal.
         uint sub = uSubstrateOn != 0 ? ids.x >> 24 : 0u;
         if (uSubstrateOn != 0 && (flags & DECAL_SUB_AUTO) != 0u && uMaterialSubstrate > 0) sub = uint(uMaterialSubstrate);
+        // Sampled per decal that shows it, not cached across the loop: a SubstrateSample kept live through the whole
+        // loop cost every fragment of the shader its registers (~0.5 ms of the Forest's opaque pass), while hits are
+        // rare. The same inputs give the same sample, so a shared substrate looks the same.
         float sw = 0.0;
+        SubstrateSample ss = SubstrateSample(vec3(0.0), vec3(0.0, 0.0, 1.0), 0.0, 0.0, 0.0, vec3(0.0), vec3(0.0), vec3(0.0));
         if (sub != 0u) {
-            if (sub != cachedSub) {
-                ss = SampleSubstrate(sub - 1u, geoN, dpx, dpy);
-                cachedSub = sub;
-            }
+            ss = SampleSubstrate(sub - 1u, geoN, dpx, dpy);
             sw = ss.strength;
         }
         // The surface map feeds the roughness / metal / AO channels and the substrate's recess (which only
@@ -335,20 +331,18 @@ uniform float uGrungeScale; // tiles per metre
 // With a material Substrate the map's alpha - a peel mask: the cooked T_Grunge_* maps carry the
 // exposed coverage there - reveals it: past a threshold Grunge Strength sets, the paint is gone and
 // the substrate's colour, normal, roughness and AO show; the dirt only tints the paint that's left.
-// `sub` / `ss` hand the material substrate's sample on to ApplyDecals (index + 1; 0 = not sampled).
+// `dpx` / `dpy`: dFdx / dFdy of vWorldPos from main(), as ApplyDecals takes them.
 void ApplyGrunge(inout vec3 albedo, inout vec3 N, inout float roughness, inout float metallic, inout float ao,
-                 vec3 geoN, out uint sub, out SubstrateSample ss) {
-    sub = 0u;
-    ss = SubstrateSample(vec3(0.0), vec3(0.0, 0.0, 1.0), 1.0, 1.0, 0.0, vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0),
-                         vec3(0.0, 0.0, 1.0)); // defined on the early return too (strength 0: no substrate)
+                 vec3 geoN, vec3 dpx, vec3 dpy) {
     if (uHasGrungeMap == 0 || uGrungeStrength <= 0.0) return;
     vec4 g4 = SampleTriplanar(uGrungeMap, vWorldPos, TriplanarWeights(geoN), max(uGrungeScale, 1e-4));
     vec3 g = g4.rgb;
     float dirt = 1.0 - dot(g, vec3(0.2126, 0.7152, 0.0722));
     float reveal = 0.0, lip = 0.0, shadow = 0.0;
+    SubstrateSample ss = SubstrateSample(vec3(0.0), vec3(0.0, 0.0, 1.0), 1.0, 1.0, 0.0, vec3(1.0, 0.0, 0.0),
+                                         vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0)); // read only where reveal > 0
     if (uSubstrateOn != 0 && uMaterialSubstrate > 0) {
-        ss = SampleSubstrate(uint(uMaterialSubstrate - 1), geoN, dFdx(vWorldPos), dFdy(vWorldPos));
-        sub = uint(uMaterialSubstrate);
+        ss = SampleSubstrate(uint(uMaterialSubstrate - 1), geoN, dpx, dpy);
         // Read on the dominant plane only (the triplanar's axes): the mask a few mips down (~6 mm at
         // the default tiling) so hairline cracks stay dirt and only flaked-off patches open up, and
         // much further down (~5 cm) as the local density of damage, so isolated specks on clean wall

@@ -17,8 +17,10 @@
 //     "crf": 14,
 //     "keys": [ {"t": 0.0, "pos": [x, y, z], "yaw": 0, "pitch": 0, "fov": 50}, ...  // "cut": true starts a new shot
 //     ],
-//     "lights": [ {"t": 12.5, "circuit": "Kitchen", "on": true}, ... ]          // "circuit": "*" = every circuit
-//   }
+//     "lights": [ {"t": 12.5, "circuit": "Kitchen", "on": true}, ... ],         // "circuit": "*" = every circuit
+//     "sun": [ {"t": 0, "hours": 17.5}, {"t": 8, "hours": 18.5} ],             // time of day, linear between keys
+//     "movers": [ {"name": "Wall Post", "near": [x, y, z], "offset": [dx, dy, dz], "period": 2, "t0": 1, "t1": 9} ]
+//   }                                    // a mover: the named entity nearest `near` swings by +-offset (sine) in t0..t1
 //
 // The render size comes from TARTARUS_SHOT_SIZE (default 1920x1080).
 namespace Cinematic {
@@ -35,6 +37,16 @@ struct LightCue {
     std::string Circuit;
     bool On = true;
     bool Done = false;
+};
+
+struct SunKey {
+    float T = 0.0f, Hours = 12.0f;
+};
+
+struct MoverCue {
+    std::string Name;
+    glm::vec3 Near{0.0f}, Offset{0.0f};
+    float Period = 2.0f, T0 = 0.0f, T1 = 0.0f;
 };
 
 struct Pose {
@@ -55,6 +67,11 @@ Pose Evaluate(const std::vector<Key>& keys, float t);
 const std::vector<Key>& Keys();
 std::vector<LightCue>& Lights();
 float Duration();
+// The time of day at t (false when the path has no "sun" keys).
+bool SunHours(float t, float& hours);
+const std::vector<MoverCue>& Movers();
+// A mover's offset from where it started at time t (zero outside t0..t1).
+glm::vec3 MoverOffset(const MoverCue& m, float t);
 int Warmup();
 
 // The video: starts ffmpeg (w x h RGBA, top row first) into the --smoke-shots dir; Write sends one frame; Finish

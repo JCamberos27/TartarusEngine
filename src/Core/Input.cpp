@@ -13,6 +13,7 @@ bool Input::s_PrevKeys[512] = {};
 static bool s_CurKeys[512] = {};
 static bool s_SimKeys[512] = {}; // SimulateKeyTap: down for the next Update() only
 static bool s_IgnoreDevices = false; // SetIgnoreDevices: a harness run
+static bool s_IgnoreMouseMotion = false; // SetIgnoreMouseMotion: a hidden run
 static constexpr int kMouseButtons = 8; // GLFW_MOUSE_BUTTON_1 .. GLFW_MOUSE_BUTTON_LAST
 static bool s_CurButtons[kMouseButtons] = {};
 static bool s_PrevButtons[kMouseButtons] = {};
@@ -93,6 +94,7 @@ void Input::Update() {
     // A harness run (SetIgnoreDevices) reads the same either way: as if unfocused, always.
     const bool focused = !s_IgnoreDevices && glfwGetWindowAttrib(s_Window, GLFW_FOCUSED) == GLFW_TRUE;
     if (s_IgnoreDevices) s_DeltaX = s_DeltaY = s_ScrollY = 0.0;
+    if (s_IgnoreMouseMotion) s_DeltaX = s_DeltaY = 0.0;
 
     // Only GLFW_KEY_SPACE (32) .. GLFW_KEY_LAST (348) are valid arguments to glfwGetKey — any
     // code outside that range raises GLFW_INVALID_VALUE (previously silent; now caught by the
@@ -127,6 +129,7 @@ void Input::Update() {
 }
 
 void Input::SetIgnoreDevices(bool ignore) { s_IgnoreDevices = ignore; }
+void Input::SetIgnoreMouseMotion(bool ignore) { s_IgnoreMouseMotion = ignore; }
 
 // #145 - reads the per-frame snapshot, like IsKeyPressed (it used to query live GLFW state, so
 // the two could disagree within a frame).

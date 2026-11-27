@@ -7,6 +7,8 @@
 #include "ShaderAsset.h"
 #include "Model.h"
 #include "Texture.h"
+#include "TextureCache.h"
+#include "Core/Env.h"
 #include "AssetDatabase.h"
 #include "AssetImport.h"
 #include "Log.h"
@@ -20,6 +22,7 @@
 #include <json.hpp>
 #include <charconv>
 #include <cstdlib>
+#include "RenderSettingsEpoch.h"
 
 using json = nlohmann::json;
 
@@ -366,8 +369,74 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path, Text
     // texture is ever loaded — but anything loaded from outside that scan (freshly imported
     // files) hit it on every single load.
     AssetDatabase::EnsureGuid(path);
-    return RegisterTexture(path, std::make_shared<Texture>(path, GetTextureSettings(path)));
+    const TextureImportSettings settings = GetTextureSettings(path);
+    if (auto pre = m_PrefetchedTextures.find(path); pre != m_PrefetchedTextures.end()) {
+        // Decoded on a worker by PrefetchMaterialTextures; used only if nothing changed its settings since.
+        TextureCpuData data = std::move(pre->second);
+        m_PrefetchedTextures.erase(pre);
+        if (TextureCache::HashSettings(data.Settings) == TextureCache::HashSettings(settings) &&
+            data.Settings.WrapMode == settings.WrapMode && data.Settings.FilterMode == settings.FilterMode)
+            return RegisterTexture(path, std::make_shared<Texture>(std::move(data)));
+    }
+    return RegisterTexture(path, std::make_shared<Texture>(path, settings));
 }
+
+int AssetLibrary::PrefetchMaterialTextures(const std::vector<std::string>& materialPaths) {
+    static const bool off = Env::Flag(Env::Var::NoTexturePrefetch);
+    if (off) return 0;
+    // Main thread: work out exactly what LoadTexture will ask for (path + settings), as it would.
+    struct Job { std::string Path; TextureImportSettings Settings; TextureCpuData Out; };
+    std::vector<Job> jobs;
+    std::set<std::string> seen;
+    for (const std::string& matPath : materialPaths) {
+        if (FindAnySpelling(m_MaterialCache, m_MaterialKeys, m_KeyEpoch, matPath) != m_MaterialCache.end()) continue;
+        std::error_code matEc;
+        if (!std::filesystem::is_regular_file(matPath, matEc)) continue; // LoadMaterial reports it
+        const auto ma = MaterialAsset::Load(matPath, nullptr); // parse only: no textures loaded
+        if (!ma) continue;
+        for (const auto& [path, use] : ma->TextureRefs()) {
+            if (path.empty() || !seen.insert(path).second) continue;
+            if (FindAnySpelling(m_TextureCache, m_TextureKeys, m_KeyEpoch, path) != m_TextureCache.end()) continue;
+            std::error_code ec;
+            if (!std::filesystem::is_regular_file(path, ec)) continue; // missing: LoadTexture logs it, as before
+            ResolveTextureSettings(path, (TextureUse)use);
+            AssetDatabase::EnsureGuid(path); // before decoding: the disk cache entry is keyed by it (see LoadTexture)
+            jobs.push_back({path, GetTextureSettings(path), {}});
+        }
+    }
+    if (jobs.empty()) return 0;
+    // The BCn formats the decode encodes to depend on the driver: known before any worker asks (main thread). On a cold
+    // cache the scene's first batch ran before any texture upload had asked, so its maps were stored uncompressed.
+    Texture::InitGpuCaps();
+    // Workers: decode only (disk cache read, or PNG decode + BCn encode + cache store). No GL.
+    const unsigned hw = std::max(2u, std::thread::hardware_concurrency());
+    const unsigned workers = std::min<unsigned>((unsigned)jobs.size(), std::min(hw - 1, 16u));
+    std::atomic<size_t> next{0};
+    auto work = [&jobs, &next] {
+        for (size_t i = next++; i < jobs.size(); i = next++) {
+            // An exception must not leave a worker (std::terminate): the job stays !Ok and LoadTexture decodes it itself.
+            try {
+                jobs[i].Out = Texture::DecodeFile(jobs[i].Path, jobs[i].Settings);
+            } catch (...) {
+                jobs[i].Out = {};
+            }
+        }
+    };
+    std::vector<std::thread> pool;
+    pool.reserve(workers);
+    for (unsigned w = 1; w < workers; ++w) pool.emplace_back(work);
+    work(); // the main thread decodes too
+    for (std::thread& t : pool) t.join();
+    int decoded = 0;
+    for (Job& j : jobs)
+        if (j.Out.Ok) {
+            m_PrefetchedTextures[j.Path] = std::move(j.Out);
+            ++decoded;
+        }
+    return decoded;
+}
+
+void AssetLibrary::DropPrefetchedTextures() { m_PrefetchedTextures.clear(); }
 
 std::shared_ptr<Texture> AssetLibrary::RegisterTexture(const std::string& path, std::shared_ptr<Texture> tex) {
     const size_t cachedBefore = m_TextureCache.size();
@@ -1077,6 +1146,7 @@ bool AssetLibrary::ReloadMaterial(const std::string& path) {
         auto fresh = MaterialAsset::Load(k, this);
         if (!fresh || fresh->Missing) return false;
         *mat = *fresh; // same object: every renderer slot holding it sees the new values
+        NoteRenderSettingsChanged(); // its queue may have changed under live renderables
         return true;
     }
     return false;

@@ -12,6 +12,7 @@
 extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsigned int format); // user32
 #endif
 #include "MotionDemo.h"
+#include "HarnessView.h"
 
 #include "EditorLayer.h"
 #include "EditorPanels.h"
@@ -40,6 +41,8 @@ extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsign
 #include "Input.h" // Input::SimulateKeyTap - main-loop keys (F1..F4) for the PlayMode suite
 #include "AtomicFile.h" // NoteSelfWrite - scratch files a suite writes are not external changes
 #include "gl.h"
+#include "Framebuffer.h"
+#include "GLRetire.h" // the render targets test (PlayMode.inl)
 #include "Core/Env.h"
 
 #include <GLFW/glfw3.h>
@@ -1076,7 +1079,8 @@ void RegisterMotionDemo() {
                 return ImVec2(p.x + s.x * 0.55f, p.y + s.y * 0.55f);
             }),
             WaitSeconds(0.2),
-            Do("record", [](Ctx&) {
+            Do("record", [](Ctx& c) {
+                HarnessView::Force(c.E, "MotionDemo"); // the clip shows the normal look whatever the prefs say
                 const ImVec2 d = ImGui::GetIO().DisplaySize;
                 MotionDemo::StartRecording((int)d.x, (int)d.y);
             }),

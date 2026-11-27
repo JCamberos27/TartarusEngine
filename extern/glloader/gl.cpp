@@ -24,7 +24,12 @@ PFNGLCREATEPROGRAMPROC glCreateProgram = nullptr;
 PFNGLATTACHSHADERPROC glAttachShader = nullptr;
 PFNGLLINKPROGRAMPROC glLinkProgram = nullptr;
 PFNGLGETPROGRAMIVPROC glGetProgramiv = nullptr;
+PFNGLGETPROGRAMINTERFACEIVPROC glGetProgramInterfaceiv = nullptr;
+PFNGLGETPROGRAMRESOURCEIVPROC glGetProgramResourceiv = nullptr;
 PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog = nullptr;
+PFNGLGETPROGRAMBINARYPROC glGetProgramBinary = nullptr;
+PFNGLPROGRAMBINARYPROC glProgramBinary = nullptr;
+PFNGLPROGRAMPARAMETERIPROC glProgramParameteri = nullptr;
 PFNGLUSEPROGRAMPROC glUseProgram = nullptr;
 PFNGLDELETEPROGRAMPROC glDeleteProgram = nullptr;
 PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation = nullptr;
@@ -185,6 +190,8 @@ bool GLLoader_Init() {
     LOAD(PFNGLATTACHSHADERPROC, glAttachShader)
     LOAD(PFNGLLINKPROGRAMPROC, glLinkProgram)
     LOAD(PFNGLGETPROGRAMIVPROC, glGetProgramiv)
+    LOAD(PFNGLGETPROGRAMINTERFACEIVPROC, glGetProgramInterfaceiv)
+    LOAD(PFNGLGETPROGRAMRESOURCEIVPROC, glGetProgramResourceiv)
     LOAD(PFNGLGETPROGRAMINFOLOGPROC, glGetProgramInfoLog)
     LOAD(PFNGLUSEPROGRAMPROC, glUseProgram)
     LOAD(PFNGLDELETEPROGRAMPROC, glDeleteProgram)
@@ -309,6 +316,10 @@ bool GLLoader_Init() {
     LOAD(PFNGLUNMAPBUFFERPROC, glUnmapBuffer)
     LOAD(PFNGLUNIFORM1UIPROC, glUniform1ui)
 #undef LOAD
+    // Optional: a context without them just compiles every program (ProgramBinaryCache checks for null).
+    glGetProgramBinary = (PFNGLGETPROGRAMBINARYPROC)LoadGLFunc("glGetProgramBinary");
+    glProgramBinary = (PFNGLPROGRAMBINARYPROC)LoadGLFunc("glProgramBinary");
+    glProgramParameteri = (PFNGLPROGRAMPARAMETERIPROC)LoadGLFunc("glProgramParameteri");
     return ok;
 }
 

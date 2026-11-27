@@ -20,8 +20,28 @@
 
 // World's LOD: which level of each LOD Group shows for a view (ApplyLod), the culled tags, the impostors and the cross-fades.
 
+void World::NoteLodToggle(entt::entity e) {
+    for (int t = 0; t < kLodToggleTakers; ++t) {
+        if (m_LodTogglesAll[t]) continue; // nobody asked yet, or past the cap: the next take says all
+        if (m_LodToggles[t].size() >= kMaxLodToggles) {
+            m_LodTogglesAll[t] = true;
+            m_LodToggles[t].clear();
+            continue;
+        }
+        m_LodToggles[t].push_back(e);
+    }
+}
+
+void World::TakeLodToggles(std::vector<entt::entity>& out, bool& all, int taker) {
+    out.swap(m_LodToggles[taker]);
+    m_LodToggles[taker].clear();
+    all = m_LodTogglesAll[taker];
+    m_LodTogglesAll[taker] = false;
+}
+
 void World::SetLodCulled(entt::entity e, bool culled) {
     const size_t s = (size_t)entt::to_entity(e);
+    if (culled != IsLodCulled(e)) NoteLodToggle(e);
     if (culled) {
         Registry.emplace_or_replace<LodCulledTag>(e);
         if (s >= m_LodCulledOwner.size()) m_LodCulledOwner.resize(s + 1, entt::null);
@@ -33,6 +53,7 @@ void World::SetLodCulled(entt::entity e, bool culled) {
 }
 
 void World::ClearLod() {
+    for (entt::entity e : Registry.view<LodCulledTag>()) NoteLodToggle(e);
     Registry.clear<LodCulledTag>();
     std::fill(m_LodCulledOwner.begin(), m_LodCulledOwner.end(), entt::null);
     // The records go with the tags: ForEachImpostor lists from them, and a record whose group is gone draws its

@@ -36,6 +36,14 @@
 #define GL_FRAGMENT_SHADER 0x8B30
 #define GL_COMPILE_STATUS 0x8B81
 #define GL_LINK_STATUS 0x8B82
+// Program binaries (GL 4.1 core / ARB_get_program_binary): ProgramBinaryCache.
+#define GL_PROGRAM_BINARY_RETRIEVABLE_HINT 0x8257
+#define GL_PROGRAM_BINARY_LENGTH 0x8741
+#define GL_NUM_PROGRAM_BINARY_FORMATS 0x87FE
+#ifndef GL_VENDOR
+#define GL_VENDOR 0x1F00
+#define GL_RENDERER 0x1F01
+#endif
 #define GL_ACTIVE_UNIFORMS 0x8B86
 #define GL_ACTIVE_UNIFORM_MAX_LENGTH 0x8B87
 #define GL_INFO_LOG_LENGTH 0x8B84
@@ -209,6 +217,11 @@
 // Buffer objects for UBO/SSBO light data + immutable (DSA) storage.
 #define GL_UNIFORM_BUFFER 0x8A11
 #define GL_SHADER_STORAGE_BUFFER 0x90D2
+// Program interface queries (GL 4.3): GpuScene::FragmentBlocks counts the model fragment's SSBO blocks.
+#define GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS 0x90DA
+#define GL_SHADER_STORAGE_BLOCK 0x92E6
+#define GL_ACTIVE_RESOURCES 0x92F5
+#define GL_REFERENCED_BY_FRAGMENT_SHADER 0x930A
 #define GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT 0x90DF
 #define GL_MAP_READ_BIT 0x0001
 #define GL_MAP_WRITE_BIT 0x0002
@@ -370,6 +383,11 @@ typedef GLuint (__stdcall* PFNGLCREATEPROGRAMPROC)(void);
 typedef void (__stdcall* PFNGLATTACHSHADERPROC)(GLuint, GLuint);
 typedef void (__stdcall* PFNGLLINKPROGRAMPROC)(GLuint);
 typedef void (__stdcall* PFNGLGETPROGRAMIVPROC)(GLuint, GLenum, GLint*);
+typedef void (__stdcall* PFNGLGETPROGRAMINTERFACEIVPROC)(GLuint, GLenum, GLenum, GLint*);
+typedef void (__stdcall* PFNGLGETPROGRAMRESOURCEIVPROC)(GLuint, GLenum, GLuint, GLsizei, const GLenum*, GLsizei, GLsizei*, GLint*);
+typedef void (__stdcall* PFNGLGETPROGRAMBINARYPROC)(GLuint, GLsizei, GLsizei*, GLenum*, void*);
+typedef void (__stdcall* PFNGLPROGRAMBINARYPROC)(GLuint, GLenum, const void*, GLsizei);
+typedef void (__stdcall* PFNGLPROGRAMPARAMETERIPROC)(GLuint, GLenum, GLint);
 typedef void (__stdcall* PFNGLGETPROGRAMINFOLOGPROC)(GLuint, GLsizei, GLsizei*, GLchar*);
 typedef void (__stdcall* PFNGLUSEPROGRAMPROC)(GLuint);
 typedef void (__stdcall* PFNGLDELETEPROGRAMPROC)(GLuint);
@@ -483,7 +501,13 @@ extern TARTARUS_CORE_API PFNGLCREATEPROGRAMPROC glCreateProgram;
 extern TARTARUS_CORE_API PFNGLATTACHSHADERPROC glAttachShader;
 extern TARTARUS_CORE_API PFNGLLINKPROGRAMPROC glLinkProgram;
 extern TARTARUS_CORE_API PFNGLGETPROGRAMIVPROC glGetProgramiv;
+extern TARTARUS_CORE_API PFNGLGETPROGRAMINTERFACEIVPROC glGetProgramInterfaceiv;
+extern TARTARUS_CORE_API PFNGLGETPROGRAMRESOURCEIVPROC glGetProgramResourceiv;
 extern TARTARUS_CORE_API PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
+// Optional (GLLoader_Init doesn't fail without them): null means no program binary cache.
+extern TARTARUS_CORE_API PFNGLGETPROGRAMBINARYPROC glGetProgramBinary;
+extern TARTARUS_CORE_API PFNGLPROGRAMBINARYPROC glProgramBinary;
+extern TARTARUS_CORE_API PFNGLPROGRAMPARAMETERIPROC glProgramParameteri;
 extern TARTARUS_CORE_API PFNGLUSEPROGRAMPROC glUseProgram;
 extern TARTARUS_CORE_API PFNGLDELETEPROGRAMPROC glDeleteProgram;
 extern TARTARUS_CORE_API PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;

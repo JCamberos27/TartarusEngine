@@ -136,6 +136,8 @@ public:
         const size_t s = (size_t)entt::to_entity(e);
         return s < m_LodFadeOwner.size() && m_LodFadeOwner[s] == e ? m_LodFadeValue[s] : 0.0f;
     }
+    // True while any cross-fade is under way (the shot harness waits for it: a capture mid-fade shows dither noise).
+    bool LodFadeActive() const { return !m_LodFading.empty(); }
     // Octahedral impostors (ImpostorLibrary): a LOD group whose LOD 0 matches a baked set draws its impostor instead of
     // any level once its centre is past ImpostorLibrary::StartDistance() from the view (the screen-height levels still
     // decide nearer, and the group stays culled where they cull it). The impostor is a level of its own to ApplyLod:
@@ -156,6 +158,15 @@ public:
         const size_t s = (size_t)entt::to_entity(e);
         return s < m_LodCulledOwner.size() && m_LodCulledOwner[s] == e;
     }
+    // The renderers whose LodCulledTag flipped since the last call (either way, maybe more than once; ClearLod's untags
+    // too), for the cached local shadows: a level change swaps which renderers a light gathers without moving any.
+    // `all`: anything may have flipped (the first call, or more than kMaxLodToggles since the last). Nothing is kept
+    // until the first call, and past the cap only the flag: a taker that stops asking (local shadows off, no local
+    // lights) lets the list grow to the cap (~1 MB) at most, then gets one `all` when it asks again.
+    // Each taker has its own list: 0 the cached local shadows (LodToggleWake), 1 the sun's reused caster gather.
+    static constexpr int kLodToggleTakers = 2;
+    void TakeLodToggles(std::vector<entt::entity>& out, bool& all, int taker = 0);
+    static constexpr size_t kMaxLodToggles = size_t(1) << 18;
     // #201 - derives InactiveTag (activeInHierarchy == false) from DeactivatedTag on the entity
     // or any ancestor. RebuildWorldTransformCache() runs it every frame; scene/prefab loads run
     // it on the way out so their callers see a consistent state immediately.
@@ -310,6 +321,9 @@ private:
     LodMemo m_LodMemo; // the last ApplyLod's view, so the same view again within a frame is free
     std::vector<entt::entity> m_LodCulledOwner; // entity slot -> the entity tagged there (IsLodCulled)
     void SetLodCulled(entt::entity e, bool culled);
+    void NoteLodToggle(entt::entity e);
+    std::vector<entt::entity> m_LodToggles[kLodToggleTakers]; // TakeLodToggles' lists, one per taker
+    bool m_LodTogglesAll[kLodToggleTakers] = {true, true};
     std::vector<std::pair<entt::entity, bool>> m_LodWalk;
     std::vector<std::int8_t> m_LodNext;       // ApplyLod's incremental pass: each record's new level, picked in parallel
     std::vector<int> m_LodChunkEvaluated;

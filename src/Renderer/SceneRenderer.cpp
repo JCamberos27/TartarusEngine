@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <array>
+#include <atomic>
 #include <optional>
 #include "RenderFrameContext.h"
 
@@ -29,6 +30,7 @@
 #include "Ssao.h"
 #include "SkinHideBuffer.h"
 #include "Model.h"
+#include "RenderSettingsEpoch.h"
 #include "InstanceBatch.h"
 #include "MaterialAsset.h"
 #include "ShaderVariant.h"
@@ -159,7 +161,46 @@ struct CandidateCache {
     std::uint32_t PatchCell = ~0u;
     size_t Dead = 0;
     std::uint64_t FullBuilds = 0;
+    std::uint64_t Edits = 0; // GatherCandidateEdits
+    // TakeStaticCandidateMoves' list: off (and All) until first asked.
+    std::vector<AABB> StaticMoves;
+    bool StaticMovesAll = true, StaticMovesOn = false;
+    static constexpr size_t kMaxStaticMoves = 1u << 16;
+    void NoteStaticMove(const VisibleRenderable& before, const VisibleRenderable& after) {
+        if (!StaticMovesOn || StaticMovesAll) return;
+        if (!before.Bounded || !after.Bounded || StaticMoves.size() >= kMaxStaticMoves) {
+            StaticMovesAll = true;
+            StaticMoves.clear();
+            return;
+        }
+        StaticMoves.push_back(AABB{glm::min(before.WorldMin, after.WorldMin), glm::max(before.WorldMax, after.WorldMax)});
+    }
     bool Forget = false; // tests: the next call rebuilds in full
+    // G-1 (GpuScene): the List indices patched since the last TakeSceneSlotChanges, each once (DirtyMark), and whether
+    // the list was rebuilt in full since (every index then means another renderable). Kept only once someone asks.
+    bool TrackSlots = false;
+    bool SlotsRebuilt = true;
+    std::vector<std::uint32_t> DirtySlots;
+    std::vector<std::uint8_t> DirtyMark;
+    // What each slot's renderable held when the slots were last handed out, for the fields ReadSceneSlot reads live
+    // (Cast Shadows, the first material's queue, the model): plain field writes from the Inspector, outfits,
+    // first-person views and loads. TakeSceneSlotChanges compares them all when RenderSettingsEpoch moved, else a
+    // slice per call (SweepAt) for writers that didn't report.
+    struct LiveKey {
+        const Model* Mesh = nullptr;
+        std::uint16_t Bits = 0; // the kSlotFlag* bits
+        bool operator!=(const LiveKey& o) const { return Mesh != o.Mesh || Bits != o.Bits; }
+    };
+    std::vector<LiveKey> Live; // by List index; empty until a full hand-out fills it
+    std::uint32_t SeenEpoch = 0;
+    size_t SweepAt = 0;
+    void MarkSlot(std::uint32_t i) {
+        if (!TrackSlots || SlotsRebuilt) return;
+        if (DirtyMark.size() <= i) DirtyMark.resize((size_t)i + 1, 0);
+        if (DirtyMark[i]) return;
+        DirtyMark[i] = 1;
+        DirtySlots.push_back(i);
+    }
 };
 constexpr std::uint32_t kNoCandidate = ~0u;
 
@@ -242,12 +283,16 @@ void PatchMovedCandidates(World& world, CandidateCache& cache) {
         if (slot >= cache.Index.size() || cache.Index[slot] == kNoCandidate) continue;
         Candidate& c = cache.List[cache.Index[slot]];
         if (c.Entity != e || !c.Renderable) continue;
+        const VisibleRenderable before = c.V;
         c.V.Xform = world.GetCachedWorldTransform(e);
         c.V.Normal = NormalMatrix(c.V.Xform);
         FillBounds(c.V, *c.Renderable);
+        cache.MarkSlot(cache.Index[slot]);
         CandidateCell& cell = cache.Cells[c.Cell];
         if (!cell.Always) {
+            cache.NoteStaticMove(before, c.V);
             if (!c.V.Bounded) {
+                ++cache.Edits;
                 cell.Always = true; // lost its bounds: the cell is tested member by member now
             } else {
                 cell.Min = glm::min(cell.Min, c.V.WorldMin);
@@ -265,6 +310,7 @@ void PatchMovedCandidates(World& world, CandidateCache& cache) {
 // when only the full build can tell: the renderable count isn't what that explains (a renderer added in place, or one
 // that had no transform or model given one).
 bool RefreshCandidates(World& world, CandidateCache& cache) {
+    ++cache.Edits; // flags, models or the set: anything a kept static gather holds may be stale
     auto& reg = world.Registry;
     auto& renderPool = reg.storage<RenderableComponent>();
     const auto& transformPool = reg.storage<TransformComponent>();
@@ -283,20 +329,23 @@ bool RefreshCandidates(World& world, CandidateCache& cache) {
     constexpr size_t kChunk = 8192;
     const size_t chunks = (n + kChunk - 1) / kChunk;
     static std::vector<size_t> chunkIds, chunkLive;
-    static std::vector<std::vector<std::uint32_t>> chunkGone, chunkFix;
+    static std::vector<std::vector<std::uint32_t>> chunkGone, chunkFix, chunkChanged;
     chunkIds.resize(chunks);
     std::iota(chunkIds.begin(), chunkIds.end(), size_t(0));
     chunkLive.assign(chunks, 0);
     if (chunkGone.size() < chunks) {
         chunkGone.resize(chunks);
         chunkFix.resize(chunks);
+        chunkChanged.resize(chunks);
     }
     constexpr std::uint16_t kOwnCell = kCandPosed | kCandViewModel | kCandPlayerBody; // never in a static cell
     const auto scan = [&](size_t ch) {
         std::vector<std::uint32_t>& gone = chunkGone[ch];
         std::vector<std::uint32_t>& fix = chunkFix[ch];
+        std::vector<std::uint32_t>& changed = chunkChanged[ch]; // flags, layer or model: GpuScene re-reads it
         gone.clear();
         fix.clear();
+        changed.clear();
         size_t live = 0;
         for (size_t i = ch * kChunk, end = std::min(n, i + kChunk); i < end; ++i) {
             Candidate& c = cache.List[i];
@@ -310,9 +359,11 @@ bool RefreshCandidates(World& world, CandidateCache& cache) {
             const std::uint16_t flags = CandidateFlagsOf(reg, e, *r);
             const bool modelChanged = r->ModelRef.get() != c.ModelAtBuild;
             const bool ownCell = (flags & kOwnCell) && !(c.Flags & kOwnCell);
+            const int layer = CandidateLayerOf(reg, e);
+            if (modelChanged || flags != c.Flags || layer != c.Layer) changed.push_back((std::uint32_t)i);
             c.Renderable = c.V.Renderable = r;
             c.Flags = c.V.CandFlags = cache.Hot[i].Flags = flags;
-            c.Layer = c.V.Layer = CandidateLayerOf(reg, e);
+            c.Layer = c.V.Layer = layer;
             if (modelChanged) {
                 c.ModelAtBuild = r->ModelRef.get();
                 FillBounds(c.V, *r);
@@ -337,7 +388,9 @@ bool RefreshCandidates(World& world, CandidateCache& cache) {
             c.Renderable = c.V.Renderable = nullptr;
             c.Flags = c.V.CandFlags = cache.Hot[i].Flags = kCandInactive;
             ++cache.Dead;
+            cache.MarkSlot(i);
         }
+        for (std::uint32_t i : chunkChanged[ch]) cache.MarkSlot(i);
         for (std::uint32_t i : chunkFix[ch]) {
             const Candidate& c = cache.List[i];
             CandidateCell& cell = cache.Cells[c.Cell];
@@ -372,6 +425,7 @@ bool RefreshCandidates(World& world, CandidateCache& cache) {
         cache.Index[slot] = (std::uint32_t)cache.List.size();
         cache.Hot.push_back({c.Entity, c.Flags});
         cache.List.push_back(c);
+        cache.MarkSlot((std::uint32_t)cache.List.size() - 1);
     }
     if (counted != renderPool.size()) return false;
     PatchMovedCandidates(world, cache);
@@ -440,6 +494,10 @@ const CandidateCache& Candidates(World& world) {
         return cache;
     }
     ++cache.FullBuilds;
+    ++cache.Edits;
+    cache.SlotsRebuilt = true; // every slot is another renderable now: GpuScene re-reads them all
+    cache.DirtySlots.clear();
+    cache.DirtyMark.clear();
     cache.Owner = &world;
     cache.Stamp = world.TransformCacheStamp();
     cache.Renderables = storage.size();
@@ -509,7 +567,138 @@ const CandidateCache& Candidates(World& world) {
 } // namespace
 
 void ForgetGatherCandidates() { CandidateStore().Forget = true; }
+
+namespace {
+std::atomic<std::uint32_t> g_RenderSettingsEpoch{0};
+}
+void NoteRenderSettingsChanged() { g_RenderSettingsEpoch.fetch_add(1, std::memory_order_relaxed); }
+std::uint32_t RenderSettingsEpoch() { return g_RenderSettingsEpoch.load(std::memory_order_relaxed); }
+
+namespace {
+// A renderable's settings GatherVisible reads live, as SceneSlot flag bits.
+std::uint16_t LiveSlotBits(const RenderableComponent& r) {
+    std::uint16_t bits = 0;
+    if (r.CastShadows == RenderableComponent::ShadowCasting::Off) bits |= kSlotFlagCastOff;
+    if (r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) bits |= kSlotFlagShadowsOnly;
+    if (r.CastShadows == RenderableComponent::ShadowCasting::TwoSided) bits |= kSlotFlagTwoSided;
+    if (!r.Materials.empty() && r.Materials[0] && r.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent)
+        bits |= kSlotFlagTransparent;
+    return bits;
+}
+CandidateCache::LiveKey LiveKeyOf(const Candidate& c) {
+    if (!c.Renderable) return {};
+    return {c.Renderable->ModelRef.get(), LiveSlotBits(*c.Renderable)};
+}
+// Re-reads the LiveKeys of slots [begin, end) and marks the ones that changed. With `full` it only refills them (every
+// slot goes out anyway). Across the cores when the range is big: a forest's 150k candidates are one pointer read
+// each, plus the shared material's queue.
+void ScanLiveKeys(CandidateCache& cache, size_t begin, size_t end, bool full) {
+    if (begin >= end) return;
+    constexpr size_t kChunk = 8192;
+    const size_t chunks = (end - begin + kChunk - 1) / kChunk;
+    static std::vector<size_t> chunkIds;
+    static std::vector<std::vector<std::uint32_t>> changed; // per chunk, in order
+    chunkIds.resize(chunks);
+    if (changed.size() < chunks) changed.resize(chunks);
+    for (size_t c = 0; c < chunks; ++c) chunkIds[c] = c;
+    const auto scan = [&](size_t c) {
+        std::vector<std::uint32_t>& out = changed[c];
+        out.clear();
+        for (size_t i = begin + c * kChunk, e = std::min(end, i + kChunk); i < e; ++i) {
+            const CandidateCache::LiveKey k = LiveKeyOf(cache.List[i]);
+            if (k != cache.Live[i]) {
+                cache.Live[i] = k;
+                if (!full) out.push_back((std::uint32_t)i);
+            }
+        }
+    };
+    if (chunks > 1) std::for_each(std::execution::par, chunkIds.begin(), chunkIds.end(), scan);
+    else scan(0);
+    if (full) return;
+    for (size_t c = 0; c < chunks; ++c)
+        for (std::uint32_t i : changed[c]) cache.MarkSlot(i);
+}
+// The slots whose live settings may have changed since the last call: all of them after a rebuild or a reported
+// write (RenderSettingsEpoch moved), else the ones appended since and one sweep slice (1/64, at least 1024).
+void UpdateLiveKeys(CandidateCache& cache, bool rebuilt) {
+    PROFILE_SCOPE("GPU Scene Live Scan");
+    const size_t n = cache.List.size();
+    const size_t had = rebuilt ? 0 : std::min(cache.Live.size(), n);
+    cache.Live.resize(n);
+    const std::uint32_t epoch = RenderSettingsEpoch();
+    if (rebuilt || epoch != cache.SeenEpoch) {
+        cache.SeenEpoch = epoch;
+        ScanLiveKeys(cache, 0, n, rebuilt);
+        return;
+    }
+    ScanLiveKeys(cache, had, n, false); // appended (already marked; this fills their keys)
+    if (had == 0) return;
+    const size_t slice = std::min(had, std::max<size_t>(1024, had / 64));
+    if (cache.SweepAt >= had) cache.SweepAt = 0;
+    const size_t end = std::min(had, cache.SweepAt + slice);
+    ScanLiveKeys(cache, cache.SweepAt, end, false);
+    if (end - cache.SweepAt < slice) ScanLiveKeys(cache, 0, slice - (end - cache.SweepAt), false); // wrap
+    cache.SweepAt = end - cache.SweepAt < slice ? slice - (end - cache.SweepAt) : end;
+}
+} // namespace
+
+void TakeSceneSlotChanges(World& world, SceneSlotChanges& out) {
+    CandidateCache& cache = CandidateStore();
+    const bool first = !cache.TrackSlots;
+    cache.TrackSlots = true;
+    const CandidateCache& now = Candidates(world);
+    out.Count = (std::uint32_t)now.List.size();
+    out.Slots.clear();
+    // Fields written in place (Cast Shadows, material queue, model): their slots join the changed ones.
+    const bool rebuilt = first || cache.SlotsRebuilt;
+    UpdateLiveKeys(cache, rebuilt);
+    // Rebuilt, first asked, or patched past half the list (cheaper to send it all): every slot.
+    out.Full = rebuilt || cache.DirtySlots.size() * 2 > now.List.size();
+    if (!out.Full) {
+        out.Slots = cache.DirtySlots;
+        // Posed models read their bounds live (GatherVisible): sent every call. They're the Always cells' few.
+        for (const CandidateCell& cell : now.Cells) {
+            if (!cell.Always) continue;
+            for (std::uint32_t i = cell.First, end = cell.First + cell.Count; i < end; ++i)
+                if ((now.List[i].Flags & kCandPosed) && (i >= cache.DirtyMark.size() || !cache.DirtyMark[i])) out.Slots.push_back(i);
+        }
+    }
+    for (std::uint32_t i : cache.DirtySlots) cache.DirtyMark[i] = 0;
+    cache.DirtySlots.clear();
+    cache.SlotsRebuilt = false;
+}
+
+bool ReadSceneSlot(std::uint32_t slot, SceneSlot& out) {
+    const CandidateCache& cache = CandidateStore();
+    if (slot >= cache.List.size()) return false;
+    const Candidate& c = cache.List[slot];
+    out.Alive = c.Renderable && c.Renderable->ModelRef && !(c.Flags & kCandInactive);
+    out.Flags = c.Flags;
+    out.Layer = c.Layer;
+    out.Entity = c.Renderable ? c.Entity : entt::null;
+    out.Renderable = c.Renderable;
+    if (c.Renderable) out.Flags |= LiveSlotBits(*c.Renderable); // read live, as GatherVisible's consider() does
+    VisibleRenderable v = c.V;
+    if (c.Renderable && c.Renderable->ModelRef && ((c.Flags & kCandPosed) || c.Renderable->ModelRef.get() != c.ModelAtBuild))
+        FillBounds(v, *c.Renderable); // as GatherVisible reads it
+    out.Xform = v.Xform;
+    out.Normal = v.Normal;
+    out.Bounded = v.Bounded;
+    out.WorldMin = v.WorldMin;
+    out.WorldMax = v.WorldMax;
+    return true;
+}
 std::uint64_t GatherCandidateFullBuilds() { return CandidateStore().FullBuilds; }
+std::uint64_t GatherCandidateEdits() { return CandidateStore().Edits; }
+void SyncGatherCandidates(World& world) { Candidates(world); }
+void TakeStaticCandidateMoves(std::vector<AABB>& out, bool& all) {
+    CandidateCache& cache = CandidateStore();
+    out.swap(cache.StaticMoves);
+    cache.StaticMoves.clear();
+    all = cache.StaticMovesAll;
+    cache.StaticMovesAll = false;
+    cache.StaticMovesOn = true;
+}
 
 bool RenderableBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) {
     const CandidateCache& cache = Candidates(world);
@@ -545,46 +734,58 @@ bool TooSmallOnScreen(const glm::vec3& worldMin, const glm::vec3& worldMax, cons
     return radius * projScaleY / dist < minScreenHeight;
 }
 
+namespace {
+// One candidate as GatherVisible(q) judges it on its own (its cell's test aside): what it would append (`liveV` holds a
+// copy read live for an animated or re-modelled one), or null when q leaves it out. Read only (the cache, the
+// registry's components, the LOD table), so the static cells run across the cores.
+inline const VisibleRenderable* ConsiderCandidate(World& world, const CandidateCache& cache, bool anyLod, const VisibilityQuery& q,
+                                                  std::uint32_t i, VisibleRenderable& liveV) {
+    // GameObject active / LOD level (#163); PoseSourceTag is animated only (the first-person arms rig).
+    const CandidateCache::HotCandidate& hot = cache.Hot[i];
+    if (hot.Flags & (kCandInactive | kCandPoseSource)) return nullptr;
+    if (anyLod && world.IsLodCulled(hot.Entity)) return nullptr;
+    const Candidate& c = cache.List[i];
+    // Split poses: the first-person copy only in the player's own camera, the world copy everywhere else (and
+    // the world copy is the one that casts).
+    if (c.Flags & ((q.ShadowCasters || !q.OwnerView) ? kCandOwnerViewOnly : kCandHiddenFromOwner)) return nullptr;
+    if (q.SkipViewModels && (c.Flags & kCandViewModel)) return nullptr;
+    if (q.SkipPlayerBody && (c.Flags & kCandPlayerBody)) return nullptr;
+    // The editor Scene view: hidden by the entity's own toggle (HiddenInSceneTag, #236 B) or by its layer (#236 A1).
+    if (q.EditorView && ((c.Flags & kCandHiddenInScene) ||
+                         (c.Layer >= 0 && c.Layer < 32 && !((q.LayerVisibleMask >> c.Layer) & 1u)))) return nullptr;
+    const RenderableComponent& r = *c.Renderable;
+    if (!r.ModelRef) return nullptr;
+    // #163 - Cast Shadows: Off never casts; Shadows Only is drawn by the shadow passes, never in a camera view.
+    if (q.ShadowCasters ? r.CastShadows == RenderableComponent::ShadowCasting::Off
+                        : r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) return nullptr;
+    if (q.SkipTransparent && !r.Materials.empty() && r.Materials[0] &&
+        r.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) return nullptr;
+    // An animated model's bounds move with its pose, and a swapped model brings its own: read those live.
+    const bool live = (c.Flags & kCandPosed) || r.ModelRef.get() != c.ModelAtBuild;
+    if (live) { liveV = c.V; FillBounds(liveV, r); }
+    const VisibleRenderable& v = live ? liveV : c.V; // tested in place; copied out only when it passes
+    if (v.Bounded) {
+        if (q.Cull && !q.Cull->Intersects(AABB{v.WorldMin, v.WorldMax})) return nullptr;
+        if (q.Within && !q.Within->Intersects(AABB{v.WorldMin, v.WorldMax})) return nullptr;
+        if (q.SizeCullEye && TooSmallOnScreen(v.WorldMin, v.WorldMax, *q.SizeCullEye, q.SizeCullProjScale,
+                                              q.MinScreenHeight)) return nullptr;
+    }
+    return &v;
+}
+} // namespace
+
 void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRenderable>& out) {
     PROFILE_SCOPE("Gather Visible");
     out.clear();
     const bool anyLod = !world.Registry.storage<LodCulledTag>().empty();
     const CandidateCache& cache = Candidates(world);
-    // One candidate: appended to `to` when the query takes it. Read only (the cache, the registry's components, the LOD
-    // table), so the static cells below run across the cores.
+    // One candidate: appended to `to` when the query takes it.
     const auto consider = [&](std::uint32_t i, std::vector<VisibleRenderable>& to) {
-        // GameObject active / LOD level (#163); PoseSourceTag is animated only (the first-person arms rig).
-        const CandidateCache::HotCandidate& hot = cache.Hot[i];
-        if (hot.Flags & (kCandInactive | kCandPoseSource)) return;
-        if (anyLod && world.IsLodCulled(hot.Entity)) return;
-        const Candidate& c = cache.List[i];
-        // Split poses: the first-person copy only in the player's own camera, the world copy everywhere else (and
-        // the world copy is the one that casts).
-        if (c.Flags & ((q.ShadowCasters || !q.OwnerView) ? kCandOwnerViewOnly : kCandHiddenFromOwner)) return;
-        if (q.SkipViewModels && (c.Flags & kCandViewModel)) return;
-        if (q.SkipPlayerBody && (c.Flags & kCandPlayerBody)) return;
-        // The editor Scene view: hidden by the entity's own toggle (HiddenInSceneTag, #236 B) or by its layer (#236 A1).
-        if (q.EditorView && ((c.Flags & kCandHiddenInScene) ||
-                             (c.Layer >= 0 && c.Layer < 32 && !((q.LayerVisibleMask >> c.Layer) & 1u)))) return;
-        const RenderableComponent& r = *c.Renderable;
-        if (!r.ModelRef) return;
-        // #163 - Cast Shadows: Off never casts; Shadows Only is drawn by the shadow passes, never in a camera view.
-        if (q.ShadowCasters ? r.CastShadows == RenderableComponent::ShadowCasting::Off
-                            : r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) return;
-        if (q.SkipTransparent && !r.Materials.empty() && r.Materials[0] &&
-            r.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) return;
-        // An animated model's bounds move with its pose, and a swapped model brings its own: read those live.
-        const bool live = (c.Flags & kCandPosed) || r.ModelRef.get() != c.ModelAtBuild;
         VisibleRenderable liveV;
-        if (live) { liveV = c.V; FillBounds(liveV, r); }
-        const VisibleRenderable& v = live ? liveV : c.V; // tested in place; copied out only when it passes
-        if (v.Bounded) {
-            if (q.Cull && !q.Cull->Intersects(AABB{v.WorldMin, v.WorldMax})) return;
-            if (q.Within && !q.Within->Intersects(AABB{v.WorldMin, v.WorldMax})) return;
-            if (q.SizeCullEye && TooSmallOnScreen(v.WorldMin, v.WorldMax, *q.SizeCullEye, q.SizeCullProjScale,
-                                                  q.MinScreenHeight)) return;
-        }
-        to.push_back(v);
+        const VisibleRenderable* v = ConsiderCandidate(world, cache, anyLod, q, i, liveV);
+        if (!v) return;
+        to.push_back(*v);
+        to.back().Slot = i;
     };
     // The cells the query can see. The Always cell (animated, unbounded: posed bounds are resolved on the model as they
     // are read) stays on this thread; the static cells of a big scene go out in chunks of about kChunk candidates, each
@@ -595,9 +796,11 @@ void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRe
     for (std::uint32_t ci = 0; ci < (std::uint32_t)cache.Cells.size(); ++ci) {
         const CandidateCell& cell = cache.Cells[ci];
         if (cell.Always) {
+            if (q.Part == VisibilityQuery::Cells::Static) continue;
             for (std::uint32_t i = cell.First, end = cell.First + cell.Count; i < end; ++i) consider(i, out);
             continue;
         }
+        if (q.Part == VisibilityQuery::Cells::Always) continue;
         const AABB box{cell.Min, cell.Max}; // the whole square is out of view
         if (q.Cull && !q.Cull->Intersects(box)) continue;
         if (q.CellCullCount > 0) {
@@ -641,6 +844,31 @@ void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRe
     for (std::size_t k = 0; k < chunks.size(); ++k) total += parts[k].size();
     out.reserve(total);
     for (std::size_t k = 0; k < chunks.size(); ++k) out.insert(out.end(), parts[k].begin(), parts[k].end());
+}
+
+int GatherStaticCandidate(World& world, const VisibilityQuery& q, entt::entity e, std::uint32_t& slot, VisibleRenderable& out) {
+    const CandidateCache& cache = Candidates(world);
+    const std::size_t s = (std::size_t)entt::to_entity(e);
+    if (s >= cache.Index.size() || cache.Index[s] == kNoCandidate) return -1;
+    slot = cache.Index[s];
+    const Candidate& c = cache.List[slot];
+    if (c.Entity != e) return -1;
+    const CandidateCell& cell = cache.Cells[c.Cell];
+    if (cell.Always) return -1;
+    // The cell's test, as GatherVisible's static cells take it.
+    const AABB box{cell.Min, cell.Max};
+    if (q.Cull && !q.Cull->Intersects(box)) return 0;
+    if (q.CellCullCount > 0) {
+        bool any = false;
+        for (int f = 0; f < q.CellCullCount && !any; ++f) any = q.CellCull[f].Intersects(box);
+        if (!any) return 0;
+    }
+    VisibleRenderable liveV;
+    const VisibleRenderable* v = ConsiderCandidate(world, cache, !world.Registry.storage<LodCulledTag>().empty(), q, slot, liveV);
+    if (!v) return 0;
+    out = *v;
+    out.Slot = slot;
+    return 1;
 }
 
 void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const {
@@ -718,9 +946,11 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         program.SetFloatArray("uPointShadowBias[0]",       fs.pointCountForView, in.pointShadowBias);
         program.SetFloatArray("uPointShadowNormalBias[0]", fs.pointCountForView, in.pointShadowNormalBias);
         // S2: the PCF radius in cube texels per slot (PointShadowMap::KernelTexels), 0 = the hard single compare.
+        // TARTARUS_EXP_POINT_PCF_OFF: every slot hard (the tent PCF's cost, A/B only).
+        static const bool pcfOff = Env::Flag(Env::Var::ExpPointPcfOff);
         std::array<float, PointShadowMap::kMaxPoints> kernel{};
         for (int i = 0; i < fs.pointCountForView && i < PointShadowMap::kMaxPoints; ++i)
-            kernel[i] = in.pointShadowSoftness ? PointShadowMap::KernelTexels(in.pointShadowSoftness[i]) : 0.0f;
+            kernel[i] = in.pointShadowSoftness && !pcfOff ? PointShadowMap::KernelTexels(in.pointShadowSoftness[i]) : 0.0f;
         program.SetFloatArray("uPointShadowSoftness[0]",   fs.pointCountForView, kernel.data());
         program.SetFloatArray("uPointShadowWeight[0]",     fs.pointCountForView, ShadowWeightsOrFull(in.pointShadowWeight));
     }

@@ -101,6 +101,10 @@ private:
     int m_ShotCameraStart = 40;
     static constexpr int kShotCameraSettle = 30;
     int m_FrameBudget = 100;
+    // --perf-bench with TARTARUS_PERF_PLAYS=N: after the maximized Play phase, Stop and Play again (N Plays in all), each
+    // measured as its own phase: a later Play in the same session (what it reuses) against the first.
+    int m_PerfPlays = 1, m_PerfPlay = 1;
+    bool m_PerfReplay = false; // stopped: Play again next frame
     // TARTARUS_MEM_REPORT=<dir>: a memory snapshot (MemReport) before the first scene and after each one.
     std::string m_MemReportDir;
     // TARTARUS_OPEN_ALL=1: every door, drawer and lid shown open, to check each one's hinge.
@@ -159,7 +163,11 @@ private:
     // Across scenes, as the function-local statics they came from were.
     std::string m_SetupError;     // a harness setup failure (a bad camera path), charged to the first scene
     bool m_Cinematic = false;     // TARTARUS_CINEMATIC: this run records the camera path (Tests/Cinematic.h)
+    std::uint64_t m_SunVerifyBefore[4] = {}; // smoke_min: GpuCull::SunTotals() when the G4-a check asked (passes, expected, missing, extra)
+    bool m_ViewPlanted = false;   // smoke_min planted a bad view pref for the guard to undo
+    std::string m_ViewNotLit;     // this scene drew a frame not Shaded and lit (HarnessView): what it was; fails the scene
     int m_ShotHold = 0;           // frames the current capture has waited for decal textures to stream in
+    int m_PerfHold = 0;           // --perf-bench: frames the edit phase has waited for the scene to stream in
     bool m_Sampling = false;      // --npc-test --perf-sample's profile is running
     int m_CombatPlayFrame = 0;    // the combat bench's maximized Play frames so far
     bool m_CombatReported = false;

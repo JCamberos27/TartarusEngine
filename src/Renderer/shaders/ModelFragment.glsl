@@ -17,6 +17,22 @@ in float vHidden; // ModelVertex: the share of the vertex moved by uHideBones
 in vec3 vBindPos;    // the surface in the mesh's bind-pose space (ModelVertex)
 in vec3 vBindNormal;
 
+// G-MB: the opaque multi-draw's per-copy state (GpuScene::ObjectState, binding 38), read while uSlotState is 1 (the
+// per-draw hook sets it for batches reading the GPU scene; everything else binds the uniforms per draw): the GI volume
+// mask (Head.xy, through GIVolumes.glsl's GI_MASK_LO/HI) and the reflection probes (Head.z of them: Probe[2j] centre +
+// layer, Probe[2j + 1] half size + blend). _NO_SLOT_STATE: a vertex program without vSlot (BloodVat).
+#ifndef _NO_SLOT_STATE
+flat in uint vSlot;
+struct SlotState {
+    uvec4 Head;
+    vec4 Probe[4];
+};
+layout(std430, binding = 38) readonly buffer SlotStateBlock { SlotState uSlotStates[]; };
+uniform int uSlotState;
+#define GI_MASK_LO (uSlotState == 1 ? int(uSlotStates[vSlot].Head.x) : uGIMaskLo)
+#define GI_MASK_HI (uSlotState == 1 ? int(uSlotStates[vSlot].Head.y) : uGIMaskHi)
+#endif
+
 // Every uniform and shading function (lights, shadows, IBL, fog): ModelShading.glsl.
 #include "ModelShading.glsl"
 
@@ -313,17 +329,15 @@ void main() {
     // This fragment's froxel, once: the decal list and the light loop below both read it.
     bool clustered = uClusterEnabled == 1;
     uint cluster = clustered ? clusterIndex() : 0u;
-    uint grungeSub;
-    SubstrateSample grungeSS;
-#ifdef _ENGINE_NO_GRUNGE // ShaderVariant.h: Grunge Strength 0, where ApplyGrunge returns at once
-    grungeSub = 0u; // nothing cached: ApplyDecals samples its own substrate, but Mesa warns on an uninitialised copy
-    grungeSS = SubstrateSample(vec3(0.0), vec3(0.0, 0.0, 1.0), 0.0, 0.0, 0.0, vec3(0.0), vec3(0.0), vec3(0.0));
-#else
-    ApplyGrunge(albedo, N, roughness, metallic, ao, geoN, grungeSub, grungeSS);
+    // The surface's footprint, here in uniform control flow: Grunge's substrate and every decal's gradients use it
+    // inside branches and the per-fragment decal loop, where implicit derivatives are undefined.
+    vec3 dpx = dFdx(vWorldPos), dpy = dFdy(vWorldPos);
+#ifndef _ENGINE_NO_GRUNGE // ShaderVariant.h: Grunge Strength 0, where ApplyGrunge returns at once
+    ApplyGrunge(albedo, N, roughness, metallic, ao, geoN, dpx, dpy);
 #endif
     vec3 decalEmissive = vec3(0.0);
 #ifndef _ENGINE_NO_DECALS // ShaderVariant.h: no clustered decal in this view
-    ApplyDecals(albedo, N, roughness, metallic, ao, decalEmissive, geoN, cluster, grungeSub, grungeSS);
+    ApplyDecals(albedo, N, roughness, metallic, ao, decalEmissive, geoN, cluster, dpx, dpy);
 #endif
     if (uBloodSplatCount > 0) {
         // Soaked in: fabric and skin take the blood's colour, darker where it pooled, glossy while wet.
@@ -546,51 +560,69 @@ void main() {
         // Parallax box projection: for each bound probe, clip R to the probe box and sample
         // the sky specular cube with the corrected direction, then blend by weight.
         // Zero probes → uProbeCount == 0 → falls through to the sky sample above.
-        if (uProbeCount > 0) {
+        // This draw's probes: the uniforms, or the copy's own (G-MB slot state, the same values).
+        int probeCount = uProbeCount;
+        vec3 probeCenter[2] = vec3[2](uProbeCenter[0], uProbeCenter[1]);
+        vec3 probeHalfSize[2] = vec3[2](uProbeHalfSize[0], uProbeHalfSize[1]);
+        float probeBlend[2] = float[2](uProbeBlend[0], uProbeBlend[1]);
+        int probeLayer[2] = int[2](uProbeLayer[0], uProbeLayer[1]);
+#ifndef _NO_SLOT_STATE
+        if (uSlotState == 1) {
+            probeCount = int(uSlotStates[vSlot].Head.z);
+            for (int pj = 0; pj < 2; ++pj) {
+                vec4 a = uSlotStates[vSlot].Probe[2 * pj], b = uSlotStates[vSlot].Probe[2 * pj + 1];
+                probeCenter[pj] = a.xyz;
+                probeLayer[pj] = int(a.w);
+                probeHalfSize[pj] = b.xyz;
+                probeBlend[pj] = b.w;
+            }
+        }
+#endif
+        if (probeCount > 0) {
             vec3 blendedPrefilter = vec3(0.0);
             vec3 roomIrradiance = vec3(0.0);
             float roomW = 0.0;
-            for (int pi = 0; pi < uProbeCount; ++pi) {
+            for (int pi = 0; pi < probeCount; ++pi) {
                 // Lagarde's box intersection: find t where R exits the probe box.
                 vec3 rInv = vec3(
                     abs(R.x) > 1e-6 ? 1.0 / R.x : (R.x >= 0.0 ? 1e6 : -1e6),
                     abs(R.y) > 1e-6 ? 1.0 / R.y : (R.y >= 0.0 ? 1e6 : -1e6),
                     abs(R.z) > 1e-6 ? 1.0 / R.z : (R.z >= 0.0 ? 1e6 : -1e6));
-                vec3 rbmax = (uProbeCenter[pi] + uProbeHalfSize[pi] - vWorldPos) * rInv;
-                vec3 rbmin = (uProbeCenter[pi] - uProbeHalfSize[pi] - vWorldPos) * rInv;
+                vec3 rbmax = (probeCenter[pi] + probeHalfSize[pi] - vWorldPos) * rInv;
+                vec3 rbmin = (probeCenter[pi] - probeHalfSize[pi] - vWorldPos) * rInv;
                 vec3 rbminmax;
                 rbminmax.x = (R.x >= 0.0) ? rbmax.x : rbmin.x;
                 rbminmax.y = (R.y >= 0.0) ? rbmax.y : rbmin.y;
                 rbminmax.z = (R.z >= 0.0) ? rbmax.z : rbmin.z;
                 float fa = max(min(min(rbminmax.x, rbminmax.y), rbminmax.z), 0.0);
                 vec3 intersect = vWorldPos + R * fa;
-                vec3 correctedR = normalize(intersect - uProbeCenter[pi]);
+                vec3 correctedR = normalize(intersect - probeCenter[pi]);
                 // A captured room's cube only lights a surface that faces INTO the room: the siding outside a probe's box
                 // (or inside its core, as the front wall inside the House probe) looks away from the probe's centre and keeps
                 // the sky's - the room's lit interior is not what an exterior wall sees. roomFace is 1 facing the centre, 0
                 // looking away (a smooth step on the angle, per pixel). Leaves keep the sky's: a canopy's inside never sees
                 // the lit street the probe saw, and the room's average on every leaf greyed the night trees.
                 float roomFace = 0.0;
-                if (uProbeLayer[pi] >= 0 && uFoliageSurface == 0 && uGIBake == 0) {
-                    vec3 toCentre = uProbeCenter[pi] - vWorldPos;
+                if (probeLayer[pi] >= 0 && uFoliageSurface == 0 && uGIBake == 0) {
+                    vec3 toCentre = probeCenter[pi] - vWorldPos;
                     roomFace = smoothstep(-0.15, 0.05, dot(N, toCentre) / max(length(toCentre), 1e-3));
                 }
                 vec3 probeSpec = textureLod(uPrefilteredMap, correctedR, roughness * uIBLSpecularMaxLod).rgb;
                 if (roomFace > 0.0)
-                    probeSpec = mix(probeSpec, ClampRoomSpec(textureLod(uProbeCubes, vec4(correctedR, float(uProbeLayer[pi])), roughness * uIBLSpecularMaxLod).rgb), roomFace);
-                blendedPrefilter += probeSpec * uProbeBlend[pi];
-                roomSpecW += uProbeBlend[pi] * roomFace;
+                    probeSpec = mix(probeSpec, ClampRoomSpec(textureLod(uProbeCubes, vec4(correctedR, float(probeLayer[pi])), roughness * uIBLSpecularMaxLod).rgb), roomFace);
+                blendedPrefilter += probeSpec * probeBlend[pi];
+                roomSpecW += probeBlend[pi] * roomFace;
                 // Room diffuse (a stand-in for baked GI): the captured room's widest GGX mip along N is close to its
                 // cosine-weighted irradiance - the lamps, the lit walls and the windows, not the open sky. It is the
                 // scene's own radiance, so the sky's Ambient intensity does not scale it. Full weight in the box's
                 // core, fading to the sky's over its outer 20% so an outdoor neighbour shows no seam.
                 if (roomFace > 0.0) {
-                    vec3 q = abs(vWorldPos - uProbeCenter[pi]) / max(uProbeHalfSize[pi], vec3(1e-3));
+                    vec3 q = abs(vWorldPos - probeCenter[pi]) / max(probeHalfSize[pi], vec3(1e-3));
                     float inBox = (1.0 - smoothstep(0.8, 1.0, max(q.x, max(q.y, q.z)))) * roomFace;
                     if (inBox > 0.0) {
-                        vec3 roomIrr = textureLod(uProbeCubes, vec4(N, float(uProbeLayer[pi])), uIBLSpecularMaxLod).rgb;
-                        roomIrradiance += roomIrr * uProbeBlend[pi] * inBox;
-                        roomW += uProbeBlend[pi] * inBox;
+                        vec3 roomIrr = textureLod(uProbeCubes, vec4(N, float(probeLayer[pi])), uIBLSpecularMaxLod).rgb;
+                        roomIrradiance += roomIrr * probeBlend[pi] * inBox;
+                        roomW += probeBlend[pi] * inBox;
                     }
                 }
             }

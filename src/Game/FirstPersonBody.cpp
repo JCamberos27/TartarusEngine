@@ -29,6 +29,7 @@
 #include <tuple>
 #include <cstdio>
 #include <sstream>
+#include "RenderSettingsEpoch.h"
 
 using namespace FirstPersonBodyDetail;
 
@@ -119,36 +120,59 @@ bool FirstPersonBody::Restart(World& world, Player& player) {
     return Start(world, player, &carry);
 }
 
-bool FirstPersonBody::Start(World& world, Player& player, const FirstPersonBodyMotion* carry) {
-    *this = FirstPersonBody{};
-    BodyDebug::Info() = BodyDebug::Snapshot{};
-    auto& reg = world.Registry;
+entt::entity FirstPersonBody::FindBody(const entt::registry& reg) {
     auto bodies = reg.view<FirstPersonBodyComponent>(entt::exclude<InactiveTag>);
-    if (bodies.begin() == bodies.end()) return false;
-    const entt::entity body = *bodies.begin(); // the first; a scene has one player
-    const auto& cfg = reg.get<FirstPersonBodyComponent>(body);
+    return bodies.begin() == bodies.end() ? entt::entity{entt::null} : *bodies.begin(); // the first; a scene has one player
+}
 
+std::vector<entt::entity> FirstPersonBody::RiggedPieces(const entt::registry& reg, entt::entity body) {
     // The pieces: the root itself and its children, each a rigged model on the one skeleton.
     auto rigged = [&](entt::entity e) {
         const auto* rc = reg.try_get<RenderableComponent>(e);
         return rc && rc->ModelRef && rc->ModelRef->NodeCount() > 0;
     };
     std::vector<entt::entity> pieces;
+    if (body == entt::null || !reg.valid(body)) return pieces;
     if (rigged(body)) pieces.push_back(body);
     if (const auto* h = reg.try_get<HierarchyComponent>(body))
         for (entt::entity child : h->Children)
             if (reg.valid(child) && !reg.all_of<InactiveTag>(child) && rigged(child)) pieces.push_back(child);
-    if (pieces.empty()) { Fail("needs rigged body pieces (the object's own model, or child objects with models)."); return false; }
+    return pieces;
+}
+
+entt::entity FirstPersonBody::PickDriver(const entt::registry& reg, const std::vector<entt::entity>& pieces,
+                                         const std::map<std::string, std::string>& boneMap, const std::string& headBone) {
     // The driver: the first piece with the whole skeleton (the pelvis, the head, a hand - the torso), whose pose motion matching
     // solves; the others follow it. (Before Phase 6: the first piece with an Animator Controller.)
-    m_BoneMap = FPBody::ParseBoneMap(cfg.BoneMap);
+    const auto bone = [&](const std::string& standard) -> const std::string& { return FPBody::MappedBone(boneMap, standard); };
     for (entt::entity e : pieces) {
         const Model& m = *reg.get<RenderableComponent>(e).ModelRef;
-        if (m.NodeIndex(Bone(FPBody::kBonePelvis)) >= 0 && m.NodeIndex(Bone(cfg.HeadBone)) >= 0 && m.NodeIndex(Bone(FPBody::kBoneHand[1])) >= 0) {
-            m_Driver = e;
-            break;
-        }
+        if (m.NodeIndex(bone(FPBody::kBonePelvis)) >= 0 && m.NodeIndex(bone(headBone)) >= 0 && m.NodeIndex(bone(FPBody::kBoneHand[1])) >= 0)
+            return e;
     }
+    return entt::null;
+}
+
+const Model* FirstPersonBody::SceneDriverModel(const entt::registry& reg) {
+    const entt::entity body = FindBody(reg);
+    if (body == entt::null) return nullptr;
+    const auto& cfg = reg.get<FirstPersonBodyComponent>(body);
+    const entt::entity driver = PickDriver(reg, RiggedPieces(reg, body), FPBody::ParseBoneMap(cfg.BoneMap), cfg.HeadBone);
+    return driver == entt::null ? nullptr : reg.get<RenderableComponent>(driver).ModelRef.get();
+}
+
+bool FirstPersonBody::Start(World& world, Player& player, const FirstPersonBodyMotion* carry) {
+    *this = FirstPersonBody{};
+    BodyDebug::Info() = BodyDebug::Snapshot{};
+    auto& reg = world.Registry;
+    const entt::entity body = FindBody(reg);
+    if (body == entt::null) return false;
+    const auto& cfg = reg.get<FirstPersonBodyComponent>(body);
+
+    const std::vector<entt::entity> pieces = RiggedPieces(reg, body);
+    if (pieces.empty()) { Fail("needs rigged body pieces (the object's own model, or child objects with models)."); return false; }
+    m_BoneMap = FPBody::ParseBoneMap(cfg.BoneMap);
+    m_Driver = PickDriver(reg, pieces, m_BoneMap, cfg.HeadBone);
     if (m_Driver == entt::null) {
         Fail("needs a piece with the whole skeleton (the pelvis, the head and the hands: the torso).");
         return false;
@@ -442,7 +466,7 @@ void FirstPersonBody::CopyLook(World& world, size_t k) {
     if (!reg.valid(twin) || !reg.valid(piece)) return;
     const auto& src = reg.get<RenderableComponent>(piece);
     auto& dst = reg.get<RenderableComponent>(twin);
-    if (dst.Materials != src.Materials) dst.Materials = src.Materials;
+    if (dst.Materials != src.Materials) { dst.Materials = src.Materials; NoteRenderSettingsChanged(); }
     // Copied by value: adding a component can move its storage (and any reference into it).
     const auto* hide = reg.try_get<OutfitHideTag>(piece);
     const auto* twinHide = reg.try_get<OutfitHideTag>(twin);
@@ -849,7 +873,11 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             parents.resize(pose.size());
             for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
             CopyArmShapeCached(m, *armRig, m_ArmsWeight, pose, parents, cfg.ClavicleFollow);
-            IK::ComputeGlobals(pose, parents, globals);
+            // Only the upper arms are read: the root-to-each path, not every node (the same products in the same order,
+            // so the same bits; the rest of `globals` is stale scratch, never read).
+            globals.resize(pose.size());
+            IK::RefreshPath(pose, parents, globals, -1, ul);
+            IK::RefreshPath(pose, parents, globals, -1, ur);
             left = IK::Position(globals[ul]);
             right = IK::Position(globals[ur]);
             break;

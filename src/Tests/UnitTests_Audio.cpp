@@ -11,6 +11,7 @@
 #include "../Audio/MasterLimiter.h"
 #include "../Game/Audio/ReverbZones.h"
 #include "../Game/Audio/WeaponAudio.h"
+#include "../App/PlayAssetsWarmup.h"
 #include "../Game/ComponentRegistry.h"
 #include "../Game/Components.h"
 #include "World.h"
@@ -23,6 +24,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -3592,6 +3594,53 @@ void TestDopplerVelocity() {
 
 } // namespace
 
+// P-56's Play assets warm-up: the manifest's files once each, resolved as WeaponAudio preloads them; decoded off the
+// main thread, then adopted into the preload table as Load would - a path already there (or failed) keeps its own.
+void TestPlayAssetsWarmupSounds() {
+    const char* text = R"({"files":[
+        {"file":"Weapons/AKS74U/mag_out_2.wav","key":"snd.ak.mag_out"},
+        {"file":"Weapons/AKS74U/mag_out_1.wav","key":"snd.ak.mag_out"},
+        {"file":"Weapons/AKS74U/shot_close_1.wav","key":"snd.ak.shot","layer":"close"},
+        {"file":"assets/Audio/Foley/concrete/walk_3.wav","key":"snd.foley.concrete.walk"}]})";
+    const std::vector<std::string> files = PlayAssetsWarmup::ManifestSoundFiles(text);
+    CHECK(files.size() == 4);
+    CHECK(std::find(files.begin(), files.end(), ProjectPaths::Resolve("assets/Audio/Weapons/AKS74U/mag_out_1.wav")) != files.end());
+    CHECK(std::find(files.begin(), files.end(), ProjectPaths::Resolve("assets/Audio/Foley/concrete/walk_3.wav")) != files.end());
+    CHECK(PlayAssetsWarmup::ManifestSoundFiles("{not json").empty());
+
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / UnitTestSupport::TempName("tartarus_warmup", "");
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    std::vector<float> tone(2 * 4800);
+    for (size_t i = 0; i < tone.size(); ++i) tone[i] = 0.25f * std::sin((float)i * 0.05f);
+    const std::string a = (dir / "a.wav").u8string(), b = (dir / "b.wav").u8string(), missing = (dir / "missing.wav").u8string();
+    WriteWav16(a, tone, 48000);
+    WriteWav16(b, tone, 48000);
+    CHECK(AudioEngine::Load(b)); // already preloaded: the warm-up's copy must not replace it
+    std::atomic<bool> cancel{false};
+    auto decoded = AudioEngine::DecodeForPreload({a, b, missing}, AudioEngine::PreloadDecodeFormat(), &cancel);
+    CHECK(decoded != nullptr);
+    CHECK(AudioEngine::DecodedBytes(*decoded) > 0);
+    CHECK(!AudioEngine::IsPreloaded(a)); // decoding alone touches no engine state
+    CHECK(AudioEngine::AdoptPreloaded(*decoded) == 1); // a only: b was there, missing failed (logged, as Load's)
+    CHECK(AudioEngine::IsPreloaded(a) && AudioEngine::IsPreloaded(b) && !AudioEngine::IsPreloaded(missing));
+    CHECK(!AudioEngine::Load(missing)); // remembered as failed, as a Load of it would have been
+    // A cancel stops it before the next file.
+    cancel = true;
+    auto none = AudioEngine::DecodeForPreload({a, b}, AudioEngine::PreloadDecodeFormat(), &cancel);
+    CHECK(none && AudioEngine::DecodedBytes(*none) == 0);
+    // Waited on (hurry): no breathers. Four files with a 250 ms pause each would take a second.
+    cancel = false;
+    std::atomic<bool> hurry{true};
+    const auto t0 = std::chrono::steady_clock::now();
+    auto quick = AudioEngine::DecodeForPreload({a, b, a, b}, AudioEngine::PreloadDecodeFormat(), &cancel,
+                                               std::chrono::milliseconds(250), &hurry);
+    CHECK(quick && AudioEngine::DecodedCount(*quick) == 4);
+    CHECK(std::chrono::steady_clock::now() - t0 < std::chrono::milliseconds(500));
+    fs::remove_all(dir, ec);
+}
+
 void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"AudioNonFiniteInputIsScrubbed", TestAudioNonFiniteInputIsScrubbed});
     tests.push_back({"ConvolutionReverbPreDelayAtHighRates", TestConvolutionReverbPreDelayAtHighRates});
@@ -3610,6 +3659,7 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"AnimEventPlaysItsSet", TestAnimEventPlaysItsSet});
     tests.push_back({"WeaponAudioProfileComponentAndJson", TestProfileComponentAndJson});
     tests.push_back({"AudioManifestGroupsVariants", TestAudioManifestGroupsVariants});
+    tests.push_back({"PlayAssetsWarmupSounds", TestPlayAssetsWarmupSounds});
     tests.push_back({"FoleyFootstepCadence", TestFoleyFootstepCadence});
     tests.push_back({"FoleyRules", TestFoleyRules});
     tests.push_back({"FoleyStopSettles", TestFoleyStopSettles});

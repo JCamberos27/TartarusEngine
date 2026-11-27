@@ -41,7 +41,9 @@
 
 #include <glm/glm.hpp>
 
+#include <atomic>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -57,6 +59,7 @@ float MmTune(const char* key, float fallback);
 
 // A cooked database shared by every character that plays it, with what is measured off it once.
 struct SharedMotionDatabase {
+    struct RigShape; // (below)
     MotionDatabase Db;
     GaitSpeedTable Gaits;
     float TurnInPlaceRate = 0.0f; // rad/s: the turn-on-the-spot frames' p75 root yaw rate
@@ -78,7 +81,9 @@ struct SharedMotionDatabase {
     static constexpr float kGestureHandRest = 0.05f, kGestureTiltRest = 5.0f;
     static constexpr int kGestureMax = 120;
     int IdleGestureCuts = -1; // the idle takes' excluded stretches entered mid-gesture (Get; -1: not measured - no rig)
-    // Loads `<base>.mmanim` / `.mmdb` once per process per exclusion policy (kept while anything holds it). Null (with
+    // Loads `<base>.mmanim` / `.mmdb` once per process per exclusion policy (kept while anything holds it, and the last
+    // kKeptLoads loads also after nothing does, across scene switches until shutdown, so a later Play reuses them; a
+    // rewritten database, rig file or rig .meta loads afresh). Null (with
     // `error`) when missing. `rig` (the body's driver): the hands-up frames are measured on it and excluded - a load with a rig
     // and one without are different databases (their excluded frames differ), so each is cached under its own key: the
     // base and the rig's file (none: no rig). (The first caller's policy used to win for everyone.)
@@ -88,11 +93,45 @@ struct SharedMotionDatabase {
     // A rebake rewrote `<base>.mmanim` / `.mmdb`: drops every cached load of it (each rig's) and bumps Generation(). A body
     // still holding the old load keeps it alive and sees FirstPersonBodyMotion::Stale(); the next Get reads the new files.
     static void Invalidate(const std::string& base);
+    // Lets go of the loads kept after their holders stopped (holders keep theirs). Application shutdown calls it.
+    static void ReleaseKept();
+    static constexpr size_t kKeptLoads = 2;
+    // The files whose write times a kept load remembers: the database's two and, with a rig, its model file and .meta.
+    static std::vector<std::string> WatchedFiles(const std::string& base, const std::string& rigPath);
     // Bumped by every Invalidate (starts at 0).
     static std::uint64_t Generation();
+
+    // The first Play's database load ahead of Play: reads `<base>.mmanim` / `.mmdb` and builds the database (the
+    // rig-free ~80% of a first Get, ~1.6 s) on the prefetch runner (SetPrefetchRunner: the Play warm-up worker). The
+    // next Get of `base` that has to load takes it instead of reading: it waits while the prefetch runs, runs it itself
+    // while it is still queued (never two loads), and reads afresh when the files were rewritten since it began or an
+    // Invalidate of `base` came in between. Does nothing with no runner, or when a prefetch of `base` is already
+    // pending or held, or a kept load of `base` is current. Main thread.
+    // With `rig` (RigShape of the body's driver, taken on the main thread), the job also measures the rig's frames (the
+    // hands-up / bent-over exclusions, the gaits, the turn and the start: the rest of a first Get, ~0.4 s); Get takes that
+    // only when its own rig has the same shape (names, parents, bind pose), else it reads afresh.
+    static void Prefetch(const std::string& base, std::shared_ptr<const RigShape> rig = nullptr);
+    // Drops a pending or held prefetch (the scene closed, or one without a first-person controller opened): a queued
+    // one never runs, a running one's result is thrown away. Main thread.
+    static void CancelPrefetch();
+    // Whether a prefetch is pending or held, not yet taken by Get or dropped.
+    static bool PrefetchPending();
+    // Where Prefetch runs its job (null: Prefetch does nothing), and what Get calls around a wait on a running one
+    // (true before, false after: the Play warm-up worker runs at normal priority while the main thread waits on it).
+    using PrefetchJob = std::function<void(const std::atomic<bool>& cancel)>;
+    static void SetPrefetchRunner(std::function<void(PrefetchJob)> run, std::function<void(bool waiting)> onWait = {});
     // Per frame, the higher hand's height over its shoulder (upper arm bone), m, model space of `rig`.
     // ... and (chestTilt) the chest's tilt off its bind pose's upright (deg).
     static std::vector<float> HandOverShoulder(const MotionDatabase& db, const Model& rig, std::vector<float>* chestTilt = nullptr);
+    // What the measuring reads of the driver rig, copied on the main thread (no live Model on the worker): node names,
+    // parents, bind pose and its globals, and the few nodes it looks up. Same() compares two shapes bit for bit.
+    static std::shared_ptr<const RigShape> ShapeOf(const Model& rig);
+    // The rest of a first Get once the files are read and built: the rig's exclusions (`rig` non-null), the gaits, the
+    // turn on the spot and the start frame. `go` (the prefetch worker) is asked along the way: false stops it (false out).
+    static bool Measure(SharedMotionDatabase& db, const std::string& base, const RigShape* rig, const std::function<bool()>& go = {});
+    static bool SameShape(const RigShape& a, const RigShape& b);
+    static std::vector<float> HandOverShoulder(const MotionDatabase& db, const RigShape& rig, std::vector<float>* chestTilt = nullptr,
+                                               const std::function<bool()>& go = {});
 };
 
 class FirstPersonBodyMotion {
@@ -186,6 +225,8 @@ public:
     static float StepCharacterFacing(float yaw, float clipTurn, float simYaw, const Settings& cfg, float dt);
     // The root speed (m/s) and turn rate (rad/s) a database frame's root has, as captured (over +-5 frames in its take).
     static float RootSpeed(const MotionDatabase& db, std::uint32_t frame);
+    // The database the player's body plays (Start), resolved: the one PrefetchPlayAssets reads ahead of Play.
+    static std::string PlayerDatabase();
     static float RootYawRate(const MotionDatabase& db, std::uint32_t frame);
 
 private:

@@ -10,6 +10,7 @@ class Model;
 class Shader;
 struct MaterialAsset;
 class VisibleIndexBuffer;
+class World;
 
 // GPU instancing of repeated static models (Project Settings > Quality > GPU instancing). A pass groups the copies of
 // one model that draw the same way, puts their transforms in the per-frame instance buffer, and draws each group once
@@ -92,6 +93,7 @@ bool SameSlots(const std::vector<std::shared_ptr<MaterialAsset>>& a, const std::
 std::uint64_t HashSlots(const std::vector<std::shared_ptr<MaterialAsset>>& slots, std::uint64_t seed);
 
 namespace InstanceBuffer {
+constexpr unsigned kXformBinding = 27; // ModelVertex.glsl / ShadowDepth.vert.glsl InstanceBlock
 // The per-frame instance transforms, two mat4s per instance (the transform, then its normal matrix), bound at 27.
 // Each Upload copies the staging into a fresh span of a persistently mapped ring and binds that range (the draws
 // before it keep reading theirs).
@@ -100,6 +102,8 @@ std::vector<glm::mat4>& Staging();
 // no normal matrix, but the shader's layout is still two mat4s per instance).
 void Append(std::vector<glm::mat4>& staging, const glm::mat4& xform);
 void Upload();
+// Binds the last Upload's transforms at 27 again (after something else, the GPU scene, was bound there).
+void Rebind();
 // Any per-frame data through the same ring: copies `bytes` into a fresh span and binds it as SSBO `binding` (a range).
 // False when the ring can't take it (too big, or no ring): the caller uploads its own way.
 bool UploadRange(unsigned binding, const void* data, std::size_t bytes);
@@ -153,9 +157,80 @@ struct DepthCaster {
     bool TwoSided = false;  // drawn without back-face culling (Cast Shadows: Two Sided)
     int LayerFirst = 0;     // the sun's single-pass cascades: its first cascade and how many in a row
     int Layers = 1;
+    std::uint32_t Slot = ~0u; // VisibleRenderable::Slot: its transform in the GPU scene (GpuScene.h), ~0u = none
 };
 // Draws the casters through a depth program (ShadowDepth.vert.glsl) whose uLightViewProj (or cascade matrices) the
 // caller set. Copies of an unskinned, whole model with the same materials, sidedness and cascades draw as one
 // instanced draw when GPU instancing is on; the rest one by one with uModel. `firstLoc`: the program's uCascadeFirst
 // when drawing the sun's layered cascades, else -1. Returns the draw calls issued (one per model, not per mesh).
-int DrawDepthCasters(Shader& shader, const std::vector<DepthCaster>& casters, int firstLoc = -1);
+// `sceneWorld`: the world the casters were gathered from. With it, the multi-draw copies read their transforms from
+// the persistent GPU scene by slot (synced first, GpuScene::SyncOnce) instead of being copied into the instance ring;
+// copies without a slot draw the old way.
+// `cache` (the sun's layered pass): when the casters are the ones it last saw, their grouping and indirect commands
+// are reused instead of worked out again (DepthCasterCache).
+class DepthCasterCache;
+int DrawDepthCasters(Shader& shader, const std::vector<DepthCaster>& casters, int firstLoc = -1, World* sceneWorld = nullptr,
+                     DepthCasterCache* cache = nullptr);
+
+// What the depth multi-draw works out from a caster list before it draws: each indirect command's group and sub-mesh,
+// the commands in batches, the copies' GPU scene slots, and the casters it can't take (they draw directly).
+struct DepthIndirectBuild {
+    struct Tag {
+        std::uint32_t Group;
+        std::uint16_t Mesh;
+    };
+    std::vector<Tag> Tags;
+    std::vector<IndirectItem> Items; // scratch
+    std::vector<IndirectCommand> Commands;
+    std::vector<IndirectBatch> Batches;
+    std::vector<std::uint32_t> Slots;
+    std::vector<std::uint32_t> Rest;
+};
+
+// The sun's casters barely change from frame to frame (a forest: ~2.5k casters, the same list every frame while
+// nothing moves), yet grouping them and building their commands cost ~0.35 ms a frame. This keeps both while the list
+// is the same - caster for caster its model import, material slots, outfit mask, GPU scene slot, sidedness and cascade
+// run - and so are the render settings epoch (material depth fields, render queues: NoteRenderSettingsChanged) and the
+// GPU scene's slot count. Transforms aren't in it: the copies read theirs from the GPU scene by slot. A change nothing
+// reports (a streamed cutout texture landing on a caster no other pass draws, a model's meshes reaching the arena) is
+// picked up by the rebuild once a build is kMaxAgeFrames old.
+// The sun keeps one per set of cascades it draws (CascadedShadowMap::PlanRender: the far ones on their own turns), so
+// the frames between two turns of a far cascade don't throw each other's builds away.
+class DepthCasterCache {
+public:
+    static constexpr std::uint64_t kMaxAgeFrames = 16; // a rebuild at least every 16 frames (~0.25 s at 60 fps)
+    struct Epochs {
+        std::uint32_t RenderSettings = 0;
+        std::uint32_t SceneCount = 0;
+        bool operator==(const Epochs& o) const { return RenderSettings == o.RenderSettings && SceneCount == o.SceneCount; }
+    };
+    // True: Groups and Build hold for these casters as they are on `frame`. False: the caller rebuilds both, then
+    // calls Built(frame).
+    bool Reuse(const std::vector<DepthCaster>& casters, const Epochs& epochs, std::uint64_t frame);
+    void Built(std::uint64_t frame) { m_Valid = true; m_BuiltFrame = frame; }
+    void Invalidate() { m_Valid = false; }
+    InstanceGroups Groups;
+    DepthIndirectBuild Build;
+    std::uint64_t Reused() const { return m_Reused; }   // calls that reused (unit tests)
+    std::uint64_t Rebuilt() const { return m_Rebuilt; } // calls that rebuilt
+    // Every cache's calls since startup (--perf-bench prints a phase's share reused).
+    struct Totals { std::uint64_t Reused = 0, Rebuilt = 0; };
+    static Totals AllTotals();
+
+private:
+    struct Entry { // 48 bytes, no padding: compared with memcmp
+        const void* Ref;
+        std::uint64_t Import;  // Model::ImportStamp: a re-import is a new list even at a reused address
+        const void* SlotList;
+        std::uint64_t SlotsHash; // the slot list's material pointers
+        const void* Visible;
+        std::uint32_t Slot;
+        std::int32_t Run; // two-sided, first cascade, cascade count
+    };
+    static_assert(sizeof(Entry) == 48, "DepthCasterCache::Entry is compared with memcmp");
+    std::vector<Entry> m_Key, m_Next;
+    Epochs m_Epochs;
+    bool m_Valid = false;
+    std::uint64_t m_BuiltFrame = 0;
+    std::uint64_t m_Reused = 0, m_Rebuilt = 0;
+};

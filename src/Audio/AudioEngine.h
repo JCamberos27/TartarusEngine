@@ -1,6 +1,10 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <atomic>
+#include <chrono>
+#include <cstddef>
+#include <memory>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include "LimiterSettings.h"
@@ -33,6 +37,24 @@ public:
     // preloaded returns true immediately without re-decoding. Returns false if the file doesn't
     // exist or can't be decoded.
     static bool Load(const std::string& path);
+    // P-56 (the Play assets warm-up): Load's decode, done on a worker thread ahead of the first Play.
+    // PreloadDecodeFormat (main thread): the format Load decodes to. DecodeForPreload (any thread: no engine state):
+    // decodes `paths` (as Load takes them); `cancel` stops it between files. AdoptPreloaded (main thread): each decoded
+    // clip joins the preload table as Load would have put it there - a path preloaded or reloaded meanwhile keeps its
+    // own - and a failure is logged and remembered as Load's. Returns the clips adopted.
+    struct PreloadFormat { unsigned Channels = 2, SampleRate = 48000; };
+    static PreloadFormat PreloadDecodeFormat();
+    struct DecodedSounds; // AudioVoices.cpp
+    // `pause`: slept after each file, so a worker sharing the machine with the editor's frames takes its time - unless
+    // `hurry` is set by then (something waits on the decode: no breathers left).
+    static std::shared_ptr<DecodedSounds> DecodeForPreload(const std::vector<std::string>& paths, PreloadFormat format,
+                                                          const std::atomic<bool>* cancel = nullptr,
+                                                          std::chrono::microseconds pause = std::chrono::microseconds(0),
+                                                          const std::atomic<bool>* hurry = nullptr);
+    static int AdoptPreloaded(DecodedSounds& sounds);
+    static std::size_t DecodedBytes(const DecodedSounds& sounds); // the decoded PCM it holds
+    static int DecodedCount(const DecodedSounds& sounds);         // the files it tried (failures included)
+    static bool IsPreloaded(const std::string& path);
     // Voices share a preloaded sound's decoded data by reference (#171): a reload while one plays is safe, the old PCM
     // lives until the last voice playing it is reaped.
     // Re-decodes a preloaded sound after its file changed on disk (`path` absolute; preloaded
