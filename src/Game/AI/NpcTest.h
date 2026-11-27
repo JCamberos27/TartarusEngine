@@ -82,6 +82,7 @@ public:
     // The scene has no Dummy Spawn but the scenario spawns its own: the host starts the director empty (Start's allowEmpty).
     bool StartsEmptyDirector() const { return m_Scenario == "npcloco"; }
     bool Done() const { return m_Done; }
+    float Seconds() const { return m_Duration; } // the scenario's length (game seconds)
     int Checks() const { return m_Checks; }
     int Failures() const { return m_Failures; }
     // A check the host itself failed (the outfit wait's cap): counted and logged like any other.

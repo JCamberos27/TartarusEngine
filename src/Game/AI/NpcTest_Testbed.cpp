@@ -356,7 +356,7 @@ struct TbStep {
 struct TbSchedule {
     std::vector<TbStep> Steps;       // in order, the watch leg last
     std::vector<char> Measured;      // per course leg
-    bool Subset = false;             // some legs of the running parts don't run (the whole-course checks are skipped)
+    bool Subset = false;             // the whole-course checks are skipped: some legs don't run, or they start afresh
     std::vector<std::string> Errors; // TARTARUS_TESTBED_START naming nothing
 };
 std::vector<std::string> TbSplit(const std::string& s, char sep) {
@@ -430,7 +430,8 @@ const TbSchedule& TbPlan() {
             }
             measure(i);
         }
-        plan.Subset = !keep.empty();
+        // (Under canonical the matcher's counters restart with each fresh body: the whole-course checks are skipped too.)
+        plan.Subset = !keep.empty() || !start.empty();
     } else {
         struct Entry { std::string Pattern, From; bool Used = false; };
         std::vector<Entry> entries;
@@ -709,6 +710,9 @@ void NpcTest::TestbedDrive(Player& player, FirstPersonPresentation& weapon, floa
         if (S.Reset) { // the fresh body: the host restarts it this frame, after the placement below
             m_BodyReset = true;
             R.MmShown.clear();
+            // ... and its feet are measured afresh: a contact open across the restart would count the new pose's feet,
+            // placed elsewhere, as a slide (and the floor each foot is read against is the old body's).
+            IK::FootSlideMeterFor("player").Reset();
         }
         if (L.Place) {
             PhysicsWorld::SetCharacterFootPosition(&L.At.x);
@@ -915,7 +919,12 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
     // --- the player's checks, once its legs are through ---
     if (L.Of == TbPart::Watch && !R.PlayerChecked) {
         R.PlayerChecked = true;
-        for (const std::string& e : TbPlan().Errors) Check(false, "testbed: TARTARUS_TESTBED_START: " + e);
+        if (!TbPlan().Errors.empty()) { // (never skipped by the leg filter: a start naming nothing fails the run)
+            std::vector<std::string> off;
+            off.swap(m_SkipLegs);
+            for (const std::string& e : TbPlan().Errors) Check(false, "TARTARUS_TESTBED_START: " + e);
+            off.swap(m_SkipLegs);
+        }
         auto legIndex = [this](const char* name) {
             for (int i = 0; i < kTbCount; ++i)
                 if (std::string(kTb[i].Name) == name) return i;

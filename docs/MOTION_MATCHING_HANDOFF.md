@@ -179,7 +179,7 @@ The pack doesn't have these. They are not faked:
   them across their limits. `-Start` or `TARTARUS_TESTBED_START` on testbed, mmplayer and mmstress (default: the course):
   - `canonical`: every leg starts from the fresh body (stopped and started again: nothing carried over), placed where its
     part's last placement leg puts it and standing 1.5 s, then plays the one leg before it unmeasured (a stop needs its
-    move), unless that leg is a placement. A leg's numbers then depend only on that leg and the one before it. About 3x
+    move), unless that leg is a placement. A leg's numbers then depend only on that leg and the one before it. About 2.5x
     the course's length.
   - `leg=from;...`: only those legs run (`*` wildcards), each from the fresh, settled body and then `from`, unmeasured:
     course legs joined by `+` (`M stroll strafe left=M stroll`), or `state:<gait>[,move=x/y][,view=deg][,secs=s]` - the
@@ -187,6 +187,10 @@ The pack doesn't have these. They are not faked:
     `0/1`), the view `deg` off the leg's own so the body arrives turned that far from the view. Empty `from`: the settled
     body alone. A name that matches nothing fails the run.
   - Compare a leg's verdict on the course and under `canonical`: a leg whose verdict differs depends on where it starts.
+    On main 9f24f9784 that was `M crouch strafe right`, `M idle` and `M sprint turning` (PASS on the course, FAIL from a
+    fresh start).
+  - Under either, the whole-course checks (`mmplayer: ...`) are skipped: the matcher's counters restart with each fresh
+    body.
 - **Tuning without a rebuild:** `TARTARUS_MM_TUNE="Key=value,..."` overrides at startup (`MmTune` in
   `FirstPersonBodyMotion.cpp`, logged `[MmTune]`). Keys include `MinWarp MaxWarp SimFacingHalflife CharacterFacingHalflife
   MaxFacingOffset TransitionCost MinRunway ForcedPoseWeight SprintCharacterFacingHalflife BlendTime DecayHalflife` and
