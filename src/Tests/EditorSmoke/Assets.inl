@@ -341,6 +341,30 @@ unsigned long long g_LogMark = 0;
 Step MarkLog() {
     return Do("mark the log", [](Ctx&) { for (const LogEntry& e : Log::Entries()) g_LogMark = std::max(g_LogMark, e.Seq); });
 }
+// A model whose submeshes are one quad per named material group (the .mtl beside it names them), in `groups` order.
+void WriteSlotObj(const std::string& path, const std::vector<std::string>& groups) {
+    const std::string mtl = fs::path(fs::u8path(path)).stem().u8string() + ".mtl";
+    {
+        std::ofstream m(fs::u8path(DirFile(mtl)), std::ios::binary);
+        for (const char* g : {"SlotA", "SlotB", "SlotC", "SlotD"}) m << "newmtl " << g << "\nKd 0.8 0.8 0.8\n";
+    }
+    std::ofstream f(fs::u8path(path), std::ios::binary);
+    f << "mtllib " << mtl << "\n";
+    for (size_t i = 0; i < groups.size(); ++i) {
+        const float x = (float)i * 1.5f;
+        f << "v " << x << " 0 0\nv " << x + 1 << " 0 0\nv " << x + 1 << " 1 0\nv " << x << " 1 0\n";
+    }
+    for (size_t i = 0; i < groups.size(); ++i) {
+        const size_t b = i * 4 + 1;
+        f << "g " << groups[i] << "\nusemtl " << groups[i] << "\nf " << b << " " << b + 1 << " " << b + 2 << " " << b + 3 << "\n";
+    }
+}
+void WriteSlotMat(const std::string& path, float r, float g, float b) {
+    std::ofstream f(fs::u8path(path), std::ios::binary);
+    f << "{\n  \"matVersion\": 2,\n  \"name\": \"" << fs::u8path(path).stem().u8string() << "\",\n  \"properties\": {\n"
+      << "    \"_BaseColor\": [" << r << ", " << g << ", " << b << "]\n  },\n  \"shader\": \"engine://Standard.shader\"\n}\n";
+}
+
 Step ExpectLogged(std::string fragment) {
     return Until("logged '" + fragment + "'", [fragment](Ctx&) {
         for (const LogEntry& e : Log::Entries())
@@ -614,6 +638,86 @@ void RegisterAssetsTests() {
             if (*clip) ImGui::SetClipboardText((*clip)->c_str());
             clip->reset();
             AX::FavoritesOnly(c.E) = false;
+        });
+    }
+
+    // ------------------------------------------------------------------ a reimport carries the placed copies' slots
+    // A model's placed copies share its meshes; their material slots follow a reimport (EditorLayer::ReimportModelAndCopies):
+    // a slot holding what the remap gave the mesh at that index follows the mesh there now (reordered, renamed, gone),
+    // empty slots take the remap, and a hand-set slot is never touched. Once through the on-disk change, once through the
+    // Reimport menu alone; the copies keep drawing (no GL error) as their mesh count shrinks and grows.
+    {
+        struct SlotState { entt::entity Lib = entt::null, Clone = entt::null; std::string Key; };
+        auto st = std::make_shared<SlotState>();
+        auto mat = [](Ctx& c, const char* name) { return c.A.LoadMaterial(DirFile(std::string("Slot ") + name + ".mat")); };
+        auto slotsAre = [mat](Ctx& c, entt::entity e, std::vector<const char*> want) {
+            const auto* rc = c.W.Registry.try_get<RenderableComponent>(e);
+            if (!rc) return std::string("the copy is gone");
+            std::string got;
+            for (size_t i = 0; i < rc->Materials.size(); ++i)
+                got += std::string(i ? ", " : "") + (rc->Materials[i] ? fs::u8path(rc->Materials[i]->Path).stem().u8string() : "-");
+            for (size_t i = 0; i < std::max(want.size(), rc->Materials.size()); ++i) {
+                const std::shared_ptr<MaterialAsset> w = i < want.size() && want[i] ? mat(c, want[i]) : nullptr;
+                const std::shared_ptr<MaterialAsset> h = i < rc->Materials.size() ? rc->Materials[i] : nullptr;
+                if (w != h) return "slots: " + got;
+            }
+            return std::string();
+        };
+        Add("assets: a reimport carries the placed copies' material slots; a hand-set slot stays", Cat({
+            EnsureScratch(),
+            {Do("write the model, its four materials and a fifth set by hand", [](Ctx&) {
+                 struct M { const char* Name; float R, G, B; };
+                 const M mats[] = {{"A", 1.0f, 0.2f, 0.2f}, {"B", 0.2f, 1.0f, 0.2f}, {"C", 0.2f, 0.2f, 1.0f},
+                                   {"D", 1.0f, 1.0f, 0.2f}, {"X", 1.0f, 0.2f, 1.0f}};
+                 for (const M& m : mats) WriteSlotMat(DirFile(std::string("Slot ") + m.Name + ".mat"), m.R, m.G, m.B);
+                 WriteSlotObj(DirFile("Slot Model.obj"), {"SlotA", "SlotB", "SlotC"});
+             }),
+             UntilListed("Slot Model.obj"), UntilListed("Slot A.mat"),
+             Do("remap the groups; place a copy and a clone; the clone's slot 1 set by hand", [st, mat](Ctx& c) {
+                 st->Key = CellKey(c, "Slot Model.obj");
+                 for (const char* n : {"A", "B", "C", "D"})
+                     c.A.SetMaterialRemap(st->Key, std::string("Slot") + n, ProjectPaths::Relativize(DirFile(std::string("Slot ") + n + ".mat")));
+                 st->Lib = c.W.CreateModelEntity(c.A.LoadModel(st->Key), glm::vec3(0, 0, -6), glm::vec3(0), glm::vec3(1), "Slot Copy");
+                 st->Clone = c.W.CreateModelEntity(c.A.InstantiateModel(st->Key), glm::vec3(0, 2, -6), glm::vec3(0), glm::vec3(1), "Slot Clone");
+                 for (entt::entity e : {st->Lib, st->Clone}) {
+                     auto& rc = c.W.Registry.get<RenderableComponent>(e);
+                     c.A.ApplyMaterialRemap(*rc.ModelRef, rc.Materials);
+                 }
+                 auto& rc = c.W.Registry.get<RenderableComponent>(st->Clone);
+                 if (rc.Materials.size() < 2) rc.Materials.resize(2);
+                 rc.Materials[1] = mat(c, "X");
+                 c.W.RebuildWorldTransformCache();
+             }),
+             Wait(5),
+             Expect("the copies hold the remap; the clone's slot 1 is the hand-set one", [st, slotsAre](Ctx& c) {
+                 const std::string a = slotsAre(c, st->Lib, {"A", "B", "C"}), b = slotsAre(c, st->Clone, {"A", "X", "C"});
+                 return a.empty() && b.empty() ? std::string() : "copy " + a + "; clone " + b;
+             }),
+             MarkLog()},
+            // 1. On disk: C, A (reordered, B gone). The watcher reimports it.
+            {Do("rewrite the model on disk: C, A", [](Ctx&) { WriteSlotObj(DirFile("Slot Model.obj"), {"SlotC", "SlotA"}); }),
+             ExpectLogged("Reloaded '"), Wait(10),
+             Expect("the remap's slots followed the meshes; the hand-set slot stayed", [st, slotsAre](Ctx& c) {
+                 const std::string a = slotsAre(c, st->Lib, {"C", "A"}), b = slotsAre(c, st->Clone, {"C", "X"});
+                 return a.empty() && b.empty() ? std::string() : "copy " + a + "; clone " + b;
+             }),
+             MarkLog()},
+            // 2. The Reimport menu alone (the watcher is told this write is the editor's own): A, B, C, D.
+            {Do("rewrite the model quietly: A, B, C, D", [](Ctx&) {
+                 AtomicFile::NoteSelfWrite(fs::u8path(DirFile("Slot Model.obj")));
+                 AtomicFile::NoteSelfWrite(fs::u8path(DirFile("Slot Model.mtl")));
+                 WriteSlotObj(DirFile("Slot Model.obj"), {"SlotA", "SlotB", "SlotC", "SlotD"});
+             })},
+            TileMenu("Slot Model.obj", "Reimport"),
+            {ExpectLogged("Reimported model"), Wait(10),
+             Expect("grown: the remap fills the new slots; the hand-set slot stayed", [st, slotsAre](Ctx& c) {
+                 const std::string a = slotsAre(c, st->Lib, {"A", "B", "C", "D"}), b = slotsAre(c, st->Clone, {"A", "X", "C", "D"});
+                 return a.empty() && b.empty() ? std::string() : "copy " + a + "; clone " + b;
+             })},
+        }), [st](Ctx& c) {
+            for (entt::entity e : {st->Lib, st->Clone})
+                if (e != entt::null && c.W.Registry.valid(e)) c.W.Registry.destroy(e);
+            st->Lib = st->Clone = entt::null;
         });
     }
 

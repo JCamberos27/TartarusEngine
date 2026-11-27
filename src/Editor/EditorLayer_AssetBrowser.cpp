@@ -2900,7 +2900,7 @@ void EditorLayer::DrawAssetItemMenu(World& world, AssetLibrary& assets, const As
         if (ImGui::MenuItem(ICON_FA_ROTATE "  Reimport")) {
             if (cell.kind == Cell::Kind::Model) {
                 PushUndo(world, "Reimport Model");
-                if (assets.ReimportModel(cell.key)) Log::Info("Reimported model '" + cell.key + "'.");
+                if (ReimportModelAndCopies(world, assets, cell.key)) Log::Info("Reimported model '" + cell.key + "'.");
                 else Log::Error("Reimport failed for '" + cell.key + "' - see Console.");
                 InvalidateModelThumbnail();
             } else {

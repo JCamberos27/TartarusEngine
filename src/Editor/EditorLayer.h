@@ -2375,6 +2375,11 @@ private:
     void OnExternalAdd(World& world, AssetLibrary& assets, const std::string& path);
     void OnExternalRemove(World& world, AssetLibrary& assets, const std::string& path);
     void OnExternalModify(World& world, AssetLibrary& assets, const std::string& path);
+    // Reimports a library model (an on-disk change, or the Reimport menu items) and brings the scene's placed copies along:
+    // a slot still holding exactly what the material remap gave the old mesh at that index is re-resolved for the mesh
+    // there now, empty slots take the remap (as a scene load does), and a hand-set slot is left alone. False when the
+    // model isn't loaded or the import failed.
+    bool ReimportModelAndCopies(World& world, AssetLibrary& assets, const std::string& listed);
     void DrawPrefabModeBar(World& world, AssetLibrary& assets);
     // Selection captured by stable OrderComponent value on Play, re-resolved to fresh entity
     // ids on Stop — the registry is rebuilt in between and entt recycles ids (#110).

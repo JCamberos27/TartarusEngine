@@ -426,6 +426,39 @@ void EditorLayer::OnExternalRemove(World& /*world*/, AssetLibrary& assets, const
                   " library entr" + (dropped == 1 ? "y" : "ies") + " removed). Objects using it keep their loaded copy until the scene is reloaded.");
 }
 
+bool EditorLayer::ReimportModelAndCopies(World& world, AssetLibrary& assets, const std::string& listed) {
+    const std::string key = AssetDatabase::PathKey(listed);
+    auto usesIt = [&](const RenderableComponent& rc) { return rc.ModelRef && AssetDatabase::PathKey(rc.ModelRef->Path()) == key; };
+    // Before: each mesh's material name and what the remap gave it (the placed copies share one model's meshes).
+    std::vector<std::string> namesBefore;
+    std::vector<std::shared_ptr<MaterialAsset>> remapBefore;
+    for (auto [e, rc] : world.Registry.view<RenderableComponent>().each()) {
+        if (!usesIt(rc)) continue;
+        const Model& m = *rc.ModelRef;
+        const auto& remap = assets.MaterialRemap(m.Path());
+        for (int i = 0; i < m.MeshCount(); ++i) {
+            namesBefore.push_back(m.MeshMaterial(i).Name);
+            const auto it = remap.find(namesBefore.back());
+            remapBefore.push_back(it == remap.end() ? nullptr : assets.LoadMaterial(ProjectPaths::Resolve(it->second)));
+        }
+        break;
+    }
+    if (!assets.ReimportModel(listed)) return false;
+    // After: a slot the remap filled follows the mesh at its index (a reorder or a rename gives it another material, a
+    // mesh gone leaves it empty); then the remap fills the empty ones, so a submesh the file gained gets its .mat now.
+    for (auto [e, rc] : world.Registry.view<RenderableComponent>().each()) {
+        if (!usesIt(rc)) continue;
+        const Model& m = *rc.ModelRef;
+        for (std::size_t i = 0; i < rc.Materials.size() && i < remapBefore.size(); ++i) {
+            if (!rc.Materials[i] || rc.Materials[i] != remapBefore[i]) continue; // empty, or set by hand
+            if ((int)i >= m.MeshCount() || m.MeshMaterial((int)i).Name != namesBefore[i]) rc.Materials[i] = nullptr;
+        }
+        assets.ApplyMaterialRemap(m, rc.Materials);
+    }
+    NoteRenderSettingsChanged(); // per-mesh draw state the caches keep (mesh count, slots)
+    return true;
+}
+
 void EditorLayer::OnExternalModify(World& world, AssetLibrary& assets, const std::string& path) {
     if (AtomicFile::WrittenBySelfRecently(path)) return; // our own save
     // Motion matching (hot reload): a saved bake config rebakes; a rewritten database reloads (no library entry either way).
@@ -440,16 +473,7 @@ void EditorLayer::OnExternalModify(World& world, AssetLibrary& assets, const std
     bool reloaded = false;
     if (type == "texture" && !listed.empty()) reloaded = assets.ReimportTexture(listed);
     else if (type == "model" && !listed.empty()) {
-        reloaded = assets.ReimportModel(listed);
-        // Placed copies share the new meshes; their empty slots take the model's material remap,
-        // as a scene load does, so a submesh the file gained gets its .mat now, not at the next open.
-        if (reloaded) {
-            const std::string key = AssetDatabase::PathKey(listed);
-            for (auto [e, rc] : world.Registry.view<RenderableComponent>().each())
-                if (rc.ModelRef && AssetDatabase::PathKey(rc.ModelRef->Path()) == key)
-                    assets.ApplyMaterialRemap(*rc.ModelRef, rc.Materials);
-                    NoteRenderSettingsChanged();
-        }
+        reloaded = ReimportModelAndCopies(world, assets, listed);
     }
     else if (type == "material" && !listed.empty()) reloaded = assets.ReloadMaterial(listed);
     else if (type == "prefab") reloaded = !listed.empty(); // its instances: the "prefab" hook
