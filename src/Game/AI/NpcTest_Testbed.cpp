@@ -1139,13 +1139,17 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
             m_CamAzimuth = wantAz;
             m_CamOrbit = true;
         } else {
-            m_CamCenter += (feet - m_CamCenter) * std::min(1.0f, dt * 5.0f);
-            if (glm::length(feet - m_CamCenter) > 6.0f) m_CamCenter = feet; // a placement: cut, don't fly
-            constexpr float kPi = 3.14159265358979f;
-            float d = std::fmod(wantAz - m_CamAzimuth, 2.0f * kPi);
-            if (d > kPi) d -= 2.0f * kPi;
-            if (d < -kPi) d += 2.0f * kPi;
-            m_CamAzimuth += d * std::min(1.0f, dt * 5.0f);
+            if (glm::length(feet - m_CamCenter) > 6.0f) { // a placement: cut, don't fly (the angle snaps too)
+                m_CamCenter = feet;
+                m_CamAzimuth = wantAz;
+            } else {
+                m_CamCenter += (feet - m_CamCenter) * std::min(1.0f, dt * 5.0f);
+                constexpr float kPi = 3.14159265358979f;
+                float d = std::fmod(wantAz - m_CamAzimuth, 2.0f * kPi);
+                if (d > kPi) d -= 2.0f * kPi;
+                if (d < -kPi) d += 2.0f * kPi;
+                m_CamAzimuth += d * std::min(1.0f, dt * 5.0f);
+            }
         }
         want = m_CamCenter + glm::vec3(std::sin(m_CamAzimuth) * kCamRadius, kCamHeight, std::cos(m_CamAzimuth) * kCamRadius);
         glm::vec3 off(want.x - feet.x, 0.0f, want.z - feet.z); // keep clear of the body (the centre lags the feet)
