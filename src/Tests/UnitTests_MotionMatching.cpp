@@ -6,6 +6,7 @@
 
 #include "../Game/MotionMatching/MotionBake.h"
 #include "../Game/MotionMatching/MotionClipStream.h"
+#include "../Game/MotionMatching/MotionDatabase.h"
 #include "../Game/MotionMatching/MotionFeatures.h"
 #include "../Game/MotionMatching/MotionMath.h"
 #include "../Game/MotionMatching/RootSynth.h"
@@ -686,6 +687,37 @@ void TestRigDiffWithPack() {
     CHECK(worst <= cfg.RigLengthPct);
 }
 
+// Needs the cooked features (--bake-motion): Manny.mmconfig's frozen normalization (MM Wave 1, F3) is the cooked database's,
+// bit for bit - its own derivation for a version 2 file (the bake before the freeze, so every cost is unchanged), the frozen
+// block the bake stored for a version 3 one.
+void TestFrozenNormMatchesCooked() {
+    const char* name = "Motion matching: frozen normalization matches the cooked database";
+    const std::string base = ProjectPaths::Resolve("assets/Animations/MotionMatching/Manny");
+    if (!fs::exists(base + ".mmdb")) return Skip(name, "Manny.mmdb not baked");
+    MotionBakeConfig cfg;
+    std::string err;
+    CHECK(cfg.Load(ProjectPaths::Resolve("assets/Animations/MotionMatching/Manny.mmconfig"), err));
+    CHECK(cfg.HasFeatureNorm());
+    MotionFeatureSet db;
+    CHECK(db.Load(base + ".mmdb", &err));
+    if (!cfg.HasFeatureNorm() || db.FrameCount() == 0) return;
+    std::vector<float> mean, scale;
+    if (db.HasNormalization()) {
+        mean = db.NormMean();
+        scale = db.NormScale();
+    } else {
+        MotionDatabase::DeriveNormalization(db, mean, scale);
+    }
+    int differ = 0;
+    for (int d = 0; d < MotionFeatureSet::kDims; ++d)
+        differ += std::memcmp(&mean[(size_t)d], &cfg.FeatureNormMean[(size_t)d], 4) != 0 ||
+                  std::memcmp(&scale[(size_t)d], &cfg.FeatureNormScale[(size_t)d], 4) != 0;
+    std::printf("[MotionMatching] frozen normalization vs the cooked %s: %d of %d dimensions differ\n",
+                db.HasNormalization() ? "frozen block" : "derivation", differ, MotionFeatureSet::kDims);
+    if (differ) std::printf("[MotionMatching] the cooked database's:\n  %s\n", MotionBake::FeatureNormJson(mean, scale).c_str());
+    CHECK(differ == 0);
+}
+
 // Needs the cooked stream (--bake-motion): it loads inside the budgets.
 void TestCookedStreamBudgets() {
     const char* name = "Motion matching: cooked stream budgets";
@@ -739,4 +771,5 @@ void RegisterMotionMatchingTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: mirrored poses", TestMirrorPose});
     tests.push_back({"Motion matching: pack rig vs Quantum rest pose", TestRigDiffWithPack});
     tests.push_back({"Motion matching: cooked stream budgets", TestCookedStreamBudgets});
+    tests.push_back({"Motion matching: frozen normalization matches the cooked database", TestFrozenNormMatchesCooked});
 }

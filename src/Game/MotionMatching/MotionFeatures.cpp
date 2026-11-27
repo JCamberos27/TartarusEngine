@@ -340,6 +340,12 @@ bool MotionFeatureSet::Save(const std::string& path, std::string* error) const {
         Put(b, d < (int)m_QScale.size() ? m_QScale[(size_t)d] : 1.0f);
         Put(b, d < (int)m_QOffset.size() ? m_QOffset[(size_t)d] : 0.0f);
     }
+    Put(b, (std::uint8_t)(HasNormalization() ? 1 : 0));
+    if (HasNormalization())
+        for (int d = 0; d < kDims; ++d) {
+            Put(b, m_NormMean[(size_t)d]);
+            Put(b, m_NormScale[(size_t)d]);
+        }
     for (const Clip& c : m_Clips) {
         PutStr(b, c.Name);
         Put(b, c.First);
@@ -378,8 +384,8 @@ bool MotionFeatureSet::Load(const std::string& path, std::string* error) {
     r.Raw(magic, 4);
     const std::uint32_t version = r.Get<std::uint32_t>(), frames = r.Get<std::uint32_t>(), dims = r.Get<std::uint32_t>(),
                         clips = r.Get<std::uint32_t>();
-    if (!r.Ok || std::memcmp(magic, "TMMD", 4) != 0 || version != kVersion || dims != (std::uint32_t)kDims) {
-        if (error) *error = path + ": not a version " + std::to_string(kVersion) + " .mmdb";
+    if (!r.Ok || std::memcmp(magic, "TMMD", 4) != 0 || version < 2 || version > kVersion || dims != (std::uint32_t)kDims) {
+        if (error) *error = path + ": not a version 2-" + std::to_string(kVersion) + " .mmdb";
         return false;
     }
     for (int k = 0; k < 3; ++k) TrajFrames[k] = (int)r.Get<std::uint32_t>();
@@ -395,14 +401,26 @@ bool MotionFeatureSet::Load(const std::string& path, std::string* error) {
         m_QScale[(size_t)d] = r.Get<float>();
         m_QOffset[(size_t)d] = r.Get<float>();
     }
-    // The normalization divides by Std and the search by QScale: a zero, negative or non-finite one (a corrupt file) would put
-    // NaN or infinity in every cost. And every count against what the file has left (a clip is at least 10 bytes, a frame
-    // kDims 16-bit features and its gait, flag and style bytes).
+    m_NormMean.clear();
+    m_NormScale.clear();
+    if (version >= 3 && r.Get<std::uint8_t>() != 0) {
+        m_NormMean.assign(kDims, 0.0f);
+        m_NormScale.assign(kDims, 1.0f);
+        for (int d = 0; d < kDims; ++d) {
+            m_NormMean[(size_t)d] = r.Get<float>();
+            m_NormScale[(size_t)d] = r.Get<float>();
+        }
+    }
+    // The normalization divides by Std (or the frozen scale) and the search by QScale: a zero, negative or non-finite one (a
+    // corrupt file) would put NaN or infinity in every cost. And every count against what the file has left (a clip is at
+    // least 10 bytes, a frame kDims 16-bit features and its gait, flag and style bytes).
     bool scalesOk = true;
     for (int d = 0; d < kDims; ++d)
         scalesOk = scalesOk && std::isfinite(m_Mean[(size_t)d]) && std::isfinite(m_QOffset[(size_t)d]) &&
                    std::isfinite(m_Std[(size_t)d]) && m_Std[(size_t)d] > 0.0f && std::isfinite(m_QScale[(size_t)d]) &&
                    m_QScale[(size_t)d] > 0.0f;
+    for (size_t d = 0; d < m_NormMean.size(); ++d)
+        scalesOk = scalesOk && std::isfinite(m_NormMean[d]) && std::isfinite(m_NormScale[d]) && m_NormScale[d] > 0.0f;
     if (!scalesOk || !r.Fits(clips, 10) || !r.Fits(frames, kDims * sizeof(std::int16_t) + 3)) {
         if (error) *error = path + ": corrupt header";
         m_Q.clear(); m_Gait.clear(); m_Flags.clear(); m_Style.clear(); m_Clips.clear();
