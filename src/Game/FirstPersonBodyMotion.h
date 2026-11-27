@@ -266,6 +266,7 @@ struct Snapshot {
     bool Crouch = false, Sprint = false, Airborne = false, Locked = false, Still = false, Turning = false;
     bool Searched = false, Jumped = false;
     int Searches = 0, Jumps = 0, ForcedByInput = 0, ForcedByEnd = 0;
+    std::array<int, MotionMatcher::CauseCount> SearchesBy{}, JumpsBy{}; // MotionMatcher's, by cause (since Start)
     bool Idle = false;   // MotionMatcher::Idle this update
     int IdleRefits = 0;  // idle searches because the continuation stopped fitting (since Start)
     int ForcedByExcluded = 0; // searches forced because the playing frame ran into an excluded one (since Start)

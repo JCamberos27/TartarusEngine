@@ -423,6 +423,8 @@ struct NpcTest::TestbedRun {
         int AirFrames = 0, AirLocked = 0, AirFlagged = 0;
         int Jumps = 0;                       // the matcher's jumps in the leg
         int Searches0 = -1, ByInput0 = 0, ByEnd0 = 0, Searches = 0, ByInput = 0, ByEnd = 0; // the schedule over the leg
+        // The matcher's searches and jumps by cause over the leg (MotionMatcher::Cause), and the counts at its start.
+        std::array<int, MotionMatcher::CauseCount> By0{}, SearchBy{}, JumpBy{}, JumpBy0{};
         // Searches where nothing passed and the filter was relaxed (MotionMatcher): the reselect history, MinRunway, the
         // style; and nothing even then. [0..3] over the leg, Relax0 the counts at its start.
         int Relax0[4] = {-1, 0, 0, 0}, Relax[4] = {};
@@ -1282,7 +1284,15 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
         R.MmPrevViewYaw = yaw;
         R.MmHaveViewYaw = true;
     }
-    if (q.Searches0 < 0) { q.Searches0 = mm.Searches; q.ByInput0 = mm.ForcedByInput; q.ByEnd0 = mm.ForcedByEnd; }
+    if (q.Searches0 < 0) {
+        q.Searches0 = mm.Searches; q.ByInput0 = mm.ForcedByInput; q.ByEnd0 = mm.ForcedByEnd;
+        q.By0 = mm.SearchesBy;
+        q.JumpBy0 = mm.JumpsBy;
+    }
+    for (int k = 0; k < MotionMatcher::CauseCount; ++k) {
+        q.SearchBy[(size_t)k] = mm.SearchesBy[(size_t)k] - q.By0[(size_t)k];
+        q.JumpBy[(size_t)k] = mm.JumpsBy[(size_t)k] - q.JumpBy0[(size_t)k];
+    }
     q.Searches = mm.Searches - q.Searches0;
     q.ByInput = mm.ForcedByInput - q.ByInput0;
     q.ByEnd = mm.ForcedByEnd - q.ByEnd0;
@@ -1586,6 +1596,28 @@ void NpcTest::MmPlayerChecks() {
         std::printf("[MmPlayer] %-26s %6.1f %9.2f %9.2f %9.2f %11.1f %9d %8d %6d %9.3f\n", kTb[i].Name, q.Jumps / std::max(0.1f, kTb[i].Seconds),
                     NpcTestCommon::Percentile(q.PoseStep, 0.5f), NpcTestCommon::Percentile(q.PoseStep, 0.99f), NpcTestCommon::Percentile(q.PoseStep, 1.0f), q.ViewOffMax, q.Searches, q.ByInput, q.ByEnd,
                     NpcTestCommon::Percentile(q.TrajErr, 0.5f));
+    }
+    // Why the matcher searched and jumped, per leg (print-only): searches / jumps by cause (MotionMatcher::Cause - the input
+    // changes are MotionSearchSchedule's 0.5 m/s and 20 deg; nosearch is a take's NoSearch tail; forced: the airborne
+    // segment's ForceFrame, jumps only).
+    {
+        std::string head = "[MmCause] " + std::string(38, ' ');
+        char col[32];
+        for (int k = 0; k < MotionMatcher::CauseCount; ++k) {
+            std::snprintf(col, sizeof col, " %10s", MotionMatcher::CauseName(k));
+            head += col;
+        }
+        std::printf("%s   (searches / jumps)\n", head.c_str());
+        for (int i = 0; i < kWatchLeg; ++i) {
+            if (!TbLegOn(i)) continue;
+            const TestbedRun::MmStats& q = R.Mm[i];
+            std::string row;
+            for (int k = 0; k < MotionMatcher::CauseCount; ++k) {
+                std::snprintf(col, sizeof col, " %5d/%-4d", q.SearchBy[(size_t)k], q.JumpBy[(size_t)k]);
+                row += col;
+            }
+            std::printf("[MmCause] %-38s%s\n", kTb[i].Name, row.c_str());
+        }
     }
     // Searches where nothing passed the filter and the matcher relaxed it: which stage landed, and none landing.
     // Print-only; a normal course has none.

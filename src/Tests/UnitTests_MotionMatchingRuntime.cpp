@@ -485,13 +485,19 @@ void TestSearchSchedule() {
     int searches = 0;
     for (int i = 0; i < 600; ++i) searches += s.Tick(dt, v, 0.0f, 7, false) ? 1 : 0;
     CHECK(searches >= 99 && searches <= 101); // every 0.1 s (6 frames) for 10 s, plus the first
+    using C = MotionSearchSchedule::Cause;
+    CHECK(s.LastCause == C::Timer);
     CHECK(s.ForcedByInput == 0 && s.ForcedByEnd == 0);
     s.Tick(dt, v, 0.0f, 7, false);
     CHECK(s.Tick(dt, glm::vec3(0.0f, 0.0f, 2.0f), 0.0f, 7, false));          // the input changed: at once
+    CHECK(s.LastCause == C::Velocity);
     CHECK(!s.Tick(dt, glm::vec3(0.0f, 0.0f, 2.1f), 0.0f, 7, false));         // a small change: wait
     CHECK(s.Tick(dt, glm::vec3(0.0f, 0.0f, 2.1f), 0.6f, 7, false));          // facing 34 degrees: at once
+    CHECK(s.LastCause == C::Facing);
     CHECK(s.Tick(dt, glm::vec3(0.0f, 0.0f, 2.1f), 0.6f, 8, false));          // the filter changed
+    CHECK(s.LastCause == C::Filter);
     CHECK(s.Tick(dt, glm::vec3(0.0f, 0.0f, 2.1f), 0.6f, 8, true));           // out of frames
+    CHECK(s.LastCause == C::End);
     CHECK(s.ForcedByInput == 3 && s.ForcedByEnd == 1);
 }
 
@@ -735,6 +741,34 @@ void TestMatcherEndToEnd() {
     CHECK(m.Jumps >= 1);
     CHECK(leftFrames > 90 && straightFrames > 40);
     CHECK(worstStep < 0.25f); // the jumps are blended (the synthetic legs swing 0.4 rad each way)
+    // Every search and jump has one cause; the first update's is the start.
+    int bySearch = 0, byJump = 0;
+    for (int k = 0; k < MotionMatcher::CauseCount; ++k) {
+        bySearch += m.SearchesBy[(size_t)k];
+        byJump += m.JumpsBy[(size_t)k];
+    }
+    std::printf("[MotionMatching] matcher causes: start %d, timer %d, velocity %d, facing %d, take end/nosearch %d/%d; jumps on timer %d\n",
+                m.SearchesBy[MotionMatcher::CauseStart], m.SearchesBy[MotionMatcher::CauseTimer], m.SearchesBy[MotionMatcher::CauseVelocity],
+                m.SearchesBy[MotionMatcher::CauseFacing], m.SearchesBy[MotionMatcher::CauseTakeEnd], m.SearchesBy[MotionMatcher::CauseNoSearch],
+                m.JumpsBy[MotionMatcher::CauseTimer]);
+    CHECK(bySearch == m.Searches && byJump == m.Jumps);
+    CHECK(m.SearchesBy[MotionMatcher::CauseStart] == 1);
+    CHECK(m.SearchesBy[MotionMatcher::CauseTimer] > 0);
+    // Played into a take's NoSearch tail: that search's cause is "nosearch".
+    {
+        MotionMatcher e;
+        const auto& w = db.Clip(db.Stream().FindClip("Walk_Straight"));
+        std::uint32_t tail = w.First;
+        while (tail < w.First + w.Count && !(db.Flags(tail) & MotionLabel::NoSearch)) ++tail;
+        e.Reset(&db, tail - 2);
+        e.SearchParams.Forbid = MotionLabel::Airborne | MotionLabel::Crouch;
+        e.SearchParams.TransitionCost = 1e9f; // the start search keeps the playing frame (it passes); the tail's must leave it
+        MotionMatcher::Input still;
+        for (int i = 0; i < 4; ++i) e.Update(dt, still);
+        std::printf("[MotionMatching] matcher causes into a NoSearch tail: start %d, nosearch %d, searches %d\n",
+                    e.SearchesBy[MotionMatcher::CauseStart], e.SearchesBy[MotionMatcher::CauseNoSearch], e.Searches);
+        CHECK(e.SearchesBy[MotionMatcher::CauseStart] == 1 && e.SearchesBy[MotionMatcher::CauseNoSearch] >= 1);
+    }
     CHECK(m.RelaxedAvoid + m.RelaxedRunway + m.RelaxedStyle + m.SearchFailed == 0); // a normal course never relaxes the filter
 }
 

@@ -81,6 +81,15 @@ public:
     int Searches = 0, Jumps = 0;
     int IdleRefits = 0; // idle searches because the continuation stopped fitting
     int ForcedByExcluded = 0; // searches forced because the playing frame is Excluded (it played into an excluded stretch)
+    // Searches and jumps by why the search ran (Update; print-only): the first update after a Reset or the lock, the timer,
+    // an input change (the desired velocity, the facing, the filter: MotionSearchSchedule's thresholds), the playing frame
+    // unable to go on (an Excluded stretch - as ForcedByExcluded - its take's last frame, its NoSearch tail, or other flags the filter refuses:
+    // crouch, airborne), and the idle refit. A search that runs while the frame can't go on counts as that end cause even
+    // when the timer was due too. Jumps also count ForceFrame's (the airborne segment's entry and exit) as Forced.
+    enum Cause { CauseStart, CauseTimer, CauseVelocity, CauseFacing, CauseFilter, CauseTakeEnd, CauseNoSearch, CauseExcluded,
+                 CauseRefused, CauseIdleRefit, CauseForced, CauseCount };
+    static const char* CauseName(int cause);
+    std::array<int, CauseCount> SearchesBy{}, JumpsBy{};
     // Searches where no frame passed the filter and it had to be relaxed (Update): landed once the reselect history was
     // dropped, then MinRunway, then the style (counted only when it moves to another frame); SearchFailed: nothing even
     // then (the frame stays). A normal course has none.
