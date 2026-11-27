@@ -534,6 +534,8 @@ void main() {
         atomicAdd(uDiagCounts[1], diagN[0]); atomicAdd(uDiagCounts[2], diagN[1]); atomicAdd(uDiagCounts[3], diagN[2]);
         atomicAdd(uDiagCounts[4], diagN[3]); atomicAdd(uDiagCounts[5], diagN[4]);
         atomicMax(uDiagCounts[6], diagN[0]);
+        atomicAdd(uDiagCounts[8], gDiagDec[0]); atomicAdd(uDiagCounts[9], gDiagDec[1]);
+        atomicAdd(uDiagCounts[10], gDiagDec[2]); atomicAdd(uDiagCounts[11], gDiagDec[3]);
     }
 #endif
 #endif

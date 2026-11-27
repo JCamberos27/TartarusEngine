@@ -1080,10 +1080,10 @@ void SceneRenderer::ViewPass::DrawOpaque() {
     if (opc & 8) {
         if (!opcCountBuf) {
             glCreateBuffers(1, &opcCountBuf);
-            glNamedBufferStorage(opcCountBuf, 8 * sizeof(GLuint), nullptr, GL_DYNAMIC_STORAGE_BIT);
+            glNamedBufferStorage(opcCountBuf, 16 * sizeof(GLuint), nullptr, GL_DYNAMIC_STORAGE_BIT);
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 39, opcCountBuf);
         }
-        glClearNamedBufferSubData(opcCountBuf, GL_R32UI, 0, 8 * sizeof(GLuint), GL_RED_INTEGER, GL_UNSIGNED_INT, nullptr);
+        glClearNamedBufferSubData(opcCountBuf, GL_R32UI, 0, 16 * sizeof(GLuint), GL_RED_INTEGER, GL_UNSIGNED_INT, nullptr);
     }
     if (opc & 1) {
         ++opcFrame;
@@ -1178,14 +1178,16 @@ void SceneRenderer::ViewPass::DrawOpaque() {
     opcScope.reset(); // DIAG
     if ((opc & 8) && ++opcCountCalls % 250 == 0) {
         glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
-        GLuint c[8] = {};
-        glGetNamedBufferSubData(opcCountBuf, 0, 8 * sizeof(GLuint), c);
+        GLuint c[16] = {};
+        glGetNamedBufferSubData(opcCountBuf, 0, 16 * sizeof(GLuint), c);
         GLint vp[4] = {};
         glGetIntegerv(GL_VIEWPORT, vp);
         const double px = c[0] ? (double)c[0] : 1.0;
         std::printf("[OPCL] call %llu vp %dx%d: px=%u looped/px=%.2f range/px=%.2f box/px=%.2f cone/px=%.2f shadow/px=%.2f "
                     "lit/px=%.2f max=%u\n", (unsigned long long)opcCountCalls, vp[2], vp[3], c[0], c[1] / px, c[2] / px,
                     c[3] / px, c[4] / px, c[5] / px, (c[1] - c[2] - c[3] - c[4] - c[5]) / px, c[6]);
+        std::printf("[OPCD] call %llu vp %dx%d: decals looped/px=%.3f boxhit/px=%.3f cover/px=%.3f substrate/px=%.3f\n",
+                    (unsigned long long)opcCountCalls, vp[2], vp[3], c[8] / px, c[9] / px, c[10] / px, c[11] / px);
         std::fflush(stdout);
     }
     // The programs stay shared: a later draw that skips the per-draw hook must not read slot state. A uniform write

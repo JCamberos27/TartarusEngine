@@ -147,6 +147,9 @@ float DecalNoise(vec2 p) {
 // `geoN` is the geometric normal (facing the viewer on a back face), N the shading normal so far.
 // `cluster`: this fragment's froxel (clusterIndex(), shared with the light loop). `grungeSub` / `grungeSS`:
 // the material substrate ApplyGrunge already sampled (index + 1, 0 = none), so an Auto decal reuses it.
+// DIAG ONLY (W2 decal sub-split, never merged): 32768 box test only, 65536 stop after the albedo cover, 131072 no
+// substrate; with 16384 counts per pixel: looped, box hit, past cover, substrate sampled.
+uint gDiagDec[4] = uint[4](0u, 0u, 0u, 0u);
 void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout float metallic, inout float ao,
                  inout vec3 emissive, vec3 geoN, uint cluster, uint grungeSub, SubstrateSample grungeSS) {
     if (uDecalCount == 0 || uReceiveDecals == 0 || uClusterEnabled == 0) return;
@@ -161,11 +164,14 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
     uint receiver = uDecalStatic == 1 ? DECAL_STATIC : DECAL_DYNAMIC;
     for (uint i = 0u; i < range.count; ++i) {
         uint di = uDecalIndex[range.offset + i];
+        gDiagDec[0]++;
         // The box test first, on the three rows alone (48 of the record's 128 bytes): most of a froxel's
         // decals miss most of its fragments, and the rest of the record is read only for the ones that hit.
         vec4 r0 = uDecals[di].WorldToBox[0], r1 = uDecals[di].WorldToBox[1], r2 = uDecals[di].WorldToBox[2];
         vec3 l = vec3(dot(r0, wp), dot(r1, wp), dot(r2, wp));
         if (any(greaterThan(abs(l), vec3(0.5)))) continue;
+        gDiagDec[1]++;
+        if ((DIAG_STRIP & 32768) != 0) { albedo += l * 1e-20; continue; }
         // The rest of the record, in one load.
         GpuDecal d = uDecals[di];
         vec4 rect = d.Rect;
@@ -211,6 +217,8 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
         if ((flags & DECAL_LIQUID) != 0u) cover = min(cover * unpackHalf2x16(h1.x).x, 1.0); // its gain, after filtering
         a *= cover;
         if (a <= 0.001) continue;
+        gDiagDec[2]++;
+        if ((DIAG_STRIP & 65536) != 0) { albedo = mix(albedo, col.rgb, a * 1e-20); continue; }
 
         // Weathering: fade, sun-bleach, peel (the aux mask, or noise), buff (scrubbed patches), wear (chips).
         vec2 relief = unpackHalf2x16(h2.y), fb = unpackHalf2x16(h2.z), pb = unpackHalf2x16(h2.w);
@@ -248,12 +256,13 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
              h03 = unpackHalf2x16(h0.w);
         // Substrate: where this decal covers, the paint is gone and the material under it shows - the
         // receiver's own on Auto when it has one, else the decal's. sw = how much it replaces the decal.
-        uint sub = uSubstrateOn != 0 ? ids.x >> 24 : 0u;
-        if (uSubstrateOn != 0 && (flags & DECAL_SUB_AUTO) != 0u && uMaterialSubstrate > 0) sub = uint(uMaterialSubstrate);
+        uint sub = uSubstrateOn != 0 && (DIAG_STRIP & 131072) == 0 ? ids.x >> 24 : 0u;
+        if (uSubstrateOn != 0 && (DIAG_STRIP & 131072) == 0 && (flags & DECAL_SUB_AUTO) != 0u && uMaterialSubstrate > 0) sub = uint(uMaterialSubstrate);
         float sw = 0.0;
         if (sub != 0u) {
             if (sub != cachedSub) {
                 ss = SampleSubstrate(sub - 1u, geoN, dpx, dpy);
+                gDiagDec[3]++;
                 cachedSub = sub;
             }
             sw = ss.strength;
