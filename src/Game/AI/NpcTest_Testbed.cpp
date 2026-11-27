@@ -1467,12 +1467,14 @@ void NpcTest::MmPlayerChecks() {
     const auto styleShare = [](const TestbedRun::MmStats& q, int style) { return q.Steady ? (float)q.Styles[style] / (float)q.Steady : 0.0f; };
     // Legs whose jump rate is accepted as it plays (2026-11-20: no tune or matcher change brought them under the relative
     // limit, and they read fine): locked at the measured rate + ~10 %, so they still catch a regression. Others: 0.
+    // Off since the crouch strafes were baked mirrored (2026-11-27): "M crouch strafe right" (2.5 -> 2.0 jumps a second) and
+    // "M jog" (2.7 -> 2.0). M jog's own takes didn't change: the course is one run, the crouch legs come first, and their new
+    // matches leave the player in a different state at the jog's start. If M jog goes back over its limit, that is an honest
+    // red (its fix is a long looped jog straight), never a new lock.
     const auto lockedJumps = [](const char* leg) {
         const struct { const char* Leg; float Max; } kLocked[] = {
             // Each is debt: measured jumps a second, and what takes the lock off.
-            {"M jog", 3.0f},                 // 2.7: the jog gets a long looped straight
-            {"M crouch strafe right", 2.8f}, // 2.5: the crouch strafes are baked mirrored
-            {"M walk looking about", 7.5f},  // 6.8: turns can be stepped while moving (or per-gait search weights fix it)
+            {"M walk looking about", 7.5f}, // 6.8: turns can be stepped while moving (or per-gait search weights fix it)
         };
         for (const auto& l : kLocked)
             if (std::strcmp(l.Leg, leg) == 0) return l.Max;
