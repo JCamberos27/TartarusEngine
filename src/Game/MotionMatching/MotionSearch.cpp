@@ -131,7 +131,7 @@ MotionSearchResult MotionSearch::SearchBrute(const MotionDatabase& db, const flo
     const QuantQuery q(db, query, p);
     const Skip skip(db, current, p);
     for (std::uint32_t i = 0; i < db.FrameCount(); ++i) {
-        if (skip(i) || !Passes(db.Flags(i), p) || !PassesStyle(db.Style(i), p) || db.Runway(i) < p.MinRunway) continue;
+        if (skip(i) || !Passes(db.Flags(i), p) || !PassesStyle(db.Style(i), p) || db.Runway(i) < p.MinRunway || db.IdleRunway(i) < p.MinIdleRunway) continue;
         ++r.FramesScored;
         const float c = Distance(q, db.Quantized(i), kInf) + GaitCost(p, db.Gait(i)) + p.TransitionCost;
         if (c < r.Cost) {
@@ -164,7 +164,7 @@ MotionSearchResult MotionSearch::Search(const MotionDatabase& db, const float* q
             const std::uint32_t from = (std::uint32_t)S * MotionDatabase::kSmallBox;
             const std::uint32_t to = std::min(n, from + (std::uint32_t)MotionDatabase::kSmallBox);
             for (std::uint32_t i = from; i < to; ++i) {
-                if (skip(i) || !Passes(db.Flags(i), p) || !PassesStyle(db.Style(i), p) || db.Runway(i) < p.MinRunway) continue;
+                if (skip(i) || !Passes(db.Flags(i), p) || !PassesStyle(db.Style(i), p) || db.Runway(i) < p.MinRunway || db.IdleRunway(i) < p.MinIdleRunway) continue;
                 ++r.FramesScored;
                 const float d = Distance(q, db.Quantized(i), r.Cost);
                 if (d >= r.Cost) continue; // (the extra costs are >= 0)
@@ -184,21 +184,20 @@ MotionSearchResult MotionSearch::Search(const MotionDatabase& db, const float* q
 bool MotionSearchSchedule::Tick(float dt, const glm::vec3& desiredVelocity, float desiredYaw, std::uint32_t filterKey,
                                 bool outOfFrames) {
     m_Timer += dt;
-    bool due = m_First || (!Hold && m_Timer >= Interval - 1e-4f);
-    if (!due && outOfFrames) {
-        due = true;
+    Cause cause = m_First ? Cause::First : (!Hold && m_Timer >= Interval - 1e-4f) ? Cause::Timer : Cause::None;
+    if (cause == Cause::None && outOfFrames) {
+        cause = Cause::End;
         ++ForcedByEnd;
     }
-    if (!due) {
-        const bool changed = glm::length(desiredVelocity - m_Vel) > VelocityChange ||
-                             std::fabs(MotionMath::WrapPi(desiredYaw - m_Yaw)) > FacingChangeDeg * MotionMath::kPi / 180.0f ||
-                             filterKey != m_Key;
-        if (changed) {
-            due = true;
-            ++ForcedByInput;
-        }
+    if (cause == Cause::None) {
+        cause = glm::length(desiredVelocity - m_Vel) > VelocityChange                                              ? Cause::Velocity
+                : std::fabs(MotionMath::WrapPi(desiredYaw - m_Yaw)) > FacingChangeDeg * MotionMath::kPi / 180.0f ? Cause::Facing
+                : filterKey != m_Key                                                                              ? Cause::Filter
+                                                                                                                  : Cause::None;
+        if (cause != Cause::None) ++ForcedByInput;
     }
-    if (!due) return false;
+    if (cause == Cause::None) return false;
+    LastCause = cause;
     m_First = false;
     m_Timer = 0.0f;
     m_Vel = desiredVelocity;

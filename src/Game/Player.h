@@ -78,8 +78,8 @@ public:
     // How quickly the move reaches the input's speed on the ground (speeding up / slowing down) and in
     // the air: the time constant (seconds) of an exponential approach, so about 2.3x this reaches 90%.
     // 0 = instantly (the move is the input).
-    float GroundAccelTime = 0.0f;
-    float GroundDecelTime = 0.0f;
+    float GroundAccelTime = 0.08f;
+    float GroundDecelTime = 0.10f;
     float AirAccelTime = 0.0f;
     float DoorwayAssist = 0.5f;          // the custom mover's nudge past a clipped jamb (FirstPersonControllerComponent)
     float DoorwayAssistMaxAngle = 35.0f;

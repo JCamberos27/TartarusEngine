@@ -44,6 +44,12 @@ void MotionMatcher::WritePose(const MotionPose& pose, const MotionClipStream& st
     if (b.Pelvis >= 0 && b.Pelvis < (int)out.size()) out[(size_t)b.Pelvis].T = pose.Pelvis * b.PelvisScale;
 }
 
+const char* MotionMatcher::CauseName(int cause) {
+    static const char* const kNames[CauseCount] = {"start", "timer", "velocity", "facing", "filter", "take end", "nosearch",
+                                                   "excluded", "refused", "idle refit", "forced"};
+    return cause >= 0 && cause < CauseCount ? kNames[cause] : "?";
+}
+
 void MotionMatcher::Reset(const MotionDatabase* db, std::uint32_t frame) {
     m_Db = db;
     m_Frame = db && db->Loaded() ? std::min(frame, db->FrameCount() - 1) : 0;
@@ -54,6 +60,8 @@ void MotionMatcher::Reset(const MotionDatabase* db, std::uint32_t frame) {
     Schedule.Reset();
     Inertializer.Reset();
     Searches = Jumps = IdleRefits = ForcedByExcluded = 0;
+    SearchesBy.fill(0);
+    JumpsBy.fill(0);
     RelaxedAvoid = RelaxedRunway = RelaxedStyle = SearchFailed = 0;
     SearchMsTotal = SearchMsMax = 0.0;
     SearchMs.clear();
@@ -112,6 +120,24 @@ void MotionMatcher::Update(float dt, const Input& in) {
     }
     if (!Locked && Schedule.Tick(dt, in.DesiredVelocity, in.DesiredYaw, key, outOfFrames || refit)) {
         if (outOfFrames && (db.Flags(m_Frame) & MotionLabel::Excluded)) ++ForcedByExcluded;
+        int cause = CauseTimer;
+        {
+            using C = MotionSearchSchedule::Cause;
+            const std::uint8_t flags = db.Flags(m_Frame);
+            const C c = Schedule.LastCause;
+            if (c == C::First) cause = CauseStart;
+            else if (outOfFrames)
+                // (Excluded first: the same frames ForcedByExcluded counts.)
+                cause = (flags & MotionLabel::Excluded) != 0   ? CauseExcluded
+                        : m_Frame >= db.ClipEnd(m_Frame)       ? CauseTakeEnd
+                        : (flags & MotionLabel::NoSearch) != 0 ? CauseNoSearch
+                                                               : CauseRefused;
+            else if (refit) cause = CauseIdleRefit;
+            else if (c == C::Velocity) cause = CauseVelocity;
+            else if (c == C::Facing) cause = CauseFacing;
+            else if (c == C::Filter) cause = CauseFilter;
+        }
+        ++SearchesBy[(size_t)cause];
         const auto pose = db.Raw(m_Frame);
         for (int d = 0; d < 15; ++d) m_QueryRaw[d] = pose[d];
         TrajectoryFeatures(in, db.Stream().RestYaw, m_QueryRaw + 15);
@@ -139,7 +165,7 @@ void MotionMatcher::Update(float dt, const Input& in) {
         m_Last = MotionSearch::Search(db, q, params, (std::int64_t)m_Frame);
         // Nothing passed (only when the playing frame fails too): left alone the body would stay frozen on a frame its own
         // filter refuses and search again every update. Relax in stages until something does - the reselect history, then
-        // MinRunway, then the style - and count which stage it took. Excluded, NoSearch and the Require/Forbid flags
+        // the runways, then the style - and count which stage it took. Excluded, NoSearch and the Require/Forbid flags
         // (airborne, crouch) always hold. A stage counts only when it moves to another frame: the playing frame failing on its
         // style alone can come back once the style is dropped, and then plays on as it did before (nothing relaxed).
         if (m_Last.Frame < 0 && params.AvoidCount > 0) {
@@ -147,8 +173,8 @@ void MotionMatcher::Update(float dt, const Input& in) {
             m_Last = MotionSearch::Search(db, q, params, (std::int64_t)m_Frame);
             if (m_Last.Switched) ++RelaxedAvoid;
         }
-        if (m_Last.Frame < 0 && params.MinRunway > 0) {
-            params.MinRunway = 0;
+        if (m_Last.Frame < 0 && (params.MinRunway > 0 || params.MinIdleRunway > 0)) {
+            params.MinRunway = params.MinIdleRunway = 0;
             m_Last = MotionSearch::Search(db, q, params, (std::int64_t)m_Frame);
             if (m_Last.Switched) ++RelaxedRunway;
         }
@@ -173,6 +199,7 @@ void MotionMatcher::Update(float dt, const Input& in) {
             m_Frac = 0.0f;
             m_Jumped = true;
             ++Jumps;
+            ++JumpsBy[(size_t)cause];
         }
     }
 
@@ -192,6 +219,7 @@ void MotionMatcher::ForceFrame(std::uint32_t frame) {
         BeginBlend();
         m_Jumped = true;
         ++Jumps;
+        ++JumpsBy[CauseForced];
     }
     if (frame != m_Frame) {
         EndRun();

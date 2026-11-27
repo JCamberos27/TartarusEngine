@@ -874,6 +874,7 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     // And only the idle takes (MotionLabel::IdleTake): over the whole database the stillest second is that stance, every time.
     if (m_Matcher.Idle) {
         m_Matcher.SearchParams.MinRunway = std::max(m_Matcher.SearchParams.MinRunway, Config.IdleRunway);
+        m_Matcher.SearchParams.MinIdleRunway = Config.IdleRunway; // ... and it must stay Idle gait that long (not into a step)
         m_Matcher.SearchParams.Require |= MotionLabel::IdleTake;
     }
     m_Matcher.PlayRate = m_Air == Air::Rising ? m_AirRate : m_Air == Air::None ? m_WarpRate : 1.0f;
@@ -924,6 +925,8 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     d.Jumps = m.Jumps;
     d.ForcedByInput = m.Schedule.ForcedByInput;
     d.ForcedByEnd = m.Schedule.ForcedByEnd;
+    d.SearchesBy = m.SearchesBy;
+    d.JumpsBy = m.JumpsBy;
     d.LastCost = m.LastResult().Cost;
     d.PlayingCost = m.LastResult().CurrentCost;
     d.SearchMsAvg = m.Searches > 0 ? m.SearchMsTotal / m.Searches : 0.0;
