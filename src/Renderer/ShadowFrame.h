@@ -128,9 +128,10 @@ public:
 
     // The sun's gather kept across frames (GatherSunCasters): the static cells are gathered against the cascades padded
     // by kSunGatherPadTexels, and while this frame's cascades still sit inside that padded set (and nothing the gather
-    // reads changed: no static candidate moved or LOD level flipped inside it, no candidate edit, the same sun
-    // direction, cascade count, render settings and world) the kept static part is reused; only the Always cells
-    // (animated, unbounded) are gathered again. With the sun direction unchanged every cascade is a box of the same
+    // reads changed: no static candidate moved inside it, no candidate edit, the same sun direction, cascade count,
+    // render settings and world) the kept static part is reused; only the Always cells (animated, unbounded) are
+    // gathered again. A renderer whose LOD level flipped is patched in or out of the kept part by the same cell test
+    // (PatchSunLodToggles), so the kept part stays what a gather against the padded cascades would give. With the sun direction unchanged every cascade is a box of the same
     // light space, so a padded cascade's cell test takes every cell the cascade's own takes: the kept list holds all a
     // fresh gather would, and its extras lie outside every cascade (their draws are culled as before). Every
     // kSunGatherFullEvery frames it gathers anew anyway. TARTARUS_NO_SUN_GATHER_REUSE=1: gather every frame.
@@ -145,6 +146,7 @@ public:
     // touches a cascade, or one held with its fields from before a small move outside the padded cascades).
     struct SunGatherTotals {
         std::uint64_t Reused = 0, Gathered = 0, VerifyChecked = 0, VerifyMissing = 0, VerifyExtraDraws = 0, VerifyAbsentNoDraw = 0;
+        std::uint64_t Patched = 0; // reused calls that patched LOD level flips in or out
     };
     static SunGatherTotals SunGatherTotalsSoFar();
     // GatherSunCasters' gather step (no GL): m_Casting = the kept or newly padded static part, then this frame's Always
@@ -262,6 +264,10 @@ private:
     std::vector<AABB> m_SunMoves;                            // scratch: static candidates moved since the last frame
     std::vector<entt::entity> m_SunLodToggles;               // scratch: LOD levels flipped since the last frame
     bool SunGatherHolds(World& world, const glm::mat4* now, int n, const glm::vec3& sunDir, std::uint64_t frame);
+    void PatchSunLodToggles(World& world, const VisibilityQuery& casts);
+    void ForgetSunStaticAt();
+    std::vector<std::int32_t> m_SunStaticAt; // slot -> index in the kept static part, -1 none (while m_SunStaticAtBuilt)
+    bool m_SunStaticAtBuilt = false;
     void VerifySunGather(SunPass& p);
     std::vector<DepthCaster> m_Draws;
     // The layered sun pass's grouping + commands, kept while its casters hold: one per set of cascades drawn (the
