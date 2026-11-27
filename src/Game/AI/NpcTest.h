@@ -108,6 +108,9 @@ public:
     bool WantsCleanViews() const;  // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
+    // The player's body starts afresh this frame (the host runs FirstPersonBody Stop + Start): the testbed's leg starts
+    // (TARTARUS_TESTBED_START). Reading it clears it.
+    bool TakeBodyReset() { const bool r = m_BodyReset; m_BodyReset = false; return r; }
     // The blood scenario's view of the blood, filled by the host each frame.
     struct BloodView {
         bool Loaded = false;
@@ -221,6 +224,7 @@ private:
     void MmStressChecks();
     struct TestbedRun;
     std::shared_ptr<TestbedRun> m_Tb;
+    bool m_BodyReset = false; // TakeBodyReset
     // doors (NpcTest_Doors.cpp)
     struct DoorSpot {
         std::string Name;

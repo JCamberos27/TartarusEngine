@@ -173,6 +173,20 @@ The pack doesn't have these. They are not faked:
 - **A subset of legs:** `-Legs` or `TARTARUS_TESTBED_LEGS` (comma-separated, `*` wildcards) on testbed, mmplayer and mmstress.
   Each matching leg starts as on the whole course. Checks naming a leg that didn't run are skipped, and whole-course checks
   are skipped under a filter.
+- **Where legs start:** on the course each leg starts from wherever the legs before it left the body (the motion playing,
+  its reselect history, the facings, the speed), so a change in one leg can flip a later leg red or green with no change of
+  its own. `M jog` and `M crouch strafe right` both do: changing only the walk and jog takes, which play before them, moved
+  them across their limits. `-Start` or `TARTARUS_TESTBED_START` on testbed, mmplayer and mmstress (default: the course):
+  - `canonical`: every leg starts from the fresh body (stopped and started again: nothing carried over), placed where its
+    part's last placement leg puts it and standing 1.5 s, then plays the one leg before it unmeasured (a stop needs its
+    move), unless that leg is a placement. A leg's numbers then depend only on that leg and the one before it. About 3x
+    the course's length.
+  - `leg=from;...`: only those legs run (`*` wildcards), each from the fresh, settled body and then `from`, unmeasured:
+    course legs joined by `+` (`M stroll strafe left=M stroll`), or `state:<gait>[,move=x/y][,view=deg][,secs=s]` - the
+    gait (`idle stroll walk jog sprint crouch crouchidle`) held `secs` (default 2.5) with the stick at `move` (default
+    `0/1`), the view `deg` off the leg's own so the body arrives turned that far from the view. Empty `from`: the settled
+    body alone. A name that matches nothing fails the run.
+  - Compare a leg's verdict on the course and under `canonical`: a leg whose verdict differs depends on where it starts.
 - **Tuning without a rebuild:** `TARTARUS_MM_TUNE="Key=value,..."` overrides at startup (`MmTune` in
   `FirstPersonBodyMotion.cpp`, logged `[MmTune]`). Keys include `MinWarp MaxWarp SimFacingHalflife CharacterFacingHalflife
   MaxFacingOffset TransitionCost MinRunway ForcedPoseWeight SprintCharacterFacingHalflife BlendTime DecayHalflife` and
