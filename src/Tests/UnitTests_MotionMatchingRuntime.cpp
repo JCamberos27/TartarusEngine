@@ -22,6 +22,7 @@
 
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -878,6 +879,27 @@ void TestGlitchScanMatchesAngle() {
     for (size_t c = 0; c < s.Clips().size(); ++c)
         wrong += ref[s.Clips()[c].First + 1] != expectOver[c]; // the reference itself splits over / under as stored
     CHECK(wrong == 0);
+    // Low frame rates: the limit passes pi under ~11.7 fps (10 fps: 210 degrees; 1 fps: 2100). No turn is bigger than pi, so
+    // nothing is flagged; cos(limit / 2) alone wraps and would flag big turns. Takes turning 30..179 degrees in a frame.
+    {
+        MotionClipStream big;
+        big.Reset(1.0f, {"bone"});
+        for (int k = 0; k < 16; ++k) {
+            const float turn = glm::radians(30.0f + 149.0f * (float)k / 15.0f);
+            const glm::quat a = glm::normalize(glm::quat(u(rng), u(rng), u(rng), u(rng)));
+            const std::vector<glm::quat> rot = {a, a * glm::angleAxis(turn, glm::normalize(glm::vec3(0.3f, 1.0f, -0.2f)))};
+            big.AddClip({"b" + std::to_string(k), "", 0, 0, 0.0f}, std::vector<MotionClipStream::RootSample>(2),
+                        std::vector<glm::vec3>(2, glm::vec3(0.0f)), rot);
+        }
+        for (const float fps : {10.0f, 1.0f}) {
+            const float l = MotionDatabase::GlitchLimit(fps);
+            CHECK(l > MotionMath::kPi);
+            std::vector<char> f;
+            CHECK(MotionDatabase::ScanGlitches(big, l, f));
+            CHECK(f == GlitchScanReference(big, l));
+            CHECK(std::count(f.begin(), f.end(), (char)1) == 0);
+        }
+    }
     // Cancelling stops it.
     std::vector<char> none;
     CHECK(!MotionDatabase::ScanGlitches(s, limit, none, [] { return false; }));

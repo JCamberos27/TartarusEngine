@@ -146,7 +146,8 @@ bool MotionDatabase::ScanGlitches(const MotionClipStream& stream, float limit, s
     // Rotation() returns unit ones (UnpackQuat normalizes): a 4-term dot per bone instead of MotionMath::QuatAngle's two
     // normalizes, a quaternion product, a sqrt and an atan2. Same Excluded frames (unit test: old vs new on the
     // cooked bake and on turns at limit +- 1e-4 rad).
-    const float cosHalf = std::cos(0.5f * limit);
+    // No turn exceeds pi (QuatAngle's range), and cos is periodic: a limit of pi or more (under ~11.7 fps) flags nothing.
+    const float cosHalf = limit >= MotionMath::kPi ? -1.0f : std::cos(0.5f * limit);
     const std::uint32_t n = stream.FrameCount();
     const int nb = (int)stream.Bones().size();
     bad.assign(n, 0);
