@@ -472,6 +472,25 @@ bool SharedMotionDatabase::Measure(SharedMotionDatabase& measured, const std::st
                     100.0f * hist[2] / std::max(1, searchable), 100.0f * hist[3] / std::max(1, searchable), 100.0f * hist[4] / std::max(1, searchable));
     }
     if (go && !go()) return false;
+    // Stretches of takes cut by hand (take, seconds in): an interrupted take's stop lands in the arm swing of the start it
+    // cut short, and a stop that jumped there threw the arms (C stop on steep platform: the pose 9.7 deg a frame at p99,
+    // 4.2 elsewhere). Only that stretch: the take's other stops and its starts stay (forbidding the whole take moved 29 legs).
+    {
+        struct Cut { const char* Take; float From, To; };
+        static constexpr Cut kCuts[] = {{"Stand_to_Jog_Interrupted_360_Take001", 11.10f, 11.35f}};
+        std::vector<char> cut(shared->Db.FrameCount(), 0);
+        for (const Cut& c : kCuts)
+            for (int k = 0; k < (int)shared->Db.Stream().Clips().size(); ++k) {
+                const auto& clip = shared->Db.Clip(k);
+                if (clip.Name != c.Take) continue;
+                const float fps = shared->Db.Fps();
+                const std::uint32_t a = (std::uint32_t)std::max(0L, std::lround(c.From * fps));
+                const std::uint32_t b = std::min<std::uint32_t>(clip.Count - 1, (std::uint32_t)std::lround(c.To * fps));
+                for (std::uint32_t f = a; f <= b && f < clip.Count; ++f) cut[clip.First + f] = 1;
+            }
+        shared->CutFrames = shared->Db.ExcludeFrames(cut);
+        std::printf("[MotionMatching] stretches cut by hand: %u frames\n", shared->CutFrames);
+    }
     const MotionDatabase& db = shared->Db;
     shared->Gaits = GaitSpeedTable::Measure(db);
     std::printf("[MotionMatching] %s: %u frames, %u excluded as capture glitches (a bone over %.0f deg in a frame, %d either side), %u "
