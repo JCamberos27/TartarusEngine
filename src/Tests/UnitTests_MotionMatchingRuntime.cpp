@@ -966,6 +966,14 @@ void TestMatcherRelaxedSearch() {
         CHECK(m.RelaxedAvoid == 0 && m.RelaxedRunway == 1 && m.RelaxedStyle == 0 && m.SearchFailed == 0);
         CHECK(m.Frame() != walkEnd && MotionSearch::Passes(db.Flags(m.Frame()), p));
     }
+    // (2b) MinIdleRunway beyond any take: the same stage drops it, so the matcher still moves.
+    {
+        MotionSearchParams p = standing;
+        p.MinIdleRunway = 100000;
+        const MotionMatcher m = once(p);
+        CHECK(m.RelaxedAvoid == 0 && m.RelaxedRunway == 1 && m.RelaxedStyle == 0 && m.SearchFailed == 0);
+        CHECK(m.Frame() != walkEnd);
+    }
     // (3) A style the database doesn't have (no sprint takes here): lands once the style is dropped, still standing and grounded.
     {
         MotionSearchParams p = standing;
