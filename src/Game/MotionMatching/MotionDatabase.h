@@ -92,6 +92,14 @@ public:
     // playing into one forces a search before it is shown.
     static constexpr float kGlitchDegrees = 35.0f;
     static constexpr int kGlitchPad = 3;
+    // The per-frame turn limit (radians) at `fps`: kGlitchDegrees at 60 fps, scaled to the frame time.
+    static float GlitchLimit(float fps);
+    // Build's glitch scan: sets bad[i] for every frame (and kGlitchPad either side, inside its clip) where a stream bone
+    // turns more than `limit` radians from the frame before. `bad` is sized to the stream. `go` (optional) runs per take;
+    // false stops the scan (returns false).
+    static bool ScanGlitches(const MotionClipStream& stream, float limit, std::vector<char>& bad,
+                             const std::function<bool()>& go = {});
+    double ScanSeconds() const { return m_ScanSeconds; } // of the last Build: the glitch scan
     // Marks more frames Excluded (a host's own pose rules, e.g. the player's hands-up frames) and rebuilds the runway and
     // the boxes. Returns how many frames it newly excluded.
     std::uint32_t ExcludeFrames(const std::vector<char>& bad);
@@ -141,6 +149,6 @@ private:
     std::uint32_t m_Glitches = 0, m_ProneApproach = 0;
     std::vector<float> m_Mean, m_Scale, m_QA, m_QB;
     std::vector<Box> m_Small, m_Large;
-    double m_LoadSeconds = 0.0, m_ReadSeconds = 0.0;
+    double m_LoadSeconds = 0.0, m_ReadSeconds = 0.0, m_ScanSeconds = 0.0;
     const std::function<bool()>* m_Between = nullptr; // Load's `between`, while its Build runs (Build asks it per take)
 };

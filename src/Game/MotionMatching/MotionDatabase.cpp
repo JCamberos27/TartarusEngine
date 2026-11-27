@@ -92,27 +92,10 @@ bool MotionDatabase::Build(std::string* error) {
     }
     m_Glitches = 0;
     {
-        const float limit = kGlitchDegrees * 3.14159265f / 180.0f * 60.0f / std::max(1.0f, m_Stream.Fps());
-        const int nb = (int)m_Stream.Bones().size();
-        std::vector<char> bad(n, 0);
-        std::vector<glm::quat> prev((size_t)nb), cur((size_t)nb);
-        for (const auto& clip : m_Stream.Clips()) {
-            if (!go()) return fail("cancelled");
-            for (int b = 0; b < nb; ++b) prev[(size_t)b] = m_Stream.Rotation(clip.First, b);
-            for (std::uint32_t k = 1; k < clip.Count; ++k) {
-                const std::uint32_t i = clip.First + k;
-                bool glitch = false;
-                for (int b = 0; b < nb; ++b) {
-                    cur[(size_t)b] = m_Stream.Rotation(i, b);
-                    glitch = glitch || MotionMath::QuatAngle(prev[(size_t)b], cur[(size_t)b]) > limit;
-                }
-                std::swap(prev, cur);
-                if (!glitch) continue;
-                const std::uint32_t from = (std::uint32_t)std::max<std::int64_t>(clip.First, (std::int64_t)i - 1 - kGlitchPad);
-                const std::uint32_t to = std::min<std::uint32_t>(clip.First + clip.Count - 1, i + (std::uint32_t)kGlitchPad);
-                for (std::uint32_t j = from; j <= to; ++j) bad[j] = 1;
-            }
-        }
+        const auto t0 = std::chrono::steady_clock::now();
+        std::vector<char> bad;
+        if (!ScanGlitches(m_Stream, GlitchLimit(m_Stream.Fps()), bad, [&] { return go(); })) return fail("cancelled");
+        m_ScanSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         for (std::uint32_t i = 0; i < n; ++i)
             if (bad[i] && !(m_Feat.Flags(i) & MotionLabel::Excluded)) {
                 m_Feat.AddFlags(i, MotionLabel::Excluded);
@@ -150,6 +133,43 @@ bool MotionDatabase::Build(std::string* error) {
     if (!go()) return fail("cancelled");
     m_Frames = n;
     Index();
+    return true;
+}
+
+float MotionDatabase::GlitchLimit(float fps) {
+    return kGlitchDegrees * 3.14159265f / 180.0f * 60.0f / std::max(1.0f, fps);
+}
+
+bool MotionDatabase::ScanGlitches(const MotionClipStream& stream, float limit, std::vector<char>& bad,
+                                  const std::function<bool()>& go) {
+    // angle(a, b) > limit  <=>  |dot(a, b)| < cos(limit / 2) for unit quaternions (q and -q are one rotation), and
+    // Rotation() returns unit ones (UnpackQuat normalizes): a 4-term dot per bone instead of MotionMath::QuatAngle's two
+    // normalizes, a quaternion product, a sqrt and an atan2. Same Excluded frames (unit test: old vs new on the
+    // cooked bake and on turns at limit +- 1e-4 rad).
+    const float cosHalf = std::cos(0.5f * limit);
+    const std::uint32_t n = stream.FrameCount();
+    const int nb = (int)stream.Bones().size();
+    bad.assign(n, 0);
+    std::vector<glm::quat> prev((size_t)nb), cur((size_t)nb);
+    for (const auto& clip : stream.Clips()) {
+        if (go && !go()) return false;
+        if (clip.Count == 0) continue;
+        for (int b = 0; b < nb; ++b) prev[(size_t)b] = stream.Rotation(clip.First, b);
+        for (std::uint32_t k = 1; k < clip.Count; ++k) {
+            const std::uint32_t i = clip.First + k;
+            bool glitch = false;
+            for (int b = 0; b < nb; ++b) {
+                const glm::quat q = stream.Rotation(i, b);
+                cur[(size_t)b] = q;
+                glitch = glitch || std::fabs(glm::dot(prev[(size_t)b], q)) < cosHalf;
+            }
+            std::swap(prev, cur);
+            if (!glitch) continue;
+            const std::uint32_t from = (std::uint32_t)std::max<std::int64_t>(clip.First, (std::int64_t)i - 1 - kGlitchPad);
+            const std::uint32_t to = std::min<std::uint32_t>(clip.First + clip.Count - 1, i + (std::uint32_t)kGlitchPad);
+            for (std::uint32_t j = from; j <= to; ++j) bad[j] = 1;
+        }
+    }
     return true;
 }
 
