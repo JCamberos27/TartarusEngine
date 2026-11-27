@@ -73,6 +73,12 @@ public:
               float nearZ, float farZ, int screenW, int screenH, Shader* decalCullShader = nullptr,
               int decalCount = 0);
 
+    // Depth-bounded lists (after the depth pre-pass): each froxel shrunk to the depth samples in it
+    // (ClusterDepthBounds.comp.glsl), the same light cull into a second list. Binds the tight z ranges at 41,
+    // the tight {offset, count} at 42 and indices at 43, and leaves 2..5 as Cull() left them for the shared list.
+    // `depthTex`: the view's depth (GL_TEXTURE_2D_MULTISAMPLE when samples > 1). Uses Cull()'s last projection.
+    void CullTight(Shader& boundsShader, Shader& cullShader, const glm::mat4& view, const glm::mat4& proj,
+                   float nearZ, float farZ, int screenW, int screenH, unsigned int depthTex, int samples);
     // Bind the range (3) and index (4) SSBOs for the model fragment shader's per-cluster loop, and
     // the decal range (13) and index (14) ones.
     void BindForShading() const;
@@ -120,6 +126,9 @@ private:
     // adapted for #208).
     unsigned int m_Overflow = 0;
     bool m_LastSaturated = false;
+    // CullTight: shrunk froxel boxes (binding 2 while it runs), their z ranges (41), {offset, count} (42),
+    // indices (43) and their own {cursor, overflow} (5 while it runs).
+    unsigned int m_TightAABBs = 0, m_TightZ = 0, m_TightCounts = 0, m_TightIndices = 0, m_TightOverflow = 0;
 
     // Deferred readback of the overflow flag (PERF-203): each Cull() reads what an earlier one copied
     // into a persistently mapped, coherent 1-uint buffer, then copies this dispatch's flag in. No

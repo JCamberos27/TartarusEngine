@@ -157,6 +157,9 @@ vec3 BloodSplatCover() {
 // 4096 probe loop only, 8192 SampleGI only, 16384 count looped/dropped local lights per pixel (SceneViewPass reads it).
 #if (DIAG_STRIP & 16384) != 0
 layout(std430, binding = 39) coherent buffer DiagCounts { uint uDiagCounts[]; }; // px, looped, range, box, cone, shadow, max
+// W2 depth-bounds diag (TARTARUS_TIGHT=1): the depth-bounded froxel lists ClusterGrid::CullTight bound.
+layout(std430, binding = 41) readonly buffer DiagTightZ { vec2 uDiagTightZ[]; };
+layout(std430, binding = 42) readonly buffer DiagTightRange { ClusterRange uDiagTightRange[]; };
 #endif
 #if (DIAG_STRIP & 32) != 0
 #define texture(s, c) textureLod(s, c, 6.0)
@@ -535,6 +538,15 @@ void main() {
         atomicAdd(uDiagCounts[1], diagN[0]); atomicAdd(uDiagCounts[2], diagN[1]); atomicAdd(uDiagCounts[3], diagN[2]);
         atomicAdd(uDiagCounts[4], diagN[3]); atomicAdd(uDiagCounts[5], diagN[4]);
         atomicMax(uDiagCounts[6], diagN[0]);
+        // [12] lights the tight list would loop (its count where this fragment's z is in its froxel's range, else the
+        // shared count), [13] fragments in range, [14] fragments out of range (shared list kept).
+        if (clustered) {
+            float vz = clamp(-(uView * vec4(vWorldPos, 1.0)).z, uClusterZParams.x, uClusterZParams.y);
+            vec2 tz = uDiagTightZ[cluster];
+            bool inR = vz >= tz.x && vz <= tz.y;
+            atomicAdd(uDiagCounts[12], inR ? uDiagTightRange[cluster].count : lightCount);
+            atomicAdd(uDiagCounts[inR ? 13 : 14], 1u);
+        }
         atomicAdd(uDiagCounts[8], gDiagDec[0]); atomicAdd(uDiagCounts[9], gDiagDec[1]);
         atomicAdd(uDiagCounts[10], gDiagDec[2]); atomicAdd(uDiagCounts[11], gDiagDec[3]);
     }

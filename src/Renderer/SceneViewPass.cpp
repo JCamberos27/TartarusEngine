@@ -36,6 +36,7 @@
 #include "FxSpriteRenderer.h"
 #include "WorldText.h"
 #include "GLStateCache.h"
+#include "ShaderLibrary.h"
 #include "gl.h"
 #include "Core/Profiler.h"
 #include "Core/Env.h"
@@ -706,6 +707,17 @@ void SceneRenderer::ViewPass::DepthPrepass() {
     depth.SetInt("uSplitViewProj", 0); // the shadow passes share this program
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     GLStateCache::Invalidate();
+    // ---- DIAG ONLY (W2 depth-bounds, never merged): TARTARUS_TIGHT=1 builds the depth-bounded froxel lists after the
+    // pre-pass (ClusterGrid::CullTight) into 41..43; ModelFragment's 16384 counter reads them.
+    static const int tightDiag = [] { char* v = nullptr; std::size_t n = 0; _dupenv_s(&v, &n, "TARTARUS_TIGHT"); const int r = v ? std::atoi(v) : 0; std::free(v); return r; }();
+    if (tightDiag && fs.clusterOn && ctx.TxHdr && ctx.TxHdr->IsValid() && !ctx.ProbeCapture) {
+        PROFILE_GPU_SCOPE("Cluster Tight");
+        static Shader boundsShader{ShaderLibrary::ReadFileRequired("ClusterDepthBounds.comp.glsl"), "clusterDepthBoundsShader"};
+        in.lightBuffer->Bind(0);
+        in.clusterGrid->CullTight(boundsShader, *in.clusterCullShader, ctx.View, ctx.Proj, fs.clusterNearZ, fs.clusterFarZ,
+                                  fs.vp[2], fs.vp[3], ctx.TxHdr->MultisampleDepthTexture(), ctx.TxHdr->Samples());
+        GLStateCache::Invalidate();
+    }
     // GPU occlusion culling (HiZCuller.h) tests against SSAO's copy (the pre-pass plus what it left out, all of
     // which the opaque pass draws in front of the culled copies too), else the pre-pass's own depth.
     if (ctx.TxHdr && ctx.TxHdr->IsValid() && !ctx.ProbeCapture && ctx.DebugView == 0 && Perspective(ctx.Proj) &&
@@ -1186,6 +1198,9 @@ void SceneRenderer::ViewPass::DrawOpaque() {
         std::printf("[OPCL] call %llu vp %dx%d: px=%u looped/px=%.2f range/px=%.2f box/px=%.2f cone/px=%.2f shadow/px=%.2f "
                     "lit/px=%.2f max=%u\n", (unsigned long long)opcCountCalls, vp[2], vp[3], c[0], c[1] / px, c[2] / px,
                     c[3] / px, c[4] / px, c[5] / px, (c[1] - c[2] - c[3] - c[4] - c[5]) / px, c[6]);
+        std::printf("[OPCT] call %llu vp %dx%d: tight looped/px=%.2f (shared %.2f) in-range px=%.1f%% fallback px=%.1f%%\n",
+                    (unsigned long long)opcCountCalls, vp[2], vp[3], c[12] / px, c[1] / px, 100.0 * c[13] / px,
+                    100.0 * c[14] / px);
         std::printf("[OPCD] call %llu vp %dx%d: decals looped/px=%.3f boxhit/px=%.3f cover/px=%.3f substrate/px=%.3f\n",
                     (unsigned long long)opcCountCalls, vp[2], vp[3], c[8] / px, c[9] / px, c[10] / px, c[11] / px);
         std::fflush(stdout);

@@ -16,6 +16,8 @@ ClusterGrid::~ClusterGrid() {
     if (m_Counts) glDeleteBuffers(1, &m_Counts);
     if (m_Indices) glDeleteBuffers(1, &m_Indices);
     if (m_Overflow) glDeleteBuffers(1, &m_Overflow);
+    for (unsigned int* b : {&m_TightAABBs, &m_TightZ, &m_TightCounts, &m_TightIndices, &m_TightOverflow})
+        if (*b) glDeleteBuffers(1, b);
     if (m_OverflowCopy) glDeleteBuffers(1, &m_OverflowCopy); // deleting unmaps it
     if (m_DecalRanges) glDeleteBuffers(1, &m_DecalRanges);
     if (m_DecalIndices) glDeleteBuffers(1, &m_DecalIndices);
@@ -40,6 +42,16 @@ void ClusterGrid::EnsureCreated() {
     glCreateBuffers(1, &m_Overflow);
     // {globalCounter, overflowFlag} — see field comment in ClusterGrid.h. Cleared on the GPU each cull.
     glNamedBufferStorage(m_Overflow, (GLsizeiptr)2 * (GLsizeiptr)sizeof(unsigned int), nullptr, 0);
+    glCreateBuffers(1, &m_TightAABBs);
+    glNamedBufferStorage(m_TightAABBs, (GLsizeiptr)CLUSTERS * 2 * (GLsizeiptr)sizeof(glm::vec4), nullptr, 0);
+    glCreateBuffers(1, &m_TightZ);
+    glNamedBufferStorage(m_TightZ, (GLsizeiptr)CLUSTERS * 2 * (GLsizeiptr)sizeof(float), nullptr, 0);
+    glCreateBuffers(1, &m_TightCounts);
+    glNamedBufferStorage(m_TightCounts, (GLsizeiptr)CLUSTERS * 2 * (GLsizeiptr)sizeof(unsigned int), nullptr, 0);
+    glCreateBuffers(1, &m_TightIndices);
+    glNamedBufferStorage(m_TightIndices, (GLsizeiptr)GLOBAL_INDEX_CAPACITY * (GLsizeiptr)sizeof(unsigned int), nullptr, 0);
+    glCreateBuffers(1, &m_TightOverflow);
+    glNamedBufferStorage(m_TightOverflow, (GLsizeiptr)2 * (GLsizeiptr)sizeof(unsigned int), nullptr, 0);
 
     // The staging uint for the deferred overflow-flag readback (PERF-203), mapped once for good.
     const GLbitfield mapFlags = GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
@@ -213,6 +225,36 @@ void ClusterGrid::Cull(Shader& buildShader, Shader& cullShader, const glm::mat4&
         m_LastSaturated = *m_OverflowMapped != 0;
         glCopyNamedBufferSubData(m_Overflow, m_OverflowCopy, (GLintptr)sizeof(unsigned int), 0, (GLsizeiptr)sizeof(unsigned int));
     }
+}
+
+void ClusterGrid::CullTight(Shader& boundsShader, Shader& cullShader, const glm::mat4& view, const glm::mat4& proj,
+                            float nearZ, float farZ, int screenW, int screenH, unsigned int depthTex, int samples) {
+    EnsureCreated();
+    glClearNamedBufferSubData(m_TightOverflow, GL_R32UI, 0, 2 * sizeof(unsigned int), GL_RED_INTEGER, GL_UNSIGNED_INT, nullptr);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, m_TightAABBs);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 41, m_TightZ);
+    boundsShader.Bind();
+    boundsShader.SetMat4("uInvProj", glm::inverse(proj));
+    boundsShader.SetVec2("uScreenSize", glm::vec2((float)screenW, (float)screenH));
+    boundsShader.SetVec4("uZParams", ZParams(nearZ, farZ));
+    boundsShader.SetInt("uSamples", samples);
+    boundsShader.SetInt("uDepth", 0);
+    boundsShader.SetInt("uDepthMS", 1);
+    glBindTextureUnit(samples > 1 ? 1 : 0, depthTex);
+    boundsShader.DispatchCompute(GRID_X, GRID_Y, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, m_TightCounts);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_TightIndices);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, m_TightOverflow);
+    cullShader.Bind();
+    cullShader.SetMat4("uView", view);
+    cullShader.DispatchCompute((CLUSTERS + 63) / 64, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 42, m_TightCounts);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 43, m_TightIndices);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, m_Counts);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_Indices);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, m_Overflow);
 }
 
 void ClusterGrid::BindForShading() const {
