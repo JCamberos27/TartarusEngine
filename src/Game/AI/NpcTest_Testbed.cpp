@@ -1284,10 +1284,44 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
     // --- the Scene view: off the player's front quarter on its legs; side on to the standing dummy for E and F ---
     glm::vec3 want, at;
     if (L.Of != TbPart::Watch) {
+        // The camera orbits the player: a point at the feet follows (smoothed), and the camera sits on a circle of
+        // fixed radius round it. Only the ANGLE is smoothed (the short way round), so after a 180 flick the camera swings
+        // round the body instead of flying through it. It never comes closer than kCamMinDist to the feet.
+        constexpr float kCamRadius = 3.4f, kCamMinDist = 2.0f, kCamHeight = 1.3f;
         const glm::vec3 feet(foot[0], foot[1], foot[2]);
-        want = feet + flatRight * 2.6f + flatFront * 2.2f + glm::vec3(0.0f, 1.3f, 0.0f);
+        const glm::vec3 side = flatRight * 2.6f + flatFront * 2.2f; // the front quarter, as before
+        const float wantAz = std::atan2(side.x, side.z);
+        if (!m_CamOrbit || !m_HaveCam) {
+            m_CamCenter = feet;
+            m_CamAzimuth = wantAz;
+            m_CamOrbit = true;
+        } else {
+            if (glm::length(feet - m_CamCenter) > 6.0f) { // a placement: cut, don't fly (the angle snaps too)
+                m_CamCenter = feet;
+                m_CamAzimuth = wantAz;
+            } else {
+                m_CamCenter += (feet - m_CamCenter) * std::min(1.0f, dt * 5.0f);
+                constexpr float kPi = 3.14159265358979f;
+                float d = std::fmod(wantAz - m_CamAzimuth, 2.0f * kPi);
+                if (d > kPi) d -= 2.0f * kPi;
+                if (d < -kPi) d += 2.0f * kPi;
+                m_CamAzimuth += d * std::min(1.0f, dt * 5.0f);
+            }
+        }
+        want = m_CamCenter + glm::vec3(std::sin(m_CamAzimuth) * kCamRadius, kCamHeight, std::cos(m_CamAzimuth) * kCamRadius);
+        glm::vec3 off(want.x - feet.x, 0.0f, want.z - feet.z); // keep clear of the body (the centre lags the feet)
+        const float dist = glm::length(off);
+        if (dist < kCamMinDist) {
+            off = dist > 1e-4f ? off / dist : glm::vec3(std::sin(m_CamAzimuth), 0.0f, std::cos(m_CamAzimuth));
+            want.x = feet.x + off.x * kCamMinDist;
+            want.z = feet.z + off.z * kCamMinDist;
+        }
         at = feet + glm::vec3(0.0f, 0.9f, 0.0f);
+        m_CamPos = want;
+        LookAt(at);
+        return;
     } else {
+        m_CamOrbit = false;
         Npc* who = find(R.Stage >= 5 ? R.Respawned : R.Standing);
         const glm::vec3 c = who ? who->Feet : kStandingSpawn;
         want = c + glm::vec3(3.2f, 1.1f, 0.0f);
