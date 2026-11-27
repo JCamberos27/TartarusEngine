@@ -939,16 +939,7 @@ void TestGlitchScanMatchesAngle() {
 }
 
 // The searchable-data report counts what MotionSearch::Passes and the runway filter let through, frame for frame.
-void TestSearchableDataReport() {
-    const char* name = "Motion matching: searchable data report";
-    const std::string base = ProjectPaths::Resolve("assets/Animations/MotionMatching/Manny");
-    if (!std::filesystem::exists(base + ".mmanim") || !std::filesystem::exists(base + ".mmdb"))
-        return Skip(name, "Manny.mmanim / .mmdb not baked");
-    MotionDatabase db;
-    std::string err;
-    CHECK(db.Load(base, &err));
-    if (!db.Loaded()) return;
-    const int runway = 8;
+void CheckSearchableReport(const MotionDatabase& db, int runway) {
     const MotionDataReport::Report r = MotionDataReport::Build(db, runway);
     MotionSearchParams p;
     p.MinRunway = runway;
@@ -963,12 +954,35 @@ void TestSearchableDataReport() {
                 cellSearchable += c.Searchable;
                 cellLost += c.Excluded + c.NoSearch + c.Airborne + c.ShortRunway;
                 CHECK(c.Searchable + c.Excluded + c.NoSearch + c.Airborne + c.ShortRunway == c.Frames);
+                CHECK(c.Longest <= c.Searchable);
             }
-    std::printf("[MotionMatching] searchable data: %u of %u frames (%.1f of %.1f s), longest run %.2f s\n", r.Total.Searchable, db.FrameCount(),
-                r.Total.Searchable / db.Fps(), db.FrameCount() / db.Fps(), r.Total.Longest / db.Fps());
+    std::printf("[MotionMatching] searchable data: %u of %u frames (%.1f of %.1f s), longest run in one cell %.2f s\n", r.Total.Searchable,
+                db.FrameCount(), r.Total.Searchable / db.Fps(), db.FrameCount() / db.Fps(), r.Total.Longest / db.Fps());
     CHECK(cellFrames == db.FrameCount() && r.Total.Frames == db.FrameCount());
     CHECK(cellSearchable == brute && r.Total.Searchable == brute);
     CHECK(cellLost + brute == db.FrameCount());
+    CHECK(brute > 0 && brute < db.FrameCount());
+}
+
+// ... on the synthetic database (runs on CI, which has no cooked bake).
+void TestSearchableDataReportSynthetic() {
+    MotionDatabase db;
+    CHECK(Adopt(db, Build(StandardTakes())));
+    CheckSearchableReport(db, 8);
+    CheckSearchableReport(db, 0);
+}
+
+void TestSearchableDataReport() {
+    const char* name = "Motion matching: searchable data report";
+    const std::string base = ProjectPaths::Resolve("assets/Animations/MotionMatching/Manny");
+    if (!std::filesystem::exists(base + ".mmanim") || !std::filesystem::exists(base + ".mmdb"))
+        return Skip(name, "Manny.mmanim / .mmdb not baked");
+    MotionDatabase db;
+    std::string err;
+    CHECK(db.Load(base, &err));
+    if (!db.Loaded()) return;
+    const int runway = 8;
+    CheckSearchableReport(db, runway);
     // The direction's sign: the takes named "...Left" / "...Right" travel to that side (+x of the root is the body's left).
     {
         int left[2] = {0, 0}, right[2] = {0, 0}; // [takes named Left / takes named Right]
@@ -1501,6 +1515,7 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: the facing model (simulation and character)", TestFacingModel});
     tests.push_back({"Motion matching: reselect history and the idle hold", TestReselectAndIdleHold});
     tests.push_back({"Motion matching: cooked database search", TestCookedDatabaseSearch});
+    tests.push_back({"Motion matching: searchable data report (synthetic)", TestSearchableDataReportSynthetic});
     tests.push_back({"Motion matching: searchable data report", TestSearchableDataReport});
     tests.push_back({"Motion matching: glitch scan (|dot| test == angle test)", TestGlitchScanMatchesAngle});
 }
