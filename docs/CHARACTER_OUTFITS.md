@@ -10,7 +10,7 @@ one wardrobe in the project.
 | Wardrobe file format, parsing and every rule (pure, unit tested) | `src/Game/Wardrobe.h/.cpp` |
 | Catalog scan, building pieces, colourways, presets, skin hiding, head wear | `src/Game/OutfitSystem.h/.cpp` |
 | Which body vertices a garment covers (geometry only) | `src/Game/OutfitCoverage.h/.cpp` |
-| Components | `CharacterOutfitComponent`, `OutfitPieceComponent`, `OutfitHideTag`, `OutfitLayerTag` (`src/Game/Components.h`) |
+| Components | `CharacterOutfitComponent`, `OutfitPieceComponent`, `OutfitHideTag`, `OutfitLayerTag` (`src/Game/ComponentsCharacter.h`) |
 | Inspector outfit editor | `src/Editor/EditorLayer_Outfit.cpp` |
 | First-person body (what the player's camera may see) | `src/Game/FirstPersonBody.cpp` |
 | The Quantum wardrobe | `project/assets/Characters/Quantum/Quantum.wardrobe` |

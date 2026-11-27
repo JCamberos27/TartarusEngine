@@ -28,7 +28,7 @@ dark spots) are not affected.
 * Scene: `project/scenes/Forest.json`, Play lighting state, every switch at its Start On value, flashlight off, no NPCs.
 * Tool: `--gi-tour <scene.json> --out <dir>` with the waypoint file `tools/gi/forest_house_tour.json`
   (stationary captures plus the continuous "Jacob routes").
-* Resolution `--perf-res 1920x1080`, fixed time of day, hidden window (`TARTARUS_HIDDEN=1`).
+* Resolution `--perf-res 1920x1080`, fixed time of day, hidden window (the default for harness runs; `TARTARUS_SHOW=1` shows it).
 * Luminance = mean luminance of the tone-mapped frame over the **static-surface mask** (depth-tested static geometry only;
   no player body, particles or sky), as the tour tool writes it. Units: relative luminance 0-1 of the final sRGB image, so
   thresholds are a fraction of full scale.
