@@ -198,7 +198,7 @@ The pack doesn't have these. They are not faked:
 - **Tuning without a rebuild:** `TARTARUS_MM_TUNE="Key=value,..."` overrides at startup (`MmTune` in
   `FirstPersonBodyMotion.cpp`, logged `[MmTune]`). Keys include `MinWarp MaxWarp SimFacingHalflife CharacterFacingHalflife
   MaxFacingOffset TransitionCost MinRunway ForcedPoseWeight SprintCharacterFacingHalflife SprintTrajPosWeight BlendTime DecayHalflife IdleEntryBlendTime` and
-  `FootLock.{Height,Lift,Speed,Reach,MaxDrift,Release,StepHeight,StepMax,RestFloor}`. A new knob is one more
+  `FootLock.{Height,Lift,Speed,Reach,MaxDrift,Release,StepHeight,StepMax,LiftFirst,RestFloor}`. A new knob is one more
   `MmTune("Key", default)` call in a .cpp.
 - **Code experiments side by side:** `tools\mm_exp.ps1 -Name <exp>` copies the runnable build to `work\exp\<exp>\`.
 - **Slow rebuilds:** the widely included headers (`IK.h`, `FirstPersonBody.h`, `FirstPersonBodyMotion.h`, `MotionSearch.h`,
