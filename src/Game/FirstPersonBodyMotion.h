@@ -169,6 +169,7 @@ public:
         // same 3 s stretch (Stand_Idle_Variations_FO, cut short by the rig's exclusions) at every end, a jump every 3 s; the
         // idle takes keep almost all their idle at 4 s (the crouch idle 53.5 -> 49.5 s).
         int IdleRunway = 240;
+        float IdleEntryBlendTime = 0.0f; // s: a jump into an idle take from outside one blends this long (MotionMatcher)
     };
     struct Input {
         float Dt = 0.0f;
