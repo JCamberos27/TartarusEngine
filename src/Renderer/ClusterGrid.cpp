@@ -1,4 +1,5 @@
 #include "ClusterGrid.h"
+#include <cstdio>
 #include "Shader.h"
 #include "DecalTypes.h"
 #include "gl.h"
@@ -211,6 +212,8 @@ void ClusterGrid::Cull(Shader& buildShader, Shader& cullShader, const glm::mat4&
     // here first: whatever an earlier cull's copy left in it (or 0 before one lands).
     if (m_OverflowMapped) {
         m_LastSaturated = *m_OverflowMapped != 0;
+        { static unsigned long long n = 0, sat = 0; sat += m_LastSaturated ? 1 : 0; // DIAG tile-size
+          if (++n % 500 == 0) { std::printf("[TILE] grid %dx%dx%d culls=%llu saturated=%llu\n", GRID_X, GRID_Y, GRID_Z, n, sat); std::fflush(stdout); } }
         glCopyNamedBufferSubData(m_Overflow, m_OverflowCopy, (GLintptr)sizeof(unsigned int), 0, (GLsizeiptr)sizeof(unsigned int));
     }
 }

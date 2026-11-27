@@ -25,7 +25,7 @@ uniform mat4 uView;
 #include "ClusterGrid.glsl"
 const uint GX = C_GX, GY = C_GY, GZ = C_GZ;
 // Total capacity of the global index list; must match ClusterGrid::GLOBAL_INDEX_CAPACITY (#208).
-const uint GLOBAL_CAPACITY = 262144u;
+const uint GLOBAL_CAPACITY = 4194304u; // DIAG tile-size: was 262144u
 
 float sqDistPointAABB(vec3 p, vec3 mn, vec3 mx) {
     float d = 0.0;

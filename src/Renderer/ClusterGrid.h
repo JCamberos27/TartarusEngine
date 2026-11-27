@@ -43,7 +43,7 @@ public:
     // smaller than the old fixed-stride buffer (65536 * 4 bytes = 256 KB vs. 1.38 MB). Must
     // match ClusterCull.comp.glsl's GLOBAL_CAPACITY.
     // Raised with the finer grid (8,064 clusters): an overflow drops lights, which shows.
-    static constexpr int GLOBAL_INDEX_CAPACITY = 262144;
+    static constexpr int GLOBAL_INDEX_CAPACITY = 4194304; // DIAG tile-size: was 262144
     // The decal index list (binding 14): every cluster owns a fixed Decals::MAX_PER_CLUSTER block
     // (3.5 MB in all), so it can't fill and a cluster's list sits at the same place every frame. The
     // shared 131072-entry list it replaces ran out in a dense view, and the clusters that reserved
