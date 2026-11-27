@@ -20,12 +20,14 @@
 #include "Core/Env.h"
 #include "BodyDebugDraw.h"
 #include "Components.h"
+#include "FirstPersonBody.h"
 #include "FirstPersonBodyContract.h"
 #include "FirstPersonBodyMotion.h"
 #include "FirstPersonPresentation.h"
 #include "FirstPersonWeaponGameplay.h"
 #include "GameModuleAPI.h" // QueryFilter, RaycastHit (the wall clearance cast)
 #include "IK.h"
+#include "MotionMatching/MotionDataReport.h"
 #include "NpcDirector.h"
 #include "Npc/NpcRagdoll.h"
 #include "PhysicsWorld.h"
@@ -883,7 +885,23 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
                     R.FadeWeightMin, R.FadeGap[0] * 1000.0f, R.FadeGap[1] * 1000.0f);
         // (Logged only: holstered, the body's arms let go of the rig on purpose. The rig's own hands-on-gun through its IK fade is
         // the unit test "IK rig at part weight keeps the hand on the gun".)
-        if (m_Scenario == "mmplayer") MmPlayerChecks();
+        if (m_Scenario == "mmplayer") {
+            // The searchable data (the player's own load: the rig's exclusions in): seconds a search can land on, per style x gait x direction.
+            if (const Model* rig = FirstPersonBody::SceneDriverModel(world.Registry)) {
+                if (const auto shared = SharedMotionDatabase::Get(FirstPersonBodyMotion::PlayerDatabase(), nullptr, rig)) {
+                    const MotionDatabase& db = shared->Db;
+                    const int runway = FirstPersonBodyMotion::Settings{}.MinRunway;
+                    MotionDataReport::Print(MotionDataReport::Build(db, runway));
+                    const MotionDataReport::IdleReport idle = MotionDataReport::BuildIdle(db, runway, FirstPersonBodyMotion::Settings{}.IdleRunway);
+                    std::printf("[MmData] idle takes: %d takes, %.1f s; Idle-gait %.1f s; searchable %.1f s; with %d+ frames of runway %.1f s. "
+                                "Excluded for the rig (hands up %u, bent over %u raw); glitches %u; prone approach %u frames\n",
+                                idle.Takes, idle.TakeFrames / db.Fps(), idle.Idle / db.Fps(), idle.Searchable / db.Fps(),
+                                std::max(runway, FirstPersonBodyMotion::Settings{}.IdleRunway), idle.WithRunway / db.Fps(), shared->HandsUpFrames,
+                                shared->BentOverFrames, db.GlitchFrames(), db.ProneApproachFrames());
+                }
+            }
+            MmPlayerChecks();
+        }
         if (m_Scenario == "mmstress") MmStressChecks();
         R.Stage = TbDummiesOn() ? 1 : 7; // (the dummies' part left out: done)
         R.StageAt = now;
