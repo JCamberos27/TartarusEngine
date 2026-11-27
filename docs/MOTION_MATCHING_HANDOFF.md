@@ -180,7 +180,9 @@ The pack doesn't have these. They are not faked:
   - `canonical`: every leg starts from the fresh body (stopped and started again: nothing carried over), placed where its
     part's last placement leg puts it and standing 1.5 s, then plays the one leg before it unmeasured (a stop needs its
     move), unless that leg is a placement. A leg's numbers then depend only on that leg and the one before it. About 2.5x
-    the course's length.
+    the course's length. The strafes checked left against right (`kTbAlikePairs`: the jog's and the stroll's) both play
+    the left one's lead-in, so they enter alike; on the plain course, where the right one enters from the left one, that
+    check is skipped.
   - `leg=from;...`: only those legs run (`*` wildcards), each from the fresh, settled body and then `from`, unmeasured:
     course legs joined by `+` (`M stroll strafe left=M stroll`), or `state:<gait>[,move=x/y][,view=deg][,secs=s]` - the
     gait (`idle stroll walk jog sprint crouch crouchidle`) held `secs` (default 2.5) with the stick at `move` (default

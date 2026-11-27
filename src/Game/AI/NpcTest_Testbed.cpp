@@ -36,6 +36,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -284,6 +285,17 @@ constexpr int kTbMaxLegs = 160; // the per-leg arrays
 static_assert(kTbCount <= kTbMaxLegs, "per-leg arrays");
 constexpr float kNpcBudget = 40.0f; // seconds the dummies' part may take
 
+// The strafes checked left against right (alike, MmPlayerChecks). On the course they enter from different legs (the right
+// from the left), so they are compared only when every leg starts afresh (TARTARUS_TESTBED_START); under canonical the right
+// one is led in by the left one's lead-in, so both enter alike.
+constexpr std::pair<const char*, const char*> kTbAlikePairs[] = {{"M jog strafe left", "M jog strafe right"},
+                                                                 {"M stroll strafe left", "M stroll strafe right"}};
+int TbLegIndex(const char* name) {
+    for (int i = 0; i < kTbCount; ++i)
+        if (std::strcmp(kTb[i].Name, name) == 0) return i;
+    return -1;
+}
+
 const glm::vec3 kStandingSpawn(-5.0f, 0.0f, 14.0f);
 
 // TESTBED_PARTS: the parts that run (all when unset).
@@ -357,6 +369,7 @@ struct TbSchedule {
     std::vector<TbStep> Steps;       // in order, the watch leg last
     std::vector<char> Measured;      // per course leg
     bool Subset = false;             // the whole-course checks are skipped: some legs don't run, or they start afresh
+    bool Fresh = false;              // every leg starts afresh (TARTARUS_TESTBED_START): legs compare on equal entries
     std::vector<std::string> Errors; // TARTARUS_TESTBED_START naming nothing
 };
 std::vector<std::string> TbSplit(const std::string& s, char sep) {
@@ -424,7 +437,10 @@ const TbSchedule& TbPlan() {
         for (int i = 0; i < kWatchLeg; ++i) {
             if (!TbLegPartOn(i) || (!keep.empty() && !keep[(size_t)i])) continue;
             if (!start.empty()) {
-                const int before = !kTb[i].Place && i > 0 && kTb[i - 1].Of == kTb[i].Of && !kTb[i - 1].Place ? i - 1 : -1;
+                const auto leadOf = [](int k) { return !kTb[k].Place && k > 0 && kTb[k - 1].Of == kTb[k].Of && !kTb[k - 1].Place ? k - 1 : -1; };
+                int before = leadOf(i);
+                for (const auto& pair : kTbAlikePairs) // (the alike pairs enter alike: the second as the first does)
+                    if (std::strcmp(kTb[i].Name, pair.second) == 0 && TbLegIndex(pair.first) >= 0) before = leadOf(TbLegIndex(pair.first));
                 fresh(i, before >= 0 ? kTb[before].Yaw : kTb[i].Yaw);
                 if (before >= 0) leadIn(kTb[before]);
             }
@@ -432,6 +448,7 @@ const TbSchedule& TbPlan() {
         }
         // (Under canonical the matcher's counters restart with each fresh body: the whole-course checks are skipped too.)
         plan.Subset = !keep.empty() || !start.empty();
+        plan.Fresh = !start.empty();
     } else {
         struct Entry { std::string Pattern, From; bool Used = false; };
         std::vector<Entry> entries;
@@ -469,6 +486,7 @@ const TbSchedule& TbPlan() {
         for (const Entry& e : entries)
             if (!e.Used) plan.Errors.push_back("no running leg matches '" + e.Pattern + "'");
         plan.Subset = true;
+        plan.Fresh = true;
     }
     measure(kWatchLeg);
     if (!start.empty()) {
@@ -1743,15 +1761,19 @@ void NpcTest::MmPlayerChecks() {
             Check(q.Steady > 20 && share >= 0.8f, b);
         }
         // Left and right alike where the pack was lopsided (the mirrored takes): the jog's and the stroll's strafes match
-        // strafing frames as often either way (within 10 points) at the same speed (within 10 %).
-        for (const auto& pair : {std::pair<const char*, const char*>{"M jog strafe left", "M jog strafe right"},
-                                 std::pair<const char*, const char*>{"M stroll strafe left", "M stroll strafe right"}}) {
+        // strafing frames as often either way (within 10 points) at the same speed (within 10 %). Only on equal entries: on the
+        // course the right one enters from the left one (kTbAlikePairs).
+        for (const auto& pair : kTbAlikePairs) {
             const TestbedRun::MmStats& l = R.Mm[legIndex(pair.first)];
             const TestbedRun::MmStats& r = R.Mm[legIndex(pair.second)];
             const float sl = l.Steady ? (float)l.Sideways / l.Steady : 0.0f, sr = r.Steady ? (float)r.Sideways / r.Steady : 0.0f;
             const float vl = mean(l.Speed), vr = mean(r.Speed);
-            std::snprintf(b, sizeof b, "%s / right: alike - strafing frames %.0f / %.0f %% (within 10 points), %.2f / %.2f m/s (within 10 %%)",
-                          pair.first, 100.0f * sl, 100.0f * sr, vl, vr);
+            std::snprintf(b, sizeof b, "%s / %s: alike - strafing frames %.0f / %.0f %% (within 10 points), %.2f / %.2f m/s (within 10 %%)",
+                          pair.first, pair.second, 100.0f * sl, 100.0f * sr, vl, vr);
+            if (!TbPlan().Fresh) {
+                std::printf("[NpcTest] SKIP (the course: the two enter from different legs; TARTARUS_TESTBED_START compares them) %s\n", b);
+                continue;
+            }
             Check(l.Steady > 20 && r.Steady > 20 && std::fabs(sl - sr) <= 0.1f && std::fabs(vl - vr) <= 0.1f * std::max(vl, vr), b);
         }
     }
