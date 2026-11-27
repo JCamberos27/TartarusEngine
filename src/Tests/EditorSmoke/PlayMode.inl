@@ -184,6 +184,34 @@ void RegisterPlayModeTests() {
         ChromeUi::BringToFront(EditorPanels::Scene),
     });
 
+    // The Game view's image goes into the frame's draw list while the UI is built; its target resizes after that (Game
+    // View Render), and ImGui draws at the frame's end. The colour texture a resize replaces must outlive that draw
+    // (GLRetire): deleted at once, the draw bound a dead name (a GL error) or, once another texture took the name, showed
+    // that one for a frame. Whether the driver hands the freed name straight back decides which, so the contract is
+    // checked directly: the old name stays a live texture, distinct from the new one, until the frame's flush.
+    Add("render targets: a resized Framebuffer's old colour texture lives until the frame's ImGui draw is done", {
+        // All in one frame, as in the editor: the name recorded, the target resized, then the name bound by the draw.
+        Expect("the replaced texture still binds later in the frame", [](Ctx&) {
+            auto fb = std::make_unique<Framebuffer>();
+            fb->Resize(64, 64);
+            const unsigned int old = fb->ColorTexture(); // what the UI build would have put in the draw list
+            fb->Resize(96, 80);
+            const unsigned int now = fb->ColorTexture();
+            fb.reset(); // frees its current texture at once; the replaced one waits for the frame's flush
+            if (old == 0 || now == 0) return std::string("no texture made");
+            if (old == now) return std::string("the old name was reused at once (deleted on resize)");
+            // A deleted name here is the GL error the run reported (GL_INVALID_OPERATION, "Texture name does not refer
+            // to a texture object"); the harness also fails on it.
+            const int before = GLDebug::ErrorCount();
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, old);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            return GLDebug::ErrorCount() == before ? std::string() : std::string("binding the replaced texture raised a GL error");
+        }),
+        Wait(2), // a frame end in between: Application flushes after the ImGui draw
+        ExpectTrue("nothing waits once the frame flushed", [](Ctx&) { return GLRetire::Pending() == 0; }),
+    });
+
     Add("playmode: a First Person Player on a floor plays and stops cleanly", {
         FreshScene(), Wait(2),
         // Project .wav files are gitignored (a fresh checkout, CI, has none): the landing foley can't load.

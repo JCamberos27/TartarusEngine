@@ -1,5 +1,6 @@
 #include "Framebuffer.h"
 #include "GLFramebufferCheck.h"
+#include "GLRetire.h"
 #include "Log.h"
 #include "gl.h"
 
@@ -13,6 +14,10 @@ void Framebuffer::Release() {
 }
 
 void Framebuffer::Create(int width, int height) {
+    // The colour texture being replaced may already be in this frame's ImGui draw list (the Game view's image is
+    // recorded before its target resizes): it goes at the frame's end (GLRetire), not now. The FBO is never shown.
+    GLRetire::Texture(m_ColorTexture);
+    m_ColorTexture = 0;
     Release();
     m_Width = width;
     m_Height = height;

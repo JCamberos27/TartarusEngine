@@ -41,6 +41,8 @@ extern "C" __declspec(dllimport) int __stdcall IsClipboardFormatAvailable(unsign
 #include "Input.h" // Input::SimulateKeyTap - main-loop keys (F1..F4) for the PlayMode suite
 #include "AtomicFile.h" // NoteSelfWrite - scratch files a suite writes are not external changes
 #include "gl.h"
+#include "Framebuffer.h"
+#include "GLRetire.h" // the render targets test (PlayMode.inl)
 #include "Core/Env.h"
 
 #include <GLFW/glfw3.h>
