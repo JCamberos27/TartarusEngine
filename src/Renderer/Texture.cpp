@@ -128,6 +128,7 @@ std::vector<unsigned char> DownsampleBox(const unsigned char* src, int srcW, int
 std::atomic<int> s_S3tc{-1};
 
 bool HasS3tc() { return s_S3tc.load(std::memory_order_acquire) == 1; }
+bool S3tcKnown() { return s_S3tc.load(std::memory_order_acquire) >= 0; }
 
 const char* FormatName(GLenum f) {
     switch (f) {
@@ -376,6 +377,8 @@ void Texture::InitGpuCaps() {
     s_S3tc.store(has, std::memory_order_release);
 }
 
+int Texture::SetS3tcForTest(int state) { return s_S3tc.exchange(state, std::memory_order_acq_rel); }
+
 Texture::Texture(const std::string& path) : Texture(path, TextureImportSettings{}) {}
 
 Texture::Texture(const std::string& path, const TextureImportSettings& settings)
@@ -525,6 +528,21 @@ void CopyEntry(TextureCache::Image& entry, TextureCpuData& out) {
     out.Ok = true;
 }
 
+// The choice Decode makes below, before the encode: a compressed normal map with 3+ channels is BC5 (core GL); anything
+// else goes through EncodeBlockCompressed, which needs S3TC for an sRGB or 3-4 channel image (BC1/BC3) and nothing extra
+// for a 1-2 channel linear one (BC4/BC5).
+bool NeedsS3tc(const TextureImportSettings& effective, int channels) {
+    if (effective.TextureType == TextureImportSettings::Type::NormalMap && channels >= 3) return false;
+    return effective.IsSRGB || channels >= 3;
+}
+
+// Whether a decode with these settings comes out block-compressed now (the forced formats have their own path).
+bool WouldBlockCompress(const TextureImportSettings& settings, const TextureImportSettings& effective, int channels) {
+    if (settings.CompressionMode == TextureImportSettings::Compression::None) return false;
+    if (settings.ForceFormat != TextureImportSettings::ForcedFormat::None) return false;
+    return !NeedsS3tc(effective, channels) || HasS3tc();
+}
+
 double MsSince(std::chrono::steady_clock::time_point start) {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 }
@@ -546,9 +564,16 @@ TextureCpuData Decode(const std::string& path, std::vector<unsigned char> memory
     // it is the single biggest startup win available. See TextureCache.h.
     TextureCache::Image entry;
     if (!fromMemory && TextureCache::Load(path, settings, entry)) {
-        CopyEntry(entry, out);
-        TextureLoadStats::AddDecode(MsSince(start));
-        return out;
+        // A raw entry under settings that ask for compression, which the encoder would compress now, was stored by a
+        // decode that ran before the driver's formats were known (scene-open prefetch skipped InitGpuCaps): decoded
+        // again here and stored over it. One that would come out raw again (no S3TC) stays a hit.
+        if (entry.GLFormat == 0 && WouldBlockCompress(settings, effective, entry.Channels)) {
+            entry = {};
+        } else {
+            CopyEntry(entry, out);
+            TextureLoadStats::AddDecode(MsSince(start));
+            return out;
+        }
     }
 
     // Do NOT flip on load: ModelImport.cpp already applies Assimp's aiProcess_FlipUVs to correct the
@@ -624,8 +649,20 @@ TextureCpuData Decode(const std::string& path, std::vector<unsigned char> memory
     if (data) stbi_image_free(data);
 
     // Bake the result for next time — post-downsample (and post-encode), so the cache stores
-    // exactly the bytes the upload receives.
-    if (!fromMemory) TextureCache::Store(path, settings, entry);
+    // exactly the bytes the upload receives. Not a raw fallback taken only because the driver's formats weren't known
+    // yet (InitGpuCaps not run): the cache would keep it raw for good. This session still uploads it raw.
+    const bool capsUnknown = entry.GLFormat == 0 && settings.CompressionMode != TextureImportSettings::Compression::None &&
+                             NeedsS3tc(effective, c) && !S3tcKnown();
+    if (capsUnknown) {
+        static std::atomic<bool> s_Warned{false};
+        if (!s_Warned.exchange(true))
+            Log::Warn("Texture: '" + path + "' decoded before the GPU's compressed formats were known: uploaded "
+                      "uncompressed this session" + std::string(fromMemory ? "" : " and not cached") +
+                      " (Texture::InitGpuCaps must run first).",
+                      LogContext::Asset(path));
+    } else if (!fromMemory) {
+        TextureCache::Store(path, settings, entry);
+    }
 
     CopyEntry(entry, out);
     out.Memory = std::move(memory);

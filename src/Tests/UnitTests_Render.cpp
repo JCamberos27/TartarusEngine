@@ -18,6 +18,7 @@
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/TextureCache.h"
 #include "../Renderer/Texture.h"
+#include "../Core/PngWrite.h"
 #include "../Renderer/ImpostorLibrary.h"
 #include "../Renderer/AssetCost.h"
 #include "../Renderer/SkyAtmosphere.h"
@@ -3678,6 +3679,69 @@ void TestTextureCacheVariants() {
     std::filesystem::remove(src, ec);
 }
 
+// A decode that runs before the driver's compressed formats are known must not cache its raw fallback (the cache would
+// keep it raw for good), and a raw entry one left behind is re-encoded once the encoder would compress it - while one that
+// would come out raw again (no S3TC) stays a plain hit instead of being re-decoded on every load.
+void TestTextureCacheRawFallback() {
+    namespace fs = std::filesystem;
+    const int saved = Texture::SetS3tcForTest(-1);
+    const std::string rgb = (fs::temp_directory_path() / "tt_raw_fallback_rgb.png").string();
+    const std::string grey = (fs::temp_directory_path() / "tt_raw_fallback_grey.png").string();
+    std::vector<unsigned char> px(16 * 16 * 3);
+    for (size_t i = 0; i < px.size(); ++i) px[i] = (unsigned char)(i * 5);
+    CHECK(PngWrite::ToFile(fs::path(rgb).u8string(), 16, 16, 3, px.data(), 16 * 3));
+    CHECK(PngWrite::ToFile(fs::path(grey).u8string(), 16, 16, 1, px.data(), 16));
+    TextureImportSettings colour;
+    colour.CompressionMode = TextureImportSettings::Compression::Normal; // sRGB RGB: BC1, needs S3TC
+    TextureImportSettings data = colour;
+    data.IsSRGB = false; // 1-channel linear: BC4, core GL
+    const std::string colourEntry = TextureCache::EntryPath(rgb, colour), dataEntry = TextureCache::EntryPath(grey, data);
+    std::error_code ec;
+    fs::remove(colourEntry, ec);
+    fs::remove(dataEntry, ec);
+
+    // Formats unknown: uploads raw this session, caches nothing.
+    TextureCpuData d = Texture::DecodeFile(rgb, colour);
+    CHECK(d.Ok && d.GLFormat == 0);
+    CHECK(!fs::exists(colourEntry));
+
+    // A raw entry under the compressed settings, with marker pixels so a cache hit shows.
+    TextureCache::Image raw;
+    raw.SourceWidth = raw.Width = 16;
+    raw.SourceHeight = raw.Height = 16;
+    raw.Channels = 3;
+    raw.Pixels.assign(16 * 16 * 3, 123);
+    TextureCache::Store(rgb, colour, raw);
+    // No S3TC: the encoder would leave it raw, so it stays a hit, load after load.
+    Texture::SetS3tcForTest(0);
+    for (int i = 0; i < 2; ++i) {
+        d = Texture::DecodeFile(rgb, colour);
+        CHECK(d.Ok && d.GLFormat == 0 && !d.Pixels.empty() && d.Pixels[0] == 123);
+    }
+    // S3TC present: decoded again, encoded and stored over it; the next load is a compressed hit.
+    Texture::SetS3tcForTest(1);
+    d = Texture::DecodeFile(rgb, colour);
+    CHECK(d.Ok && d.GLFormat != 0 && !d.LevelSizes.empty());
+    TextureCache::Image back;
+    CHECK(TextureCache::Load(rgb, colour, back) && back.GLFormat == d.GLFormat);
+
+    // A 1-channel linear map needs no S3TC (BC4): its raw entry heals with S3TC absent too.
+    Texture::SetS3tcForTest(0);
+    raw.Channels = 1;
+    raw.Pixels.assign(16 * 16, 123);
+    TextureCache::Store(grey, data, raw);
+    d = Texture::DecodeFile(grey, data);
+    CHECK(d.Ok && d.GLFormat != 0);
+    CHECK(TextureCache::Load(grey, data, back) && back.GLFormat != 0);
+
+    Texture::SetS3tcForTest(saved);
+    // The entries land in the project's real Library/Textures: remove exactly the ones this test wrote.
+    fs::remove(colourEntry, ec);
+    fs::remove(dataEntry, ec);
+    fs::remove(rgb, ec);
+    fs::remove(grey, ec);
+}
+
 // --- TextureCache keys: pixel-affecting settings change the hash, sampler state doesn't ------
 void TestTextureCacheHash() {
     TextureImportSettings a;
@@ -3868,6 +3932,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"MaterialRobustness", TestMaterialRobustness});
     tests.push_back({"MaterialTextureDefaults", TestMaterialTextureDefaults});
     tests.push_back({"TextureCacheVariants", TestTextureCacheVariants});
+    tests.push_back({"TextureCacheRawFallback", TestTextureCacheRawFallback});
     tests.push_back({"TextureCachePinEvict", TestTextureCachePinEvict});
     tests.push_back({"TextureCacheHash", TestTextureCacheHash});
     tests.push_back({"CameraFrustumValidation", TestCameraFrustumValidation});
