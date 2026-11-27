@@ -1000,8 +1000,8 @@ void TestSearchableDataReport() {
     }
     const MotionDataReport::IdleReport idle = MotionDataReport::BuildIdle(db, runway, 180);
     CHECK(idle.WithRunway <= idle.Searchable && idle.Searchable <= idle.Idle && idle.Idle <= idle.TakeFrames);
-    // 1.10: every idle take stays standing wherever the idle search can pick it.
-    const auto checks = MotionDataReport::CheckIdleTakes(db, runway, 180);
+    // Every idle take stays standing wherever the idle search can pick it.
+    const auto checks = MotionDataReport::CheckIdleTakes(db, FirstPersonBodyMotion::Settings{}.MinRunway, FirstPersonBodyMotion::Settings{}.IdleRunway);
     int failed = 0;
     for (const auto& c : checks) {
         std::printf("[MotionMatching] idle take %-40s %6u frames, %6u candidates, %6u lead into motion%s\n", c.Name.c_str(), c.Frames, c.Candidates, c.Bad,

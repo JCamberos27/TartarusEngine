@@ -55,7 +55,8 @@ IdleReport BuildIdle(const MotionDatabase& db, int minRunway, int idleRunway);
 // The idle-take check: what the standing idle search can pick in each idle take must stay standing. A candidate is an idle-take
 // frame the search accepts (Passes, with `idleRunway` frames of runway); it is bad when it is not Idle gait or any of the next
 // `idleRunway` frames of its take is not (an idle leading into a step, a turn or a jump stance). A take fails when it has a bad
-// candidate or no candidate at all.
+// candidate or no candidate at all. The stance filter is left out on purpose: the standing and the crouched idle searches both
+// run, so a take's candidates are the two together.
 struct IdleTakeCheck {
     std::string Name;
     std::uint32_t Frames = 0, Candidates = 0, Bad = 0;
