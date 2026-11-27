@@ -233,7 +233,7 @@ void TestSearchMatchesBruteForce() {
     CHECK(scoredBox * 2 < scoredBrute); // the boxes prune
 }
 
-// The frozen normalization (MM Wave 1, F3): a feature set carrying its own database's derivation, frozen and round-tripped
+// The frozen normalization (MotionDatabase.h): a feature set carrying its own database's derivation, frozen and round-tripped
 // through a .mmdb, builds the very same normalization (bit for bit) and every search gives the same frame at the same cost;
 // and a bake change (a take more) under a frozen normalization keeps the frozen scales, where a fresh derivation moves them.
 void TestFrozenNormalization() {

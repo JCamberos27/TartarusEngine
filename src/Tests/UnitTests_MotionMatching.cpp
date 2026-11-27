@@ -687,7 +687,7 @@ void TestRigDiffWithPack() {
     CHECK(worst <= cfg.RigLengthPct);
 }
 
-// Needs the cooked features (--bake-motion): Manny.mmconfig's frozen normalization (MM Wave 1, F3) is the cooked database's,
+// Needs the cooked features (--bake-motion): Manny.mmconfig's frozen normalization (MotionDatabase.h) is the cooked database's,
 // bit for bit - its own derivation for a version 2 file (the bake before the freeze, so every cost is unchanged), the frozen
 // block the bake stored for a version 3 one.
 void TestFrozenNormMatchesCooked() {
