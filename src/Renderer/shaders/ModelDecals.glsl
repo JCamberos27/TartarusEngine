@@ -259,6 +259,15 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
         uint sub = uSubstrateOn != 0 && (DIAG_STRIP & 131072) == 0 ? ids.x >> 24 : 0u;
         if (uSubstrateOn != 0 && (DIAG_STRIP & 131072) == 0 && (flags & DECAL_SUB_AUTO) != 0u && uMaterialSubstrate > 0) sub = uint(uMaterialSubstrate);
         float sw = 0.0;
+#if (DIAG_STRIP & 262144) != 0
+        // DIAG: no cache across decals - sample the substrate per hit (same inputs, same result), so no SubstrateSample
+        // stays live across the loop.
+        SubstrateSample ss = SubstrateSample(vec3(0.0), vec3(0.0, 0.0, 1.0), 0.0, 0.0, 0.0, vec3(0.0), vec3(0.0), vec3(0.0));
+        if (sub != 0u) {
+            ss = SampleSubstrate(sub - 1u, geoN, dpx, dpy);
+            sw = ss.strength;
+        }
+#else
         if (sub != 0u) {
             if (sub != cachedSub) {
                 ss = SampleSubstrate(sub - 1u, geoN, dpx, dpy);
@@ -267,6 +276,7 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
             }
             sw = ss.strength;
         }
+#endif
         // The surface map feeds the roughness / metal / AO channels and the substrate's recess (which only
         // the albedo channel shows); a decal using neither never reads it.
         bool recessed = sw > 0.0 && (ch & DECAL_CH_ALBEDO) != 0u && (flags & DECAL_HAS_SURFACE) != 0u;
