@@ -421,6 +421,9 @@ struct NpcTest::TestbedRun {
         int AirFrames = 0, AirLocked = 0, AirFlagged = 0;
         int Jumps = 0;                       // the matcher's jumps in the leg
         int Searches0 = -1, ByInput0 = 0, ByEnd0 = 0, Searches = 0, ByInput = 0, ByEnd = 0; // the schedule over the leg
+        // Searches where nothing passed and the filter was relaxed (MotionMatcher): the reselect history, MinRunway, the
+        // style; and nothing even then. [0..3] over the leg, Relax0 the counts at its start.
+        int Relax0[4] = {-1, 0, 0, 0}, Relax[4] = {};
         std::vector<float> PoseStep;         // the output pose's worst bone turn per frame (deg), the steady part
         std::vector<float> TrajErr;          // per search: the matched frame's root 1 s on off the wanted one (m)
         float ViewOffMax = 0.0f;             // the body's heading off the view, at most (deg), the steady part
@@ -1261,6 +1264,11 @@ void NpcTest::MmPlayerFrame(World& world, const Player& player, int leg, const f
     q.Searches = mm.Searches - q.Searches0;
     q.ByInput = mm.ForcedByInput - q.ByInput0;
     q.ByEnd = mm.ForcedByEnd - q.ByEnd0;
+    {
+        const int now[4] = {mm.RelaxedAvoid, mm.RelaxedRunway, mm.RelaxedStyle, mm.SearchFailed};
+        if (q.Relax0[0] < 0) std::copy(now, now + 4, q.Relax0);
+        for (int k = 0; k < 4; ++k) q.Relax[k] = now[k] - q.Relax0[k];
+    }
     // The first jumps of each leg, for the log: where to, why (a search forced by the input or by the frame running out).
     if (mm.Jumped && q.Jumps <= 4 && std::string(kTb[leg].Name).find("crouch") != std::string::npos) {
         auto row = [](const float* f) {
@@ -1553,6 +1561,21 @@ void NpcTest::MmPlayerChecks() {
         std::printf("[MmPlayer] %-26s %6.1f %9.2f %9.2f %9.2f %11.1f %9d %8d %6d %9.3f\n", kTb[i].Name, q.Jumps / std::max(0.1f, kTb[i].Seconds),
                     NpcTestCommon::Percentile(q.PoseStep, 0.5f), NpcTestCommon::Percentile(q.PoseStep, 0.99f), NpcTestCommon::Percentile(q.PoseStep, 1.0f), q.ViewOffMax, q.Searches, q.ByInput, q.ByEnd,
                     NpcTestCommon::Percentile(q.TrajErr, 0.5f));
+    }
+    // Searches where nothing passed the filter and the matcher relaxed it: which stage landed, and none landing.
+    // Print-only; a normal course has none.
+    {
+        int legs = 0, total = 0;
+        for (int i = 0; i < kWatchLeg; ++i) {
+            if (!TbLegOn(i)) continue;
+            const TestbedRun::MmStats& q = R.Mm[i];
+            const int sum = q.Relax[0] + q.Relax[1] + q.Relax[2] + q.Relax[3];
+            total += sum;
+            if (sum == 0) continue;
+            ++legs;
+            std::printf("[MmRelax] %-26s avoid %d, runway %d, style %d, none %d\n", kTb[i].Name, q.Relax[0], q.Relax[1], q.Relax[2], q.Relax[3]);
+        }
+        std::printf("[MmRelax] relaxed searches: %d over %d legs\n", total, legs);
     }
     for (const auto& pair : {std::make_pair("M walk looking about", TbPartOn('A') ? "A walk" : "M crouch walk"),
                              std::make_pair("M jog looking about", "M jog")}) {

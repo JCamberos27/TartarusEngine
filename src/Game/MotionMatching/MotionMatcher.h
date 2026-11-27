@@ -81,6 +81,9 @@ public:
     int Searches = 0, Jumps = 0;
     int IdleRefits = 0; // idle searches because the continuation stopped fitting
     int ForcedByExcluded = 0; // searches forced because the playing frame is Excluded (it played into an excluded stretch)
+    // Searches where no frame passed the filter and it had to be relaxed (Update): landed once the reselect history was
+    // dropped, then MinRunway, then the style; SearchFailed: nothing even then (the frame stays). A normal course has none.
+    int RelaxedAvoid = 0, RelaxedRunway = 0, RelaxedStyle = 0, SearchFailed = 0;
     double SearchMsTotal = 0.0, SearchMsMax = 0.0;
     // The latest kSearchSamples search times (ms; a ring once full, so a long Play doesn't grow it ~10 a second forever).
     static constexpr size_t kSearchSamples = 4096;

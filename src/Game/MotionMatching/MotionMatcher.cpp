@@ -54,6 +54,7 @@ void MotionMatcher::Reset(const MotionDatabase* db, std::uint32_t frame) {
     Schedule.Reset();
     Inertializer.Reset();
     Searches = Jumps = IdleRefits = ForcedByExcluded = 0;
+    RelaxedAvoid = RelaxedRunway = RelaxedStyle = SearchFailed = 0;
     SearchMsTotal = SearchMsMax = 0.0;
     SearchMs.clear();
     m_ShownCount = 0;
@@ -136,6 +137,26 @@ void MotionMatcher::Update(float dt, const Input& in) {
             params.AvoidCount = n;
         }
         m_Last = MotionSearch::Search(db, q, params, (std::int64_t)m_Frame);
+        // Nothing passed (only when the playing frame fails too): left alone the body would stay frozen on a frame its own
+        // filter refuses and search again every update. Relax in stages until something does - the reselect history, then
+        // MinRunway, then the style - and count which stage it took. Excluded, NoSearch and the Require/Forbid flags
+        // (airborne, crouch) always hold.
+        if (m_Last.Frame < 0 && params.AvoidCount > 0) {
+            params.AvoidCount = 0;
+            m_Last = MotionSearch::Search(db, q, params, (std::int64_t)m_Frame);
+            if (m_Last.Frame >= 0) ++RelaxedAvoid;
+        }
+        if (m_Last.Frame < 0 && params.MinRunway > 0) {
+            params.MinRunway = 0;
+            m_Last = MotionSearch::Search(db, q, params, (std::int64_t)m_Frame);
+            if (m_Last.Frame >= 0) ++RelaxedRunway;
+        }
+        if (m_Last.Frame < 0 && params.DesiredStyle >= 0) {
+            params.DesiredStyle = -1;
+            m_Last = MotionSearch::Search(db, q, params, (std::int64_t)m_Frame);
+            if (m_Last.Frame >= 0) ++RelaxedStyle;
+        }
+        if (m_Last.Frame < 0) ++SearchFailed;
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         ++Searches;
         SearchMsTotal += ms;
