@@ -1102,6 +1102,71 @@ void TestPredictAlong() {
     CHECK(glm::length(out[2].Position - there.Position) < 0.02f);
 }
 
+// The predicted start and stop against the capsule's own (PlayerApproachVelocity: an exponential, time constant accelTime
+// speeding up, decelTime slowing down; the NPC director's pace is the same ease). The predictor's spring takes each one's
+// halflife (tau ln 2), picked per step the way the capsule picks its time. A critically damped spring and an exponential with
+// the same halflife cover the same distance to a stop or lose the same distance on a start (the spring's v0 (1 + y t) e^-yt,
+// y = 2 / tau, integrates to v0 tau, as the exponential's v0 e^-t/tau does), so where the move settles is predicted exactly;
+// only the shape on the way differs (printed: predicted vs capsule at 0.1 s and the query's 1/3, 2/3, 1 s).
+// Tolerance 1 cm at 2/3 s and 1 s: by then both are settled (e^-6.7 of v0 tau left at worst, decel 0.15 s: < 0.1 mm), the
+// capsule here is stepped at 1 kHz (trapezoid: < 0.1 mm off its continuous path), and its 0.01 m/s arrive snap moves the end
+// by under 0.01 m/s x tau = 1.5 mm. One halflife for both ways (the old predictor) misses a 5 m/s stop by v0 (decel - accel):
+// 10 cm for 0.08 / 0.10, 15 cm for the NPCs' 0.12 / 0.15 - checked below so the test can tell the two apart.
+void TestPredictStartStop() {
+    const float times[4] = {0.1f, 1.0f / 3.0f, 2.0f / 3.0f, 1.0f};
+    struct Pair { float Accel, Decel; const char* Who; };
+    const Pair pairs[2] = {{0.08f, 0.10f, "player"}, {0.12f, 0.15f, "npc"}};
+    const glm::vec3 run(0.0f, 0.0f, 5.0f);
+    // The capsule: position and velocity at times[], from v0 toward `target`.
+    const auto capsule = [&](const glm::vec3& v0, const glm::vec3& target, const Pair& p, glm::vec3* pos, glm::vec3* vel) {
+        glm::vec3 x(0.0f), v = v0;
+        const float dt = 0.001f;
+        int k = 0;
+        for (int i = 1; k < 4; ++i) {
+            const glm::vec3 nv = PlayerApproachVelocity(v, target, dt, p.Accel, p.Decel);
+            x += (v + nv) * (0.5f * dt);
+            v = nv;
+            if (std::fabs(i * dt - times[k]) < 0.5f * dt) { pos[k] = x; vel[k] = v; ++k; }
+        }
+    };
+    const auto predict = [&](const glm::vec3& v0, const glm::vec3& target, float accelH, float decelH, TrajectoryState* out) {
+        TrajectoryPredictor tp;
+        tp.Params.VelocityHalflife = accelH;
+        tp.Params.VelocityDecelHalflife = decelH;
+        TrajectoryState s;
+        s.Velocity = v0;
+        tp.SetState(s);
+        tp.Predict(target, 0.0f, times, 4, out);
+    };
+    for (const Pair& p : pairs) {
+        const float ah = p.Accel * 0.6931f, dh = p.Decel * 0.6931f;
+        for (int stop = 0; stop < 2; ++stop) {
+            const glm::vec3 v0 = stop ? run : glm::vec3(0.0f), target = stop ? glm::vec3(0.0f) : run;
+            glm::vec3 cp[4], cv[4];
+            capsule(v0, target, p, cp, cv);
+            TrajectoryState pr[4], old[4];
+            predict(v0, target, ah, dh, pr);
+            predict(v0, target, ah, 0.0f, old); // one halflife both ways
+            for (int k = 0; k < 4; ++k)
+                std::printf("[PredictStartStop] %s %s %.2f/%.2f t %.2f: speed predicted %.3f capsule %.3f (one-halflife %.3f) m/s, "
+                            "distance predicted %.3f capsule %.3f (one-halflife %.3f) m\n",
+                            p.Who, stop ? "stop " : "start", p.Accel, p.Decel, times[k], glm::length(pr[k].Velocity),
+                            glm::length(cv[k]), glm::length(old[k].Velocity), pr[k].Position.z, cp[k].z, old[k].Position.z);
+            for (int k = 2; k < 4; ++k) CHECK(std::fabs(pr[k].Position.z - cp[k].z) < 0.01f);
+            if (stop) CHECK(std::fabs(old[3].Position.z - cp[3].z) > 0.05f); // the old predictor's stop: v0 (decel - accel) short
+            else CHECK(std::fabs(old[3].Position.z - pr[3].Position.z) < 1e-5f); // a start never takes the decel halflife
+        }
+    }
+    // A slower move (run to walk) slows with the decel halflife too: it ends where the capsule does.
+    const Pair& p = pairs[0];
+    glm::vec3 cp[4], cv[4];
+    const glm::vec3 walk(0.0f, 0.0f, 1.5f);
+    capsule(run, walk, p, cp, cv);
+    TrajectoryState pr[4];
+    predict(run, walk, p.Accel * 0.6931f, p.Decel * 0.6931f, pr);
+    CHECK(std::fabs(pr[3].Position.z - cp[3].z) < 0.01f);
+}
+
 // The first Play's database read ahead (Prefetch): Get takes the prefetched load (never a second read), loads itself while
 // the prefetch is still queued (the job then does nothing), waits on a running one, and reads afresh after an Invalidate
 // or a rewrite since the prefetch was queued; a cancelled or dropped prefetch never runs.
@@ -1428,6 +1493,7 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: dead blending", TestInertialization});
     tests.push_back({"Motion matching: trajectory springs and collision", TestTrajectoryPredictor});
     tests.push_back({"Motion matching: trajectory along a route (NPCs)", TestPredictAlong});
+    tests.push_back({"Motion matching: predicted start and stop match the capsule's", TestPredictStartStop});
     tests.push_back({"Motion matching: gait speed table", TestGaitTable});
     tests.push_back({"Motion matching: query root space", TestQueryConvention});
     tests.push_back({"Motion matching: matcher end to end", TestMatcherEndToEnd});

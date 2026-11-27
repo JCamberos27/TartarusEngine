@@ -39,7 +39,8 @@ void TrajectoryPredictor::Reset(const glm::vec3& position, float yaw) {
 void TrajectoryPredictor::Step(TrajectoryState& s, glm::vec3& goal, float goalYaw, float dt, int* hits) const {
     const glm::vec3 from = s.Position;
     glm::vec3 x = s.Position;
-    SpringCharacter(x, s.Velocity, s.Acceleration, goal, Params.VelocityHalflife, dt);
+    const bool slowing = Params.VelocityDecelHalflife > 0.0f && glm::dot(goal, goal) < glm::dot(s.Velocity, s.Velocity);
+    SpringCharacter(x, s.Velocity, s.Acceleration, goal, slowing ? Params.VelocityDecelHalflife : Params.VelocityHalflife, dt);
     x.y = from.y;
     s.Velocity.y = s.Acceleration.y = 0.0f;
     glm::vec3 stop, n;

@@ -3,7 +3,8 @@
 // TrajectoryPredictor: where the character will be over the next second, for the motion matching query
 // (docs/MOTION_MATCHING_HANDOFF.md, Phase 3). Spring-based and collision-aware.
 //
-//   - Velocity follows the desired velocity through a critically damped spring (VelocityHalflife), integrated exactly
+//   - Velocity follows the desired velocity through a critically damped spring (VelocityHalflife speeding up,
+//     VelocityDecelHalflife slowing down, picked each step), integrated exactly
 //     (position, velocity and acceleration in closed form - Holden's "simple spring damper"), so the prediction and
 //     the simulated character agree at any time step.
 //   - Facing follows the desired yaw through a critically damped spring (FacingHalflife), the goal unwrapped to the
@@ -22,7 +23,10 @@
 #include <functional>
 
 struct TrajectoryParams {
-    float VelocityHalflife = 0.20f; // s
+    float VelocityHalflife = 0.20f; // s: speeding up (the goal's speed at least the velocity's)
+    // s: slowing down (the goal slower than the velocity: a stop, a slower move); <= 0: VelocityHalflife. Picked each step as
+    // the capsule picks its acceleration / deceleration time (PlayerApproachVelocity, the NPC director's pace).
+    float VelocityDecelHalflife = 0.0f;
     float FacingHalflife = 0.15f;   // s
     int SubSteps = 20;              // sweep steps per predicted second
 };

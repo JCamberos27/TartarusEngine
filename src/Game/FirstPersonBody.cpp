@@ -707,8 +707,10 @@ void FirstPersonBody::TickMotionMatching(World& world, const Player& player, con
     in.Gravity = player.Gravity;
     in.TurnThreshold = glm::radians(std::max(cfg.TurnThreshold, 0.0f));
     in.TurnEndAngle = glm::radians(std::max(cfg.TurnEndAngle, 0.0f));
-    // The capsule's approach (an exponential, time constant GroundAccelTime) as the predictor's spring.
+    // The capsule's approach (an exponential, time constant GroundAccelTime speeding up, GroundDecelTime slowing down:
+    // PlayerApproachVelocity) as the predictor's spring, the same halflife each way (0 = instant: the spring's quickest).
     in.VelocityHalflife = player.GroundAccelTime > 0.0f ? player.GroundAccelTime * 0.6931f : 0.05f;
+    in.VelocityDecelHalflife = player.GroundDecelTime > 0.0f ? player.GroundDecelTime * 0.6931f : 0.05f;
     const float radius = std::max(0.05f, player.Size.x * 0.5f);
     in.Sweep = [radius](const glm::vec3& from, const glm::vec3& to, glm::vec3& stopAt, glm::vec3& normal) {
         glm::vec3 d = to - from;
