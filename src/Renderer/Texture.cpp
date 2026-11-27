@@ -657,7 +657,8 @@ TextureCpuData Decode(const std::string& path, std::vector<unsigned char> memory
         static std::atomic<bool> s_Warned{false};
         if (!s_Warned.exchange(true))
             Log::Warn("Texture: '" + path + "' decoded before the GPU's compressed formats were known: uploaded "
-                      "uncompressed this session and not cached (Texture::InitGpuCaps must run first).",
+                      "uncompressed this session" + std::string(fromMemory ? "" : " and not cached") +
+                      " (Texture::InitGpuCaps must run first).",
                       LogContext::Asset(path));
     } else if (!fromMemory) {
         TextureCache::Store(path, settings, entry);
