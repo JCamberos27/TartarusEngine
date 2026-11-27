@@ -165,7 +165,10 @@ public:
         // and the Turn Threshold turns the body back to the view. (At the Turn Threshold's 30 deg, Stand_Idle_LookAround - its
         // root half the shoulder line, past 30 deg in a second on 22 % of its frames - re-searched every 0.8 s.)
         float IdleSpeed = 0.1f, IdleTravel = 0.25f, IdleTurn = 1.571f;
-        int IdleRunway = 180; // frames (3 s) an idle candidate plays before its labels change
+        // Frames (4 s) an idle candidate plays before its labels change. At 3 s, standing from a fresh start re-picked the
+        // same 3 s stretch (Stand_Idle_Variations_FO, cut short by the rig's exclusions) at every end, a jump every 3 s; the
+        // idle takes keep almost all their idle at 4 s (the crouch idle 53.5 -> 49.5 s).
+        int IdleRunway = 240;
     };
     struct Input {
         float Dt = 0.0f;
