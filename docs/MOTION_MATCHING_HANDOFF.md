@@ -232,24 +232,26 @@ The pack doesn't have these. They are not faked:
 
 ## Open issues
 
-Measured failures (all in `src/Game/AI/NpcTest_Testbed.cpp` unless noted). Three legs are locked in `lockedJumps` at their
-measured jump rate + ~10 % instead of the relative limit; each lock is debt that comes off when its fix lands:
-`M jog` locked 3.0 (measured 2.7; comes off when the jog gets a long looped straight), `M crouch strafe right`
-locked 2.8 (measured 2.5; comes off when the crouch strafes are baked mirrored), `M walk looking about` locked 7.5
-(measured 6.8; comes off when turns can be stepped while moving, or per-gait search weights bring it under). Still red and
-not locked: `A jog`
-(2.6 vs 2.3) and `M jog looking about`. No other limit has been loosened.
-- **`A jog` jumps a second (2.6, limit 2.3).** Every hop is voluntary, as the playing take's continuation drifts near the end of
-  its straight stretch (the pack's longest steady jog is 1.4 s). Three lighter trajectory-weight variants were measured on
-  the whole course; each broke other checks. The defaults stay.
-- **Looking-about jump rates** (`M walk looking about`, `M jog looking about`; about 6.6 and 5.5 a second against 2.8 and
-  4.45). Pose steps and foot slide pass. The cause is the asset gap "tight turns at a walk". Turn-on-the-spot frames are
-  filtered out while moving; stepping a turn with them would be a new feature.
-- **`M crouch strafe right` (2.5 jumps a second, limit 2.3).** A side effect of mirroring the walk's strafes: the extra
-  frames shift the database's normalization, and the crouch strafe's thin data (8 legs) sits near ties. The fix belongs with
-  the crouch strafe data.
+Measured failures (all in `src/Game/AI/NpcTest_Testbed.cpp` unless noted). One leg is locked in `lockedJumps` at its
+measured jump rate + ~10 % instead of the relative limit, and the lock is debt that comes off when its fix lands:
+`M walk looking about` locked 7.5 (measured 6.8; comes off when turns can be stepped while moving, or per-gait search
+weights bring it under). Still red and not locked: `M jog looking about`. No other limit has been loosened.
+- **Looking-about jump rates** (`M walk looking about` 6.8 a second against 2.8, locked; `M jog looking about` 5.0 against
+  4.0). Pose steps and foot slide pass. The cause is the asset gap "tight turns at a walk". Turn-on-the-spot frames are
+  filtered out while moving; stepping a turn with them would be a new feature. `M jog looking about`'s limit is relative to
+  `M jog`'s measured rate (1.5x + 1): its own rate didn't change when the crouch strafes were mirrored (5.0, pose step p99
+  11.16 deg), but `M jog` dropped from 2.7 to 2.0, so its limit went from 5.05 to 4.0.
+- **`M jog` and `A jog` sit at or near their limit** (2.0 and 2.3 against 2.3; `A jog` measured 2.6 before 2026-11-27). Every
+  hop is voluntary, as the playing take's continuation drifts near the end of its straight stretch (the pack's longest steady
+  jog is 1.4 s). Three lighter trajectory-weight variants were measured on the whole course; each broke other checks. The
+  defaults stay. `M jog`'s lock (3.0) came off at 2.0, but that drop came from the course, not the jog: the crouch legs run
+  before it, and their new matches change the player's state at its start. If it goes back over its limit, that is an honest
+  red (its fix is a long looped jog straight), never a new lock.
 
 Fixed, and kept here only as outcomes:
+- `M crouch strafe right` jump rate (2.5, limit 2.3, locked at 2.8): the crouch strafes baked mirrored as well, 2026-11-27 (the
+  walk's mirrors had shifted the then-derived normalization; it is frozen now, `featureNorm` in `Manny.mmconfig`). Now 2.0,
+  lock off.
 - `mmstress` pop (114.5 deg on `calf_l`): the dead blend re-chose the short way every frame. Now 0, worst about 11 deg.
 - `M sprint back` foot hold (5.0 cm): the foot lock's floor. `FootLockSettings::RestFloor` fixed it (0.6 cm).
 - The looking-about foot slides (7.8-22.6 cm): the slide meter read a swing's end as a plant. It now judges a plant from where

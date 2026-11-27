@@ -15,7 +15,8 @@ Curation (docs/MOTION_MATCHING_HANDOFF.md, decision 4 and decision 6; the measur
 - The mirrored takes: the strafes of the styles the audit found lopsided (left against right steady seconds more than
   1.25 apart: the stroll's and the jog's strafes), and the walk's (2026-11-18: balanced in seconds, but strafing right
   matched poorly - the walk's right strafes drift forward and turn 17-37 deg a second; costs 5-10 against the left's 4-6,
-  `M strafe right (walk)`'s clips at 0.72 of the capsule's pace) are baked a second time, mirrored left for right (a row
+  `M strafe right (walk)`'s clips at 0.72 of the capsule's pace), and the crouch's (2026-11-27: `M crouch strafe right`
+  jumped 2.5 a second over its 2.3 limit) are baked a second time, mirrored left for right (a row
   named `<take>_Mirror`, `source` the take, tagged `mirrored`; MotionBake::MirrorPose).
 Per-frame labels (gait, style, crouch, strafe, airborne, prone) are computed by the bake, not here; the tags here are per
 take: the group, the pattern's kind (idle, turn, jump, start, strafe, loop, circles, snakes, card, stops, transition,
@@ -40,7 +41,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TRIM = 1.0  # seconds off each end of a take
 
 # The mirrored takes (docs/mm_audit.md, "Left / right balance"): the strafes of these groups.
-MIRROR_GROUPS = ('Stroll', 'Jog', 'Walk')
+MIRROR_GROUPS = ('Stroll', 'Jog', 'Walk', 'Crouch')
 
 # The sprint (2026-11-17, the owner's call): the pack has no held run - its runs are dashes - so the held fast gait is the old
 # locomotion's jog (3.26 m/s), a looped set with starts, stops, pivots and turning starts. Project clips (no pack), their travel
@@ -149,7 +150,8 @@ def main():
         r['include'] = 1
         if r['group'] in MIRROR_GROUPS and 'strafe' in r['tags']:
             m = dict(r, name=r['name'] + '_Mirror', source=r['name'], tags=r['tags'] + ['mirrored'],
-                     notes='mirrored: the walk strafes matched poorly to the right' if r['group'] == 'Walk'
+                     notes='mirrored: the ' + r['group'].lower() + ' strafes matched poorly to the right'
+                     if r['group'] in ('Walk', 'Crouch')
                      else 'mirrored: the audit found the ' + r['group'].lower() + ' strafes lopsided')
             mirrored.append(m)
     rows += mirrored
