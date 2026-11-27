@@ -147,6 +147,11 @@ public:
         // the forward loop plays on while the facing follows. Measured on `M sprint turning` (60 deg/s): at 0.2, 2.25 jumps/s,
         // 17 % cruising, the planted feet sliding 16.7 cm (turning starts stitched); at 0.08, 0.5 jumps/s, 100 %, 2.3 cm.
         float SprintCharacterFacingHalflife = 0.08f;
+        // ... and the sprint search weighs where the root goes this many times over (like a strafe): with no curved runs, a turning
+        // sprint's trajectory runs off the facing, and at weight 1 the pose kept it out of the diagonal loops once it played anything
+        // else - after a flick 180 the turning sprint stitched turning starts (begun from standing) at 3.3 m/s, the planted feet
+        // sliding 17.3 cm.
+        float SprintTrajPosWeight = 2.0f;
         float MaxFacingOffset = 1.5708f;       // rad (90 deg): the character facing at most this far off the simulation's
         float TakeoffSeconds = 0.12f;          // a jump's segment starts this far before its first airborne frame
         float LandSeconds = 0.25f;             // ... and plays this far past its last before searching again
