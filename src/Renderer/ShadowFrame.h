@@ -125,6 +125,8 @@ public:
     std::vector<VisibleRenderable>& CastingForTest() { return m_Casting; }
     bool LastSunListWasDelta() const { return m_SunLastDelta; }
     bool LastSunListWasKeyed() const { return m_SunLastKeyed; }
+    // Every slot index points at a set entry with that slot, and every set entry's slot points back at it.
+    bool SunSlotIndexConsistent() const;
     bool SameSunListAs(const ShadowFrame& other) const;
     // Sun caster lists since startup: how many took the delta / keyed path (--perf-bench prints a phase's share), and how
     // many casters the keyed path copied vs filled.
@@ -321,9 +323,10 @@ private:
     std::vector<std::uint32_t> m_SunHiddenSet;   // outfit-hidden entities (sorted) when the full loop last ran
     std::vector<std::int32_t> m_SunSlotIndex;    // GPU scene slot -> index in m_SunCasters, -1 none
     std::vector<std::uint32_t> m_SunAlwaysCheck; // indices re-checked every delta frame: skinned and outfit-hidden casters
-    // The keyed path's scratch, kept between frames (no per-frame allocation): the list it builds, per-slot "in this
-    // frame's change log" marks and per-old-index "re-checked every frame" marks (the slot marks cleared after use).
+    // The keyed path's scratch, kept between frames (no per-frame allocation): the list and set it builds, per-slot "in
+    // this frame's change log" marks and per-old-index "re-checked every frame" marks (the slot marks cleared after use).
     std::vector<SunCaster> m_SunCastersNext;
+    std::vector<SunSetEntry> m_SunSetNext;
     std::vector<std::uint8_t> m_SunSlotLogged, m_SunOldAlways;
     std::uint64_t m_SunListFrame = ~0ull;        // the frame the list was last brought up to date
     std::uint64_t m_SunFullFrame = ~0ull;        // ...and last fully refilled
@@ -333,9 +336,8 @@ private:
     std::uint64_t m_ChangeLogFrame = ~0ull, m_ChangeLogPrevFrame = ~0ull; // when RenderLocal took m_ChangeLog, and the take before
     void FillSunCaster(World& world, const VisibleRenderable& v, SunCaster& sc);
     void TrackSunMotion(const SunListIn& in, const VisibleRenderable& v, const SunCaster& sc, unsigned& force);
-    // FillSunCasters' bookkeeping after the full loop or the keyed path: m_SunSet, m_SunSlotIndex, m_SunAlwaysCheck from
-    // m_Casting / m_SunCasters. `resetAll`: clear every slot index (else only the old set's).
-    void RebuildSunSet(const std::vector<std::uint32_t>& hidden, bool (*skinned)(const Model*), bool resetAll);
+    // The full loop's bookkeeping: m_SunSet, m_SunSlotIndex, m_SunAlwaysCheck from m_Casting / m_SunCasters.
+    void RebuildSunSet(const std::vector<std::uint32_t>& hidden, bool (*skinned)(const Model*));
     std::vector<const LocalCaster*> m_Visible;
     std::vector<std::uint8_t> m_VisibleDynamic; // per m_Visible entry: DynamicFor for the light being rendered
     std::uint64_t m_SpotShadowSig[SpotShadowMap::kMaxSpots] = {}; // the static casters'

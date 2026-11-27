@@ -1016,6 +1016,7 @@ void SunCasterListKeyed() {
             break;
         }
         CHECK(!fullOnly.LastSunListWasKeyed() && !fullOnly.LastSunListWasDelta());
+        CHECK(keyed.SunSlotIndexConsistent()); // slots that left are unmapped (the delta path indexes the list by them)
         if (keyed.LastSunListWasKeyed()) {
             ++keyedFrames;
             camOnlyKeyed += camOnly;
