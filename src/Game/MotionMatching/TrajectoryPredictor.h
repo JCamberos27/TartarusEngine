@@ -22,13 +22,19 @@
 #include <array>
 #include <functional>
 
+// The capsules' snaps, shared by the hosts and their predictions (TrajectoryParams::SnapToGoal / SnapToStop):
+// PlayerApproachVelocity takes a velocity within 1 cm/s of the target as arrived; NpcDirector's pace under 2 cm/s is a stop.
+inline constexpr float kPlayerArriveSnap = 0.01f; // m/s
+inline constexpr float kNpcStopPace = 0.02f;      // m/s
+
 struct TrajectoryParams {
     float VelocityHalflife = 0.20f; // s
     // The capsule's own law in place of the velocity spring: each frame (FrameDt) the velocity eases toward the goal as an
     // exponential, time constant AccelTime when the goal is at least as fast as the velocity and DecelTime when it is slower
     // (0: at once), then the position moves by the new velocity x the frame - PlayerApproachVelocity and the player's move,
     // the NPC director's pace and its move. A velocity within SnapToGoal of the goal takes it (the player's arrive); a speed
-    // under SnapToStop is a stop (the director's).
+    // under SnapToStop is a stop (the director's). The director eases a scalar pace along its way where this eases the
+    // velocity vector: the two agree on a straight leg, not on a slowdown during a turn.
     bool CapsuleLaw = false;
     float AccelTime = 0.0f, DecelTime = 0.0f; // s
     float FrameDt = 1.0f / 60.0f;             // s: the host's frame

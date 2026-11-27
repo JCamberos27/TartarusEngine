@@ -3,6 +3,7 @@
 #include "Input.h"
 #include "InputMap.h"
 #include "PhysicsWorld.h"
+#include "MotionMatching/TrajectoryPredictor.h" // kPlayerArriveSnap
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <cmath>
@@ -180,5 +181,5 @@ glm::vec3 PlayerApproachVelocity(const glm::vec3& current, const glm::vec3& targ
     const float t = glm::length(target) >= glm::length(current) ? accelTime : decelTime;
     if (!(t > 0.0f) || !(dt > 0.0f)) return target;
     const glm::vec3 next = current + (target - current) * (1.0f - std::exp(-dt / t));
-    return glm::length(target - next) < 0.01f ? target : next; // arrive, rather than creep for ever
+    return glm::length(target - next) < kPlayerArriveSnap ? target : next; // arrive, rather than creep for ever
 }

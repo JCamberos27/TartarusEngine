@@ -1484,8 +1484,8 @@ void TestPredictMatchesCapsule() {
         tp.Params.AccelTime = accel;
         tp.Params.DecelTime = decel;
         tp.Params.FrameDt = dt;
-        tp.Params.SnapToGoal = c.Npc ? 0.0f : 0.01f;
-        tp.Params.SnapToStop = c.Npc ? 0.02f : 0.0f;
+        tp.Params.SnapToGoal = c.Npc ? 0.0f : kPlayerArriveSnap;
+        tp.Params.SnapToStop = c.Npc ? kNpcStopPace : 0.0f;
         tp.SetState(start);
         TrajectoryState pr[4], spring[4];
         tp.Predict(c.To, 0.0f, times, 4, pr);

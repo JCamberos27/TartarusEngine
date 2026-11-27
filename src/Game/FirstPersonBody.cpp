@@ -714,7 +714,7 @@ void FirstPersonBody::TickMotionMatching(World& world, const Player& player, con
     in.CapsuleLaw = true;
     in.AccelTime = player.Grounded ? player.GroundAccelTime : player.AirAccelTime;
     in.DecelTime = player.Grounded ? player.GroundDecelTime : player.AirAccelTime;
-    in.SnapToGoal = 0.01f; // PlayerApproachVelocity's arrive
+    in.SnapToGoal = kPlayerArriveSnap; // PlayerApproachVelocity's arrive
     const float radius = std::max(0.05f, player.Size.x * 0.5f);
     in.Sweep = [radius](const glm::vec3& from, const glm::vec3& to, glm::vec3& stopAt, glm::vec3& normal) {
         glm::vec3 d = to - from;
