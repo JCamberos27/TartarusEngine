@@ -131,7 +131,7 @@ MotionSearchResult MotionSearch::SearchBrute(const MotionDatabase& db, const flo
     const QuantQuery q(db, query, p);
     const Skip skip(db, current, p);
     for (std::uint32_t i = 0; i < db.FrameCount(); ++i) {
-        if (skip(i) || !Passes(db.Flags(i), p) || !PassesStyle(db.Style(i), p) || db.Runway(i) < p.MinRunway) continue;
+        if (skip(i) || !Passes(db.Flags(i), p) || !PassesStyle(db.Style(i), p) || db.Runway(i) < p.MinRunway || db.IdleRunway(i) < p.MinIdleRunway) continue;
         ++r.FramesScored;
         const float c = Distance(q, db.Quantized(i), kInf) + GaitCost(p, db.Gait(i)) + p.TransitionCost;
         if (c < r.Cost) {
@@ -164,7 +164,7 @@ MotionSearchResult MotionSearch::Search(const MotionDatabase& db, const float* q
             const std::uint32_t from = (std::uint32_t)S * MotionDatabase::kSmallBox;
             const std::uint32_t to = std::min(n, from + (std::uint32_t)MotionDatabase::kSmallBox);
             for (std::uint32_t i = from; i < to; ++i) {
-                if (skip(i) || !Passes(db.Flags(i), p) || !PassesStyle(db.Style(i), p) || db.Runway(i) < p.MinRunway) continue;
+                if (skip(i) || !Passes(db.Flags(i), p) || !PassesStyle(db.Style(i), p) || db.Runway(i) < p.MinRunway || db.IdleRunway(i) < p.MinIdleRunway) continue;
                 ++r.FramesScored;
                 const float d = Distance(q, db.Quantized(i), r.Cost);
                 if (d >= r.Cost) continue; // (the extra costs are >= 0)

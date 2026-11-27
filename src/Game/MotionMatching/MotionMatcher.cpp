@@ -165,7 +165,7 @@ void MotionMatcher::Update(float dt, const Input& in) {
         m_Last = MotionSearch::Search(db, q, params, (std::int64_t)m_Frame);
         // Nothing passed (only when the playing frame fails too): left alone the body would stay frozen on a frame its own
         // filter refuses and search again every update. Relax in stages until something does - the reselect history, then
-        // MinRunway, then the style - and count which stage it took. Excluded, NoSearch and the Require/Forbid flags
+        // the runways, then the style - and count which stage it took. Excluded, NoSearch and the Require/Forbid flags
         // (airborne, crouch) always hold. A stage counts only when it moves to another frame: the playing frame failing on its
         // style alone can come back once the style is dropped, and then plays on as it did before (nothing relaxed).
         if (m_Last.Frame < 0 && params.AvoidCount > 0) {
@@ -173,8 +173,8 @@ void MotionMatcher::Update(float dt, const Input& in) {
             m_Last = MotionSearch::Search(db, q, params, (std::int64_t)m_Frame);
             if (m_Last.Switched) ++RelaxedAvoid;
         }
-        if (m_Last.Frame < 0 && params.MinRunway > 0) {
-            params.MinRunway = 0;
+        if (m_Last.Frame < 0 && (params.MinRunway > 0 || params.MinIdleRunway > 0)) {
+            params.MinRunway = params.MinIdleRunway = 0;
             m_Last = MotionSearch::Search(db, q, params, (std::int64_t)m_Frame);
             if (m_Last.Switched) ++RelaxedRunway;
         }
