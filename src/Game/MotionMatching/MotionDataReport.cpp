@@ -108,4 +108,36 @@ IdleReport BuildIdle(const MotionDatabase& db, int minRunway, int idleRunway) {
     return r;
 }
 
+std::vector<IdleTakeCheck> CheckIdleTakes(const MotionDatabase& db, int minRunway, int idleRunway) {
+    std::vector<IdleTakeCheck> out;
+    MotionSearchParams p;
+    p.Require = MotionLabel::IdleTake;
+    const std::uint16_t need = (std::uint16_t)std::max(0, std::max(minRunway, idleRunway));
+    for (const auto& clip : db.Stream().Clips()) {
+        if (clip.Count == 0 || !(db.Flags(clip.First) & MotionLabel::IdleTake)) continue;
+        // notIdleFrom[k]: the first frame at or after k (take-relative) that isn't Idle gait (Count: none).
+        std::vector<std::uint32_t> notIdleFrom(clip.Count + 1, clip.Count);
+        for (std::uint32_t k = clip.Count; k-- > 0;)
+            notIdleFrom[k] = db.Gait(clip.First + k) != MotionLabel::Idle ? k : notIdleFrom[k + 1];
+        IdleTakeCheck c;
+        c.Name = clip.Name;
+        c.Frames = clip.Count;
+        for (std::uint32_t k = 0; k < clip.Count; ++k) {
+            const std::uint32_t f = clip.First + k;
+            if (!MotionSearch::Passes(db.Flags(f), p) || db.Runway(f) < need) continue;
+            ++c.Candidates;
+            // The next idleRunway frames (the take may end sooner: the runway already stops at its end).
+            const std::uint32_t last = std::min<std::uint32_t>(clip.Count, k + (std::uint32_t)std::max(1, idleRunway));
+            if (notIdleFrom[k] >= last) continue;
+            if (!c.Bad++) {
+                c.FirstBad = k;
+                c.LeadsInto = db.Gait(clip.First + notIdleFrom[k]);
+            }
+            c.LastBad = k;
+        }
+        out.push_back(std::move(c));
+    }
+    return out;
+}
+
 } // namespace MotionDataReport

@@ -14,6 +14,8 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <string>
+#include <vector>
 
 namespace MotionDataReport {
 
@@ -47,5 +49,18 @@ struct IdleReport {
     int Takes = 0;
 };
 IdleReport BuildIdle(const MotionDatabase& db, int minRunway, int idleRunway);
+
+// The idle-take check: what the standing idle search can pick in each idle take must stay standing. A candidate is an idle-take
+// frame the search accepts (Passes, with `idleRunway` frames of runway); it is bad when it is not Idle gait or any of the next
+// `idleRunway` frames of its take is not (an idle leading into a step, a turn or a jump stance). A take fails when it has a bad
+// candidate or no candidate at all.
+struct IdleTakeCheck {
+    std::string Name;
+    std::uint32_t Frames = 0, Candidates = 0, Bad = 0;
+    std::uint32_t FirstBad = 0, LastBad = 0; // take-relative frames of the first and last bad candidate
+    int LeadsInto = -1;                       // the gait the first bad candidate runs into (MotionLabel::Gait)
+    bool Failed() const { return Candidates == 0 || Bad > 0; }
+};
+std::vector<IdleTakeCheck> CheckIdleTakes(const MotionDatabase& db, int minRunway, int idleRunway);
 
 } // namespace MotionDataReport
