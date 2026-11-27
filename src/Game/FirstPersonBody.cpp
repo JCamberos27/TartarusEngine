@@ -507,7 +507,7 @@ void FirstPersonBody::SyncTwins(World& world) {
             else reg.remove<InactiveTag>(m_Twins[k]);
         }
         const IK::Pose& pose = m_Models[k]->AppliedLocalPose();
-        // The piece's pose, Spine Stability and all: one body, seen from inside and out (only the arms' targets differ).
+        // The piece's pose, as drawn (aim and layers included): one body, seen from inside and out (only the arms' targets differ).
         if (!pose.empty()) m_TwinModels[k]->ApplyLocalPose(pose);
         // The piece's look can change without either outfit version: the hiding lands when its coverage has been
         // worked out (often after Start).

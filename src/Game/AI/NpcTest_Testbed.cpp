@@ -428,9 +428,9 @@ struct NpcTest::TestbedRun {
         float ViewOffMax = 0.0f;             // the body's heading off the view, at most (deg), the steady part
         std::vector<float> Bend, ClipBend, Pitch; // the torso's bend as drawn and as posed, the view's pitch (deg), steady
         std::vector<float> ArmAim, Arm;            // the upper arms off straight down: as the aim left them, as drawn (deg)
-        // Posture (BodyDebug, the steady part): the chest's pitch as the clip has it, after Spine Stability and drawn; its
-        // roll; the head's pitch against the chest; the higher hand over its shoulder (m); frames with a hand in the view,
-        // with a hand over its shoulder, with the feet crossed; the narrowest feet gap (m); the body's yaw rate (deg/s).
+        // Posture (BodyDebug, the steady part): the chest's pitch as the clip has it, before the aim ("Stable") and drawn;
+        // its roll; the head's pitch against the chest; the higher hand over its shoulder (m); frames with a hand in the
+        // view, with a hand over its shoulder, with the feet crossed; the narrowest feet gap (m); the body's yaw rate (deg/s).
         std::vector<float> ChestClip, ChestStable, Chest, ChestRoll, Head, HeadWorld, HandOver, HandEye, YawRate, Pelvis, PelvisClip;
         int HandPushFrames = 0; float HandPushMax = 0.0f; // KeepHandsFromEye: frames it moved a hand, the most (m)
         std::vector<float> TrunkClip[9], Trunk[9]; // BodyDebug's trunk angles (pelvis, chest, chest vs pelvis), clip and drawn
@@ -1487,9 +1487,10 @@ void NpcTest::MmPlayerChecks() {
     // limit, and they read fine): locked at the measured rate + ~10 %, so they still catch a regression. Others: 0.
     const auto lockedJumps = [](const char* leg) {
         const struct { const char* Leg; float Max; } kLocked[] = {
-            {"M jog", 3.0f},                // measured 2.7 jumps a second
-            {"M crouch strafe right", 2.8f}, // 2.5
-            {"M walk looking about", 7.5f},  // 6.8
+            // Each is debt: measured jumps a second, and what takes the lock off.
+            {"M jog", 3.0f},                 // 2.7: the jog gets a long looped straight
+            {"M crouch strafe right", 2.8f}, // 2.5: the crouch strafes are baked mirrored
+            {"M walk looking about", 7.5f},  // 6.8: turns can be stepped while moving (or per-gait search weights fix it)
         };
         for (const auto& l : kLocked)
             if (std::strcmp(l.Leg, leg) == 0) return l.Max;
@@ -1594,7 +1595,7 @@ void NpcTest::MmPlayerChecks() {
                     NpcTestCommon::Percentile(q.Bend, 1.0f), NpcTestCommon::Percentile(q.ArmAim, 0.5f), NpcTestCommon::Percentile(q.Arm, 0.5f), NpcTestCommon::Percentile(q.Arm, 1.0f));
     }
     // Looking 60 degrees down the torso bends no further than on the locomotion controller (measured 2026-11-17: legacy
-    // median 16-27, worst 27 degrees; motion matching before Spine Stability took it, running 46 and 61): the bend the view
+    // median 16-27, worst 27 degrees; motion matching without a stability stage, running 46 and 61): the bend the view
     // adds over the gait's own (as posed, before the aim) - the sprint keeps its lean on purpose (Phase 4, play test 2).
     for (const char* name : {"M look down standing", "M walk looking down", "M jog looking down"}) {
         const TestbedRun::MmStats& q = R.Mm[legIndex(name)];
