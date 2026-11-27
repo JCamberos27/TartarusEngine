@@ -41,7 +41,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "resources", "EditorSounds"))
 DEFAULT_SRC = r"G:\My Drive\Tartarus Assets\Raw\Audio\SFX"
 
-# P6 remaster: the whole ladder came up 10 dB (it was mastered so low that Jacob had to max every slider to hear it). The
+# P6 remaster: the whole ladder came up 10 dB (it was mastered so low that every slider had to be maxed to hear it). The
 # relative balance between the tiers - and each recipe's own `peak=` - is unchanged: LIFT_DB is added to all of them.
 LIFT_DB = 10.0
 NOTIFY_LUFS = -28.0 + LIFT_DB     # notifications: loudest 400 ms momentary window (LUFS-M max)

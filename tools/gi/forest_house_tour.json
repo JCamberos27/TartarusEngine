@@ -87,7 +87,7 @@
       ],
       "yawDeg": 0.0,
       "pitchDeg": 0.0,
-      "note": "Atlas gap: hall/kitchen seam at x -6.59 behind this point"
+      "note": "Coverage gap: hall/kitchen seam at x -6.59 behind this point"
     },
     {
       "id": "kitchen_door_before",
@@ -181,7 +181,7 @@
       "yawDeg": 0.0,
       "pitchDeg": 0.0,
       "cut": true,
-      "note": "Atlas gap: half-wall seam at z 28.73 to the left"
+      "note": "Coverage gap: half-wall seam at z 28.73 to the left"
     },
     {
       "id": "kitchen_stair_side",
@@ -287,7 +287,7 @@
       ],
       "yawDeg": 0.0,
       "pitchDeg": 0.0,
-      "note": "Atlas gap: hall 4 / living room 9 seam at x 4.45"
+      "note": "Coverage gap: hall 4 / living room 9 seam at x 4.45"
     },
     {
       "id": "bathroom_down_door_before",
@@ -644,7 +644,7 @@
       ],
       "yawDeg": 90.0,
       "pitchDeg": 0.0,
-      "note": "Atlas gap: 5.0 m2 strip x -0.34..5.72, z 24.31..25.11 in no volume"
+      "note": "Coverage gap: 5.0 m2 strip x -0.34..5.72, z 24.31..25.11 in no volume"
     },
     {
       "id": "den_east",
@@ -724,7 +724,7 @@
       ],
       "yawDeg": 180.0,
       "pitchDeg": 0.0,
-      "note": "Atlas gap: looks at the 5.5 m2 west strip x -14.14..-13.39 in no volume"
+      "note": "Coverage gap: looks at the 5.5 m2 west strip x -14.14..-13.39 in no volume"
     },
     {
       "id": "box_room_door_before",
@@ -830,7 +830,7 @@
       ],
       "yawDeg": 0.0,
       "pitchDeg": 0.0,
-      "note": "Atlas gap: looks at the 3.1 m2 strip x -0.34..0.67 in no volume"
+      "note": "Coverage gap: looks at the 3.1 m2 strip x -0.34..0.67 in no volume"
     },
     {
       "id": "upstairs_bath_north",
@@ -844,7 +844,7 @@
       ],
       "yawDeg": 0.0,
       "pitchDeg": 0.0,
-      "note": "Atlas gap: 1.75 m2 x -2.70..-0.66, z 26.73..28.05 in no volume"
+      "note": "Coverage gap: 1.75 m2 x -2.70..-0.66, z 26.73..28.05 in no volume"
     },
     {
       "id": "den_door_before",

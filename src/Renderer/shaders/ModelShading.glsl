@@ -658,7 +658,7 @@ float ShadowTap(int kind, int slot, vec3 u, float ref) {
 // across the light direction. Every tap is a hardware 2x2 bilinear compare (DepthArrayTarget: GL_LINEAR + compare), i.e.
 // a ramp ONE texel wide; with h <= 1 the ramps overlap, so the weighted sum is ONE continuous bell-shaped penumbra: no
 // 16-level bands (the equal-weight 16-tap Poisson disk showed separate edge copies on grazing walls, hall spot wedge)
-// and no per-pixel grain (h > 1 would leave (h - 1)-texel plateaus: Argus's review). h = (kernel - 1) / 1.5 puts the
+// and no per-pixel grain (h > 1 would leave (h - 1)-texel plateaus, found in review). h = (kernel - 1) / 1.5 puts the
 // filter's reach (1.5 h + 1 texels) at `kernel` texels (<= 2.5, KernelTexels caps it) and moves continuously with
 // Softness (kernel <= 1: one bilinear tap). texelW = the map texel's world size at the receiver.
 // Each tap compares against the receiver plane's distance along its own ray (geometric N), as before.
@@ -719,7 +719,7 @@ float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N, vec3 geoN) {
     if (soft < 1.0) vis = texture(uPointShadowMap, vec4(dir, float(slot)), (d - biasW) / far);
     if (soft > 0.0) {
         // A cube texel's world size shrinks toward the face corners by 1 + s^2 + t^2 (s, t = the face coordinates):
-        // scale the tap spacing with it, or the taps sit > 1 texel apart near the corners (Argus's review).
+        // scale the tap spacing with it, or the taps sit > 1 texel apart near the corners (found in review).
         vec3 r = abs(dir) / max(max(abs(dir.x), abs(dir.y)), max(abs(dir.z), 1e-6));
         float faceTexelW = 2.0 * d / uPointShadowMapResolution / dot(r, r);
         vis = mix(vis, ShadowPlanePCF(0, slot, dir, d, geoN, faceTexelW, kernel, biasW, far), soft);

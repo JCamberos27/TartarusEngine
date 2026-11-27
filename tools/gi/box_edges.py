@@ -1,4 +1,4 @@
-"""Hard-edge inventory (W1 Atlas, fix-3): where a light's Bounds box edge lands on a WALL face that the light faces.
+"""Hard-edge inventory (fix-3): where a light's Bounds box edge lands on a WALL face that the light faces.
     python -I box_edges.py <repo> [--md out.md] [--all]   (default: exterior faces only = #1 siding)
 For every light with Bounds (house and outside) and every vertical face of every active wall box collider (geo.walls):
 the face plane must lie inside the box along its normal, the light must be on the face's front side (N.L > 0) and the box

@@ -1,6 +1,6 @@
 {
   "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870",
-  "retainedSource": "C:\\Users\\Jacob\\Desktop\\Remington 870 60fps(Revised).blend",
+  "retainedSource": "Remington 870 60fps(Revised).blend",
   "fps": 60,
   "exports": [
     {
@@ -428,7 +428,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Aim.fbx",
-      "source": "C:\\Users\\Jacob\\Desktop\\Remington 870 60fps(Revised).blend",
+      "source": "Remington 870 60fps(Revised).blend",
       "action": "Scene",
       "frameStart": 0,
       "frameEnd": 1.0,

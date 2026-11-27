@@ -1,4 +1,4 @@
-"""W2 (Argus) interim GI coverage gate (until gi_audit --check-margins sees uneven faces; review of #1205).
+"""Interim GI coverage gate (until gi_audit --check-margins sees uneven faces; review of #1205).
 
 Usage:  python -I wallcross.py <repo_root> [--scene project/scenes/Forest.json] [--tol 0.0]
         (needs <repo_root>/tools/gi/gi_audit.py; read-only; exit 1 = a leak was found)

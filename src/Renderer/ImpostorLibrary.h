@@ -25,7 +25,7 @@ struct ImpostorSet {
 };
 
 namespace ImpostorLibrary {
-// The metres beyond which a matched LOD group draws its impostor: the sets' startDistance (40 m, Jacob's pick), or
+// The metres beyond which a matched LOD group draws its impostor: the sets' startDistance (40 m, the chosen default), or
 // TARTARUS_IMPOSTOR_DISTANCE.
 float StartDistance();
 // Some set loaded and TARTARUS_NO_IMPOSTORS off: LOD groups are matched to their sets. Loads the sets on first use.

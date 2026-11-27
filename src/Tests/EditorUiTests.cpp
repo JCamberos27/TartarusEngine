@@ -619,7 +619,7 @@ Step Shot(std::string name, std::vector<std::string> nonBlank = {}) {
 }
 // A Shot of the result with the editor's viewport overlays off for its frames (gizmos, decal boxes,
 // light / camera icons, the grid, the selection outline, colliders, the tool palette), so what was
-// made is what the picture shows. Jacob's rule for shots of the Scene view.
+// made is what the picture shows. The rule for shots of the Scene view.
 Step CleanShot(std::string name, std::vector<std::string> nonBlank = {}) {
     Step inner = Shot(name, std::move(nonBlank));
     auto frames = std::make_shared<int>(0);

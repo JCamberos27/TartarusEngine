@@ -520,7 +520,7 @@ def want(name):
 
 os.makedirs(os.path.join(OUT, "FirstPerson"), exist_ok=True)
 os.makedirs(os.path.join(OUT, "Weapon"), exist_ok=True)
-manifest = {"source": bpy.data.filepath, "fps": scn.render.fps, "armsSkeleton": "Armature",
+manifest = {"source": os.path.basename(bpy.data.filepath), "fps": scn.render.fps, "armsSkeleton": "Armature",
             "weaponSkeleton": "Armature.001", "weaponMesh": "Revolver", "exports": []}
 
 # The hip shot's kick, kept to this share of the source take's (user, 2026-11-09: the barrel went way too high - the

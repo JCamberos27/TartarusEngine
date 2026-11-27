@@ -1,4 +1,4 @@
-"""Light Bounds vs walls (W1 Atlas; Jacob #1 + Briareos sweep #4: Bounds faces short of the wall leave the wall unlit).
+"""Light Bounds vs walls (look notes #1 and sweep #4: Bounds faces short of the wall leave the wall unlit).
     python -I bounds_audit.py <repo> [--md out.md] [--json out.json]
 For every house light (descendant of the 'House Lights' group, found by name) with Bounds, each horizontal face (-x, +x, -z, +z) is checked against the walls
 the light faces: rays from the light's own coordinate along the face normal, at lateral samples across the box (0.25 m step)
@@ -8,7 +8,7 @@ Bounds Fade is applied INWARD (LightBuffer.glsl BoundsAtten: weight = inside dis
 must sit at least `fade` past the wall's near plane to light the wall surface fully, and must not pass the wall's far plane
 (that lights the neighbour's side). Target = near + fade (+0.005). Status per face:
   OK     near + fade - 0.01 <= face <= far
-  SHORT  face < near + fade - 0.01           (unlit strip at the wall; Jacob #1)
+  SHORT  face < near + fade - 0.01           (unlit strip at the wall; look note #1)
   OVER   face > far                           (lights past the wall)
   OPEN   no room wall found (face in open air / mostly doorway): listed, needs a look
 Y faces (floor/ceiling) are not checked here (see fixture_audit / the upper-floor note)."""
@@ -135,7 +135,7 @@ def audit():
                         st += "-THIN"  # wall thinner than the fade: needs a look
                     row.update(status=st, near=round(near, 3), far=round(far, 3), target=round(target, 3),
                                delta=round((face - target) * sgn, 3), share=round(len(sel) / n, 2))
-                    # share<0.5 blind spot (W1 step 5, 2026-11-24): the mode wall alone decides the status, so a face
+                    # share<0.5 blind spot (step 5, 2026-11-24): the mode wall alone decides the status, so a face
                     # spanning two walls (L-room, offset wall, stub) is judged on one and blind to the other, and the
                     # label can flip when the lateral lattice moves. Judge every other wall bin with >= 15% of the
                     # samples too; half-height walls (< 1.5 m tall: counters) are skipped. NOT gated: report only.

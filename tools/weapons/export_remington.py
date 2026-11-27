@@ -183,7 +183,7 @@ def action_range(name):
 os.makedirs(os.path.join(OUT, "FirstPerson"), exist_ok=True)
 os.makedirs(os.path.join(OUT, "Weapon"), exist_ok=True)
 manifest = {
-    "source": bpy.data.filepath,
+    "source": os.path.basename(bpy.data.filepath),  # the file name, not the machine path
     "fps": scn.render.fps,
     "armsSkeleton": "Armature",
     "weaponSkeleton": "Armature.001",

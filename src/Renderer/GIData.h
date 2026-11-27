@@ -69,7 +69,7 @@ inline int ProbeIndex(const glm::ivec3& ijk, const glm::ivec3& dims) { return ij
 // The probes on a box face sit in the wall, floor or ceiling slab (the boxes stop a few cm inside them), so a capture there
 // sees mostly back faces. FaceProbeNudge() is the box-local offset the baker captures a FACE probe at instead: inward along
 // each axis it lies on a face of (an axis with one probe has no face), by `nudge` metres but at most 0.45 of that axis' cell,
-// so the capture is in open air just inside the surface (Jacob #5: the ceiling ring around a fixture). Interior probes: zero.
+// so the capture is in open air just inside the surface (look note #5: the ceiling ring around a fixture). Interior probes: zero.
 glm::vec3 FaceProbeNudge(const glm::ivec3& ijk, const glm::ivec3& dims, const glm::vec3& half, float nudge);
 // A solid the nudge must not enter: the world box of a visible mesh (the baker collects them). A face probe is nudged only
 // when its segment to the nudged point enters no box that does not already hold the face point: a ceiling or wall slab

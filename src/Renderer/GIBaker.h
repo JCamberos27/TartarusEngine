@@ -33,7 +33,7 @@ public:
         int FaceSize = 32;          // cube face texels
         int Bounces = 2;
         // Probes on a box face (the boxes stop inside the wall / ceiling slab) are captured this many metres inside it, so they
-        // see open air, not back faces (GI::FaceProbeNudge; Jacob #5 ceiling ring). 0 = captured on the face as before.
+        // see open air, not back faces (GI::FaceProbeNudge; look note #5, the ceiling ring). 0 = captured on the face as before.
         float FaceNudge = 0.15f;
         float InvalidBackfaces = 0.2f; // a probe seeing more than this share of back faces (by solid angle) is invalid
         float Emissive = 0.0f;      // emission kept in the captures (the light itself already lights the room)

@@ -1,14 +1,14 @@
 # GI bounce: plan (default = NO tuning; trim rooms on request via per-volume Intensity)
 
-**DECISION (Jacob, Nov 23, in person to Hermes): "Keep it, trim rooms".** The blanket tune-down of the fresh bake to the Nov 14
-levels is **CANCELLED**. The new bake brightness is the correct one and stays. In Phase 3, Jacob marks the individual rooms
-he dislikes on the look sign-off sheet (`gi-p1/briareos/signoff.html`, one "trim: darker / lighter / OK" choice per room);
+**DECISION (Nov 23): "Keep it, trim rooms".** The blanket tune-down of the fresh bake to the Nov 14
+levels is **CANCELLED**. The new bake brightness is the correct one and stays. In Phase 3, the individual rooms to change are
+marked on the look sign-off sheet (one "trim: darker / lighter / OK" choice per room);
 only those rooms get a per-volume `Intensity` change (option A below). Every other room is left untouched. The by-design dark
-rooms (box room, closet, master bedroom 3) are no longer pulled to a ceiling by this plan; they are trimmed only if Jacob marks them.
+rooms (box room, closet, master bedroom 3) are no longer pulled to a ceiling by this plan; they are trimmed only if they are marked.
 
-## Why: the H1 result (Kronos, `gi-p2/kronos/h1/h1_result.md`, `h1_compare.py`)
+## Why: the H1 result
 
-H1 asked whether the committed Nov 14 `Forest.gi` was stale. Kronos baked the same scene with the Nov 14 code (378a1e74) and
+H1 asked whether the committed Nov 14 `Forest.gi` was stale. The same scene was baked with the Nov 14 code (378a1e74) and
 with today's main, in three volumes (two bakes each), and compared both with the committed `.gi` (DC = mean per layer):
 
 | volume / layer | main / Nov 14 code | main / committed | Nov 14 code / committed |
@@ -23,8 +23,8 @@ with today's main, in three volumes (two bakes each), and compared both with the
   code for those circuits (1.0-1.05x). So the 1.64x brightening seen in Phase 0 is mostly "the old file was out of date", not a
   regression, and "today's look" was never the true Nov 14 look.
 * **The lamp circuits are different:** Lamp_table_B 11 and 13 match the committed file under the Nov 14 code (1.000) but are 1.68x
-  brighter under today's code. A code change since Nov 14 raised them; the likely commit is 15930c7d (to be confirmed by Kronos
-  running).
+  brighter under today's code. A code change since Nov 14 raised them; the likely commit is 15930c7d (to be
+  confirmed).
 * Outside layer values are tiny and noisy (0.65-1.5x); not read as a trend.
 
 Consequence: matching the fresh bake to the committed levels would dim rooms that are now correct. Hence "keep it, trim rooms".
@@ -33,14 +33,14 @@ Consequence: matching the fresh bake to the committed levels would dim rooms tha
 
 Mechanism A (per-volume `Intensity`, the existing runtime field, no engine change, no rebake) is still the way a trim is applied.
 The rest of this document (comparison A vs B, the first-estimate table, the "Do not match to Nov 14" rules, the Phase 3
-procedure) was written for the blanket tune-down and is kept as **reference for a trim** only: when Jacob marks a room, use
-`Intensity_v = 2.0 / ratio_v` only if he wants it back toward the Nov 14 level; otherwise pick the value by eye on the tour. Nothing
-is applied, edited or baked from this plan unless Jacob marks a room.
+procedure) was written for the blanket tune-down and is kept as **reference for a trim** only: when a room is marked, use
+`Intensity_v = 2.0 / ratio_v` only if it should go back toward the Nov 14 level; otherwise pick the value by eye on the tour. Nothing
+is applied, edited or baked from this plan unless a room is marked.
 
 ### Phase 3 flow for a trim
-1. After the Phase 2 fixes and the rebake, Jacob looks at the sign-off sheet and marks rooms "darker" or "lighter" (default OK).
+1. After the Phase 2 fixes and the rebake, rooms are marked "darker" or "lighter" on the sign-off sheet (default OK).
 2. For each marked room, edit only that room's GI Volume `Intensity` fields (minimal JSON edit; diff must show only those lines).
-3. Re-run `--gi-tour`, show the marked rooms before/after, Jacob confirms. Unmarked rooms must be byte-identical in GI-only terms
+3. Re-run `--gi-tour`, show the marked rooms before/after for confirmation. Unmarked rooms must be byte-identical in GI-only terms
    (and note the runtime-GI bistability finding in `GI_VALIDATION.md`: compare on a deterministic run).
 
 ---
@@ -49,8 +49,8 @@ is applied, edited or baked from this plan unless Jacob marks a room.
 
 ## What "today's look" is
 
-Argus's Phase 0 tour (`gi-p0/argus/before_gi.png`, `before_full.png`) was taken with the committed `Forest.gi`
-(the Nov 14 bake, 378a1e74). So the target is **that bake's brightness, per volume**. Kronos's fresh bake of the same
+The Phase 0 tour (`before_gi.png`, `before_full.png`) was taken with the committed `Forest.gi`
+(the Nov 14 bake, 378a1e74). So the target is **that bake's brightness, per volume**. A fresh bake of the same
 scene is brighter in every lit room except the stairs: DC ratio fresh / Nov 14 is **median 1.64x (1.72x over whole
 volumes), min 0.99x, max 2.20x** over the 35 lit layers, up to 3.0x on dim layers. The cause (Phase 2) is attributed
 separately; this plan only decides how the brightness is brought back.
@@ -59,7 +59,7 @@ separately; this plan only decides how the brightness is brought back.
 
 The GI Volume already has a runtime field, `Intensity` (`GIVolume::Params.x`, `GIVolumes.cpp:291`). It is applied **after**
 the atlas lookup: `GIVolumes.glsl:67`, `sum += e * Params.x * f`. It is not baked into the .gi. All 46 volumes in
-`Forest.json` currently have `Intensity` 2.0 (Atlas, `gi_audit_volumes.csv`).
+`Forest.json` currently have `Intensity` 2.0 (`gi_audit_volumes.csv`).
 
 | | A. Per-volume Intensity (existing field) | B. One scene-level GI intensity (new) |
 |---|---|---|
@@ -74,7 +74,7 @@ the atlas lookup: `GIVolumes.glsl:67`, `sum += e * Params.x * f`. It is not bake
 
 **Recommendation: A, per-volume Intensity, as the mechanism. No engine change.** It is the only option that returns each
 room, including the dark ones, to its own old level. B's only advantage is one number; it is a code change and it cannot
-express the room-by-room spread. If Jacob later wants a single overall dimmer for taste, B can be added then as a
+express the room-by-room spread. If a single overall dimmer is wanted later for taste, B can be added then as a
 multiplier on top of A (a small, separate renderer PR); it is not needed for the tune-down.
 
 Side effect to accept: a volume's `Intensity` scales the whole mixed brick, which includes any Outside layer (the sun and
@@ -86,7 +86,7 @@ matches that too.
 1. After the Phase 2 fixes, rebake once (Phase 3). Phase 3 changes the bake itself (doors open, the ceiling-row fill,
    coverage gaps, the 9-door bake), so **the ratios below must be re-measured on that bake**; they are a first estimate, not
    the values to commit.
-2. With `gi-p0/kronos/gi_diff.py` (read-only, offline, no GPU): per volume, sum mean DC over the layers on at Play start
+2. With a per-volume `.gi` diff (read-only, offline, no GPU): per volume, sum mean DC over the layers on at Play start
    for the Nov 14 `Forest.nov14.gi` and for the new bake. `ratio_v = new / old`.
 3. `Intensity_v = 2.0 / ratio_v`, rounded to 2 decimals. Volumes where the old bake was defective (inner-probe fill over
    20%, cause 5; the storeroom, cause 9) have no meaningful old level: see "Do not match to Nov 14" below.
@@ -156,11 +156,11 @@ nearby lit volumes' value** rather than trust the single ratio, unless the tour 
 
 ## Do not match to Nov 14
 
-* **Fixed dark spots stay fixed (Jacob's provisional answer 3, ON HOLD).** A volume that contains a fixed dark spot (the
+* **Fixed dark spots stay fixed (provisional answer 3, ON HOLD).** A volume that contains a fixed dark spot (the
   kitchen-dining corner, the chandelier ring) must not be dimmed by a plain `2.0 / ratio`: that would dim the whole volume,
   including the spot the new bake repaired. Phase 3 treats each such volume per room: pick `Intensity` from the part of the
   volume that was NOT repaired (the over-bright area), check the repaired spot did not drop below its fresh-bake level,
-  and if one value cannot do both, report it to Jacob rather than choosing for him. List these volumes after Phase 2, when
+  and if one value cannot do both, report it for a decision rather than choosing. List these volumes after Phase 2, when
   the ceiling-row fill and gap fixes say which volumes changed.
 
 * **Defective old bake** (cause 5, 9): living room 7, kitchen-dining 8 (100% of inner probes invalid), the stair
@@ -168,21 +168,21 @@ nearby lit volumes' value** rather than trust the single ratio, unless the tour 
   the storeroom's bounce is ~1e-5 because its door was baked shut), not a look to preserve. After Phase 2 these get a
   value set by eye against their neighbours, not by ratio. The stair storeroom is a defect and must pass the dark-spot
   rule; it is not on the dark-room list.
-* **Kitchen doorway** (Atlas's Phase 1 range fix) and anything else Phase 1 changes the direct light on: the tour
+* **Kitchen doorway** (the Phase 1 range fix) and anything else Phase 1 changes the direct light on: the tour
   comparison is full + GI-only, but Intensity only touches the GI-only part.
 
-## Dark rooms: kept dark (SUPERSEDED by the decision at the top: no ceiling unless Jacob marks the room)
+## Dark rooms: kept dark (SUPERSEDED by the decision at the top: no ceiling unless the room is marked)
 
-By-design dark rooms (box room, closet, master bedroom 3, per Jacob and GI_VALIDATION.md) are tuned by the same rule, so
+By-design dark rooms (box room, closet, master bedroom 3, per GI_VALIDATION.md) are tuned by the same rule, so
 each returns to its Nov 14 level rather than to a "fixed" brightness. The check is a **ceiling**, not a floor: after the
 tune-down each must read **no brighter than its before_gi value (within the room's bake-noise tolerance)**, and none is
-brightened to meet the dark-spot floor. Whether a deliberately dark room is acceptable at all stays Jacob's call; it is
+brightened to meet the dark-spot floor. Whether a deliberately dark room is acceptable at all stays a look decision; it is
 unchanged by this plan.
 
 ## Order of work and dependencies
 
-1. Phase 1 (now): this plan; the 20 lamp shadows (Atlas), shadow slots (Argus), bake repeatability (Kronos), the SSAO-off
-   renderer bug (Talos). None of these changes the look of the bounce. **The bake-repeatability fix (cause 10) lowers the
+1. Phase 1 (now): this plan; the 20 lamp shadows, shadow slots, bake repeatability, the SSAO-off
+   renderer bug. None of these changes the look of the bounce. **The bake-repeatability fix (cause 10) lowers the
    5-20% noise floor on the ratios, which is the biggest improvement to step 2 above.**
 2. Phase 2: bake fixes (doors open, ceiling-row fill, coverage gaps with 0.3-0.5 m fades, the tree emissive decision).
    Attribution of the 1.64x brightening. If a Phase 2 attribution **removes** part of the brightening at the source (for
@@ -190,9 +190,9 @@ unchanged by this plan.
    Phase 3 measures on the final bake instead of committing the table above.
 3. Phase 3: rebake, measure, write the 46 values, run the tour, check against the P0 pictures, then GI_VALIDATION checks.
 
-## Jacob's answers (Nov 23): history
+## Answers (Nov 23): history
 
-Jacob first answered three questions through Muse (per-volume `Intensity`; match each room's old level within the bake-noise
-tolerance; keep the fixed dark spots), recorded as PROVISIONAL / ON HOLD pending H1. After the H1 result he decided "Keep it,
+Three questions were first answered (per-volume `Intensity`; match each room's old level within the bake-noise
+tolerance; keep the fixed dark spots), recorded as PROVISIONAL / ON HOLD pending H1. After the H1 result the decision was "Keep it,
 trim rooms" (top of this document), which supersedes answer 2. Answer 1 (mechanism A) stands for any trim. Answer 3 stands:
-a trim never dims a repaired dark spot below its fresh-bake level; if one value cannot do both, report it to Jacob.
+a trim never dims a repaired dark spot below its fresh-bake level; if one value cannot do both, report it for a decision.

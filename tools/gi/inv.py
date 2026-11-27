@@ -1,4 +1,4 @@
-"""House-wide Bounds hard-edge INVENTORY (W1 Atlas, fix-3 item 2).
+"""House-wide Bounds hard-edge INVENTORY (fix-3 item 2).
     python -I inv.py <repo D:/ path> --md out.md [--csv out.csv]
 Walls: box_edges.py rows (Bounds box edge on a wall face the light faces, within Range), then
   - merged: mesh/"Collider" duplicates and adjacent wall pieces with the same (light, face plane, cut, at) -> one edge;

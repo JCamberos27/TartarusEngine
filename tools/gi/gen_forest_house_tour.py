@@ -94,19 +94,19 @@ door("front_door", 1.00, 24.04, "N", GROUND, PORCH_R, HALL, y_before=PORCH)
 wp("hall_east_corner", *HALL, "corner", 3.00, GROUND, 25.60, YAW["W"])
 wp("hall_center", *HALL_W, "room", -1.50, GROUND, 25.40, YAW["W"])
 wp("hall_west_corner", *HALL_W, "corner", -5.90, GROUND, 25.60, YAW["E"],
-   note="Atlas gap: hall/kitchen seam at x -6.59 behind this point")
+   note="Coverage gap: hall/kitchen seam at x -6.59 behind this point")
 door("kitchen_door", -4.82, 26.95, "N", GROUND, HALL_W, KITCHEN)
 wp("kitchen_main", "Kitchen-dining", "GI kitchen-dining 3", "room", -11.00, GROUND, 27.25, YAW["W"])
 wp("dining", "Kitchen-dining", "GI kitchen-dining 1", "room", -10.60, GROUND, 22.70, YAW["N"])
 # The island counter and the half-height wall split the kitchen: its north strip and east end are cuts.
 wp("kitchen_north", "Kitchen-dining", "GI kitchen-dining 7", "room", -12.75, GROUND, 30.25, YAW["E"], cut=True)
 wp("kitchen_east", "Kitchen-dining", "GI kitchen-dining 5", "room", -3.00, GROUND, 27.75, YAW["E"], cut=True,
-   note="Atlas gap: half-wall seam at z 28.73 to the left")
+   note="Coverage gap: half-wall seam at z 28.73 to the left")
 wp("kitchen_stair_side", *KITCHEN6, "corner", -0.20, GROUND, 28.40, YAW["N"])
 door("storeroom_door", -1.91, 30.35, "W", GROUND, KITCHEN6, STORE)
 door("hall_double_door", 2.46, 26.95, "N", GROUND, HALL, HALL3, cut=True)
 wp("corridor_east", *CORR, "corner", 4.75, GROUND, 27.55, YAW["E"],
-   note="Atlas gap: hall 4 / living room 9 seam at x 4.45")
+   note="Coverage gap: hall 4 / living room 9 seam at x 4.45")
 # The bathroom door, held open, stands across the corridor between corridor_east and its doorway: a cut.
 door("bathroom_down_door", 6.34, 26.95, "S", GROUND, CORR, BATH_D, cut=True)
 door("living_door", 7.79, 29.37, "E", GROUND, LIV3, LIV1, cut=True)
@@ -130,22 +130,22 @@ door("closet_door", 11.67, 29.37, "N", UPSTAIRS, CHILD, CLOSET)
 door("upstairs_hall_door", 4.40, 27.92, "S", UPSTAIRS, GALLERY, UHALL, cut=True)
 wp("upstairs_hall", *UHALL, "room", 3.35, UPSTAIRS, 26.20, YAW["W"])
 wp("upstairs_hall_south", *UHALL, "gap", 2.00, UPSTAIRS, 24.90, YAW["N"],
-   note="Atlas gap: 5.0 m2 strip x -0.34..5.72, z 24.31..25.11 in no volume")
+   note="Coverage gap: 5.0 m2 strip x -0.34..5.72, z 24.31..25.11 in no volume")
 wp("den_east", "Upstairs den", "GI upstairs den 2", "room", -1.15, UPSTAIRS, 29.90, YAW["W"], cut=True)
 wp("den_west", *DEN1, "room", -4.40, UPSTAIRS, 29.80, YAW["W"])
 door("master_den_door", -6.76, 29.38, "W", UPSTAIRS, DEN1, MASTER3)
 wp("master_bedroom", "Master bedroom", "GI master bedroom 1", "room", -9.75, UPSTAIRS, 23.20, YAW["W"],
-   note="Atlas gap: looks at the 5.5 m2 west strip x -14.14..-13.39 in no volume")
+   note="Coverage gap: looks at the 5.5 m2 west strip x -14.14..-13.39 in no volume")
 door("box_room_door", -11.13, 27.44, "W", UPSTAIRS, MASTER2, BOX)
 wp("box_room", *BOX, "room", -12.80, UPSTAIRS, 28.80, YAW["N"])
 door("master_hall_door", -6.76, 26.47, "E", UPSTAIRS, MASTER2, BATH_U, cut=True)
 wp("upstairs_bathroom", "Upstairs bathroom", "GI upstairs bathroom 2", "room", -2.50, UPSTAIRS, 25.80, YAW["E"],
-   note="Atlas gap: looks at the 3.1 m2 strip x -0.34..0.67 in no volume")
+   note="Coverage gap: looks at the 3.1 m2 strip x -0.34..0.67 in no volume")
 wp("upstairs_bath_north", *BATH_U, "gap", -2.50, UPSTAIRS, 27.25, YAW["E"],
-   note="Atlas gap: 1.75 m2 x -2.70..-0.66, z 26.73..28.05 in no volume")
+   note="Coverage gap: 1.75 m2 x -2.70..-0.66, z 26.73..28.05 in no volume")
 door("den_door", -4.34, 27.92, "N", UPSTAIRS, BATH_U, DEN1)
 
-# ---- Jacob routes: continuous walks, looking along travel ---------------------------------------
+# ---- Walk routes: continuous walks, looking along travel ---------------------------------------
 routes = [
     {"id": "route_front_door_to_living_room",
      "name": "Come in the front door, through the hall's double doors and the corridor, into the living room",
@@ -177,7 +177,7 @@ def main():
         "scene": "scenes/Forest.json",
         "player": PLAYER,
         # Every Openable door held fully open for the whole tour (the --gi-tour loader's Openable::SetAll),
-        # so doorway waypoints see through the opening the way Jacob walks the house.
+        # so doorway waypoints see through the opening the way a person walks the house.
         "doorState": "allOpen",
         "waypoints": waypoints,
         "routes": routes,

@@ -878,7 +878,7 @@ def face_probe_exposure(volumes, walls, step=0.25, heights=(1.0, 1.7)):
 
 
 def git_show(repo, rev, path):
-    flags = 0x08000000 if os.name == "nt" else 0  # CREATE_NO_WINDOW: no console pops up on Jacob's screen
+    flags = 0x08000000 if os.name == "nt" else 0  # CREATE_NO_WINDOW: no console pops up on the desktop
     r = subprocess.run(["git", "-C", repo, "show", "%s:%s" % (rev, path)], capture_output=True, creationflags=flags)
     if r.returncode != 0:
         raise RuntimeError("git show %s:%s failed: %s" % (rev, path, r.stderr.decode(errors="replace").strip()))
@@ -1363,7 +1363,7 @@ def run(args):
 
 
 def tour_waypoints(doc):
-    """W3's tools/gi/forest_house_tour.json: {player: {eyeHeight}, waypoints: [{id, room, feet}], routes: [{id, points}]}.
+    """tools/gi/forest_house_tour.json: {player: {eyeHeight}, waypoints: [{id, room, feet}], routes: [{id, points}]}.
     -> (eye height, [(id, room, feet)], [(route id, [feet...])]). None when the file isn't in that shape."""
     wps = doc.get("waypoints") if isinstance(doc, dict) else None
     if not isinstance(wps, list) or not all(isinstance(w, dict) and "feet" in w for w in wps):
@@ -1436,7 +1436,7 @@ def render_report(args, repo, scene, vols, vol_rows, orphan_bakes, samples, coun
     head = git_out(repo, "rev-parse", "--short=8", "HEAD")
     gi_rev = git_out(repo, "log", "-1", "--format=%h %cs %s", "--", "project/" + (vols[0]["bake_file"] if vols else ""))
     L = []
-    L.append("# GI Phase 0: coverage and bake audit (W1 Atlas)\n")
+    L.append("# GI Phase 0: coverage and bake audit\n")
     L.append("Generated %s UTC by `tools/gi/gi_audit.py` (offline, read-only, CPU only) at worktree HEAD `%s`.  "
              % (datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M"), head))
     L.append("Scene `%s`; bake last committed: `%s`; changes diffed against `%s`.\n" % (args.scene, gi_rev, args.since))
@@ -1526,7 +1526,7 @@ def render_report(args, repo, scene, vols, vol_rows, orphan_bakes, samples, coun
              "invalid, a lower bound; `inner_invalid_source` says which count was used)." % BLACK_FLOOR)
     L.append("- **Walkable floor** = the top faces of the box floor colliders under %s (%d slabs), less points inside a "
              "wall collider 0.3 m up. %d floor piece(s) have mesh colliders and are NOT sampled (%s): the stair runs, "
-             "for one. Talos's tour waypoints cover those (see the cross-check). Furniture is not subtracted. "
+             "for one. The tour waypoints cover those (see the cross-check). Furniture is not subtracted. "
              "Skipped as not walkable: %d ceiling slab(s) (they hang under the floor pieces) and slabs above every GI "
              "box (%s). Floor-height points sit on the slab top with an up normal, so each volume tests them lifted by "
              "its normal bias (0.25 x Spacing), as the shader does; eye-height points are tested as they are."
@@ -1538,7 +1538,7 @@ def render_report(args, repo, scene, vols, vol_rows, orphan_bakes, samples, coun
              "(0 < wSum < 1, part fallback).")
     L.append("- **Bake shadow sets** simulate LightGather's slot score with the camera at each volume's centre, in scene "
              "order, with the 25%% holder bonus carried between volumes; bake camera FOV assumed %.0f deg (it only "
-             "matters through DistanceFade, which is 1 at house distances). Kronos's bake trace is the measurement; "
+             "matters through DistanceFade, which is 1 at house distances). The bake trace is the measurement; "
              "this is the prediction." % args.bake_fov)
     L.append("")
 
@@ -1615,7 +1615,7 @@ def render_report(args, repo, scene, vols, vol_rows, orphan_bakes, samples, coun
                                                 "longest_stretch_m"]))
         L.append("Every waypoint: `gi_audit_tour.csv`.\n")
     else:
-        L.append("Pending: Talos's `tools/gi/forest_house_tour.json` isn't in yet. Re-run with `--tour <file>`.\n")
+        L.append("Pending: `tools/gi/forest_house_tour.json` isn't in yet. Re-run with `--tour <file>`.\n")
     if getattr(args, "margin_rows", None) is not None:
         mr, fr = args.margin_rows, args.face_rows
         bad = [r for r in mr if r["verdict"] != "ok"]
