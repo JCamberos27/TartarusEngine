@@ -1013,6 +1013,110 @@ void SunGatherReuse() {
     ForgetGatherCandidates();
 }
 
+// The sun's kept gather through LOD level flips (ShadowFrame::PatchSunLodToggles): with the cascade still, LOD groups
+// inside it, far outside it and one whose levels straddle the padded cascade's edge switch levels both ways, twice in
+// one frame now and then. Every frame keeps the list, and the kept list is exactly what a fresh static-cell gather
+// against the padded cascade holds: the same renderables, field for field.
+void SunGatherLodPatch() {
+    auto prop = Model::CreatePrimitive("terrain", "w1_sun_lod_patch_prop.fbx"); // CPU-only stand-in: no GL in unit tests
+    CHECK(prop != nullptr);
+    if (!prop) return;
+    constexpr int kRes = 1024;
+    const glm::vec3 sun = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
+    const float r = 20.0f;
+    const glm::mat4 vp = glm::ortho(-r, r, -r, r, 0.0f, 200.0f) * glm::lookAt(-sun * 100.0f, glm::vec3(0.0f), glm::vec3(0, 1, 0));
+    const Frustum cell = Frustum::FromViewProj(vp);
+    const float pad = 2.0f * ShadowFrame::kSunGatherPadTexels / (float)kRes;
+    const glm::mat4 padVp = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f / (1.0f + pad))) * vp;
+    const Frustum padded = Frustum::FromViewProj(padVp);
+    glm::vec3 lo, hi;
+    prop->PosedBounds(lo, hi);
+    // Where a level's box straddles the padded cascade's edge: walking out along +x, the first spot with corners on both
+    // sides of it.
+    auto straddles = [&](const glm::vec3& at, float scale) {
+        int in = 0, out = 0;
+        for (int i = 0; i < 8; ++i) {
+            const glm::vec3 p = at + scale * glm::vec3((i & 1) ? hi.x : lo.x, (i & 2) ? hi.y : lo.y, (i & 4) ? hi.z : lo.z);
+            glm::vec4 q = padVp * glm::vec4(p, 1.0f);
+            q /= q.w;
+            (std::abs(q.x) <= 1.0f && std::abs(q.y) <= 1.0f && q.z >= -1.0f && q.z <= 1.0f ? in : out)++;
+        }
+        return in > 0 && out > 0;
+    };
+    glm::vec3 edge(0.0f);
+    for (float x = 0.0f; x < 100.0f; x += 0.05f)
+        if (straddles(glm::vec3(x, 0.0f, 0.0f), 1.0f) && straddles(glm::vec3(x, 0.0f, 0.0f), 0.8f)) { edge = glm::vec3(x, 0.0f, 0.0f); break; }
+    CHECK(edge.x > 0.0f);
+    World w;
+    for (int i = 0; i < 25; ++i) // plain props around the cascade, some in it
+        w.CreateModelEntity(prop, glm::vec3((float)(i % 5) * 10.0f - 20.0f, 0.0f, (float)(i / 5) * 10.0f - 20.0f), glm::vec3(0), glm::vec3(1), "P");
+    const glm::vec3 groupsAt[] = {glm::vec3(-6.0f, 0.0f, 4.0f), glm::vec3(3.0f, 0.0f, -8.0f), edge, glm::vec3(300.0f, 0.0f, 300.0f)};
+    std::vector<entt::entity> levels;
+    for (const glm::vec3& at : groupsAt) {
+        const entt::entity group = w.CreateEmptyEntity(at, glm::vec3(0), glm::vec3(1), "G");
+        w.Registry.emplace<LODGroupComponent>(group).Size = 12.0f;
+        for (int l = 0; l < 2; ++l) {
+            levels.push_back(w.CreateModelEntity(prop, at, glm::vec3(0), glm::vec3(1.0f - 0.2f * l), "L"));
+            CHECK(w.SetParent(levels.back(), group));
+        }
+    }
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    const glm::mat4 camProj = glm::perspective(glm::radians(70.0f), 16.0f / 9.0f, 0.1f, 1000.0f);
+    // The LOD camera's spots: at the groups (level 0), out a way (level 1) and far off (culled).
+    const glm::vec3 views[] = {glm::vec3(0.0f, 1.7f, 0.0f), glm::vec3(0.0f, 1.7f, 60.0f), glm::vec3(0.0f, 1.7f, 600.0f)};
+    ShadowFrame sf;
+    std::vector<VisibleRenderable> fresh;
+    std::mt19937 rng(4411);
+    std::uniform_int_distribution<int> pick(0, 2), roll(0, 9);
+    const ShadowFrame::SunGatherTotals t0 = ShadowFrame::SunGatherTotalsSoFar();
+    int reused = 0, bad = 0, changed = 0, edgeIn = 0, edgeOut = 0;
+    std::vector<std::uint32_t> last;
+    for (std::uint64_t frame = 5000; frame < 5040; ++frame) { // < kSunGatherFullEvery: one gather, then all kept
+        if (roll(rng) < 3) w.ApplyLod(views[pick(rng)], camProj); // twice in a frame now and then
+        w.ApplyLod(views[pick(rng)], camProj);
+        const bool kept = sf.GatherSunCasting(w, &vp, 1, kRes, sun, &cell, frame);
+        if (frame > 5000) reused += kept;
+        VisibilityQuery q;
+        q.ShadowCasters = true;
+        q.CellCull = &padded;
+        q.CellCullCount = 1;
+        q.Part = VisibilityQuery::Cells::Static;
+        GatherVisible(w, q, fresh);
+        std::vector<VisibleRenderable> list = sf.CastingForTest(); // no Always cell here: all of it is the static part
+        auto bySlot = [](const VisibleRenderable& a, const VisibleRenderable& b) { return a.Slot < b.Slot; };
+        std::sort(list.begin(), list.end(), bySlot);
+        std::sort(fresh.begin(), fresh.end(), bySlot);
+        bool same = list.size() == fresh.size();
+        for (std::size_t i = 0; same && i < list.size(); ++i) {
+            const VisibleRenderable &a = list[i], &b = fresh[i];
+            same = a.Slot == b.Slot && a.Entity == b.Entity && a.Renderable == b.Renderable && a.Xform == b.Xform &&
+                   a.Bounded == b.Bounded && a.WorldMin == b.WorldMin && a.WorldMax == b.WorldMax;
+        }
+        if (!same) {
+            std::printf("[SunGatherLodPatch] frame %llu: kept %zu, fresh %zu, not the same\n", (unsigned long long)frame, list.size(), fresh.size());
+            ++bad;
+        }
+        std::vector<std::uint32_t> slots;
+        bool edgeHere = false;
+        for (const VisibleRenderable& v : list) {
+            slots.push_back(v.Slot);
+            edgeHere |= v.Entity == levels[4] || v.Entity == levels[5]; // the straddling group's levels
+        }
+        (edgeHere ? edgeIn : edgeOut)++;
+        changed += frame > 5000 && slots != last;
+        last = slots;
+    }
+    const ShadowFrame::SunGatherTotals t1 = ShadowFrame::SunGatherTotalsSoFar();
+    std::printf("[SunGatherLodPatch] %d of 39 kept, %d with a changed list, %llu patched, straddler in %d / out %d, %d bad\n", reused,
+                changed, (unsigned long long)(t1.Patched - t0.Patched), edgeIn, edgeOut, bad);
+    CHECK(bad == 0);
+    CHECK(reused == 39);
+    CHECK(changed >= 5 && t1.Patched - t0.Patched >= 5);
+    CHECK(edgeIn > 0 && edgeOut > 0);
+    ForgetGatherCandidates();
+}
+
 // G4-c: the GPU scene's change log for the cached local shadows. Over random frames (moves, Cast Shadows writes,
 // removals, a quiet frame now and then), every slot whose packed data changed is logged with a box holding where it was
 // and where it is, and a frame that changed nothing logs nothing.
@@ -3894,6 +3998,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GpuScene: the change log lists every changed slot with where it was and is (300 random frames)", GpuSceneChangeLog});
     tests.push_back({"Sun caster list: the change-log delta path = the full loop, field for field, every frame (400 random frames)", SunCasterListDelta});
     tests.push_back({"Sun gather reuse: the kept list holds every caster a fresh gather draws, field for field (800 random frames)", SunGatherReuse});
+    tests.push_back({"Sun gather reuse: LOD level flips are patched into the kept list, which stays a fresh padded gather field for field", SunGatherLodPatch});
     tests.push_back({"Local shadows (G4-c): a frame's changes wake the quiet lights they reach, and only those", LocalShadowQuietWake});
     tests.push_back({"Local shadows (G4-c): a LOD level change wakes the lights around the renderers it swapped", LocalShadowLodToggles});
     tests.push_back({"GpuScene: upload runs (merge, cap, whole list) and layer packing", GpuSceneRuns});
