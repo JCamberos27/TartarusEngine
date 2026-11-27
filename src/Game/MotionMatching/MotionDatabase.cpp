@@ -113,15 +113,13 @@ bool MotionDatabase::Build(std::string* error) {
         if (idle)
             for (std::uint32_t k = 0; k < clip.Count; ++k) m_Feat.AddFlags(clip.First + k, MotionLabel::IdleTake);
     }
-    // Per-group scale: the mean of the group's standard deviations.
-    m_Mean.assign(m_Feat.Mean().begin(), m_Feat.Mean().end());
-    m_Scale.assign(kDims, 1.0f);
-    for (int g = 0; g < MotionFeature::GroupCount; ++g) {
-        const int a = MotionFeature::kGroupFirst[g], b = MotionFeature::kGroupFirst[g + 1];
-        float s = 0.0f;
-        for (int d = a; d < b; ++d) s += m_Feat.Std()[(size_t)d];
-        s = std::max(1e-4f, s / (float)(b - a));
-        for (int d = a; d < b; ++d) m_Scale[(size_t)d] = s;
+    // The normalization: the frozen one the file carries, else this bake's own (per-group scale: the mean of the group's
+    // standard deviations).
+    if (m_Feat.HasNormalization()) {
+        m_Mean = m_Feat.NormMean();
+        m_Scale = m_Feat.NormScale();
+    } else {
+        DeriveNormalization(m_Feat, m_Mean, m_Scale);
     }
     m_QA.assign(kDims, 1.0f);
     m_QB.assign(kDims, 0.0f);
@@ -134,6 +132,20 @@ bool MotionDatabase::Build(std::string* error) {
     m_Frames = n;
     Index();
     return true;
+}
+
+void MotionDatabase::DeriveNormalization(const MotionFeatureSet& features, std::vector<float>& mean, std::vector<float>& scale) {
+    mean.assign(features.Mean().begin(), features.Mean().end());
+    mean.resize(kDims, 0.0f);
+    scale.assign(kDims, 1.0f);
+    if (features.Std().size() != (size_t)kDims) return;
+    for (int g = 0; g < MotionFeature::GroupCount; ++g) {
+        const int a = MotionFeature::kGroupFirst[g], b = MotionFeature::kGroupFirst[g + 1];
+        float s = 0.0f;
+        for (int d = a; d < b; ++d) s += features.Std()[(size_t)d];
+        s = std::max(1e-4f, s / (float)(b - a));
+        for (int d = a; d < b; ++d) scale[(size_t)d] = s;
+    }
 }
 
 float MotionDatabase::GlitchLimit(float fps) {
