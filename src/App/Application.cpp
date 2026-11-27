@@ -152,6 +152,7 @@
 #include <optional>
 #pragma warning(disable: 4996) // stb_image_write.h's own sprintf() use, not this file's
 #include "Renderer/UploadStaging.h"
+#include "Renderer/GLRetire.h"
 #include <cstdio>
 #include <stb_image_write.h>
 #include <cstring>
@@ -302,6 +303,7 @@ private:
         editorModule.Shutdown();
         AppAudioMuter::Shutdown();
         EditorSound::Shutdown();
+        GLRetire::Flush(); // anything a render target retired after the last frame, while the context still lives
     }
 
     const LaunchOptions& opt;
@@ -2642,6 +2644,7 @@ bool AppSession::Frame() {
         PROFILE_GPU_SCOPE("ImGui Render");
         MotionDemo::DrawCursor(); // the motion demo's drawn pointer
         editor.EndFrame(); // flushes the ImGui frame (empty when not in editor mode)
+        GLRetire::Flush(); // the textures render targets replaced this frame: ImGui has drawn with them now
     }
     // Dear ImGui's OpenGL3 backend just made its own raw glUseProgram/glBindTexture
     // calls inside EndFrame() above, bypassing GLStateCache entirely - without this,
