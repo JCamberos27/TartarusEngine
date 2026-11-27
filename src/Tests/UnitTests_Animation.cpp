@@ -949,6 +949,59 @@ void TestFootLockStepsForTravel() {
     CHECK(second[1] > 0.015f); // off the floor (the slide meter's 1.5 cm) by its second frame
 }
 
+// LiftFirst: a step keeps its place over the ground while it rises to LiftFirst (here half its arc, Release / 6), then
+// catches up by Release; the arc itself is unchanged. LiftFirst 0 eases the lag out from the first frame, as before.
+void TestFootLockLiftsFirst() {
+    const float dt = 0.01f, speed = 3.0f; // the body running off the planted foot at 3 m/s
+    const glm::vec3 local(0.1f, 0.08f, 0.0f);
+    const glm::quat facing(1.0f, 0.0f, 0.0f, 0.0f);
+    float arc[2][30] = {};
+    for (int k = 0; k < 2; ++k) {
+        IK::FootLockSettings set;
+        set.StepForTravel = true;
+        set.LiftFirst = k == 0 ? 0.0f : 0.04f;
+        IK::FootLock lock;
+        glm::vec3 root(0.0f);
+        for (int i = 0; i < 3; ++i) lock.Step(0, set, root, facing, local, local.y, dt); // planted, still
+        for (int i = 0; i < 5; ++i) { // the body runs on: a 15 cm lag
+            root.x += speed * dt;
+            lock.Step(0, set, root, facing, local, local.y, dt);
+        }
+        CHECK(lock.Locked(0));
+        const glm::vec3 pin = lock.Pinned(0), from = lock.Offset(0);
+        lock.Release(0, set); // (travel 0.15 + 3 m/s x Release: the arc is StepMax, LiftFirst its half)
+        const float hold = set.LiftFirst > 0.0f ? set.Release / 6.0f : 0.0f;
+        float t = 0.0f, lastX = -1e9f;
+        int held = 0;
+        bool ok = true;
+        for (int i = 0; i < 30; ++i) {
+            root.x += speed * dt;
+            const glm::vec3 o = lock.Step(0, set, root, facing, local, local.y, dt);
+            t += dt;
+            arc[k][i] = o.y;
+            const float drawnX = root.x + local.x + o.x, drawnZ = local.z + o.z;
+            if (k == 0) { // the old ease, exactly
+                const float e = std::clamp(t / std::max(set.Release, 1e-3f), 0.0f, 1.0f);
+                const float keep = 1.0f - e * e * (3.0f - 2.0f * e);
+                ok = ok && o.x == from.x * keep && o.z == from.z * keep;
+            } else if (t <= hold - 1e-4f) { // rising where it was planted
+                ok = ok && std::fabs(drawnX - pin.x) < 1e-5f && std::fabs(drawnZ - pin.z) < 1e-5f;
+                ++held;
+            } else if (t > hold + 1e-4f) {
+                ok = ok && drawnX > lastX; // then on its way, never back
+            }
+            if (t >= set.Release - 1e-4f) ok = ok && std::fabs(o.x) < 1e-5f && std::fabs(o.z) < 1e-5f; // caught up
+            lastX = drawnX;
+        }
+        std::printf("[UnitTest] lift first %.2f m: %s, %d frames held\n", set.LiftFirst, ok ? "as expected" : "WRONG", held);
+        CHECK(ok);
+        if (k == 1) CHECK(held == 3); // Release / 6 = 33 ms at 10 ms a frame
+    }
+    bool sameArc = true;
+    for (int i = 0; i < 30; ++i) sameArc = sameArc && arc[0][i] == arc[1][i];
+    CHECK(sameArc && arc[1][9] > 0.079f); // the same arc both ways, StepMax at its middle
+}
+
 // Heel then ball: the strike holds the heel; the ball coming down takes the hold over without moving the foot; the body
 // turning swivels the foot on its held ball; the heel rising stays held; the toe leaving lets go.
 void TestFootLockHeelThenBall() {
@@ -1985,6 +2038,7 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Foot slide meter: a pivot on the ball is not a slide", TestFootSlideMeterContactPoint});
     tests.push_back({"Foot slide meter: a plant is judged from where it settles", TestFootSlideMeterSettles});
     tests.push_back({"Foot lock steps clear over the way a turn carries the foot", TestFootLockStepsForTravel});
+    tests.push_back({"Foot lock lifts a step before it moves it", TestFootLockLiftsFirst});
     tests.push_back({"Foot lock holds the heel, then pivots on the ball", TestFootLockHeelThenBall});
     tests.push_back({"AnimatorController", TestAnimatorController});
     tests.push_back({"RootMotion", TestRootMotion});
