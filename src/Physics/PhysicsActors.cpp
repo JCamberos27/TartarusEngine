@@ -627,4 +627,24 @@ int RefreshPhysicMaterial(const World& world, const std::string& absPath) {
     if (n) Log::Info("Physic Material re-applied to " + std::to_string(n) + " collider(s) in the running world: " + absPath);
     return n;
 }
+
+bool SceneGravity(float out[3]) {
+    if (!g_State || !g_State->scene) return false;
+    const PxVec3 g = g_State->scene->getGravity();
+    out[0] = g.x; out[1] = g.y; out[2] = g.z;
+    return true;
+}
+
+bool ColliderFriction(unsigned entity, float* outStatic, float* outDynamic) {
+    if (!g_State) return false;
+    PxRigidActor* a = detail::ActorFor(*g_State, entity);
+    if (!a || a->getNbShapes() == 0) return false;
+    PxShape* sh = nullptr;
+    a->getShapes(&sh, 1);
+    PxMaterial* m = nullptr;
+    if (!sh || sh->getMaterials(&m, 1) == 0 || !m) return false;
+    if (outStatic) *outStatic = m->getStaticFriction();
+    if (outDynamic) *outDynamic = m->getDynamicFriction();
+    return true;
+}
 } // namespace PhysicsWorld
