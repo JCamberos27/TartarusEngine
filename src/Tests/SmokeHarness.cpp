@@ -504,6 +504,9 @@ void SmokeHarness::BeginFrame() {
     // and the toolbar button use.
     if (m_SceneActive && m_Ctx.npcTest) {
         if (m_FramesRendered == 20 && !m_Ctx.playing) { std::cout << "[NpcTest] -> Play" << std::endl; m_Ctx.togglePlay(); }
+        // A scenario longer than the 6 min budget (the testbed's canonical starts) gets its own length plus 10 s (the game
+        // steps a fixed 1/60 s under --npc-test).
+        m_FrameBudget = std::max(m_FrameBudget, 20 + (int)std::ceil(m_Ctx.npcTest->Seconds() * 60.0f) + 600);
         if (m_Ctx.npcTest->Done()) m_FramesRendered = std::max(m_FramesRendered, m_FrameBudget - 1);
     }
     if (m_SceneActive && m_PlayScene) {

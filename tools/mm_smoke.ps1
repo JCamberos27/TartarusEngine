@@ -2,7 +2,7 @@
 #
 #   powershell -ExecutionPolicy Bypass -File tools\mm_smoke.ps1 [-Quick | -Full] [scenario ...] [-Runs N] [-PerfBench <scene.json>]
 #       [-TraceDir <dir>] [-UnitFilter <filter>] [-AllowErrors <regex>] [-SkipBuild] [-SkipUnit] [-SkipSmoke] [-Sound]
-#       [-TimeoutMinutes N] [-Legs <names>] [-Exe <path>] [-LogDir <dir>] [-Parallel N] [-Show]
+#       [-TimeoutMinutes N] [-Legs <names>] [-Start <spec>] [-Exe <path>] [-LogDir <dir>] [-Parallel N] [-Show]
 #
 # Presets (docs/MOTION_MATCHING_HANDOFF.md, "Fast iteration"):
 #   -Quick  unit, mmplayer, mmstress (~3-4 min): the check before committing motion matching work. Scenarios named after it
@@ -14,6 +14,8 @@
 #
 # -Legs: only these legs of testbed / mmplayer / mmstress (TARTARUS_TESTBED_LEGS: comma-separated, * wildcards; each runs from
 #   its part's last placement leg), e.g. -Legs "M sprint*,M jog,A walk". Checks naming a leg that didn't run are skipped.
+# -Start: where the legs start (TARTARUS_TESTBED_START): 'canonical' (each leg from the fresh, settled body and its one leg
+#   before) or 'leg=from;...' (from: legs joined by +, or state:gait[,move=x/y][,view=deg][,secs=s]); see MOTION_MATCHING_HANDOFF.md.
 #   The fast loop for experiments; the whole course is for the final pass (docs/MOTION_MATCHING_HANDOFF.md, "Fast iteration").
 # -Exe: run this engine build instead of build\Release\TartarusEngine.exe (implies -SkipBuild) - copy the exe to a folder per
 #   experiment and run 2-3 scripts at once, each with its own -LogDir (the copy runs from the repo, as the original does).
@@ -51,6 +53,7 @@ param(
     [int]$TimeoutMinutes = 30,
     [string]$LogDir = '',
     [string]$Legs = '',
+    [string]$Start = '',
     [string]$Exe = '',
     [int]$Parallel = 3,
     [switch]$Quick,
@@ -180,6 +183,7 @@ foreach ($scenario in $Scenarios) {
         $name = if ($Runs -gt 1) { "npc_${scenario}_$k" } else { "npc_$scenario" }
         $envs = @{}
         if ($Legs) { $envs['TARTARUS_TESTBED_LEGS'] = $Legs }
+        if ($Start) { $envs['TARTARUS_TESTBED_START'] = $Start }
         $dir = Join-Path $TraceDir $(if ($Runs -gt 1) { "${scenario}_$k" } else { $scenario })
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
         $envs['NPC_TEST_TRACE'] = $dir

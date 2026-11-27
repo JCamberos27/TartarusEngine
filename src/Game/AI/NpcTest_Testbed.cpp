@@ -337,20 +337,156 @@ const std::vector<char>& TbFilter() {
     }
     return keep;
 }
-bool TbLegOn(int leg) {
-    if (leg == kWatchLeg) return true;
-    const std::vector<char>& keep = TbFilter();
-    return TbLegPartOn(leg) && (keep.empty() || keep[(size_t)leg]);
-}
-
-int TbLegAt(float t, float& into) {
-    int leg = 0;
-    while (leg < kWatchLeg && (!TbLegOn(leg) || t >= kTb[leg].Seconds)) {
-        if (TbLegOn(leg)) t -= kTb[leg].Seconds;
-        ++leg;
+// TARTARUS_TESTBED_START: where the legs start. Unset: the course - each leg from wherever the leg before left the body, so a
+// change in one leg moves the start of every leg after it.
+// 'canonical': every leg that runs starts from the fresh body (FirstPersonBody Stop + Start: no motion, facing or reselect
+// history carried over), placed where its part's last placement leg puts it and standing for kStartSettle s, then plays the
+// one leg before it unmeasured (what it arrives from: a stop needs its move) unless that leg is a placement. A leg's numbers
+// then depend on that leg and the one before it only.
+// 'leg=from;...': only those legs run (names, * wildcards), each from the fresh, settled body and then `from` (unmeasured):
+// course legs joined by '+', or state:<idle|stroll|walk|jog|sprint|crouch|crouchidle>[,move=x/y][,view=deg][,secs=s] - the
+// gait held for secs (default 2.5) with the stick at move (default 0/1, straight on), the view deg off the leg's own (the
+// body arrives heading deg from the view). Empty `from`: the settled body alone.
+constexpr float kStartSettle = 1.5f;
+struct TbStep {
+    TbLeg Leg;          // what the step drives (a copy: a course leg, or a made-up start / lead-in)
+    int Index = -1;     // the course leg it measures (-1: none - a start or a lead-in)
+    bool Reset = false; // the body starts afresh as the step begins
+};
+struct TbSchedule {
+    std::vector<TbStep> Steps;       // in order, the watch leg last
+    std::vector<char> Measured;      // per course leg
+    bool Subset = false;             // the whole-course checks are skipped: some legs don't run, or they start afresh
+    std::vector<std::string> Errors; // TARTARUS_TESTBED_START naming nothing
+};
+std::vector<std::string> TbSplit(const std::string& s, char sep) {
+    std::vector<std::string> out;
+    for (size_t at = 0; at <= s.size();) {
+        const size_t end = std::min(s.find(sep, at), s.size());
+        std::string p = s.substr(at, end - at);
+        while (!p.empty() && p.front() == ' ') p.erase(p.begin());
+        while (!p.empty() && p.back() == ' ') p.pop_back();
+        out.push_back(p);
+        at = end + 1;
     }
+    return out;
+}
+// state:<gait>[,move=x/y][,view=deg][,secs=s] for leg `target` (text after "state:"). False: not understood.
+bool TbStateLeadIn(const std::string& spec, const TbLeg& target, TbLeg& out) {
+    out = TbLeg{"state", 2.5f, target.Of, {0, 1}, false, false, {}, target.Yaw};
+    const std::vector<std::string> parts = TbSplit(spec, ',');
+    const std::string& gait = parts[0];
+    if (gait == "idle" || gait == "crouchidle") out.Move = {0, 0};
+    else if (gait == "stroll") out.Stroll = true;
+    else if (gait == "jog") out.Jog = true;
+    else if (gait == "sprint") out.Jog = out.Run = true;
+    else if (gait != "walk" && gait != "crouch") return false;
+    out.Crouch = gait == "crouch" || gait == "crouchidle";
+    for (size_t i = 1; i < parts.size(); ++i) {
+        const size_t eq = parts[i].find('=');
+        if (eq == std::string::npos) return false;
+        const std::string key = parts[i].substr(0, eq), value = parts[i].substr(eq + 1);
+        try {
+            if (key == "move") {
+                const size_t slash = value.find('/');
+                if (slash == std::string::npos) return false;
+                out.Move = {std::stof(value.substr(0, slash)), std::stof(value.substr(slash + 1))};
+            } else if (key == "view") out.Yaw = target.Yaw + std::stof(value);
+            else if (key == "secs") out.Seconds = std::max(0.1f, std::stof(value));
+            else return false;
+        } catch (...) { return false; }
+    }
+    return true;
+}
+const TbSchedule& TbPlan() {
+    static TbSchedule plan;
+    static bool built = false;
+    if (built) return plan;
+    built = true;
+    plan.Measured.assign((size_t)kTbCount, 0);
+    const std::vector<char>& keep = TbFilter();
+    const std::string start = Env::IsSet(Env::Var::TestbedStart) ? Env::Str(Env::Var::TestbedStart) : std::string();
+    auto measure = [&](int i) {
+        TbStep s{kTb[i], i};
+        plan.Steps.push_back(s);
+        plan.Measured[(size_t)i] = 1;
+    };
+    // The fresh body where leg i's part last placed it, facing `yaw`, standing.
+    auto fresh = [&](int i, float yaw) {
+        int from = i;
+        while (from > 0 && !kTb[from].Place && kTb[from - 1].Of == kTb[i].Of) --from;
+        TbStep s{TbLeg{"fresh body, settled", kStartSettle, kTb[i].Of, {0, 0}, false, true, kTb[from].Place ? kTb[from].At : kMStart, yaw}};
+        s.Reset = true;
+        plan.Steps.push_back(s);
+    };
+    auto leadIn = [&](const TbLeg& l) { plan.Steps.push_back(TbStep{l}); };
+    if (start.empty() || start == "canonical") {
+        for (int i = 0; i < kWatchLeg; ++i) {
+            if (!TbLegPartOn(i) || (!keep.empty() && !keep[(size_t)i])) continue;
+            if (!start.empty()) {
+                const int before = !kTb[i].Place && i > 0 && kTb[i - 1].Of == kTb[i].Of && !kTb[i - 1].Place ? i - 1 : -1;
+                fresh(i, before >= 0 ? kTb[before].Yaw : kTb[i].Yaw);
+                if (before >= 0) leadIn(kTb[before]);
+            }
+            measure(i);
+        }
+        // (Under canonical the matcher's counters restart with each fresh body: the whole-course checks are skipped too.)
+        plan.Subset = !keep.empty() || !start.empty();
+    } else {
+        struct Entry { std::string Pattern, From; bool Used = false; };
+        std::vector<Entry> entries;
+        for (const std::string& e : TbSplit(start, ';')) {
+            if (e.empty()) continue;
+            const size_t eq = e.find('=');
+            entries.push_back({e.substr(0, eq), eq == std::string::npos ? std::string() : e.substr(eq + 1)});
+            while (!entries.back().Pattern.empty() && entries.back().Pattern.back() == ' ') entries.back().Pattern.pop_back();
+        }
+        for (int i = 0; i < kWatchLeg; ++i) {
+            if (!TbLegPartOn(i)) continue;
+            Entry* hit = nullptr;
+            for (Entry& e : entries)
+                if (!hit && TbNameMatches(kTb[i].Name, e.Pattern)) hit = &e;
+            if (!hit) continue;
+            hit->Used = true;
+            std::vector<TbLeg> leads;
+            if (hit->From.rfind("state:", 0) == 0) {
+                TbLeg l{};
+                if (TbStateLeadIn(hit->From.substr(6), kTb[i], l)) leads.push_back(l);
+                else plan.Errors.push_back("'" + hit->From + "' (for " + kTb[i].Name + ") isn't a state");
+            } else if (!hit->From.empty()) {
+                for (const std::string& name : TbSplit(hit->From, '+')) {
+                    int found = -1;
+                    for (int k = 0; k < kWatchLeg && found < 0; ++k)
+                        if (TbNameMatches(kTb[k].Name, name)) found = k;
+                    if (found >= 0) leads.push_back(kTb[found]);
+                    else plan.Errors.push_back("no leg '" + name + "' (the start of " + kTb[i].Name + ")");
+                }
+            }
+            fresh(i, leads.empty() ? kTb[i].Yaw : leads.front().Yaw);
+            for (const TbLeg& l : leads) leadIn(l);
+            measure(i);
+        }
+        for (const Entry& e : entries)
+            if (!e.Used) plan.Errors.push_back("no running leg matches '" + e.Pattern + "'");
+        plan.Subset = true;
+    }
+    measure(kWatchLeg);
+    if (!start.empty()) {
+        float seconds = 0.0f;
+        for (size_t k = 0; k + 1 < plan.Steps.size(); ++k) seconds += plan.Steps[k].Leg.Seconds;
+        std::printf("[Testbed] start '%s': %zu steps, %.0f s of legs\n", start.c_str(), plan.Steps.size() - 1, seconds);
+        for (const std::string& e : plan.Errors) std::printf("[Testbed] start: %s\n", e.c_str());
+    }
+    return plan;
+}
+bool TbLegOn(int leg) { return TbPlan().Measured[(size_t)leg] != 0; }
+
+int TbStepAt(float t, float& into) {
+    const std::vector<TbStep>& steps = TbPlan().Steps;
+    int step = 0;
+    while (step + 1 < (int)steps.size() && t >= steps[(size_t)step].Leg.Seconds) t -= steps[(size_t)step++].Leg.Seconds;
     into = t;
-    return leg;
+    return step;
 }
 bool TbHas(const std::string& s, const char* what) { return s.find(what) != std::string::npos; }
 float WrapDeg(float d) { return std::remainder(d, 360.0f); }
@@ -359,7 +495,9 @@ float WrapDeg(float d) { return std::remainder(d, 360.0f); }
 struct NpcTest::TestbedRun {
     // Drive -> After, this frame
     float Clock = 0.0f;
-    int Leg = 0, PrevLeg = -1;
+    int Step = 0, PrevStep = -1; // TbPlan's
+    int Leg = -1;                // the course leg measured (-1: a start or a lead-in, nothing measured)
+    const TbLeg* Driving = nullptr;
     float Into = 0.0f;
     const FirstPersonPresentation* Weapon = nullptr;
     int Frame = 0;
@@ -480,8 +618,8 @@ struct NpcTest::TestbedRun {
     float MmPrevViewYaw = 0.0f;
     bool MmHaveViewYaw = false;
     int MmCrouchWrong = 0, MmAirborneGround = 0, MmFrames = 0, MmPosed = 0, MmBigSteps = 0;
-    bool Jumped[kTbMaxLegs] = {};
-    int JumpSlot[kTbMaxLegs] = {};
+    std::vector<char> Jumped = std::vector<char>(TbPlan().Steps.size(), 0); // per step
+    std::vector<int> JumpSlot = std::vector<int>(TbPlan().Steps.size(), 0);
     float FlatCamMax = 0.0f; // A walk's highest camera off the capsule's eye (steady)
     bool HaveFlat = false;
     // B
@@ -527,7 +665,7 @@ struct NpcTest::TestbedRun {
 
 std::vector<std::string> NpcTest::TestbedLegsOff() {
     std::vector<std::string> off;
-    if (TbFilter().empty()) return off;
+    if (!TbPlan().Subset) return off;
     for (int i = 0; i < kWatchLeg; ++i)
         if (!TbLegOn(i)) off.push_back(kTb[i].Name);
     // A part none of whose legs run: its setup checks ("C setup: ...") are skipped too.
@@ -547,8 +685,8 @@ std::vector<std::string> NpcTest::TestbedLegsOff() {
 
 float NpcTest::TestbedSeconds() {
     float t = 0.0f;
-    for (int i = 0; i < kWatchLeg; ++i)
-        if (TbLegOn(i)) t += kTb[i].Seconds;
+    const std::vector<TbStep>& steps = TbPlan().Steps;
+    for (size_t k = 0; k + 1 < steps.size(); ++k) t += steps[k].Leg.Seconds; // (the last is the watch leg)
     return t + (TbDummiesOn() ? kNpcBudget : 1.0f);
 }
 
@@ -558,14 +696,26 @@ void NpcTest::TestbedDrive(Player& player, FirstPersonPresentation& weapon, floa
     R.Weapon = &weapon;
     R.Clock += dt;
     float into = 0.0f;
-    const int leg = TbLegAt(R.Clock, into);
-    const TbLeg& L = kTb[leg];
-    const bool entered = leg != R.PrevLeg;
+    const int step = TbStepAt(R.Clock, into);
+    const TbStep& S = TbPlan().Steps[(size_t)step];
+    const TbLeg& L = S.Leg;
+    const bool entered = step != R.PrevStep;
     IK::SetFootSlideMeterOn(true);
-    if (entered && R.PrevLeg >= 0 && kTb[R.PrevLeg].Moving()) SlideLeg(kTb[R.PrevLeg].Name);
+    if (entered && R.PrevStep >= 0) {
+        const TbStep& before = TbPlan().Steps[(size_t)R.PrevStep];
+        if (before.Index >= 0 && before.Leg.Moving()) SlideLeg(before.Leg.Name);
+    }
     if (entered && L.Moving()) IK::FootSlideMeterFor("player").TakeTotals(); // the leg's own plants only
     if (entered) {
-        std::printf("[Testbed] %6.2f s  %s\n", R.Clock, L.Name);
+        if (S.Index >= 0) std::printf("[Testbed] %6.2f s  %s\n", R.Clock, L.Name);
+        else std::printf("[Testbed] %6.2f s  (%s) %s\n", R.Clock, S.Reset ? "start" : "lead-in", L.Name);
+        if (S.Reset) { // the fresh body: the host restarts it this frame, after the placement below
+            m_BodyReset = true;
+            R.MmShown.clear();
+            // ... and its feet are measured afresh: a contact open across the restart would count the new pose's feet,
+            // placed elsewhere, as a slide (and the floor each foot is read against is the old body's).
+            IK::FootSlideMeterFor("player").Reset();
+        }
         if (L.Place) {
             PhysicsWorld::SetCharacterFootPosition(&L.At.x);
             player.Velocity = glm::vec3(0.0f);
@@ -576,8 +726,9 @@ void NpcTest::TestbedDrive(Player& player, FirstPersonPresentation& weapon, floa
         if (L.Equip == 1) weapon.SetEquipped(true);
         if (m_Scenario == "mmplayer" || m_Scenario == "mmstress") weapon.SetEquipped(false); // Phase 4 is verified unarmed
     }
-    R.PrevLeg = leg;
-    R.Leg = leg;
+    R.PrevStep = R.Step = step;
+    R.Leg = S.Index;
+    R.Driving = &L;
     R.Into = into;
     player.ScriptMove = L.AltPeriod > 0.0f && std::fmod(into, 2.0f * L.AltPeriod) >= L.AltPeriod ? L.Move2 : L.Move;
     player.ScriptSprint = L.Jog;
@@ -586,14 +737,14 @@ void NpcTest::TestbedDrive(Player& player, FirstPersonPresentation& weapon, floa
     player.ScriptCrouch = L.CrouchPeriod > 0.0f ? std::fmod(into, 2.0f * L.CrouchPeriod) >= L.CrouchPeriod : L.Crouch;
     if (L.JumpEvery > 0.0f) {
         const int slot = (int)(into / L.JumpEvery);
-        if (slot != R.JumpSlot[leg]) {
-            R.JumpSlot[leg] = slot;
+        if (slot != R.JumpSlot[(size_t)step]) {
+            R.JumpSlot[(size_t)step] = slot;
             if (slot > 0) player.ScriptJump = true;
         }
     }
-    if (L.JumpAt >= 0.0f && into >= L.JumpAt && !R.Jumped[leg]) {
+    if (L.JumpAt >= 0.0f && into >= L.JumpAt && !R.Jumped[(size_t)step]) {
         player.ScriptJump = true;
-        R.Jumped[leg] = true;
+        R.Jumped[(size_t)step] = 1;
     }
     if (L.Aim) m_Target = "testbed"; // sights up: aiming at cover peeks round it
     else m_Target.clear();
@@ -611,7 +762,7 @@ void NpcTest::TestbedDrive(Player& player, FirstPersonPresentation& weapon, floa
 }
 
 void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, float now) {
-    if (!m_Tb) return; // (Drive hasn't run yet)
+    if (!m_Tb || !m_Tb->Driving) return; // (Drive hasn't run yet)
     TestbedRun& R = *m_Tb;
     npcs.NoLod = true;
     npcs.FootIKEverywhere = true;
@@ -622,7 +773,7 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
     const bool stepped = R.PrevNow < 0.0f || now > R.PrevNow;
     R.PrevNow = now;
     const int leg = R.Leg;
-    const TbLeg& L = kTb[leg];
+    const TbLeg& L = *R.Driving;
     const BodyDebug::Snapshot& bd = BodyDebug::Info();
 
     // Every dummy stands still unless this scenario moves it (the roaming one is out of the way, and out of the numbers).
@@ -654,7 +805,7 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
     const float procY = weapon ? weapon->ProceduralPose().CameraOffset.y : 0.0f;
     const std::string weaponState = weapon ? weapon->CurrentState() : std::string();
 
-    if (L.Of != TbPart::Watch && stepped) {
+    if (L.Of != TbPart::Watch && leg >= 0 && stepped) { // (a start or a lead-in measures nothing)
         TestbedRun::LegStats& s = R.Legs[leg];
         if (s.Frames == 0) s.FootYStart = foot[1];
         s.FootYEnd = foot[1];
@@ -774,6 +925,12 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
     // --- the player's checks, once its legs are through ---
     if (L.Of == TbPart::Watch && !R.PlayerChecked) {
         R.PlayerChecked = true;
+        if (!TbPlan().Errors.empty()) { // (never skipped by the leg filter: a start naming nothing fails the run)
+            std::vector<std::string> off;
+            off.swap(m_SkipLegs);
+            for (const std::string& e : TbPlan().Errors) Check(false, "TARTARUS_TESTBED_START: " + e);
+            off.swap(m_SkipLegs);
+        }
         auto legIndex = [this](const char* name) {
             for (int i = 0; i < kTbCount; ++i)
                 if (std::string(kTb[i].Name) == name) return i;

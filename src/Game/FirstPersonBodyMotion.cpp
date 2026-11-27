@@ -666,6 +666,7 @@ bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& mod
         c.SimFacingHalflife = MmTune("SimFacingHalflife", c.SimFacingHalflife);
         c.CharacterFacingHalflife = MmTune("CharacterFacingHalflife", c.CharacterFacingHalflife);
         c.SprintCharacterFacingHalflife = MmTune("SprintCharacterFacingHalflife", c.SprintCharacterFacingHalflife);
+        c.SprintTrajPosWeight = MmTune("SprintTrajPosWeight", c.SprintTrajPosWeight);
         c.MaxFacingOffset = MmTune("MaxFacingOffset", c.MaxFacingOffset);
         c.TransitionCost = MmTune("TransitionCost", c.TransitionCost);
         c.MinRunway = (int)MmTune("MinRunway", (float)c.MinRunway);
@@ -775,6 +776,8 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     // few (crouched, 8 legs), and at the default weights diagonal walks won them.
     if (wishSpeed > 0.1f && std::fabs(Wrap(MotionMath::YawOf(wish) - in.ViewYaw)) > 50.0f * kPi / 180.0f)
         params.GroupWeight[MotionFeature::TrajPos] *= 2.0f;
+    else if (wishSpeed > 0.1f && style == (int)MotionLabel::StyleSprint) // (Settings::SprintTrajPosWeight)
+        params.GroupWeight[MotionFeature::TrajPos] *= Config.SprintTrajPosWeight;
     if (crouch) params.Require = MotionLabel::Crouch;
     else params.Forbid = MotionLabel::Airborne | MotionLabel::Crouch;
 
