@@ -76,6 +76,30 @@ shared vec4 sDirCos[TILE];   // view-space aim, outer cone cos (> 1: a point lig
 shared uint sMask[TILE * MASK_WORDS];
 shared vec4 sBoxC[TILE];     // the light's bounds as a view-space box: centre, half extents (w < 0: unbounded)
 shared vec4 sBoxE[TILE];
+shared vec4 sBoxAx[TILE];    // the box's own axes in view space, w = its half size along that axis
+shared vec4 sBoxAy[TILE];
+shared vec4 sBoxAz[TILE];
+shared vec4 sBoxQ0[TILE];    // the box coordinate of the view origin per axis: q = dot(axis, p) + this, as LightBoxFade's
+// How far past a box face a whole froxel must lie before the light is dropped from it. LightBoxFade is exactly 0 from
+// the face outward, so any margin only keeps lights; this one absorbs the view-space vs world-space rounding and a
+// fragment that lands on a froxel's edge, so no pixel the light reaches ever loses it.
+const float BOX_CULL_MARGIN = 0.01;
+
+// True when the whole froxel [mn, mx] lies past one face of the light's box, where LightBoxFade is 0 everywhere. Per box
+// axis: the froxel's span along it is its centre's coordinate +- the AABB's projected radius, exact for a box, so this
+// is the 8-corner test in closed form. The fade is clamp((h - |q|) / f): |q| >= h on any axis gives 0.
+bool froxelOutsideBox(uint t, vec3 mn, vec3 mx) {
+    vec3 fc = 0.5 * (mn + mx);
+    vec3 fe = 0.5 * (mx - mn);
+    for (int a = 0; a < 3; ++a) {
+        vec4 ax = a == 0 ? sBoxAx[t] : (a == 1 ? sBoxAy[t] : sBoxAz[t]);
+        float q = dot(ax.xyz, fc) + sBoxQ0[t][a];
+        float r = dot(abs(ax.xyz), fe);
+        float h = ax.w + BOX_CULL_MARGIN;
+        if (q - r >= h || q + r <= -h) return true;
+    }
+    return false;
+}
 
 bool tileLightHitsCluster(uint t, vec3 mn, vec3 mx) {
     float r = sPosRange[t].w;
@@ -84,6 +108,8 @@ bool tileLightHitsCluster(uint t, vec3 mn, vec3 mx) {
     if (sqDistPointAABB(pv, mn, mx) > r * r) return false;  // sphere test: cheap first reject
     if (sBoxE[t].w >= 0.0 && any(greaterThan(abs(sBoxC[t].xyz - 0.5 * (mn + mx)), sBoxE[t].xyz + 0.5 * (mx - mn))))
         return false; // outside its bounds (its room)
+    if (sBoxE[t].w >= 0.0 && froxelOutsideBox(t, mn, mx))
+        return false; // outside its box exactly: a rotated room's view-space bounds above still reach past it
     float cosOuter = sDirCos[t].w;
     if (cosOuter <= 1.0) { // spot: narrow further with a cone test
         vec3  sphereCenter = 0.5 * (mn + mx);
@@ -123,6 +149,13 @@ void main() {
                 mat3 v = mat3(uView);
                 sBoxC[lid] = vec4((uView * vec4(c, 1.0)).xyz, 0.0);
                 sBoxE[lid] = vec4(abs(v[0]) * e.x + abs(v[1]) * e.y + abs(v[2]) * e.z, 0.0);
+                sBoxAx[lid] = vec4(v * ax, h.x);
+                sBoxAy[lid] = vec4(v * ay, h.y);
+                sBoxAz[lid] = vec4(v * az, h.z);
+                // The rows map world -> box (q = axis . p + w); with p = view^-1 p_view that is (V axis) . p_view + w - (V axis) . t.
+                vec3 tv = uView[3].xyz;
+                sBoxQ0[lid] = vec4(uLights[i].BoxX.w - dot(v * ax, tv), uLights[i].BoxY.w - dot(v * ay, tv),
+                                   uLights[i].BoxZ.w - dot(v * az, tv), 0.0);
             }
         }
         barrier();
