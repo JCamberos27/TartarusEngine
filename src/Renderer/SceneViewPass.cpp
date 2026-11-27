@@ -1056,7 +1056,7 @@ void SceneRenderer::ViewPass::DrawOpaque() {
     };
     // ---- DIAG ONLY (W2 Opaque census, never merged): TARTARUS_OPC=1 counts, 2 GPU scope per program run, 4 per
     // program+material run (prepassed batches; the rest go under "OpC: rest"). Counts print every 250th frame.
-    static const int opc = [] { const char* v = std::getenv("TARTARUS_OPC"); return v ? std::atoi(v) : 0; }();
+    static const int opc = [] { char* v = nullptr; std::size_t n = 0; _dupenv_s(&v, &n, "TARTARUS_OPC"); const int r = v ? std::atoi(v) : 0; std::free(v); return r; }();
     static std::set<std::string> opcNames;
     static std::uint64_t opcFrame = 0;
     const auto opcMat = [&](const SceneOpaqueTag& t) -> const MaterialAsset* {
