@@ -693,6 +693,7 @@ bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& mod
         auto& ip = m_Matcher.Inertializer.Params;
         ip.BlendTime = MmTune("BlendTime", ip.BlendTime);
         ip.DecayHalflife = MmTune("DecayHalflife", ip.DecayHalflife);
+        c.IdleEntryBlendTime = MmTune("IdleEntryBlendTime", c.IdleEntryBlendTime);
         static const char* const kW[MotionFeature::GroupCount] = {"W.FootPos", "W.FootVel", "W.PelvisVel", "W.TrajPos", "W.TrajDir"};
         const MotionSearchParams defaults;
         for (int g = 0; g < MotionFeature::GroupCount; ++g) m_GroupWeight[g] = MmTune(kW[g], defaults.GroupWeight[g]);
@@ -890,6 +891,7 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     m_WarpRate += (rate - m_WarpRate) * Toward(dt, 0.08f);
     m_Matcher.SearchParams = params;
     m_Matcher.ForcedPoseWeight = Config.ForcedPoseWeight;
+    m_Matcher.IdleEntryBlendTime = Config.IdleEntryBlendTime;
     // Standing idle: the playing take plays on while its continuation fits (MotionMatcher::Idle). Only once the body has
     // truly stopped on an idle frame: as the stick is released the capsule is still slowing, and the stop is searched.
     m_Matcher.Idle = m_Still && !m_Turning && m_Air == Air::None && in.Grounded && m_CapsuleSpeed < Config.IdleSpeed &&

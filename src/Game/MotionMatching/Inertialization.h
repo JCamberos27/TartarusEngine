@@ -27,8 +27,9 @@ class Inertialization {
 public:
     InertializationParams Params;
 
-    // Start a blend: the output continues from what was shown (`last`, and `previous` one `dt` before it).
-    void Transition(const MotionPose& previous, const MotionPose& last, float dt);
+    // Start a blend: the output continues from what was shown (`last`, and `previous` one `dt` before it). `blendTime` > 0:
+    // this blend's cross-fade lasts that long instead of Params.BlendTime.
+    void Transition(const MotionPose& previous, const MotionPose& last, float dt, float blendTime = -1.0f);
     // Advance by dt and blend into `target` (the new animation's pose this frame). Writes the output into `out`
     // (`target` itself when no blend is running).
     void Update(float dt, const MotionPose& target, MotionPose& out);
@@ -39,6 +40,7 @@ public:
 private:
     bool m_Active = false;
     float m_Time = 0.0f;
+    float m_BlendTime = 0.2f; // this blend's (Transition)
     // The stream bones then the fingers (MotionPose::Rot, then MotionPose::Fingers).
     std::vector<glm::quat> m_Rot;
     std::vector<glm::vec3> m_AngVel; // scaled angle-axis per second, in the bone's parent space

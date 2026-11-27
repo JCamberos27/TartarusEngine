@@ -192,7 +192,7 @@ void MotionMatcher::Update(float dt, const Input& in) {
         else SearchMs[(size_t)(Searches - 1) % kSearchSamples] = (float)ms;
         m_Searched = true;
         if (m_Last.Frame >= 0 && m_Last.Switched) {
-            BeginBlend();
+            BeginBlend((std::uint32_t)m_Last.Frame);
             EndRun();
             m_Frame = (std::uint32_t)m_Last.Frame;
             m_RunFirst = m_Frame;
@@ -207,8 +207,11 @@ void MotionMatcher::Update(float dt, const Input& in) {
     PoseAndBlend(dt);
 }
 
-void MotionMatcher::BeginBlend() {
-    if (m_HaveOut) Inertializer.Transition(m_Prev, m_Out, m_OutInterval);
+void MotionMatcher::BeginBlend(std::uint32_t to) {
+    if (!m_HaveOut) return;
+    const bool intoIdle = IdleEntryBlendTime > 0.0f && m_Db && (m_Db->Flags(to) & MotionLabel::IdleTake) &&
+                          !(m_Db->Flags(m_Frame) & MotionLabel::IdleTake);
+    Inertializer.Transition(m_Prev, m_Out, m_OutInterval, intoIdle ? IdleEntryBlendTime : -1.0f);
 }
 
 void MotionMatcher::ForceFrame(std::uint32_t frame) {
@@ -216,7 +219,7 @@ void MotionMatcher::ForceFrame(std::uint32_t frame) {
     if (!m_Db || !m_Db->Loaded()) return;
     frame = std::min(frame, m_Db->FrameCount() - 1);
     if (m_HaveOut && frame != m_Frame) {
-        BeginBlend();
+        BeginBlend(frame);
         m_Jumped = true;
         ++Jumps;
         ++JumpsBy[CauseForced];

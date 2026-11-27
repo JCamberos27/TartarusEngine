@@ -47,6 +47,10 @@ public:
     // by this: the playing pose has no continuation, so the trajectory picks and the dead blend hides the pose change. At 1
     // an odd pose (a jump's deep landing) kept matching odd poses after a crouch (Phase 4). 1 = always the same weights.
     float ForcedPoseWeight = 1.0f;
+    // A jump into an idle take (MotionLabel::IdleTake) from a frame outside one - coming to rest - blends this long (s) in
+    // place of Inertializer.Params.BlendTime: the arms of a stop or a walk settle into the idle's instead of snapping to it.
+    // 0 = every jump blends alike.
+    float IdleEntryBlendTime = 0.0f;
     std::int64_t HoldFrame = -1;
     // Standing idle (the host sets it each update): no searching on the timer - the playing take plays on while its
     // continuation fits the wanted trajectory: its root 1 s on within IdleTravel of where it's wanted and facing within
@@ -112,8 +116,9 @@ private:
     void PoseAndBlend(float dt);
     // Starts a dead blend from what is on screen. Its velocity is the last two output poses' over the time between them -
     // not this update's dt: in Play the frame time varies, and a hitch's long frame (or the short one after it) would scale
-    // the carried velocity by the ratio of the two (into the 4 pi rad/s clamp: a lurch at the jump).
-    void BeginBlend();
+    // the carried velocity by the ratio of the two (into the 4 pi rad/s clamp: a lurch at the jump). `to`: the frame jumped
+    // to (IdleEntryBlendTime).
+    void BeginBlend(std::uint32_t to);
     // The reselect history: the run of frames shown since the last jump starts at m_RunFirst; a jump files it (with its age).
     void EndRun();
     struct ShownRun {
