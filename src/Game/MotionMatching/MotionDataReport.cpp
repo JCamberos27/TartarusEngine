@@ -32,7 +32,7 @@ Report Build(const MotionDatabase& db, int minRunway) {
     for (const auto& clip : db.Stream().Clips()) {
         Cell* seen[MotionLabel::StyleCount * 4 * DirCount] = {};
         int nSeen = 0;
-        Cell* runCell = nullptr;
+        Cell* runCell = nullptr; // the cell the current run of searchable frames is in (reset with every take)
         std::uint32_t run = 0;
         for (std::uint32_t k = 0; k < clip.Count; ++k) {
             const std::uint32_t f = clip.First + k;

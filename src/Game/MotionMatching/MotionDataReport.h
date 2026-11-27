@@ -6,8 +6,10 @@
 // frames lost on the way are counted in the order Excluded, NoSearch, Airborne, short runway, so each frame is charged to
 // one cause. Excluded is every cause together (hands up, bent over, gestures, glitches, the prone approach, prone: the
 // database keeps one flag); the totals per cause are the database's and the rig load's own counters.
-// Not counted: the matcher's reselect-avoid windows (they move with what just played) and the style filter (a search asks
-// for one style, so a style's row is its pool).
+// Not counted: the matcher's reselect-avoid windows (they move with what just played), the style filter (a search asks for
+// one style, so a style's row is its pool) and the stance filter (a standing search forbids Crouch, a crouched one requires
+// it: Crouch-flagged frames in a non-crouch style row, mixed takes and transitions, count as searchable here although a
+// standing search can't land on them).
 // Direction: the root's travel over the last trajectory sample (+1 s) against its facing, for Walk, Jog and Run frames.
 
 #include "MotionDatabase.h"
@@ -24,7 +26,7 @@ int DirOf(const MotionDatabase& db, std::uint32_t frame);
 
 struct Cell {
     std::uint32_t Frames = 0, Excluded = 0, NoSearch = 0, Airborne = 0, ShortRunway = 0, Searchable = 0;
-    std::uint32_t Longest = 0; // the longest unbroken run of searchable frames in one take
+    std::uint32_t Longest = 0; // the longest unbroken run of searchable frames inside this cell, in one take (Total: the longest cell's)
     int Takes = 0;             // takes with at least one searchable frame in the cell
 };
 
