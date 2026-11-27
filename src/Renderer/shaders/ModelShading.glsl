@@ -751,6 +751,37 @@ vec3 ShadeLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, vec3 F0,
 #define DIAG_STRIP 0
 #endif
 uint gDiagReject = 0u; // 1 range, 2 box, 3 cone/atten, 4 shadow
+#if (DIAG_STRIP & 524288) != 0
+// DIAG: the same tests reading each field where it's needed (no whole-record copy up front).
+bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance) {
+    L = vec3(0.0);
+    radiance = vec3(0.0);
+    vec4 pt = uLights[i].PositionType;
+    float range = uLights[i].ColorRange.a;
+    vec3 toLight = pt.xyz - vWorldPos;
+    float dist2 = dot(toLight, toLight);
+    if (dist2 > range * range) { gDiagReject = 1u; return false; }
+    float boxFade = LightBoxFade(i, vWorldPos);
+    if (boxFade <= 0.0) { gDiagReject = 2u; return false; }
+    float dist = sqrt(dist2);
+    L = toLight / max(dist, 1e-4);
+    float atten = LightDistanceAtten(dist, range) * boxFade;
+    int slot = int(uLights[i].Params.y);
+    if (int(pt.w) == 2) {
+        float cone = SpotConeAtten(i, L);
+        if (cone <= 0.0) { gDiagReject = 3u; return false; }
+        atten *= cone;
+        if (atten <= 0.0) { gDiagReject = 3u; return false; }
+        if ((DIAG_STRIP & 128) == 0) atten *= SpotShadow(slot, vWorldPos, N, geoN);
+    } else {
+        if (atten <= 0.0) { gDiagReject = 3u; return false; }
+        if ((DIAG_STRIP & 128) == 0) atten *= PointShadow(slot, vWorldPos, pt.xyz, N, geoN);
+    }
+    if (atten <= 0.0) { gDiagReject = 4u; return false; }
+    radiance = uLights[i].ColorRange.rgb * atten;
+    return true;
+}
+#else
 bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance) {
     Light lt = uLights[i];
     int type = int(lt.PositionType.w);
@@ -785,6 +816,7 @@ bool PointSpotLight(uint i, vec3 N, vec3 geoN, out vec3 L, out vec3 radiance) {
     radiance = lt.ColorRange.rgb * atten;
     return true;
 }
+#endif
 
 // Callers without a separate geometric normal (grass, fur, sprites, impostors: no normal maps) use N for both.
 bool PointSpotLight(uint i, vec3 N, out vec3 L, out vec3 radiance) { return PointSpotLight(i, N, N, L, radiance); }

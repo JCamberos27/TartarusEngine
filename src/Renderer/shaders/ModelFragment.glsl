@@ -507,6 +507,7 @@ void main() {
     for (uint j = 0u; j < lightCount; ++j) {
         uint li = clustered ? uClusterLightIndices[lightOffset + j] : j;
         if (!clustered && int(uLights[li].PositionType.w) == 0) continue; // the sun is shaded above
+        if ((DIAG_STRIP & 1048576) != 0) { Lo += vec3(float(li)) * 1e-20; continue; } // DIAG: loop + index only
         if (!LightAffects(li)) continue; // #203
         vec3 L, radiance;
         diagN[0]++;
