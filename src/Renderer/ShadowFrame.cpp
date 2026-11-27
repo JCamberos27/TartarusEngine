@@ -247,6 +247,7 @@ bool ShadowFrame::GatherSunCasting(World& world, const glm::mat4* vp, int count,
     casts.CellCullCount = count;
     SunGatherBase& g = m_SunGather;
     if (SunGatherReuseOff()) { // one gather of every cell against this frame's cascades, nothing kept or drained
+        ForgetSunStaticAt();
         g.valid = false;
         casts.CellCull = cells;
         GatherVisible(world, casts, m_Casting);
@@ -257,7 +258,13 @@ bool ShadowFrame::GatherSunCasting(World& world, const glm::mat4* vp, int count,
     if (reused) {
         m_Casting.resize(g.staticCount);
         ++g_SunGatherTotals.Reused;
+        if (!m_SunLodToggles.empty()) {
+            casts.CellCull = g.padded;
+            casts.Part = VisibilityQuery::Cells::Static;
+            PatchSunLodToggles(world, casts);
+        }
     } else {
+        ForgetSunStaticAt();
         g.valid = true;
         g.world = &world;
         g.count = count;
@@ -305,15 +312,61 @@ bool ShadowFrame::SunGatherHolds(World& world, const glm::mat4* now, int n, cons
     };
     for (const AABB& b : m_SunMoves)
         if (inside(b)) return false; // a kept caster went stale, or a new one came in
-    for (const entt::entity e : m_SunLodToggles) {
-        const auto* r = world.Registry.valid(e) ? world.Registry.try_get<RenderableComponent>(e) : nullptr;
-        if (!r || !r->ModelRef || r->CastShadows == RenderableComponent::ShadowCasting::Off) continue; // casts nothing
-        glm::vec3 lo, hi;
-        r->ModelRef->PosedBounds(lo, hi);
-        if (!(lo.x <= hi.x && lo.y <= hi.y && lo.z <= hi.z)) return false; // unbounded: anywhere
-        if (inside(AABB{lo, hi}.Transformed(world.GetCachedWorldTransform(e)))) return false;
+    return true; // LOD level flips (m_SunLodToggles) are patched in by PatchSunLodToggles
+}
+
+// The renderers whose LOD level flipped since the last call, patched into the kept static part (m_Casting, still only
+// that part): each one a fresh gather against the kept padded cells would hold (`casts`: the same query and cell test)
+// is in it with its fields now, each one it wouldn't is out. A flip in the Always cells needs nothing: they're gathered
+// every frame. The order isn't kept (a removal moves the last entry in): the list's users don't depend on it.
+void ShadowFrame::PatchSunLodToggles(World& world, const VisibilityQuery& casts) {
+    PROFILE_SCOPE("Sun: Gather LOD Patch");
+    if (!m_SunStaticAtBuilt) { // slot -> index, built on the first patch since the gather
+        for (std::size_t i = 0; i < m_Casting.size(); ++i) {
+            const std::uint32_t s = m_Casting[i].Slot;
+            if (s >= m_SunStaticAt.size()) m_SunStaticAt.resize((std::size_t)s + 1, -1);
+            m_SunStaticAt[s] = (std::int32_t)i;
+        }
+        m_SunStaticAtBuilt = true;
     }
-    return true;
+    bool patched = false;
+    VisibleRenderable v;
+    for (const entt::entity e : m_SunLodToggles) {
+        std::uint32_t slot = 0;
+        const int take = GatherStaticCandidate(world, casts, e, slot, v);
+        if (take < 0) continue; // no static-cell renderable
+        if (slot >= m_SunStaticAt.size()) m_SunStaticAt.resize((std::size_t)slot + 1, -1);
+        const std::int32_t at = m_SunStaticAt[slot];
+        if (take == 1) {
+            if (at >= 0) {
+                m_Casting[(std::size_t)at] = v;
+            } else {
+                m_SunStaticAt[slot] = (std::int32_t)m_Casting.size();
+                m_Casting.push_back(v);
+            }
+            patched = true;
+        } else if (at >= 0) {
+            const std::size_t last = m_Casting.size() - 1;
+            if ((std::size_t)at != last) {
+                m_Casting[(std::size_t)at] = m_Casting[last];
+                m_SunStaticAt[m_Casting[(std::size_t)at].Slot] = at;
+            }
+            m_Casting.pop_back();
+            m_SunStaticAt[slot] = -1;
+            patched = true;
+        }
+    }
+    m_SunGather.staticCount = m_Casting.size();
+    if (patched) ++g_SunGatherTotals.Patched;
+}
+
+// The kept static part's slot index (PatchSunLodToggles) forgotten before m_Casting is gathered anew: only the entries
+// it set are cleared, not the whole table.
+void ShadowFrame::ForgetSunStaticAt() {
+    if (!m_SunStaticAtBuilt) return;
+    for (std::size_t i = 0; i < m_SunGather.staticCount && i < m_Casting.size(); ++i)
+        if (m_Casting[i].Slot < m_SunStaticAt.size()) m_SunStaticAt[m_Casting[i].Slot] = -1;
+    m_SunStaticAtBuilt = false;
 }
 
 // Verify mode: this frame's fresh gather against the kept list. Every caster it holds that can draw (DrawSunCasters'

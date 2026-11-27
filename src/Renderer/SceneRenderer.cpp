@@ -734,46 +734,57 @@ bool TooSmallOnScreen(const glm::vec3& worldMin, const glm::vec3& worldMax, cons
     return radius * projScaleY / dist < minScreenHeight;
 }
 
+namespace {
+// One candidate as GatherVisible(q) judges it on its own (its cell's test aside): what it would append (`liveV` holds a
+// copy read live for an animated or re-modelled one), or null when q leaves it out. Read only (the cache, the
+// registry's components, the LOD table), so the static cells run across the cores.
+inline const VisibleRenderable* ConsiderCandidate(World& world, const CandidateCache& cache, bool anyLod, const VisibilityQuery& q,
+                                                  std::uint32_t i, VisibleRenderable& liveV) {
+    // GameObject active / LOD level (#163); PoseSourceTag is animated only (the first-person arms rig).
+    const CandidateCache::HotCandidate& hot = cache.Hot[i];
+    if (hot.Flags & (kCandInactive | kCandPoseSource)) return nullptr;
+    if (anyLod && world.IsLodCulled(hot.Entity)) return nullptr;
+    const Candidate& c = cache.List[i];
+    // Split poses: the first-person copy only in the player's own camera, the world copy everywhere else (and
+    // the world copy is the one that casts).
+    if (c.Flags & ((q.ShadowCasters || !q.OwnerView) ? kCandOwnerViewOnly : kCandHiddenFromOwner)) return nullptr;
+    if (q.SkipViewModels && (c.Flags & kCandViewModel)) return nullptr;
+    if (q.SkipPlayerBody && (c.Flags & kCandPlayerBody)) return nullptr;
+    // The editor Scene view: hidden by the entity's own toggle (HiddenInSceneTag, #236 B) or by its layer (#236 A1).
+    if (q.EditorView && ((c.Flags & kCandHiddenInScene) ||
+                         (c.Layer >= 0 && c.Layer < 32 && !((q.LayerVisibleMask >> c.Layer) & 1u)))) return nullptr;
+    const RenderableComponent& r = *c.Renderable;
+    if (!r.ModelRef) return nullptr;
+    // #163 - Cast Shadows: Off never casts; Shadows Only is drawn by the shadow passes, never in a camera view.
+    if (q.ShadowCasters ? r.CastShadows == RenderableComponent::ShadowCasting::Off
+                        : r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) return nullptr;
+    if (q.SkipTransparent && !r.Materials.empty() && r.Materials[0] &&
+        r.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) return nullptr;
+    // An animated model's bounds move with its pose, and a swapped model brings its own: read those live.
+    const bool live = (c.Flags & kCandPosed) || r.ModelRef.get() != c.ModelAtBuild;
+    if (live) { liveV = c.V; FillBounds(liveV, r); }
+    const VisibleRenderable& v = live ? liveV : c.V; // tested in place; copied out only when it passes
+    if (v.Bounded) {
+        if (q.Cull && !q.Cull->Intersects(AABB{v.WorldMin, v.WorldMax})) return nullptr;
+        if (q.Within && !q.Within->Intersects(AABB{v.WorldMin, v.WorldMax})) return nullptr;
+        if (q.SizeCullEye && TooSmallOnScreen(v.WorldMin, v.WorldMax, *q.SizeCullEye, q.SizeCullProjScale,
+                                              q.MinScreenHeight)) return nullptr;
+    }
+    return &v;
+}
+} // namespace
+
 void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRenderable>& out) {
     PROFILE_SCOPE("Gather Visible");
     out.clear();
     const bool anyLod = !world.Registry.storage<LodCulledTag>().empty();
     const CandidateCache& cache = Candidates(world);
-    // One candidate: appended to `to` when the query takes it. Read only (the cache, the registry's components, the LOD
-    // table), so the static cells below run across the cores.
+    // One candidate: appended to `to` when the query takes it.
     const auto consider = [&](std::uint32_t i, std::vector<VisibleRenderable>& to) {
-        // GameObject active / LOD level (#163); PoseSourceTag is animated only (the first-person arms rig).
-        const CandidateCache::HotCandidate& hot = cache.Hot[i];
-        if (hot.Flags & (kCandInactive | kCandPoseSource)) return;
-        if (anyLod && world.IsLodCulled(hot.Entity)) return;
-        const Candidate& c = cache.List[i];
-        // Split poses: the first-person copy only in the player's own camera, the world copy everywhere else (and
-        // the world copy is the one that casts).
-        if (c.Flags & ((q.ShadowCasters || !q.OwnerView) ? kCandOwnerViewOnly : kCandHiddenFromOwner)) return;
-        if (q.SkipViewModels && (c.Flags & kCandViewModel)) return;
-        if (q.SkipPlayerBody && (c.Flags & kCandPlayerBody)) return;
-        // The editor Scene view: hidden by the entity's own toggle (HiddenInSceneTag, #236 B) or by its layer (#236 A1).
-        if (q.EditorView && ((c.Flags & kCandHiddenInScene) ||
-                             (c.Layer >= 0 && c.Layer < 32 && !((q.LayerVisibleMask >> c.Layer) & 1u)))) return;
-        const RenderableComponent& r = *c.Renderable;
-        if (!r.ModelRef) return;
-        // #163 - Cast Shadows: Off never casts; Shadows Only is drawn by the shadow passes, never in a camera view.
-        if (q.ShadowCasters ? r.CastShadows == RenderableComponent::ShadowCasting::Off
-                            : r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) return;
-        if (q.SkipTransparent && !r.Materials.empty() && r.Materials[0] &&
-            r.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) return;
-        // An animated model's bounds move with its pose, and a swapped model brings its own: read those live.
-        const bool live = (c.Flags & kCandPosed) || r.ModelRef.get() != c.ModelAtBuild;
         VisibleRenderable liveV;
-        if (live) { liveV = c.V; FillBounds(liveV, r); }
-        const VisibleRenderable& v = live ? liveV : c.V; // tested in place; copied out only when it passes
-        if (v.Bounded) {
-            if (q.Cull && !q.Cull->Intersects(AABB{v.WorldMin, v.WorldMax})) return;
-            if (q.Within && !q.Within->Intersects(AABB{v.WorldMin, v.WorldMax})) return;
-            if (q.SizeCullEye && TooSmallOnScreen(v.WorldMin, v.WorldMax, *q.SizeCullEye, q.SizeCullProjScale,
-                                                  q.MinScreenHeight)) return;
-        }
-        to.push_back(v);
+        const VisibleRenderable* v = ConsiderCandidate(world, cache, anyLod, q, i, liveV);
+        if (!v) return;
+        to.push_back(*v);
         to.back().Slot = i;
     };
     // The cells the query can see. The Always cell (animated, unbounded: posed bounds are resolved on the model as they
@@ -833,6 +844,31 @@ void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRe
     for (std::size_t k = 0; k < chunks.size(); ++k) total += parts[k].size();
     out.reserve(total);
     for (std::size_t k = 0; k < chunks.size(); ++k) out.insert(out.end(), parts[k].begin(), parts[k].end());
+}
+
+int GatherStaticCandidate(World& world, const VisibilityQuery& q, entt::entity e, std::uint32_t& slot, VisibleRenderable& out) {
+    const CandidateCache& cache = Candidates(world);
+    const std::size_t s = (std::size_t)entt::to_entity(e);
+    if (s >= cache.Index.size() || cache.Index[s] == kNoCandidate) return -1;
+    slot = cache.Index[s];
+    const Candidate& c = cache.List[slot];
+    if (c.Entity != e) return -1;
+    const CandidateCell& cell = cache.Cells[c.Cell];
+    if (cell.Always) return -1;
+    // The cell's test, as GatherVisible's static cells take it.
+    const AABB box{cell.Min, cell.Max};
+    if (q.Cull && !q.Cull->Intersects(box)) return 0;
+    if (q.CellCullCount > 0) {
+        bool any = false;
+        for (int f = 0; f < q.CellCullCount && !any; ++f) any = q.CellCull[f].Intersects(box);
+        if (!any) return 0;
+    }
+    VisibleRenderable liveV;
+    const VisibleRenderable* v = ConsiderCandidate(world, cache, !world.Registry.storage<LodCulledTag>().empty(), q, slot, liveV);
+    if (!v) return 0;
+    out = *v;
+    out.Slot = slot;
+    return 1;
 }
 
 void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const {

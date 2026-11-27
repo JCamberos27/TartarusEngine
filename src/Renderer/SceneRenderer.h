@@ -77,6 +77,11 @@ struct VisibleRenderable {
 };
 // Clears `out` and fills it with what passes `q`.
 void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRenderable>& out);
+// One static-cell renderable as GatherVisible(q) would give it now, for a caller that keeps a static-cell gather and
+// patches it (ShadowFrame's sun, on LOD level flips): -1 when `e` is no candidate in a static cell (slot unset), else
+// its slot, and 1 with `out` filled when q takes it (its cell's box passes q's cell test and it passes on its own),
+// 0 when not.
+int GatherStaticCandidate(World& world, const VisibilityQuery& q, entt::entity e, std::uint32_t& slot, VisibleRenderable& out);
 // Tests: the next GatherVisible reads every renderable again (a from-scratch reference), and how many times it has.
 void ForgetGatherCandidates();
 std::uint64_t GatherCandidateFullBuilds();
