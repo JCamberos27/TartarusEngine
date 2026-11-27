@@ -82,6 +82,7 @@ public:
     // The scene has no Dummy Spawn but the scenario spawns its own: the host starts the director empty (Start's allowEmpty).
     bool StartsEmptyDirector() const { return m_Scenario == "npcloco"; }
     bool Done() const { return m_Done; }
+    float Seconds() const { return m_Duration; } // the scenario's length (game seconds)
     int Checks() const { return m_Checks; }
     int Failures() const { return m_Failures; }
     // A check the host itself failed (the outfit wait's cap): counted and logged like any other.
@@ -108,6 +109,9 @@ public:
     bool WantsCleanViews() const;  // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
+    // The player's body starts afresh this frame (the host runs FirstPersonBody Stop + Start): the testbed's leg starts
+    // (TARTARUS_TESTBED_START). Reading it clears it.
+    bool TakeBodyReset() { const bool r = m_BodyReset; m_BodyReset = false; return r; }
     // The blood scenario's view of the blood, filled by the host each frame.
     struct BloodView {
         bool Loaded = false;
@@ -221,6 +225,7 @@ private:
     void MmStressChecks();
     struct TestbedRun;
     std::shared_ptr<TestbedRun> m_Tb;
+    bool m_BodyReset = false; // TakeBodyReset
     // doors (NpcTest_Doors.cpp)
     struct DoorSpot {
         std::string Name;

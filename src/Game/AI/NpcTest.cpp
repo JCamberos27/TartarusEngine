@@ -74,7 +74,9 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "l
     if (m_Scenario == "testbed" || m_Scenario == "mmplayer" || m_Scenario == "mmstress") {
         m_Duration = TestbedSeconds();
         m_SkipLegs = TestbedLegsOff();
-        if (!m_SkipLegs.empty()) std::printf("[NpcTest] leg filter '%s': %zu legs left out\n", Env::Str(Env::Var::TestbedLegs).c_str(), m_SkipLegs.size());
+        if (!m_SkipLegs.empty())
+            std::printf("[NpcTest] leg filter '%s', start '%s': %zu legs left out\n", Env::Str(Env::Var::TestbedLegs).c_str(),
+                        Env::Str(Env::Var::TestbedStart).c_str(), m_SkipLegs.size());
     }
     if (m_Scenario == "mmview") m_Duration = MmViewSeconds();
     if (m_Scenario == "mmdb") m_Duration = MmDbSeconds();

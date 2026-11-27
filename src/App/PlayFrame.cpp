@@ -189,7 +189,10 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
                                glm::angleAxis(std::atan2(-std::cos(yaw), -std::sin(yaw)), glm::vec3(0.0f, 1.0f, 0.0f)));
         }
         // An outfit piece changed in Play: take the new pieces. A rebaked motion database: take the new database.
-        if (firstPersonBody.OutfitChanged(world) || firstPersonBody.MotionStale()) {
+        if (npcTest && npcTest->TakeBodyReset()) { // a testbed leg starting from the fresh body (no motion carried over)
+            firstPersonBody.Stop(world);
+            firstPersonBody.Start(world, player);
+        } else if (firstPersonBody.OutfitChanged(world) || firstPersonBody.MotionStale()) {
             firstPersonBody.Restart(world, player);
         } else if (firstPersonBody.OutfitLookChanged(world)) { // only a colourway: the twins take it, no rebuild
             firstPersonBody.SyncLook(world);
