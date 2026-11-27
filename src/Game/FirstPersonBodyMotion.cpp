@@ -912,6 +912,10 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     d.Idle = m.Idle;
     d.IdleRefits = m.IdleRefits;
     d.ForcedByExcluded = m.ForcedByExcluded;
+    d.RelaxedAvoid = m.RelaxedAvoid;
+    d.RelaxedRunway = m.RelaxedRunway;
+    d.RelaxedStyle = m.RelaxedStyle;
+    d.SearchFailed = m.SearchFailed;
     d.IdleGestureCuts = m_Shared->IdleGestureCuts;
     d.Still = m_Still;
     d.Turning = m_Turning;

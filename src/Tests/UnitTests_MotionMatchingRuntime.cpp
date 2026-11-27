@@ -735,6 +735,7 @@ void TestMatcherEndToEnd() {
     CHECK(m.Jumps >= 1);
     CHECK(leftFrames > 90 && straightFrames > 40);
     CHECK(worstStep < 0.25f); // the jumps are blended (the synthetic legs swing 0.4 rad each way)
+    CHECK(m.RelaxedAvoid + m.RelaxedRunway + m.RelaxedStyle + m.SearchFailed == 0); // a normal course never relaxes the filter
 }
 
 // Phase 4's hooks: the matcher's play rate (speed warping), its locked playback with a hold frame and a forced jump (the
@@ -899,6 +900,97 @@ void TestReselectAndIdleHold() {
     s.Hold = false;
     for (int i = 0; i < 6; ++i) timer += s.Tick(dt, glm::vec3(1.0f, 0.0f, 0.0f), 0.0f, 1, false);
     CHECK(timer == 1); // released: the timer again (0.1 s)
+}
+
+// When no frame passes the filter (the playing one included), the matcher relaxes it in stages - the reselect history,
+// then MinRunway, then the style - instead of staying on a frame its own filter refuses and searching again every update.
+// The flags (Excluded, NoSearch, airborne, crouch) always hold.
+void TestMatcherRelaxedSearch() {
+    MotionDatabase db;
+    CHECK(Adopt(db, Build(StandardTakes())));
+    const float dt = 1.0f / 60.0f;
+    // Walking straight on at 1 m/s (the root faces +x at yaw 0 here, as MotionMath::YawDir).
+    auto input = [&](float time) {
+        MotionMatcher::Input in;
+        in.Position = MotionMath::YawDir(0.0f) * time;
+        in.DesiredVelocity = MotionMath::YawDir(0.0f);
+        const auto ts = db.TrajSeconds();
+        for (int k = 0; k < 3; ++k) in.FuturePosition[(size_t)k] = in.Position + MotionMath::YawDir(0.0f) * ts[(size_t)k];
+        return in;
+    };
+    auto relaxed = [](const MotionMatcher& m) { return m.RelaxedAvoid + m.RelaxedRunway + m.RelaxedStyle + m.SearchFailed; };
+    const auto& walk = db.Clip(db.Stream().FindClip("Walk_Straight"));
+    const std::uint32_t walkEnd = walk.First + walk.Count - 10; // in the take's NoSearch tail: the playing frame fails
+    CHECK((db.Flags(walkEnd) & MotionLabel::NoSearch) != 0);
+
+    // (1) The reselect history: crouching, the only crouch take is the one playing, and a long history covers all of it.
+    // Played into its NoSearch tail, nothing passes until the history is dropped.
+    {
+        MotionMatcher m;
+        const auto& crouch = db.Clip(db.Stream().FindClip("Crouch_Walk"));
+        m.Reset(&db, crouch.First + 5);
+        m.ReselectSeconds = 100.0f;
+        m.SearchParams.Require = MotionLabel::Crouch;
+        m.SearchParams.Forbid = MotionLabel::Airborne;
+        m.SearchParams.DesiredGait = MotionLabel::Walk;
+        int legal = 0;
+        const int n = (int)crouch.Count + 60;
+        for (int i = 0; i < n; ++i) {
+            m.Update(dt, input((float)i * dt));
+            legal += MotionSearch::Passes(db.Flags(m.Frame()), m.SearchParams) ? 1 : 0;
+        }
+        std::printf("[MotionMatching] relaxed: crouch take played out with a 100 s history: %d searches, %d jumps, relaxed avoid %d "
+                    "runway %d style %d, none %d; %d / %d frames legal\n",
+                    m.Searches, m.Jumps, m.RelaxedAvoid, m.RelaxedRunway, m.RelaxedStyle, m.SearchFailed, legal, n);
+        CHECK(m.RelaxedAvoid >= 1 && m.RelaxedRunway == 0 && m.RelaxedStyle == 0 && m.SearchFailed == 0);
+        CHECK(legal == n);                         // never on a refused frame
+        CHECK(m.Searches <= n / 6 + 10);           // the timer's ~10 a second, not one every update
+        CHECK(db.ClipOf(m.Frame()) == db.Stream().FindClip("Crouch_Walk")); // still crouching
+    }
+    // One search from the NoSearch tail of the walk, under `p`; the matcher afterwards.
+    auto once = [&](const MotionSearchParams& p) {
+        MotionMatcher m;
+        m.Reset(&db, walkEnd);
+        m.SearchParams = p;
+        m.Update(dt, input(0.0f));
+        return m;
+    };
+    MotionSearchParams standing;
+    standing.Forbid = MotionLabel::Airborne | MotionLabel::Crouch;
+    standing.DesiredGait = MotionLabel::Walk;
+    // (2) MinRunway beyond any take: lands once it's dropped.
+    {
+        MotionSearchParams p = standing;
+        p.MinRunway = 100000;
+        const MotionMatcher m = once(p);
+        CHECK(m.RelaxedAvoid == 0 && m.RelaxedRunway == 1 && m.RelaxedStyle == 0 && m.SearchFailed == 0);
+        CHECK(m.Frame() != walkEnd && MotionSearch::Passes(db.Flags(m.Frame()), p));
+    }
+    // (3) A style the database doesn't have (no sprint takes here): lands once the style is dropped, still standing and grounded.
+    {
+        MotionSearchParams p = standing;
+        p.DesiredStyle = MotionLabel::StyleSprint;
+        const MotionMatcher m = once(p);
+        CHECK(m.RelaxedAvoid == 0 && m.RelaxedRunway == 0 && m.RelaxedStyle == 1 && m.SearchFailed == 0);
+        CHECK(m.Frame() != walkEnd && MotionSearch::Passes(db.Flags(m.Frame()), p));
+    }
+    // (4) All three at once: the last stage counts.
+    {
+        MotionSearchParams p = standing;
+        p.MinRunway = 100000;
+        p.DesiredStyle = MotionLabel::StyleSprint;
+        const MotionMatcher m = once(p);
+        CHECK(m.RelaxedStyle == 1 && relaxed(m) == 1);
+        CHECK(MotionSearch::Passes(db.Flags(m.Frame()), p));
+    }
+    // (5) Flags no frame has (a crouched strafe: none here) are never relaxed: nothing lands, the frame stays.
+    {
+        MotionSearchParams p = standing;
+        p.Require = MotionLabel::Crouch | MotionLabel::Strafe;
+        p.Forbid = MotionLabel::Airborne;
+        const MotionMatcher m = once(p);
+        CHECK(m.SearchFailed == 1 && relaxed(m) == 1 && m.Frame() == walkEnd && m.Jumps == 0);
+    }
 }
 
 // The glitch scan before the |dot| test (MotionMath::QuatAngle per bone): what ScanGlitches must reproduce exactly.
@@ -1643,6 +1735,7 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: dead blend across a frame-time change", TestDeadBlendFrameTime});
     tests.push_back({"Motion matching: the facing model (simulation and character)", TestFacingModel});
     tests.push_back({"Motion matching: reselect history and the idle hold", TestReselectAndIdleHold});
+    tests.push_back({"Motion matching: a filter nothing passes is relaxed in stages", TestMatcherRelaxedSearch});
     tests.push_back({"Motion matching: cooked database search", TestCookedDatabaseSearch});
     tests.push_back({"Motion matching: searchable data report (synthetic)", TestSearchableDataReportSynthetic});
     tests.push_back({"Motion matching: idle runway", TestIdleRunway});
