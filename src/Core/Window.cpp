@@ -557,6 +557,12 @@ int Window::RefreshRate() const {
 
 void Window::SetFullscreen(bool fullscreen) {
     if (fullscreen == m_IsFullscreen) return;
+    // A hidden run's window only records it (as SetCursorLocked): entering moves it to the top and can activate
+    // it, leaving shows it.
+    if (m_KeepHidden) {
+        m_IsFullscreen = fullscreen;
+        return;
+    }
     GLFWmonitor* monitor = PickMonitor(m_Handle, m_FsMonitor);
     const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
     if (fullscreen && !mode) return;

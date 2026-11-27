@@ -1394,7 +1394,7 @@ bool AppSession::Frame() {
         if (!editor.ExitPromptActive()) editor.OpenExitPrompt();
         // Closed from the taskbar while minimized: bring the window back so the prompt
         // is visible (a minimized editor doesn't render at all — #143).
-        if (glfwGetWindowAttrib(window.Handle(), GLFW_ICONIFIED)) glfwRestoreWindow(window.Handle());
+        if (glfwGetWindowAttrib(window.Handle(), GLFW_ICONIFIED)) window.Restore();
     }
 
     // Rebuilding this (filesystem::path parse + string concat) is wasted work on the
