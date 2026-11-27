@@ -64,10 +64,8 @@ Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrcIn, c
         static const int strip = [] { char* v = nullptr; std::size_t n = 0; _dupenv_s(&v, &n, "TARTARUS_OPC_STRIP");
                                       const int r = v ? std::atoi(v) : 0; std::free(v); return r; }();
         if (strip && fragmentSrc.find("DIAG_STRIP") != std::string::npos) {
-            const std::size_t eol = fragmentSrc.find('
-');
-            fragmentSrc.insert(eol == std::string::npos ? 0 : eol + 1, "#define DIAG_STRIP " + std::to_string(strip) + "
-");
+            const std::size_t eol = fragmentSrc.find('\n');
+            fragmentSrc.insert(eol == std::string::npos ? 0 : eol + 1, "#define DIAG_STRIP " + std::to_string(strip) + "\n");
         }
     }
     // A-2: a program linked on an earlier run comes back from Library/ShaderCache without compiling.
