@@ -377,6 +377,26 @@ void Window::Maximize() {
     glfwMaximizeWindow(m_Handle);
 }
 
+void Window::Restore() {
+#if defined(_WIN32)
+    if (m_KeepHidden) {
+        // glfwRestoreWindow is ShowWindow(SW_RESTORE), which also shows and activates the window. GLFW maximizes
+        // a hidden window by hand (WS_MAXIMIZE plus the work-area rect), so undo it the same way: drop the
+        // style and go back to the normal rect - where SW_RESTORE puts it - still hidden.
+        HWND hwnd = glfwGetWin32Window(m_Handle);
+        WINDOWPLACEMENT wp{};
+        wp.length = sizeof(wp);
+        if (!hwnd || !GetWindowPlacement(hwnd, &wp)) return;
+        SetWindowLongW(hwnd, GWL_STYLE, GetWindowLongW(hwnd, GWL_STYLE) & ~(WS_MAXIMIZE | WS_MINIMIZE));
+        wp.flags = 0;
+        wp.showCmd = SW_HIDE;
+        SetWindowPlacement(hwnd, &wp);
+        return;
+    }
+#endif
+    glfwRestoreWindow(m_Handle);
+}
+
 Window::Placement Window::GetPlacement() const {
     Placement p;
     if (!m_Handle) return p;
@@ -459,6 +479,7 @@ void Window::UseStandardFrame() {
 }
 
 void Window::Show() {
+    if (m_KeepHidden) return;
     glfwShowWindow(m_Handle);
 }
 
@@ -536,6 +557,12 @@ int Window::RefreshRate() const {
 
 void Window::SetFullscreen(bool fullscreen) {
     if (fullscreen == m_IsFullscreen) return;
+    // A hidden run's window only records it (as SetCursorLocked): entering moves it to the top and can activate
+    // it, leaving shows it.
+    if (m_KeepHidden) {
+        m_IsFullscreen = fullscreen;
+        return;
+    }
     GLFWmonitor* monitor = PickMonitor(m_Handle, m_FsMonitor);
     const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
     if (fullscreen && !mode) return;
@@ -583,6 +610,8 @@ void Window::SetFullscreen(bool fullscreen) {
 
 void Window::SetCursorLocked(bool locked) {
     m_CursorLocked = locked;
+    // GLFW_CURSOR_DISABLED clips and hides the desktop pointer whenever Windows counts the window as active.
+    if (m_KeepHidden) return;
     glfwSetInputMode(m_Handle, GLFW_CURSOR, locked ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
     // Locked, the mouse is a look device: raw motion skips the OS pointer acceleration (Windows'
     // "Enhance pointer precision"), so the same hand movement always turns the view the same amount.

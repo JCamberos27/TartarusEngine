@@ -1,5 +1,6 @@
 #include "LightBuffer.h"
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <utility>
 #include <vector>
@@ -95,6 +96,16 @@ void LightBuffer::BoundLast(const glm::mat3& axes, const glm::vec3& centre, cons
         l.BoxFadeNeg[i] = fadeNeg[i] < 0.0f ? f : std::max(fadeNeg[i], 1e-3f);
         l.BoxFadePos[i] = fadePos[i] < 0.0f ? f : std::max(fadePos[i], 1e-3f);
     }
+}
+
+bool LightBuffer::BoxWorldBounds(const glm::vec4& rowX, const glm::vec4& rowY, const glm::vec4& rowZ, const glm::vec3& half,
+                                 glm::vec3& centre, glm::vec3& extent) {
+    const glm::mat3 a = glm::transpose(glm::mat3(glm::vec3(rowX), glm::vec3(rowY), glm::vec3(rowZ)));
+    if (std::abs(glm::determinant(a)) <= 1e-6f) return false;
+    const glm::mat3 m = glm::inverse(a);
+    centre = -(m * glm::vec3(rowX.w, rowY.w, rowZ.w));
+    extent = glm::abs(m[0]) * half.x + glm::abs(m[1]) * half.y + glm::abs(m[2]) * half.z;
+    return true;
 }
 
 float LightBuffer::BoxWeight(const glm::vec3& q, const glm::vec3& half, const glm::vec3& fadeNeg, const glm::vec3& fadePos) {
