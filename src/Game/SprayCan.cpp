@@ -172,6 +172,7 @@ SprayCanSystem::PieceData* SprayCanSystem::Data(const std::string& piece) {
     }
     auto d = std::make_unique<PieceData>();
     d->Piece = Graffiti::Piece::Load(Abs(piece));
+    ++m_RecipeReads;
     if (!d->Piece || d->Piece->Missing) {
         Log::Warn("Spray can: no graffiti piece at " + piece);
         m_Pieces.emplace(key, nullptr);

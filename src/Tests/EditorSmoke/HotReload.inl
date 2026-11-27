@@ -12,6 +12,10 @@
 #include "GameModuleBuild.h"
 #include "EditorRestart.h"
 #include "RestartState.h"
+#include "PhysicsWorld.h"
+#include "ProjectSettings.h"
+#include "SprayCan.h"
+#include "AssetChangeHooks.h"
 struct EditorSmokeAccess_HotReload {
     // Whether the Asset Browser's Scenes listing (refreshed from disk when invalidated) has `path`.
     static bool SceneListed(EditorLayer& e, const std::string& path) {
@@ -178,6 +182,152 @@ void RegisterHotReloadTests() {
                 return !fs::exists(fs::path(path().string() + ".meta"), ec);
             }, 10),
         }, cleanup); // pass or fail: a scene left in project/scenes would become a scenes: test of its own
+    }
+
+    // ------------------------------------------------------------------ edits on disk reach a running Play / the spray can
+    // Through the project watcher, as an outside editor's save would arrive (not the editor's own writes):
+    // settings.json's gravity reaches the running PhysX scene, a .physicmaterial's friction the colliders that use it,
+    // and a .graffiti recipe is read again by the spray can at its next use - also when it changed while that piece's
+    // first bake was still writing (read again once the bake is done).
+    {
+        struct HotState {
+            std::string Settings; // settings.json as it was, put back after
+            entt::entity Slab = entt::null;
+            std::shared_ptr<SprayCanSystem> Can;
+            int Reads = 0;
+            int StableReads = -1; // the read count, and since when (ImGui time) it hasn't moved
+            double StableSince = 0.0;
+        };
+        auto st = std::make_shared<HotState>();
+        auto dir = [] { return fs::path(ProjectPaths::Resolve("editor-smoke-scratch-hotload")); };
+        auto settingsFile = [] { return fs::path(ProjectPaths::Resolve("settings.json")); };
+        auto matFile = [dir] { return dir() / "Smoke Live.physicmaterial"; };
+        auto pieceRel = [] { return std::string("editor-smoke-scratch-hotload/GP_SmokeHot.graffiti"); };
+        auto writeMat = [matFile](float f) {
+            return WriteFile(matFile(), "{\n  \"dynamicFriction\": " + std::to_string(f) + ",\n  \"staticFriction\": " + std::to_string(f) +
+                                            ",\n  \"bounciness\": 0.0,\n  \"frictionCombine\": 0,\n  \"bounceCombine\": 0\n}\n");
+        };
+        auto gravityY = [](float* y) {
+            float g[3] = {0, 0, 0};
+            if (!PhysicsWorld::SceneGravity(g)) return false;
+            *y = g[1];
+            return true;
+        };
+        auto cleanup = [st, dir, settingsFile](Ctx&) {
+            st->Can.reset(); // waits for a bake still writing, drops its change hook
+            if (!st->Settings.empty()) {
+                WriteFile(settingsFile(), st->Settings);
+                ProjectSettings::Load();
+                PhysicsWorld::ApplySettings();
+                st->Settings.clear();
+            }
+            std::error_code ec;
+            fs::remove_all(dir(), ec);
+        };
+        Add("hotreload: settings.json gravity and a .physicmaterial edited on disk reach the running Play", {
+            FreshScene(), Wait(2),
+            Do("no leftover from an earlier run", cleanup),
+            Do("a Physic Material at friction 0.3, a slab using it", [st, writeMat](Ctx& c) {
+                if (!writeMat(0.3f)) Fail("couldn't write the .physicmaterial");
+                st->Slab = c.W.CreateEmptyEntity(glm::vec3(0, -0.5f, 0), glm::vec3(0), glm::vec3(10, 1, 10), "Hot Slab");
+                ColliderComponent col;
+                col.Kind = ColliderComponent::Shape::Box;
+                col.Material = "editor-smoke-scratch-hotload/Smoke Live.physicmaterial";
+                c.W.Registry.emplace<ColliderComponent>(st->Slab, col);
+                c.W.SyncActiveInHierarchy();
+                c.W.RebuildWorldTransformCache();
+            }),
+            WaitSeconds(1.0), // the watcher has seen the new file before Play
+            smoke_play::Tap(GLFW_KEY_F1, "F1"),
+            Until("in play", [](Ctx& c) { return X::InPlay(c.E); }, 300), Wait(5),
+            Expect("the slab plays at friction 0.3", [st](Ctx&) {
+                float sf = 0, df = 0;
+                if (!PhysicsWorld::ColliderFriction((unsigned)entt::to_integral(st->Slab), &sf, &df)) return std::string("no actor for the slab");
+                return std::fabs(df - 0.3f) < 1e-4f ? std::string() : "dynamic friction " + std::to_string(df);
+            }),
+            Do("settings.json: gravity -4.5, written from outside", [st, settingsFile](Ctx&) {
+                std::ifstream in(settingsFile(), std::ios::binary);
+                st->Settings.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+                nlohmann::json j = nlohmann::json::parse(st->Settings, nullptr, false);
+                if (!j.is_object()) { Fail("settings.json doesn't parse"); return; }
+                j["physics"]["gravity"] = {0.0, -4.5, 0.0};
+                if (!WriteFile(settingsFile(), j.dump(2) + "\n")) Fail("couldn't write settings.json");
+            }),
+            UntilSeconds("the running scene's gravity follows", [gravityY](Ctx&) {
+                float y = 0;
+                return gravityY(&y) && std::fabs(y + 4.5f) < 1e-4f;
+            }, 15),
+            Do("the .physicmaterial: friction 0.85, written from outside", [writeMat](Ctx&) {
+                if (!writeMat(0.85f)) Fail("couldn't rewrite the .physicmaterial");
+            }),
+            UntilSeconds("the slab's collider follows", [st](Ctx&) {
+                float sf = 0, df = 0;
+                return PhysicsWorld::ColliderFriction((unsigned)entt::to_integral(st->Slab), &sf, &df) &&
+                       std::fabs(df - 0.85f) < 1e-4f && std::fabs(sf - 0.85f) < 1e-4f;
+            }, 15),
+            smoke_play::Tap(GLFW_KEY_F1, "F1"),
+            Until("stopped", [](Ctx& c) { return !X::InPlay(c.E); }, 300), Wait(3),
+        }, cleanup);
+
+        Add("hotreload: the spray can reads a .graffiti recipe again after it changes on disk", {
+            FreshScene(), Wait(2),
+            Do("no leftover from an earlier run", cleanup),
+            Do("a piece to spray (a copy of a project piece) and a spray can", [st, pieceRel](Ctx&) {
+                std::ifstream in(fs::path(ProjectPaths::Resolve("assets/Decals/Graffiti/Pieces/GP_Rats.graffiti")), std::ios::binary);
+                const std::string recipe((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+                if (recipe.empty() || !WriteFile(fs::path(ProjectPaths::Resolve(pieceRel())), recipe)) Fail("couldn't copy the piece");
+                st->Can = std::make_shared<SprayCanSystem>();
+            }),
+            WaitSeconds(1.5), // the watcher has seen the new file and the folder it made
+            // 1. Changed while its first bake is still writing: kept until the bake is done, then read again. The event is
+            // dispatched here directly (as the watcher would): the bake must still be uncollected when it arrives.
+            Do("first use (its first bake starts), then the recipe changes", [st, pieceRel](Ctx&) {
+                st->Can->PieceReady(pieceRel());
+                st->Reads = st->Can->RecipeReads();
+                AssetChangeHooks::Event e; // now: the bake can't have been collected yet (only Update collects it)
+                e.Type = AssetChangeHooks::Event::Kind::Modified;
+                e.Path = ProjectPaths::Resolve(pieceRel());
+                e.AssetType = "graffiti";
+                AssetChangeHooks::Dispatch(e);
+            }),
+            Expect("read once; kept while its bake writes", [st, pieceRel](Ctx&) {
+                st->Can->PieceReady(pieceRel()); // marked stale: the same data back, no read, until Update collects the bake
+                return st->Reads == 1 && st->Can->RecipeReads() == 1 ? std::string()
+                                                                      : "reads " + std::to_string(st->Can->RecipeReads());
+            }),
+            UntilSeconds("read again once the bake is done", [st, pieceRel](Ctx& c) {
+                st->Can->Update(c.W, 1.0f / 60.0f, glm::vec3(0.0f));
+                st->Can->PieceReady(pieceRel());
+                return st->Can->RecipeReads() > st->Reads;
+            }, 20),
+            UntilSeconds("the read count settles (no change for 1 s)", [st, pieceRel](Ctx& c) {
+                st->Can->Update(c.W, 1.0f / 60.0f, glm::vec3(0.0f));
+                st->Can->PieceReady(pieceRel());
+                const double now = ImGui::GetTime();
+                if (st->Can->RecipeReads() != st->StableReads) { st->StableReads = st->Can->RecipeReads(); st->StableSince = now; }
+                if (now - st->StableSince < 1.0) return false;
+                st->Reads = st->StableReads;
+                return true;
+            }, 15),
+            Expect("not read again while nothing changes", [st, pieceRel](Ctx& c) {
+                st->Can->Update(c.W, 1.0f / 60.0f, glm::vec3(0.0f));
+                st->Can->PieceReady(pieceRel());
+                return st->Can->RecipeReads() == st->Reads ? std::string() : "reads " + std::to_string(st->Can->RecipeReads());
+            }),
+            // 2. Changed on disk from outside, through the project watcher: read again at the next use.
+            Do("the recipe rewritten from outside", [pieceRel](Ctx&) {
+                const fs::path p = fs::path(ProjectPaths::Resolve(pieceRel()));
+                std::ifstream in(p, std::ios::binary);
+                std::string recipe((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+                in.close();
+                if (!WriteFile(p, recipe + "\n")) Fail("couldn't rewrite the piece");
+            }),
+            UntilSeconds("the spray can reads it again", [st, pieceRel](Ctx& c) {
+                st->Can->Update(c.W, 1.0f / 60.0f, glm::vec3(0.0f));
+                st->Can->PieceReady(pieceRel());
+                return st->Can->RecipeReads() > st->Reads;
+            }, 15),
+        }, cleanup);
     }
 
     // ------------------------------------------------------------------ Rebuild & Restart (fake build)

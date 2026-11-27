@@ -154,6 +154,8 @@ struct ProjectFilesGuard::File {
     std::string Path;
     bool Existed = false;
     std::string Bytes;
+    std::string Kept;   // Library/EditorTestsOriginal/<name>: the bytes, on disk, until the run puts the file back
+    std::string Absent; // ...or this marker, when the run started without the file
 };
 
 namespace {
@@ -166,10 +168,29 @@ bool ReadBytes(const std::string& path, std::string& out) {
 } // namespace
 
 ProjectFilesGuard::ProjectFilesGuard() {
+    namespace fs = std::filesystem;
+    const fs::path keep = fs::u8path(ProjectPaths::Resolve("Library/EditorTestsOriginal"));
+    std::error_code ec;
     for (const char* name : {"settings.json", "layers.json"}) {
         File file;
         file.Path = ProjectPaths::Resolve(name);
+        file.Kept = (keep / name).u8string();
+        file.Absent = (keep / (std::string(name) + ".absent")).u8string();
+        // An earlier run that never put the file back (killed, or a hard crash): back as it was before that run first.
+        std::string kept;
+        if (ReadBytes(file.Kept, kept)) {
+            std::ofstream out(fs::u8path(file.Path), std::ios::binary | std::ios::trunc);
+            out.write(kept.data(), (std::streamsize)kept.size());
+            std::cerr << "--editor-tests: an earlier run ended without putting " << file.Path << " back; put back from its copy" << std::endl;
+        } else if (fs::exists(fs::u8path(file.Absent), ec) && fs::remove(fs::u8path(file.Path), ec)) {
+            std::cerr << "--editor-tests: removed " << file.Path << " (made by an earlier run that never removed it)" << std::endl;
+        }
         file.Existed = ReadBytes(file.Path, file.Bytes);
+        fs::create_directories(keep, ec);
+        fs::remove(fs::u8path(file.Kept), ec);
+        fs::remove(fs::u8path(file.Absent), ec);
+        std::ofstream copy(fs::u8path(file.Existed ? file.Kept : file.Absent), std::ios::binary | std::ios::trunc);
+        if (file.Existed) copy.write(file.Bytes.data(), (std::streamsize)file.Bytes.size());
         m_Files.push_back(std::move(file));
     }
     EditorUiTests::SetRunEndHook([this] { Restore(); });
@@ -197,5 +218,15 @@ void ProjectFilesGuard::Restore() {
         out.close();
         if (out) std::cerr << "--editor-tests: put " << file.Path << " back as it was before the run" << std::endl;
         else std::cerr << "--editor-tests: could not put " << file.Path << " back; restore it from git" << std::endl;
+    }
+    // Each file back as it was: its on-disk copy has done its job (a later call still has the bytes in memory). One that
+    // couldn't be put back keeps it, for the next run.
+    for (const File& file : m_Files) {
+        std::error_code ec;
+        std::string now;
+        const bool back = file.Existed ? ReadBytes(file.Path, now) && now == file.Bytes : !fs::exists(fs::u8path(file.Path), ec);
+        if (!back) continue;
+        fs::remove(fs::u8path(file.Kept), ec);
+        fs::remove(fs::u8path(file.Absent), ec);
     }
 }

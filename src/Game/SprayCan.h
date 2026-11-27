@@ -93,6 +93,7 @@ public:
     int SoundsPlayed() const { return m_SoundsPlayed; }
     bool Hissing() const;
     bool PieceReady(const std::string& piece); // baked and its reveal order made
+    int RecipeReads() const { return m_RecipeReads; } // .graffiti recipes read from disk so far
 
 private:
     struct PieceData {
@@ -121,4 +122,5 @@ private:
     int m_SoundsPlayed = 0;
     int m_NextPiece = 0;
     int m_RecipeHook = 0; // AssetChangeHooks id: .graffiti recipes changed on disk
+    int m_RecipeReads = 0;
 };
