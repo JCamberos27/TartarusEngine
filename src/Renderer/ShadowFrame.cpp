@@ -31,6 +31,156 @@
 #include "Profiler.h"
 #include "RenderSettingsEpoch.h"
 #include "Shader.h"
+#include <chrono>
+#include "Core/DiagW1.h"
+#include "World.h"
+
+// ===== DIAG ONLY (diag/w1-sun-lodflip, never merged): sun gather reuse misses while walking =====
+int DiagCandidateCell(World& world, entt::entity e, const Frustum* f, int n); // SceneRenderer.cpp
+namespace {
+struct DiagSeg {
+    std::uint64_t frames = 0, hit = 0, simHit = 0, simGather = 0, onlyLod = 0;
+    std::uint64_t why[11] = {};      // real base, every reason that fails (not first-only)
+    std::uint64_t first[11] = {};    // real base, the first that fails (what the code returns on)
+    std::uint64_t simWhy[11] = {};   // simulated patched base: the non-LOD reason it re-gathered on (first)
+    std::uint64_t toggles = 0, togCast = 0;
+    std::uint64_t togCell[4] = {};   // none / Always / static cell out / static cell in (padded, real base)
+    std::uint64_t togBoundsIn = 0, togBoundsInAlways = 0; // bounds inside the padded cascades (the real check's trigger)
+    std::uint64_t simPatchIn = 0;    // sim hits: toggled static-cell entities in the sim base's padded cells (patch work)
+    std::uint64_t simPatchFrames = 0; // sim hits that needed at least one patch
+    double gatherMs = 0; std::uint64_t gathers = 0, gatherCasters = 0;
+    double listFullMs = 0, listDeltaMs = 0, listFullReusedMs = 0; std::uint64_t listFull = 0, listDelta = 0, listFullReused = 0;
+    double checkMs = 0;
+};
+DiagSeg g_Diag;
+int g_DiagSegNow = -1;
+const char* const kWhyName[11] = {"base", "movesAll", "lodAll", "edits", "epoch", "sunDir", "age", "cascades", "moveIn", "lodUnb", "lodIn"};
+} // namespace
+void DiagW1AddGather(double ms, std::size_t casters) { g_Diag.gatherMs += ms; ++g_Diag.gathers; g_Diag.gatherCasters += casters; }
+void DiagW1AddList(double ms, bool delta, bool reused) {
+    if (delta) { g_Diag.listDeltaMs += ms; ++g_Diag.listDelta; }
+    else { g_Diag.listFullMs += ms; ++g_Diag.listFull; if (reused) { g_Diag.listFullReusedMs += ms; ++g_Diag.listFullReused; } }
+}
+void DiagW1Walk(int seg, double, double, double) {
+    if (seg == g_DiagSegNow) return;
+    const DiagSeg& d = g_Diag;
+    char line[1024];
+    int k = std::snprintf(line, sizeof line, "LODFLIP seg %d: frames=%llu hit=%llu simHit=%llu simGather=%llu onlyLod=%llu | first:", g_DiagSegNow,
+                          (unsigned long long)d.frames, (unsigned long long)d.hit, (unsigned long long)d.simHit, (unsigned long long)d.simGather,
+                          (unsigned long long)d.onlyLod);
+    for (int i = 0; i < 11; ++i) k += std::snprintf(line + k, sizeof line - k, " %s=%llu", kWhyName[i], (unsigned long long)d.first[i]);
+    k += std::snprintf(line + k, sizeof line - k, " | any:");
+    for (int i = 0; i < 11; ++i) k += std::snprintf(line + k, sizeof line - k, " %s=%llu", kWhyName[i], (unsigned long long)d.why[i]);
+    k += std::snprintf(line + k, sizeof line - k, " | simFirst:");
+    for (int i = 0; i < 11; ++i) k += std::snprintf(line + k, sizeof line - k, " %s=%llu", kWhyName[i], (unsigned long long)d.simWhy[i]);
+    Log::Info(line);
+    std::snprintf(line, sizeof line,
+                  "LODFLIP2 seg %d: toggles=%llu cast=%llu cell none/always/out/in=%llu/%llu/%llu/%llu boundsIn=%llu (always %llu) simPatchIn=%llu simPatchFrames=%llu | "
+                  "gather n=%llu ms=%.3f casters=%llu | listFull n=%llu ms=%.3f (on reused n=%llu ms=%.3f) listDelta n=%llu ms=%.3f | check ms=%.3f",
+                  g_DiagSegNow, (unsigned long long)d.toggles, (unsigned long long)d.togCast, (unsigned long long)d.togCell[0],
+                  (unsigned long long)d.togCell[1], (unsigned long long)d.togCell[2], (unsigned long long)d.togCell[3], (unsigned long long)d.togBoundsIn,
+                  (unsigned long long)d.togBoundsInAlways, (unsigned long long)d.simPatchIn, (unsigned long long)d.simPatchFrames,
+                  (unsigned long long)d.gathers, d.gatherMs, (unsigned long long)d.gatherCasters, (unsigned long long)d.listFull, d.listFullMs,
+                  (unsigned long long)d.listFullReused, d.listFullReusedMs, (unsigned long long)d.listDelta, d.listDeltaMs, d.checkMs);
+    Log::Info(line);
+    g_Diag = DiagSeg{};
+    g_DiagSegNow = seg;
+}
+void ShadowFrame::DiagLodFlip(World& world, const glm::mat4* now, int n, const glm::vec3& sunDir, std::uint64_t frame, bool movesAll, bool lodAll) {
+    const auto t0 = std::chrono::steady_clock::now();
+    DiagSeg& d = g_Diag;
+    ++d.frames;
+    // Every reason base b fails on (bit per kWhyName). lod: also run the LOD-flip test (the real base only).
+    auto reasons = [&](const SunGatherBase& b, bool lod) {
+        unsigned m = 0;
+        if (!b.valid || b.world != &world || b.count != n) return 1u;
+        if (movesAll) m |= 1u << 1;
+        if (lodAll) m |= 1u << 2;
+        if (b.edits != GatherCandidateEdits()) m |= 1u << 3;
+        if (b.epoch != RenderSettingsEpoch()) m |= 1u << 4;
+        if (b.sunDir != sunDir) m |= 1u << 5;
+        if (frame - b.frame >= kSunGatherFullEvery) m |= 1u << 6;
+        if (!CascadesInside(b.vp, now, n, b.pad * (kSunGatherPadTexels - 1.0f) / kSunGatherPadTexels)) m |= 1u << 7;
+        auto inside = [&](const AABB& a) {
+            for (int c = 0; c < n; ++c)
+                if (b.padded[c].Intersects(a)) return true;
+            return false;
+        };
+        for (const AABB& a : m_SunMoves)
+            if (inside(a)) { m |= 1u << 8; break; }
+        if (lod)
+            for (const entt::entity e : m_SunLodToggles) {
+                const auto* r = world.Registry.valid(e) ? world.Registry.try_get<RenderableComponent>(e) : nullptr;
+                if (!r || !r->ModelRef || r->CastShadows == RenderableComponent::ShadowCasting::Off) continue;
+                glm::vec3 lo, hi;
+                r->ModelRef->PosedBounds(lo, hi);
+                if (!(lo.x <= hi.x && lo.y <= hi.y && lo.z <= hi.z)) { m |= 1u << 9; continue; }
+                if (inside(AABB{lo, hi}.Transformed(world.GetCachedWorldTransform(e)))) m |= 1u << 10;
+            }
+        return m;
+    };
+    const SunGatherBase& g = m_SunGather;
+    const unsigned real = reasons(g, true);
+    if (!real) ++d.hit;
+    for (int i = 0; i < 11; ++i)
+        if (real & (1u << i)) ++d.why[i];
+    // The first, in the order SunGatherHolds tests them (base, the flag group, cascades, moves, LOD).
+    static const int order[11] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    for (int i : order)
+        if (real & (1u << i)) { ++d.first[i]; break; }
+    if (real && !(real & ~((1u << 9) | (1u << 10)))) ++d.onlyLod;
+    // The toggles, classified against the real base's padded cells.
+    for (const entt::entity e : m_SunLodToggles) {
+        ++d.toggles;
+        const auto* r = world.Registry.valid(e) ? world.Registry.try_get<RenderableComponent>(e) : nullptr;
+        if (!r || !r->ModelRef || r->CastShadows == RenderableComponent::ShadowCasting::Off) continue;
+        ++d.togCast;
+        const int cell = g.valid ? DiagCandidateCell(world, e, g.padded, n) : -1;
+        ++d.togCell[cell + 1];
+        glm::vec3 lo, hi;
+        r->ModelRef->PosedBounds(lo, hi);
+        if (g.valid && lo.x <= hi.x && lo.y <= hi.y && lo.z <= hi.z) {
+            const AABB a = AABB{lo, hi}.Transformed(world.GetCachedWorldTransform(e));
+            bool in = false;
+            for (int c = 0; c < n && !in; ++c) in = g.padded[c].Intersects(a);
+            if (in) { ++d.togBoundsIn; if (cell == 0) ++d.togBoundsInAlways; }
+        }
+    }
+    // The simulated patched base: kept through LOD flips (patched), re-gathered on any other reason.
+    static SunGatherBase sim;
+    const unsigned s = reasons(sim, false);
+    if (!s) {
+        ++d.simHit;
+        std::uint64_t in = 0;
+        for (const entt::entity e : m_SunLodToggles) {
+            const auto* r = world.Registry.valid(e) ? world.Registry.try_get<RenderableComponent>(e) : nullptr;
+            if (!r || !r->ModelRef || r->CastShadows == RenderableComponent::ShadowCasting::Off) continue;
+            if (DiagCandidateCell(world, e, sim.padded, n) == 2) ++in;
+        }
+        d.simPatchIn += in;
+        if (in) ++d.simPatchFrames;
+    } else {
+        for (int i : order)
+            if (s & (1u << i)) { ++d.simWhy[i]; break; }
+        ++d.simGather;
+        sim.valid = true;
+        sim.world = &world;
+        sim.count = n;
+        sim.pad = g.pad; // the real base's (the resolution's): until it has one, gather again next frame
+        if (!g.valid) sim.valid = false;
+        const glm::mat4 grow = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f / (1.0f + sim.pad)));
+        for (int c = 0; c < n; ++c) {
+            sim.vp[c] = now[c];
+            sim.padded[c] = Frustum::FromViewProj(grow * now[c]);
+        }
+        sim.sunDir = sunDir;
+        sim.edits = GatherCandidateEdits();
+        sim.epoch = RenderSettingsEpoch();
+        sim.frame = frame;
+    }
+    d.checkMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+}
+// ===== end DIAG =====
 #include "World.h"
 
 namespace {
@@ -204,7 +354,9 @@ void ShadowFrame::GatherSunCasters(SunPass& p, const glm::mat4& fitView, const g
     li.logPrevFrame = m_ChangeLogPrevFrame;
     static const bool noDelta = Env::Flag(Env::Var::NoSunCasterDelta);
     li.allowDelta = !noDelta && MultiDrawEnabled(); // the per-draw path sorts the list below: its order isn't m_Casting's
+    const auto diagL0 = std::chrono::steady_clock::now();
     const unsigned force = FillSunCasters(li);
+    DiagW1AddList(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - diagL0).count(), m_SunLastDelta, reused);
     p.renderMask = shadowMap.ForceRender(p.renderMask, force);
     // Consecutive draws of the same model share its VAO and (usually) its material, which the state cache then skips.
     // The multi-draw path doesn't need it: GroupCasters groups by hash in any order, its batches bind by page and state,
@@ -273,7 +425,9 @@ bool ShadowFrame::GatherSunCasting(World& world, const glm::mat4* vp, int count,
         g.frame = frame;
         casts.CellCull = g.padded; // DrawSunCasters' castsInto draws nothing outside every cascade's frustum
         casts.Part = VisibilityQuery::Cells::Static;
+        const auto diagT0 = std::chrono::steady_clock::now();
         GatherVisible(world, casts, m_Casting);
+        DiagW1AddGather(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - diagT0).count(), m_Casting.size());
         g.staticCount = m_Casting.size();
         ++g_SunGatherTotals.Gathered;
     }
@@ -292,6 +446,7 @@ bool ShadowFrame::SunGatherHolds(World& world, const glm::mat4* now, int n, cons
     bool movesAll = false, lodAll = false;
     TakeStaticCandidateMoves(m_SunMoves, movesAll);
     world.TakeLodToggles(m_SunLodToggles, lodAll, 1);
+    DiagLodFlip(world, now, n, sunDir, frame, movesAll, lodAll);
     const SunGatherBase& g = m_SunGather;
     if (!g.valid || g.world != &world || g.count != n || movesAll || lodAll || g.edits != GatherCandidateEdits() ||
         g.epoch != RenderSettingsEpoch() || g.sunDir != sunDir || frame - g.frame >= kSunGatherFullEvery)

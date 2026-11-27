@@ -262,6 +262,8 @@ private:
     std::vector<AABB> m_SunMoves;                            // scratch: static candidates moved since the last frame
     std::vector<entt::entity> m_SunLodToggles;               // scratch: LOD levels flipped since the last frame
     bool SunGatherHolds(World& world, const glm::mat4* now, int n, const glm::vec3& sunDir, std::uint64_t frame);
+    // DIAG ONLY (diag/w1-sun-lodflip): miss reasons + a simulated base patched on LOD flips instead of re-gathered.
+    void DiagLodFlip(World& world, const glm::mat4* now, int n, const glm::vec3& sunDir, std::uint64_t frame, bool movesAll, bool lodAll);
     void VerifySunGather(SunPass& p);
     std::vector<DepthCaster> m_Draws;
     // The layered sun pass's grouping + commands, kept while its casters hold: one per set of cascades drawn (the

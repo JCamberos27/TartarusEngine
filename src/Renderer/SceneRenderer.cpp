@@ -691,6 +691,21 @@ bool ReadSceneSlot(std::uint32_t slot, SceneSlot& out) {
 std::uint64_t GatherCandidateFullBuilds() { return CandidateStore().FullBuilds; }
 std::uint64_t GatherCandidateEdits() { return CandidateStore().Edits; }
 void SyncGatherCandidates(World& world) { Candidates(world); }
+// DIAG ONLY (diag/w1-sun-lodflip, never merged): where entity e sits in the candidate cache. -1 no candidate, 0 the
+// Always cell, 1 a static cell whose box misses every frustum, 2 a static cell whose box touches one.
+int DiagCandidateCell(World& world, entt::entity e, const Frustum* f, int n) {
+    const CandidateCache& cache = Candidates(world);
+    const size_t s = (size_t)entt::to_entity(e);
+    if (s >= cache.Index.size() || cache.Index[s] == kNoCandidate) return -1;
+    const Candidate& c = cache.List[cache.Index[s]];
+    if (c.Entity != e) return -1;
+    const CandidateCell& cell = cache.Cells[c.Cell];
+    if (cell.Always) return 0;
+    const AABB box{cell.Min, cell.Max};
+    for (int i = 0; i < n; ++i)
+        if (f[i].Intersects(box)) return 2;
+    return 1;
+}
 void TakeStaticCandidateMoves(std::vector<AABB>& out, bool& all) {
     CandidateCache& cache = CandidateStore();
     out.swap(cache.StaticMoves);
