@@ -148,6 +148,14 @@ vec3 BloodSplatCover() {
     return acc;
 }
 
+// DIAG ONLY (W2 Opaque split): bits 1 sun shadow, 2 local lights, 4 probes+GI, 8 grunge/decals/wetness,
+// 16 fog/aerial/vol fog, 32 material fetches at mip 6, 64 albedo only (no lighting).
+#ifndef DIAG_STRIP
+#define DIAG_STRIP 0
+#endif
+#if (DIAG_STRIP & 32) != 0
+#define texture(s, c) textureLod(s, c, 6.0)
+#endif
 void main() {
     // uTaaVelocity 1: the vertex stage carried both clip positions (w 0 = a stage that can't, e.g. the blood VAT).
     // 0: the view-model sub-pass (it moves with the camera: no motion) or TAA off (discarded anyway).
@@ -217,6 +225,9 @@ void main() {
     vec3 albedo = (uHasAlbedoMap == 1 ? albedoSample.rgb : vec3(1.0)) * uBaseColor;
     if (tri) albedo *= TriplanarMacroTint();
     if (uUseVertexColor == 1) albedo *= vColor.rgb; // #113
+#if (DIAG_STRIP & 64) != 0
+    FragColor = vec4(albedo, 1.0); return;
+#endif
     vec2 detailUV = vUV * (uDetailTiling == vec2(0.0) ? vec2(1.0) : uDetailTiling);
     // Detail albedo, Unity-style "x2" in linear space: 50% grey (0.2159 linear) leaves the colour unchanged.
     if (uHasDetailAlbedoMap == 1) albedo *= texture(uDetailAlbedoMap, detailUV).rgb * 4.6317;
@@ -319,14 +330,14 @@ void main() {
     uint cluster = clustered ? clusterIndex() : 0u;
     uint grungeSub;
     SubstrateSample grungeSS;
-#ifdef _ENGINE_NO_GRUNGE // ShaderVariant.h: Grunge Strength 0, where ApplyGrunge returns at once
+#if defined(_ENGINE_NO_GRUNGE) || (DIAG_STRIP & 8) != 0 // ShaderVariant.h: Grunge Strength 0, where ApplyGrunge returns at once
     grungeSub = 0u; // nothing cached: ApplyDecals samples its own substrate, but Mesa warns on an uninitialised copy
     grungeSS = SubstrateSample(vec3(0.0), vec3(0.0, 0.0, 1.0), 0.0, 0.0, 0.0, vec3(0.0), vec3(0.0), vec3(0.0));
 #else
     ApplyGrunge(albedo, N, roughness, metallic, ao, geoN, grungeSub, grungeSS);
 #endif
     vec3 decalEmissive = vec3(0.0);
-#ifndef _ENGINE_NO_DECALS // ShaderVariant.h: no clustered decal in this view
+#if !defined(_ENGINE_NO_DECALS) && (DIAG_STRIP & 8) == 0 // ShaderVariant.h: no clustered decal in this view
     ApplyDecals(albedo, N, roughness, metallic, ao, decalEmissive, geoN, cluster, grungeSub, grungeSS);
 #endif
     if (uBloodSplatCount > 0) {
@@ -340,7 +351,7 @@ void main() {
         }
     }
 
-    ApplyWetness(albedo, N, roughness, metallic, geoN, ao); // after decals and blood: the rain is on top of them
+    if ((DIAG_STRIP & 8) == 0) ApplyWetness(albedo, N, roughness, metallic, geoN, ao); // after decals and blood: the rain is on top of them
 
     // --- Debug draw modes (#236 R2; 4-7 the F7 light views) ---
 #ifndef _ENGINE_NO_DEBUG_VIEW // ShaderVariant.h: the view draws no debug mode
@@ -438,7 +449,7 @@ void main() {
 #else
         bool sunFront = dot(N, L) > 0.0;
         float sunVis = 1.0;
-        if (sunShadowed)
+        if (sunShadowed && (DIAG_STRIP & 1) == 0)
             sunVis = (sunFront || uTranslucency > 0.0) ? SunShadow(vWorldPos, sunFront ? N : -N, L) * CloudShadow(vWorldPos) : 0.0;
         vec3 radiance = uLights[i].ColorRange.rgb * sunVis;
 #endif
@@ -486,6 +497,7 @@ void main() {
         lightOffset = uClusterRange[cluster].offset;
         lightCount = uClusterRange[cluster].count;
     }
+    if ((DIAG_STRIP & 2) != 0) lightCount = 0u;
     for (uint j = 0u; j < lightCount; ++j) {
         uint li = clustered ? uClusterLightIndices[lightOffset + j] : j;
         if (!clustered && int(uLights[li].PositionType.w) == 0) continue; // the sun is shaded above
@@ -551,14 +563,14 @@ void main() {
         // the sky specular cube with the corrected direction, then blend by weight.
         // Zero probes → uProbeCount == 0 → falls through to the sky sample above.
         // This draw's probes: the uniforms, or the copy's own (G-MB slot state, the same values).
-        int probeCount = uProbeCount;
+        int probeCount = (DIAG_STRIP & 4) != 0 ? 0 : uProbeCount;
         vec3 probeCenter[2] = vec3[2](uProbeCenter[0], uProbeCenter[1]);
         vec3 probeHalfSize[2] = vec3[2](uProbeHalfSize[0], uProbeHalfSize[1]);
         float probeBlend[2] = float[2](uProbeBlend[0], uProbeBlend[1]);
         int probeLayer[2] = int[2](uProbeLayer[0], uProbeLayer[1]);
 #ifndef _NO_SLOT_STATE
         if (uSlotState == 1) {
-            probeCount = int(uSlotStates[vSlot].Head.z);
+            probeCount = (DIAG_STRIP & 4) != 0 ? 0 : int(uSlotStates[vSlot].Head.z);
             for (int pj = 0; pj < 2; ++pj) {
                 vec4 a = uSlotStates[vSlot].Probe[2 * pj], b = uSlotStates[vSlot].Probe[2 * pj + 1];
                 probeCenter[pj] = a.xyz;
@@ -625,7 +637,8 @@ void main() {
         // an Outside layer (moon, sun and sky baked through the windows), replaces that too. Faded at the box faces.
         {
             float giFade, giSky;
-            vec3 gi = SampleGI(vWorldPos, N, giFade, giSky);
+            vec3 gi = vec3(0.0); giFade = 0.0; giSky = 0.0;
+            if ((DIAG_STRIP & 4) == 0) gi = SampleGI(vWorldPos, N, giFade, giSky);
             if (giFade > 0.0) irradiance = mix(irradiance, skyIrradiance * (1.0 - giSky) + gi, giFade);
 #ifndef _ENGINE_NO_DEBUG_VIEW
             if (uDebugView == 8) { // GI only: the baked bounce on flat grey, with its SSAO
@@ -697,9 +710,12 @@ void main() {
         color = mix(color, refrColor, uTransmissionStrength * (1.0 - metallic));
     }
 #endif
+#if (DIAG_STRIP & 16) == 0
     color = ApplyFog(color); // #162
     color = ApplyAerialPerspective(color);
-    color = ApplyVolumetricFog(color); // the air nearest the eye goes on last
+    color = ApplyVolumetricFog(color);
+#endif
+    // the air nearest the eye goes on last
 
     if (uApplyTonemap == 1) {
         color = color / (color + vec3(1.0)); // Reinhard tonemap

@@ -46,6 +46,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <filesystem>
 #include <map>
 #include <set>
 #include <optional>
@@ -1090,7 +1091,7 @@ void SceneRenderer::ViewPass::DrawOpaque() {
                 }
                 const bool cut = ma && (ma->Mat.AlphaClip || ma->RenderQueue == MaterialAsset::Queue::AlphaTest);
                 const std::string pn = opcProgName(t);
-                const std::string mn = pn + " | " + (ma ? ma->Name : std::string("(mesh mat)")) + (cut ? " [cut]" : "") +
+                const std::string mn = pn + " | " + (ma ? ma->Name : "(mesh mat) " + std::filesystem::path(drawList[groups.Order[groups.Groups[t.Group].First]].Ref->Path()).filename().string()) + (cut ? " [cut]" : "") +
                                        (t.Prepassed ? "" : " [nopre]");
                 for (Row* r : {&byProg[pn], &byMat[mn], &all}) {
                     ++r->Batches; r->Cmds += b.Count; r->Inst += inst; r->Tris += tris; r->Pre += t.Prepassed ? 1 : 0;
