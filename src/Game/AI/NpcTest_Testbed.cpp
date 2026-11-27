@@ -2091,7 +2091,7 @@ void NpcTest::MmPlayerChecks() {
             Check(q.Chest.size() > 20 && q.YawStepMax <= 30.0f && q.HandHigh == 0, b);
         }
         // 5. The facing model: the character facing never more than its clamp off the simulation's (any leg), and looking about
-        //    on the move the planted feet hold - the body turns with the clip, not over the feet (worst plant drift <= 5 cm;
+        //    on the move the planted feet hold - the body turns with the clip, not over the feet (worst plant drift within its limit;
         //    with the heading spun after the view, M run random look slid 51 cm).
         {
             float worst = 0.0f;
@@ -2103,16 +2103,20 @@ void NpcTest::MmPlayerChecks() {
                           worst, offLeg >= 0 ? kTb[offLeg].Name : "none", clamp);
             Check(worst <= clamp, b);
             // The planted feet hold - or pivot - while the view turns the body faster than the clip turns: the worst plant's drift
-            // of the less moving of its heel and its ball (a foot swivelling on either is turning, not sliding), <= 5 cm.
-            for (const char* name : {"M jog random look", "M walk random look", "M walk looking about", "M jog looking about", "M walk flick 180",
-                                     "M jog flick 180"}) {
+            // of the less moving of its heel and its ball (a foot swivelling on either is turning, not sliding). The limits are
+            // 1.5x the worst measured on the current database, per group (random look and looking about: 1.8 cm worst; the flicks:
+            // 5.2 cm worst on M jog flick 180, over the old 5 cm, which is kept - the flick is a real slide to fix, not a limit to raise).
+            struct SlideLimit { const char* Leg; float Cm; };
+            for (const SlideLimit& sl : {SlideLimit{"M jog random look", 2.7f}, SlideLimit{"M walk random look", 2.7f}, SlideLimit{"M walk looking about", 2.7f},
+                                         SlideLimit{"M jog looking about", 2.7f}, SlideLimit{"M walk flick 180", 5.0f}, SlideLimit{"M jog flick 180", 5.0f}}) {
+                const char* name = sl.Leg;
                 const auto it = m_SlideContactPlayer.find(name);
                 const auto ankle = m_SlideWorstPlayer.find(name);
                 const float slide = it != m_SlideContactPlayer.end() ? it->second : -1.0f;
                 std::snprintf(b, sizeof b, "%s: the planted feet hold while the view turns the body - worst plant drift %.1f cm at the heel or "
-                                           "ball (<= 5; the ankle %.1f)", name, slide * 100.0f,
+                                           "ball (<= %.1f; the ankle %.1f)", name, slide * 100.0f, sl.Cm,
                               ankle != m_SlideWorstPlayer.end() ? ankle->second * 100.0f : -1.0f);
-                Check(slide >= 0.0f && slide <= 0.05f, b);
+                Check(slide >= 0.0f && slide <= sl.Cm / 100.0f, b);
             }
         }
     }
@@ -2120,7 +2124,7 @@ void NpcTest::MmPlayerChecks() {
     // and Phase B, the dash played whole, both measured and retired: docs/MOTION_MATCHING_HANDOFF.md, "Asset gaps"). Each sprint
     // leg against its jog counterpart: no more stitching (jumps a second within 1.5x + 0.5); no pops beyond its own motion (pose
     // step p99 within 1.15x + 1 deg of the leg's own away from jumps - the sprint's limbs move further a frame than the jog's, so
-    // the jog's steps are no reference); and the planted feet hold (heel or ball <= 5 cm). The style share is checked above.
+    // the jog's steps are no reference); and the planted feet hold (heel or ball <= 1.7 cm: 1.5x the worst measured, 1.1). The style share is checked above.
     if (TbPartOn('M')) {
         const auto medianOf = [&](const std::vector<float>& v) { return NpcTestCommon::Percentile(v, 0.5f); };
         std::printf("[MmSprint] %-24s %8s %8s %8s %9s %10s %9s %9s %8s %9s\n", "leg", "sprint %", "m/s", "jumps/s", "longest s",
@@ -2146,9 +2150,9 @@ void NpcTest::MmPlayerChecks() {
             const float p99 = NpcTestCommon::Percentile(q.PoseStep, 0.99f), play = NpcTestCommon::Percentile(q.PoseStepPlaying, 0.99f);
             const float jumps = q.Jumps / std::max(0.1f, kTb[i].Seconds), jogJumps = R.Mm[k].Jumps / std::max(0.1f, kTb[k].Seconds);
             std::snprintf(b, sizeof b, "%s: the sprint plays cleanly - %.1f jumps a second (%s %.1f: within 1.5x + 0.5), pose step p99 %.2f deg "
-                                       "(its own away from jumps %.2f: within 1.15x + 1); feet hold %.1f cm at the heel or ball (<= 5); %.2f m/s",
+                                       "(its own away from jumps %.2f: within 1.15x + 1); feet hold %.1f cm at the heel or ball (<= 1.7); %.2f m/s",
                           l.Leg, jumps, l.Jog, jogJumps, p99, play, slide, mean(q.Speed));
-            Check(jumps <= 1.5f * jogJumps + 0.5f && p99 <= 1.15f * play + 1.0f && slide >= 0.0f && slide <= 5.0f, b);
+            Check(jumps <= 1.5f * jogJumps + 0.5f && p99 <= 1.15f * play + 1.0f && slide >= 0.0f && slide <= 1.7f, b);
         }
     }
     // Jumps: the airborne segment plays locked, then matching takes over.
