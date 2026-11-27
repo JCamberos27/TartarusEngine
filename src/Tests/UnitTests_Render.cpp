@@ -898,6 +898,140 @@ void SunCasterListDelta() {
     ForgetGatherCandidates();
 }
 
+// The sun caster list's keyed path (ShadowFrame::FillSunCasters, the gathered set changed and nothing else) against the
+// full loop, side by side: over 400 seeded frames where the gathered set itself changes - casters dropping out and coming
+// back (as an LOD flip or a cascade edge does), the order shuffling, entities leaving and their slots reused, a caster
+// moving the same frame its index changes, skinned ones changing index - plus frames where only the camera / cascades
+// move (no entity in the log), both give the same casters field for field, the same G4-d motion table and the same forced
+// cascades every frame. It must actually take the keyed path on most set-change frames.
+void SunCasterListKeyed() {
+    if (!GpuScene::Enabled()) {
+        UnitTestSupport::Skip("TARTARUS_NO_GPU_SCENE");
+        return;
+    }
+    auto prop = Model::CreatePrimitive("terrain", "w1_sun_keyed_prop.fbx"); // CPU-only stand-ins: no GL in unit tests
+    CHECK(prop != nullptr);
+    if (!prop) return;
+    std::vector<std::shared_ptr<Model>> skins;
+    g_FakeSunPose.clear();
+    for (int i = 0; i < 3; ++i) {
+        skins.push_back(Model::CreatePrimitive("terrain", "w1_sun_keyed_skin" + std::to_string(i) + ".fbx"));
+        g_FakeSunPose[skins.back().get()] = 1;
+    }
+    World w;
+    std::vector<entt::entity> props, chars;
+    for (int i = 0; i < 64; ++i)
+        props.push_back(w.CreateModelEntity(prop, glm::vec3((float)(i % 8) * 6.0f, 0.0f, (float)(i / 8) * 6.0f), glm::vec3(0), glm::vec3(1), "P"));
+    for (int i = 0; i < 3; ++i)
+        chars.push_back(w.CreateModelEntity(skins[(size_t)i], glm::vec3(3.0f + i, 0.0f, 3.0f), glm::vec3(0), glm::vec3(1), "C"));
+    w.RebuildWorldTransformCache();
+    ForgetGatherCandidates();
+    GpuScene scene;
+    GpuScene::ChangeLog log;
+
+    ShadowFrame keyed, fullOnly;
+    ShadowFrame::SunListIn in;
+    in.world = &w;
+    in.cascadeCount = 4;
+    // The cascades follow a camera: far cascade c reaches a caster whose box starts within its range of the camera.
+    float camX = 0.0f;
+    in.reaches = [&camX](int c, const glm::vec3& lo, const glm::vec3&) { return std::abs(lo.x - camX) + lo.z < 12.0f * (float)c; };
+    in.probe.Skinned = FakeSunSkinned;
+    in.probe.Pose = FakeSunPose;
+    std::mt19937 rng(1263);
+    std::uniform_int_distribution<int> roll(0, 99);
+    std::uniform_real_distribution<float> step(-3.0f, 3.0f);
+    std::uint64_t lastTake = ~0ull, prevTake = ~0ull;
+    int keyedFrames = 0, deltaFrames = 0, fullFrames = 0, camOnlyKeyed = 0, moveOnIndexChange = 0, reuseFrames = 0;
+    auto alive = [&](entt::entity e) { return w.Registry.valid(e); };
+    auto pick = [&](std::vector<entt::entity>& v) { return v[(size_t)(roll(rng) * (int)v.size() / 100)]; };
+    for (std::uint64_t frame = 100; frame < 500; ++frame) {
+        // Edits. Every ~5th frame only the camera (and so the cascades) moves: nothing in the log.
+        const bool camOnly = roll(rng) < 20;
+        if (camOnly) camX += step(rng) * 2.0f;
+        bool moved = false;
+        if (!camOnly) {
+            if (roll(rng) < 40) { // a prop moves
+                const entt::entity e = pick(props);
+                if (alive(e)) { w.Registry.get<TransformComponent>(e).Position += glm::vec3(step(rng), 0.0f, step(rng)); moved = true; }
+            }
+            for (const auto& sk : skins)
+                if (roll(rng) < 70) ++g_FakeSunPose[sk.get()];
+            if (roll(rng) < 6) { // one leaves and another arrives: the GPU scene may hand it the freed slot
+                const entt::entity e = pick(props);
+                if (alive(e)) {
+                    w.Registry.destroy(e);
+                    props.push_back(w.CreateModelEntity(prop, glm::vec3(step(rng) + 20.0f, 0.0f, step(rng)), glm::vec3(0), glm::vec3(1), "R"));
+                    ++reuseFrames;
+                }
+            }
+            if (frame % 61 == 17) { // a renderable on an unrelated entity: the pool may grow and move every Renderable*
+                const entt::entity e = w.Registry.create();
+                w.Registry.emplace<RenderableComponent>(e);
+            }
+            if (roll(rng) < 2) { // an outfit-hide tag comes or goes (a full refill)
+                const entt::entity e = chars[(size_t)(roll(rng) % 3)];
+                if (w.Registry.all_of<OutfitHideTag>(e)) w.Registry.remove<OutfitHideTag>(e);
+                else w.Registry.emplace<OutfitHideTag>(e);
+            }
+        }
+
+        w.RebuildWorldTransformCache();
+        scene.Sync(w, false);
+        const bool taken = roll(rng) >= 5;
+        if (taken) {
+            scene.TakeChangeLog(w, log);
+            prevTake = lastTake;
+            lastTake = frame;
+        }
+        VisibilityQuery casts;
+        casts.ShadowCasters = true;
+        std::vector<VisibleRenderable> set;
+        GatherVisible(w, casts, set);
+        // The gathered set changes as an LOD flip / cascade edge changes it: some casters drop out this frame (and come
+        // back later), and now and then the order shuffles (skinned ones included).
+        if (roll(rng) < 70) {
+            std::vector<VisibleRenderable> kept;
+            for (const VisibleRenderable& v : set)
+                if (roll(rng) >= 8) kept.push_back(v);
+            set.swap(kept);
+        }
+        if (roll(rng) < 25) std::shuffle(set.begin(), set.end(), rng);
+        keyed.CastingForTest() = set;
+        fullOnly.CastingForTest() = set;
+        in.frame = frame;
+        const unsigned phase = (unsigned)(frame % 4);
+        in.held = phase == 0 ? 0x8u : phase == 2 ? 0x4u : 0xCu;
+        in.log = taken ? &log : nullptr;
+        in.logPrevFrame = prevTake;
+        in.allowDelta = true;
+        const unsigned forceKeyed = keyed.FillSunCasters(in);
+        in.allowDelta = false;
+        const unsigned forceFull = fullOnly.FillSunCasters(in);
+        CHECK(forceKeyed == forceFull);
+        CHECK(keyed.SameSunListAs(fullOnly));
+        if (forceKeyed != forceFull || !keyed.SameSunListAs(fullOnly)) {
+            std::printf("[SunCasterListKeyed] mismatch on frame %llu (keyed %d, delta %d)\n", (unsigned long long)frame,
+                        keyed.LastSunListWasKeyed() ? 1 : 0, keyed.LastSunListWasDelta() ? 1 : 0);
+            break;
+        }
+        CHECK(!fullOnly.LastSunListWasKeyed() && !fullOnly.LastSunListWasDelta());
+        CHECK(keyed.SunSlotIndexConsistent()); // slots that left are unmapped (the delta path indexes the list by them)
+        if (keyed.LastSunListWasKeyed()) {
+            ++keyedFrames;
+            camOnlyKeyed += camOnly;
+            moveOnIndexChange += moved;
+        } else {
+            (keyed.LastSunListWasDelta() ? deltaFrames : fullFrames)++;
+        }
+    }
+    std::printf("[SunCasterListKeyed] %d keyed frames (%d camera-only, %d with a move), %d delta, %d full, %d slot-reuse frames\n",
+                keyedFrames, camOnlyKeyed, moveOnIndexChange, deltaFrames, fullFrames, reuseFrames);
+    CHECK(keyedFrames > 150 && camOnlyKeyed > 30 && moveOnIndexChange > 40 && fullFrames > 20 && reuseFrames > 10);
+    g_FakeSunPose.clear();
+    ForgetGatherCandidates();
+}
+
 // The sun's kept caster gather (ShadowFrame::GatherSunCasting) against a fresh gather, every frame: over random frames of
 // a camera walking and turning (four texel-snapped cascades following it), now and then a jump, a sun turn or a cascade
 // count change, with props moving, LOD groups switching levels as the camera passes, Cast Shadows writes, adds and removals and player-body pieces
@@ -4033,6 +4167,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GpuScene: slot state needs 9 fragment SSBO blocks; below that a global _NO_SLOT_STATE define", GpuSceneSlotStateBlockBudget});
     tests.push_back({"GpuScene: the change log lists every changed slot with where it was and is (300 random frames)", GpuSceneChangeLog});
     tests.push_back({"Sun caster list: the change-log delta path = the full loop, field for field, every frame (400 random frames)", SunCasterListDelta});
+    tests.push_back({"Sun caster list: the keyed path (the set changed) = the full loop, field for field, every frame (400 random frames)", SunCasterListKeyed});
     tests.push_back({"Sun gather reuse: the kept list holds every caster a fresh gather draws, field for field (800 random frames)", SunGatherReuse});
     tests.push_back({"Sun gather reuse: LOD level flips are patched into the kept list, which stays a fresh padded gather field for field", SunGatherLodPatch});
     tests.push_back({"Local shadows (G4-c): a frame's changes wake the quiet lights they reach, and only those", LocalShadowQuietWake});

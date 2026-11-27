@@ -209,6 +209,7 @@ void PerfBench::Sample(double frameMs, int frameNo) {
         m_Far0 = CascadedShadowMap::FarCascadeTotals();
         m_SunCache0 = DepthCasterCache::AllTotals();
         m_SunDelta0 = ShadowFrame::SunListTotalsSoFar().Delta; m_SunFull0 = ShadowFrame::SunListTotalsSoFar().Full;
+        m_SunKeyed0 = ShadowFrame::SunListTotalsSoFar().Keyed;
         m_SunReused0 = ShadowFrame::SunGatherTotalsSoFar().Reused; m_SunGathered0 = ShadowFrame::SunGatherTotalsSoFar().Gathered;
         m_SunPatched0 = ShadowFrame::SunGatherTotalsSoFar().Patched;
     }
@@ -366,9 +367,10 @@ void PerfBench::ReportHitches(const std::string& sceneFile, const char* label) {
                     (unsigned long long)calls);
         // The sun caster list (ShadowFrame::FillSunCasters): the gathers this phase that took the change-log delta path.
         const ShadowFrame::SunListTotals l = ShadowFrame::SunListTotalsSoFar();
-        const std::uint64_t delta = l.Delta - m_SunDelta0, lists = delta + (l.Full - m_SunFull0);
-        std::printf("[PerfBench] %s sun caster list: delta %llu of %llu gathers\n", label, (unsigned long long)delta,
-                    (unsigned long long)lists);
+        const std::uint64_t delta = l.Delta - m_SunDelta0, keyed = l.Keyed - m_SunKeyed0,
+                            lists = delta + keyed + (l.Full - m_SunFull0);
+        std::printf("[PerfBench] %s sun caster list: delta %llu, keyed %llu of %llu gathers\n", label, (unsigned long long)delta,
+                    (unsigned long long)keyed, (unsigned long long)lists);
         // The sun's static-cell gather (ShadowFrame::kSunGatherPadTexels): the calls this phase that kept the last one.
         const ShadowFrame::SunGatherTotals g = ShadowFrame::SunGatherTotalsSoFar();
         const std::uint64_t kept = g.Reused - m_SunReused0, gathers = kept + (g.Gathered - m_SunGathered0);
