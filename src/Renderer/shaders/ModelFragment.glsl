@@ -544,8 +544,11 @@ void main() {
             float vz = clamp(-(uView * vec4(vWorldPos, 1.0)).z, uClusterZParams.x, uClusterZParams.y);
             vec2 tz = uDiagTightZ[cluster];
             bool inR = vz >= tz.x && vz <= tz.y;
-            atomicAdd(uDiagCounts[12], inR ? uDiagTightRange[cluster].count : lightCount);
-            atomicAdd(uDiagCounts[inR ? 13 : 14], 1u);
+            uint tightN = lightCount;
+            if (inR) tightN = uDiagTightRange[cluster].count;
+            atomicAdd(uDiagCounts[12], tightN);
+            if (inR) atomicAdd(uDiagCounts[13], 1u);
+            else atomicAdd(uDiagCounts[14], 1u);
         }
         atomicAdd(uDiagCounts[8], gDiagDec[0]); atomicAdd(uDiagCounts[9], gDiagDec[1]);
         atomicAdd(uDiagCounts[10], gDiagDec[2]); atomicAdd(uDiagCounts[11], gDiagDec[3]);
