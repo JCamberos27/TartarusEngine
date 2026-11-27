@@ -481,11 +481,13 @@ unsigned ShadowFrame::FillSunCasters(const SunListIn& in) {
     for (const entt::entity e : world.Registry.view<OutfitHideTag>()) hidden.push_back(static_cast<std::uint32_t>(e));
     std::sort(hidden.begin(), hidden.end());
 
-    // The delta path: only when every check holds; anything else is the full loop below.
-    bool delta = in.allowDelta && m_SunListValid && in.log && !in.log->All && m_SunListFrame == in.logPrevFrame &&
-                 in.frame > m_SunFullFrame && in.frame - m_SunFullFrame < kSunFullEvery &&
-                 m_SunSetEpoch == RenderSettingsEpoch() && hidden == m_SunHiddenSet && m_SunSet.size() == m_Casting.size() &&
-                 m_SunCasters.size() == m_Casting.size();
+    // The delta path: only when every check holds; anything else is the keyed path or the full loop below. `sameRun`:
+    // every check but the gathered set itself, which is all the keyed path needs.
+    const bool sameRun = in.allowDelta && m_SunListValid && in.log && !in.log->All && m_SunListFrame == in.logPrevFrame &&
+                         in.frame > m_SunFullFrame && in.frame - m_SunFullFrame < kSunFullEvery &&
+                         m_SunSetEpoch == RenderSettingsEpoch() && hidden == m_SunHiddenSet && m_SunCasters.size() == m_SunSet.size();
+    m_SunLastKeyed = false;
+    bool delta = sameRun && m_SunSet.size() == m_Casting.size();
     for (std::size_t i = 0; delta && i < m_Casting.size(); ++i) {
         const VisibleRenderable& v = m_Casting[i];
         delta = m_SunSet[i] == SunSetEntry{v.Slot, static_cast<std::uint32_t>(v.Entity), v.Renderable};
@@ -507,6 +509,45 @@ unsigned ShadowFrame::FillSunCasters(const SunListIn& in) {
         return force;
     }
 
+    if (sameRun) {
+        // The keyed path: the set changed, nothing else did. By slot: a caster the list held there - the same set entry
+        // (slot, entity, renderable), not in this frame's change log, not skinned or outfit-hidden - holds exactly what
+        // the full loop would refill it to (nothing unlogged changes a caster's fields), and its motion check would
+        // find it unchanged, so it is copied. The list holds no per-cascade data: a moved camera or cascade only
+        // matters through TrackSunMotion, which acts on a changed caster alone. The rest: filled and checked as below.
+        if (m_SunSlotLogged.size() < m_SunSlotIndex.size()) m_SunSlotLogged.resize(m_SunSlotIndex.size(), 0);
+        for (const GpuScene::SlotChange& c : in.log->Changes)
+            if (c.Slot < m_SunSlotLogged.size()) m_SunSlotLogged[c.Slot] = 1;
+        m_SunOldAlways.assign(m_SunSet.size(), 0);
+        for (const std::uint32_t i : m_SunAlwaysCheck) m_SunOldAlways[i] = 1;
+        m_SunCastersNext.clear();
+        m_SunCastersNext.reserve(m_Casting.size());
+        std::uint64_t copied = 0;
+        for (const VisibleRenderable& v : m_Casting) {
+            const std::int32_t j = v.Slot < m_SunSlotIndex.size() ? m_SunSlotIndex[v.Slot] : -1;
+            if (j >= 0 && m_SunSet[(std::size_t)j] == SunSetEntry{v.Slot, static_cast<std::uint32_t>(v.Entity), v.Renderable} &&
+                !m_SunSlotLogged[v.Slot] && !m_SunOldAlways[(std::size_t)j]) {
+                m_SunCastersNext.push_back(m_SunCasters[(std::size_t)j]);
+                ++copied;
+                continue;
+            }
+            SunCaster& sc = m_SunCastersNext.emplace_back();
+            FillSunCaster(world, v, sc);
+            TrackSunMotion(in, v, sc, force);
+        }
+        for (const GpuScene::SlotChange& c : in.log->Changes)
+            if (c.Slot < m_SunSlotLogged.size()) m_SunSlotLogged[c.Slot] = 0;
+        m_SunCasters.swap(m_SunCastersNext);
+        RebuildSunSet(hidden, skinned, false);
+        m_SunListFrame = in.frame;
+        m_SunLastDelta = false;
+        m_SunLastKeyed = true;
+        ++g_SunListTotals.Keyed;
+        g_SunListTotals.KeyedCopied += copied;
+        g_SunListTotals.KeyedFilled += m_Casting.size() - copied;
+        return force;
+    }
+
     // The full loop (the reference): every caster filled and checked.
     m_SunCasters.clear();
     for (const VisibleRenderable& v : m_Casting) {
@@ -514,10 +555,26 @@ unsigned ShadowFrame::FillSunCasters(const SunListIn& in) {
         FillSunCaster(world, v, sc);
         TrackSunMotion(in, v, sc, force);
     }
-    // What the next frames' delta path compares against and re-checks.
+    RebuildSunSet(hidden, skinned, true);
+    m_SunHiddenSet = hidden;
+    m_SunSetEpoch = RenderSettingsEpoch();
+    m_SunListValid = true;
+    m_SunListFrame = m_SunFullFrame = in.frame;
+    m_SunLastDelta = false;
+    ++g_SunListTotals.Full;
+    return force;
+}
+
+// What the next frames' delta and keyed paths compare against and re-check.
+void ShadowFrame::RebuildSunSet(const std::vector<std::uint32_t>& hidden, bool (*skinned)(const Model*), bool resetAll) {
+    if (resetAll) {
+        for (std::int32_t& s : m_SunSlotIndex) s = -1;
+    } else {
+        for (const SunSetEntry& e : m_SunSet)
+            if (e.slot < m_SunSlotIndex.size()) m_SunSlotIndex[e.slot] = -1;
+    }
     m_SunSet.resize(m_Casting.size());
     m_SunAlwaysCheck.clear();
-    for (std::int32_t& s : m_SunSlotIndex) s = -1;
     for (std::size_t i = 0; i < m_Casting.size(); ++i) {
         const VisibleRenderable& v = m_Casting[i];
         m_SunSet[i] = SunSetEntry{v.Slot, static_cast<std::uint32_t>(v.Entity), v.Renderable};
@@ -527,13 +584,6 @@ unsigned ShadowFrame::FillSunCasters(const SunListIn& in) {
             std::binary_search(hidden.begin(), hidden.end(), static_cast<std::uint32_t>(v.Entity)))
             m_SunAlwaysCheck.push_back((std::uint32_t)i);
     }
-    m_SunHiddenSet = hidden;
-    m_SunSetEpoch = RenderSettingsEpoch();
-    m_SunListValid = true;
-    m_SunListFrame = m_SunFullFrame = in.frame;
-    m_SunLastDelta = false;
-    ++g_SunListTotals.Full;
-    return force;
 }
 
 bool ShadowFrame::SameSunListAs(const ShadowFrame& o) const {

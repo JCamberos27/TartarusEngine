@@ -98,7 +98,10 @@ public:
     // epoch and the outfit-hidden entities are unchanged, and `log` is this frame's GPU scene change log taken right
     // after the one the list was last brought up to date with, the delta path refills and re-checks only the casters
     // that can differ - those the log names, the skinned ones, the outfit-hidden ones - with the same per-caster code.
-    // Every kSunFullEvery frames the full loop runs anyway. TARTARUS_NO_SUN_CASTER_DELTA=1: always the full loop.
+    // When only the gathered set differs (LOD flips, casters in and out), the keyed path builds the list by GPU-scene slot:
+    // a caster the last list held at that slot (same entity and renderable), not in the log and not one re-checked every
+    // frame, is copied as it is; the rest are filled and checked as in the full loop. Every kSunFullEvery frames the full
+    // loop runs anyway. TARTARUS_NO_SUN_CASTER_DELTA=1: always the full loop (no delta, no keyed).
     struct SunCasterProbe { // what the loop asks a model (tests stand in a fake pose for a skinned one)
         bool (*Skinned)(const Model*) = nullptr;
         std::uint64_t (*Pose)(const Model*) = nullptr;
@@ -117,13 +120,15 @@ public:
     };
     static constexpr std::uint64_t kSunFullEvery = 16;
     unsigned FillSunCasters(const SunListIn& in); // returns the cascades to force (G4-d)
-    // Tests: the gathered casters the next FillSunCasters reads, whether the last one took the delta path, and whether
-    // two frames hold the same list and motion table field for field.
+    // Tests: the gathered casters the next FillSunCasters reads, whether the last one took the delta / keyed path, and
+    // whether two frames hold the same list and motion table field for field.
     std::vector<VisibleRenderable>& CastingForTest() { return m_Casting; }
     bool LastSunListWasDelta() const { return m_SunLastDelta; }
+    bool LastSunListWasKeyed() const { return m_SunLastKeyed; }
     bool SameSunListAs(const ShadowFrame& other) const;
-    // Sun caster lists since startup: how many took the delta path (--perf-bench prints a phase's share).
-    struct SunListTotals { std::uint64_t Delta = 0, Full = 0; };
+    // Sun caster lists since startup: how many took the delta / keyed path (--perf-bench prints a phase's share), and how
+    // many casters the keyed path copied vs filled.
+    struct SunListTotals { std::uint64_t Delta = 0, Full = 0, Keyed = 0, KeyedCopied = 0, KeyedFilled = 0; };
     static SunListTotals SunListTotalsSoFar();
 
     // The sun's gather kept across frames (GatherSunCasters): the static cells are gathered against the cascades padded
@@ -316,13 +321,21 @@ private:
     std::vector<std::uint32_t> m_SunHiddenSet;   // outfit-hidden entities (sorted) when the full loop last ran
     std::vector<std::int32_t> m_SunSlotIndex;    // GPU scene slot -> index in m_SunCasters, -1 none
     std::vector<std::uint32_t> m_SunAlwaysCheck; // indices re-checked every delta frame: skinned and outfit-hidden casters
+    // The keyed path's scratch, kept between frames (no per-frame allocation): the list it builds, per-slot "in this
+    // frame's change log" marks and per-old-index "re-checked every frame" marks (the slot marks cleared after use).
+    std::vector<SunCaster> m_SunCastersNext;
+    std::vector<std::uint8_t> m_SunSlotLogged, m_SunOldAlways;
     std::uint64_t m_SunListFrame = ~0ull;        // the frame the list was last brought up to date
     std::uint64_t m_SunFullFrame = ~0ull;        // ...and last fully refilled
     bool m_SunListValid = false;
     bool m_SunLastDelta = false;
+    bool m_SunLastKeyed = false;
     std::uint64_t m_ChangeLogFrame = ~0ull, m_ChangeLogPrevFrame = ~0ull; // when RenderLocal took m_ChangeLog, and the take before
     void FillSunCaster(World& world, const VisibleRenderable& v, SunCaster& sc);
     void TrackSunMotion(const SunListIn& in, const VisibleRenderable& v, const SunCaster& sc, unsigned& force);
+    // FillSunCasters' bookkeeping after the full loop or the keyed path: m_SunSet, m_SunSlotIndex, m_SunAlwaysCheck from
+    // m_Casting / m_SunCasters. `resetAll`: clear every slot index (else only the old set's).
+    void RebuildSunSet(const std::vector<std::uint32_t>& hidden, bool (*skinned)(const Model*), bool resetAll);
     std::vector<const LocalCaster*> m_Visible;
     std::vector<std::uint8_t> m_VisibleDynamic; // per m_Visible entry: DynamicFor for the light being rendered
     std::uint64_t m_SpotShadowSig[SpotShadowMap::kMaxSpots] = {}; // the static casters'
