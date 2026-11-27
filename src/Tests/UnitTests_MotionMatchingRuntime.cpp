@@ -1482,7 +1482,7 @@ void TestPredictMatchesCapsule() {
                 if (c.Npc) { // NpcDirector: the pace (its speed along the way) eased, under 2 cm/s a stop
                     const float cur = glm::length(v), target = glm::length(c.To);
                     const float pace = target + (cur - target) * std::exp(-dt / (target > cur ? accel : decel));
-                    v = glm::vec3(0.0f, 0.0f, pace < 0.02f ? 0.0f : pace);
+                    v = glm::vec3(0.0f, 0.0f, pace < kNpcStopPace ? 0.0f : pace);
                 } else {
                     v = PlayerApproachVelocity(v, c.To, dt, accel, decel);
                 }
