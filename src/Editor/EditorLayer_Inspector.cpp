@@ -1312,7 +1312,7 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
             [&]() {
                 PushUndo(world, "Reimport Model");
                 assets.SetModelSettings(key, m_PendingModelSettings);
-                if (assets.ReimportModel(key)) Log::Info("Reimported model '" + key + "'.");
+                if (ReimportModelAndCopies(world, assets, key)) Log::Info("Reimported model '" + key + "'.");
                 else Log::Error("Reimport failed for '" + key + "' - see Console.");
                 InvalidateModelThumbnail(); // re-render the Asset Browser preview
                 m_ImportSettingsDirty = false;
