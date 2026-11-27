@@ -553,6 +553,19 @@ void TestInertialization() {
     CHECK(frames == expect || frames == expect + 1); // (float time sums)
     CHECK(PoseAngle(out, target) < 1e-5f && glm::length(out.Pelvis - target.Pelvis) < 1e-5f);
     CHECK(worstStep < 4.0f * std::max(share, 3.0f * dt));
+    // A blend given its own time (the matcher's idle entry) lasts that long; the next one is back on Params.BlendTime.
+    {
+        Inertialization own;
+        own.Transition(prev, last, dt, 0.5f);
+        int n = 0;
+        while (own.Blending() && n < 1000) { own.Update(dt, target, out); ++n; }
+        const int want = (int)std::lround(0.5f / dt);
+        CHECK(n == want || n == want + 1);
+        own.Transition(prev, last, dt);
+        n = 0;
+        while (own.Blending() && n < 1000) { own.Update(dt, target, out); ++n; }
+        CHECK(n == expect || n == expect + 1);
+    }
     // No blend running: the target passes through.
     MotionPose t2 = target;
     t2.Rot[0] = glm::angleAxis(0.2f, glm::vec3(1, 0, 0));

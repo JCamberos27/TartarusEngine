@@ -42,7 +42,7 @@ glm::quat IM::SlerpAsSigned(const glm::quat& a, const glm::quat& bIn, float t) {
     return glm::normalize(a * (std::sin((1.0f - t) * theta) / s) + b * (std::sin(t * theta) / s));
 }
 
-void Inertialization::Transition(const MotionPose& previous, const MotionPose& last, float dt) {
+void Inertialization::Transition(const MotionPose& previous, const MotionPose& last, float dt, float blendTime) {
     m_Bones = last.Rot.size();
     const size_t n = m_Bones + last.Fingers.size();
     m_Rot = last.Rot;
@@ -65,11 +65,12 @@ void Inertialization::Transition(const MotionPose& previous, const MotionPose& l
     m_Pelvis = last.Pelvis;
     m_Goal.clear(); // (the hemisphere is chosen on the first Update, against the source)
     m_Time = 0.0f;
-    m_Active = Params.BlendTime > 1e-4f;
+    m_BlendTime = blendTime > 0.0f ? blendTime : Params.BlendTime;
+    m_Active = m_BlendTime > 1e-4f;
 }
 
 float Inertialization::BlendWeight() const {
-    return m_Active ? IM::Smoothstep(m_Time / Params.BlendTime) : 1.0f;
+    return m_Active ? IM::Smoothstep(m_Time / m_BlendTime) : 1.0f;
 }
 
 void Inertialization::Update(float dt, const MotionPose& target, MotionPose& out) {
@@ -104,5 +105,5 @@ void Inertialization::Update(float dt, const MotionPose& target, MotionPose& out
         (i < m_Bones ? out.Rot[i] : out.Fingers[i - m_Bones]) = IM::SlerpAsSigned(m_Rot[i], t, a);
     }
     out.Pelvis = glm::mix(m_Pelvis, target.Pelvis, a);
-    if (m_Time >= Params.BlendTime) m_Active = false;
+    if (m_Time >= m_BlendTime) m_Active = false;
 }
