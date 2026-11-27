@@ -445,7 +445,7 @@ void NpcBody::StepMotionMatching(World& world, float dt) {
     mi.CapsuleLaw = true;
     mi.AccelTime = m_In.AccelTime;
     mi.DecelTime = m_In.DecelTime;
-    mi.SnapToStop = 0.02f; // NpcDirector's pace
+    mi.SnapToStop = kNpcStopPace; // NpcDirector's pace
     mi.Path = m_In.Path;
     mi.PathCount = std::clamp(m_In.PathCount, 0, 4);
     mi.ArriveTime = m_In.PathArrives ? std::max(m_In.DecelTime, 0.05f) : 0.0f;

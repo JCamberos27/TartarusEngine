@@ -15,6 +15,7 @@
 #include "SceneRenderer.h"
 #include "SceneSerializer.h"
 #include "World.h"
+#include "../MotionMatching/TrajectoryPredictor.h" // kNpcStopPace
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -629,7 +630,7 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
         }
         const float tau = target > cur ? kStartTime : kStopTime;
         const float pace = target + (cur - target) * std::exp(-dt / tau);
-        want = dir * (pace < 0.02f ? 0.0f : pace);
+        want = dir * (pace < kNpcStopPace ? 0.0f : pace);
         if (!braking) wish = dir * n.PaceSpeed;
     }
     n.FallSpeed -= m_Cfg.FallGravity * dt;

@@ -167,6 +167,8 @@ The pack doesn't have these. They are not faked:
 | Quick + bake | `tools\mm_smoke.ps1 -Quick mmview mmdb` | when the bake or the database changed |
 | Full | `tools\mm_smoke.ps1 -Full` (unit, smoke, testbed, npcloco, stopsteps, feet, labloco, mmview, mmdb, mmplayer, npcperf, mmstress, `tests\perf-scenes\perf_stress.json`) | once per PR |
 
+- **mmplayer runs twice per PR:** the course and one `-Start canonical` run. The left/right strafe checks
+  (`kTbAlikePairs`) only run when every leg starts afresh, so the course alone never checks them.
 - Run as `powershell -ExecutionPolicy Bypass -File tools\mm_smoke.ps1 ...`. Other options: `-Runs`, `-LogDir`, `-TraceDir`,
   `-UnitFilter`, `-SkipBuild`, `-Parallel` (default 3; the timing checks `mmdb` and `npcperf` run alone), `-Exe`.
 - Run one script at a time. Several at once swap the machine and can fail the unit tests' load-time budget.
