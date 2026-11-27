@@ -75,10 +75,10 @@ float Score(float intensity, float range, float viewToLight, Tier tier, bool hel
 // freed). A light that was lit but slot-less only gets a slot that is free, so it waits while a leaving light fades
 // out and then fades in: the hand-over between two lit lamps never pops.
 // A light that ARRIVES - not LIT last frame: switched on, activated, spawned - is different: its light appears at
-// once, so its shadow must too, or it shines through walls until the fade is done (Talos's #1189 review). It comes in
+// once, so its shadow must too, or it shines through walls until the fade is done (the #1189 review). It comes in
 // at full strength, taking the leaving holder with the least shadow left if no slot is free. The flashlight (urgent)
 // is always treated so. "Lit" is taken before the distance cull: a lamp walking into DistanceFade range was lit all
-// along and its light ramps up from 0, so its shadow fades in like any hand-over (Talos's re-check).
+// along and its light ramps up from 0, so its shadow fades in like any hand-over (the review's re-check).
 template <int N>
 struct FadingSlots {
     std::uint32_t Owner[N];        // the light's key, or kNone

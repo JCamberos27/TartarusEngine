@@ -1,4 +1,4 @@
-"""House light -> fixture audit (W1 Atlas, Jacob's lamp-1 look, rules from ISSUES.md / SM).
+"""House light -> fixture audit (the lamp-1 look note; rules from the GI issue list).
     python -I fixture_audit.py <repo> [--md out.md]
 RULES (each a column, FAIL = must fix before the re-bake):
   OFFSET     light within 5 cm of its fixture's emitter point (table TARGET; wall lamps: within 5 cm of the mesh box)

@@ -1,6 +1,6 @@
 {
   "method": "Blender 5.2 FBX re-import of every installed payload (tools/weapons/export_revolver38.py output); render checks of the fixes; gameplay tests left to the user",
-  "source": "D:\\Jacob\\JCamberos\\Downloads\\38 Special 60fps.blend",
+  "source": "38 Special 60fps.blend",
   "fixes": [
     "A_FP_Reload: CB_ik_hand_r keyed at the constant every other take holds (loc [8.925, -33.652, 44.26]).",
     "A_W_Fire: double-action pull re-keyed (trigger 20 deg, hammer 35 deg, cylinder 60 deg CCW from the rear; pulled f2, hammer falls f3, trigger reset f18), over the arms' 0..46.",

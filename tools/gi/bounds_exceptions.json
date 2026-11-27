@@ -34,7 +34,7 @@
    ],
    "face": "-z",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 35588
   },
   {
@@ -46,7 +46,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 35591
   },
   {
@@ -70,7 +70,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 35592
   },
   {
@@ -106,7 +106,7 @@
    ],
    "face": "+x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 35604
   },
   {
@@ -130,7 +130,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 35609
   },
   {
@@ -142,7 +142,7 @@
    ],
    "face": "+x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 35610
   },
   {
@@ -154,7 +154,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 35610
   },
   {
@@ -178,7 +178,7 @@
    ],
    "face": "+x",
    "status": "OVER",
-   "reason": "fix-3 (dev/fix3-master-ceil 5802c9f0, SM 2026-11-24): 35611 Lamp_stand 17 now Cast Shadows ON; its +x face reaches the open part's east wall past the box-room door wall, which its shadow map blocks",
+   "reason": "fix-3 (dev/fix3-master-ceil 5802c9f0, 2026-11-24): 35611 Lamp_stand 17 now Cast Shadows ON; its +x face reaches the open part's east wall past the box-room door wall, which its shadow map blocks",
    "old_id": 35611
   },
   {
@@ -190,7 +190,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 35614
   },
   {
@@ -202,7 +202,7 @@
    ],
    "face": "+x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 36367
   },
   {
@@ -214,7 +214,7 @@
    ],
    "face": "+x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 36368
   },
   {
@@ -226,7 +226,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 36370
   },
   {
@@ -238,7 +238,7 @@
    ],
    "face": "-z",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 36373
   },
   {
@@ -250,7 +250,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 36390
   },
   {
@@ -262,7 +262,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 36391
   },
   {
@@ -274,7 +274,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 36392
   },
   {
@@ -286,7 +286,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 36393
   },
   {
@@ -298,7 +298,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 36394
   },
   {
@@ -310,7 +310,7 @@
    ],
    "face": "+x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 36395
   },
   {
@@ -322,7 +322,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 36395
   },
   {
@@ -334,7 +334,7 @@
    ],
    "face": "-z",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 36400
   },
   {
@@ -346,7 +346,7 @@
    ],
    "face": "-z",
    "status": "OPEN",
-   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look (Hermes)",
+   "reason": "OPEN: face in open-plan air / doorway, no room wall; per-room look",
    "old_id": 36401
   },
   {
@@ -406,7 +406,7 @@
    ],
    "face": "+x",
    "status": "SHORT",
-   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
+   "reason": "family E (1b), by design, approved 2026-11-24 (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
    "old_id": 36392
   },
   {
@@ -418,7 +418,7 @@
    ],
    "face": "+x",
    "status": "SHORT",
-   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
+   "reason": "family E (1b), by design, approved 2026-11-24 (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
    "old_id": 36394
   },
   {
@@ -430,7 +430,7 @@
    ],
    "face": "+x",
    "status": "SHORT",
-   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
+   "reason": "family E (1b), by design, approved 2026-11-24 (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
    "old_id": 35609
   },
   {
@@ -442,7 +442,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
+   "reason": "family E (1b), by design, approved 2026-11-24 (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
    "old_id": 38103
   },
   {
@@ -454,7 +454,7 @@
    ],
    "face": "-z",
    "status": "OPEN",
-   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
+   "reason": "family E (1b), by design, approved 2026-11-24 (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
    "old_id": 38103
   },
   {
@@ -466,7 +466,7 @@
    ],
    "face": "+z",
    "status": "OVER",
-   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
+   "reason": "family E (1b), by design, approved 2026-11-24 (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
    "old_id": 38103
   },
   {
@@ -478,7 +478,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
+   "reason": "family E (1b), by design, approved 2026-11-24 (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
    "old_id": 38104
   },
   {
@@ -490,7 +490,7 @@
    ],
    "face": "-z",
    "status": "OPEN",
-   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
+   "reason": "family E (1b), by design, approved 2026-11-24 (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
    "old_id": 38104
   },
   {
@@ -502,7 +502,7 @@
    ],
    "face": "+z",
    "status": "OVER",
-   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
+   "reason": "family E (1b), by design, approved 2026-11-24 (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
    "old_id": 38104
   },
   {
@@ -514,7 +514,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
+   "reason": "family E (1b), by design, approved 2026-11-24 (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
    "old_id": 38105
   },
   {
@@ -526,7 +526,7 @@
    ],
    "face": "-z",
    "status": "OPEN",
-   "reason": "family E (1b), by design, SM OK 2026-11-24 17:5x UTC (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
+   "reason": "family E (1b), by design, approved 2026-11-24 (dev/fix3-jambs ced5d6b7): originals trimmed to +x 13.61, SHORT by design (the strip copy lights the rest); copies boxed to the strip x 13.42..14.58 z 24.04..31.66, light outside the sub-box (OPEN/OVER by design)",
    "old_id": 38105
   },
   {
@@ -538,7 +538,7 @@
    ],
    "face": "+x",
    "status": "OPEN",
-   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
+   "reason": "36370 (B)+strips, by design, approved 2026-11-24: original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
    "old_id": 36370
   },
   {
@@ -550,7 +550,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
+   "reason": "36370 (B)+strips, by design, approved 2026-11-24: original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
    "old_id": 38109
   },
   {
@@ -562,7 +562,7 @@
    ],
    "face": "+x",
    "status": "OPEN",
-   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
+   "reason": "36370 (B)+strips, by design, approved 2026-11-24: original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
    "old_id": 38109
   },
   {
@@ -574,7 +574,7 @@
    ],
    "face": "-z",
    "status": "SHORT",
-   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
+   "reason": "36370 (B)+strips, by design, approved 2026-11-24: original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
    "old_id": 38109
   },
   {
@@ -586,7 +586,7 @@
    ],
    "face": "+z",
    "status": "SHORT",
-   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
+   "reason": "36370 (B)+strips, by design, approved 2026-11-24: original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
    "old_id": 38109
   },
   {
@@ -598,7 +598,7 @@
    ],
    "face": "-x",
    "status": "SHORT",
-   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
+   "reason": "36370 (B)+strips, by design, approved 2026-11-24: original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
    "old_id": 38110
   },
   {
@@ -610,7 +610,7 @@
    ],
    "face": "+x",
    "status": "OVER",
-   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
+   "reason": "36370 (B)+strips, by design, approved 2026-11-24: original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
    "old_id": 38110
   },
   {
@@ -622,7 +622,7 @@
    ],
    "face": "-z",
    "status": "OPEN",
-   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
+   "reason": "36370 (B)+strips, by design, approved 2026-11-24: original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
    "old_id": 38110
   },
   {
@@ -634,7 +634,7 @@
    ],
    "face": "+z",
    "status": "OPEN",
-   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
+   "reason": "36370 (B)+strips, by design, approved 2026-11-24: original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
    "old_id": 38110
   },
   {
@@ -646,7 +646,7 @@
    ],
    "face": "-x",
    "status": "SHORT",
-   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
+   "reason": "36370 (B)+strips, by design, approved 2026-11-24: original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
    "old_id": 38111
   },
   {
@@ -658,7 +658,7 @@
    ],
    "face": "+x",
    "status": "OPEN",
-   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
+   "reason": "36370 (B)+strips, by design, approved 2026-11-24: original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
    "old_id": 38111
   },
   {
@@ -670,7 +670,7 @@
    ],
    "face": "-z",
    "status": "OPEN",
-   "reason": "36370 (B)+strips, by design, PM OK (PM FINAL via SM ~18:50 UTC 2026-11-24): original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
+   "reason": "36370 (B)+strips, by design, approved 2026-11-24: original trimmed +x 7.887 (F 0.19); copy 38109 = doorway shaft x 7.697..10.8 z 27.663..31.097 (seam faces SHORT by design); strips 38110/38111 x 8.30..10.8 to the original's z faces 26.853/31.758, crossfade 0.05 into 38109; light sits outside the sub-boxes (OPEN/OVER by design)",
    "old_id": 38111
   },
   {
@@ -682,7 +682,7 @@
    ],
    "face": "-z",
    "status": "OVER",
-   "reason": "fix4 fam4_south (Talos 422f7a81): -z 20.3 -> 20.05 + inward fade 0.5 past the south window wall, shadowed spot; 'expected OVER, list at merge'"
+   "reason": "house fix 4 (fam4 south, 422f7a81): -z 20.3 -> 20.05 + inward fade 0.5 past the south window wall, shadowed spot; 'expected OVER, list at merge'"
   },
   {
    "name": "Stairwell Stairs",
@@ -693,7 +693,7 @@
    ],
    "face": "-z",
    "status": "OVER",
-   "reason": "fix4 fam3_35604 (Talos 5e3ba4c2): -z 26.992 -> 26.742 + fade 0.5, 0.25 past the bedroom-hall wall, shadowed; 'expected OVER, list at merge'"
+   "reason": "house fix 4 (fam3 35604, 5e3ba4c2): -z 26.992 -> 26.742 + fade 0.5, 0.25 past the bedroom-hall wall, shadowed; 'expected OVER, list at merge'"
   },
   {
    "name": "Lamp_stand Lamp_stand 17 (master)",
@@ -704,7 +704,7 @@
    ],
    "face": "+x",
    "status": "OVER",
-   "reason": "fix4 master_ceiling (Atlas, PM-approved 35611 trim + unshadowed copy): +x = the lamp's own +x at -6.663 (jambs family D passage far plane, listed for the lamp too); the audit's ray starts inside the door wall because the lamp sits west of the copy's box"
+   "reason": "house fix 4 (master ceiling, approved 35611 trim + unshadowed copy): +x = the lamp's own +x at -6.663 (jambs family D passage far plane, listed for the lamp too); the audit's ray starts inside the door wall because the lamp sits west of the copy's box"
   },
   {
    "name": "Lamp_stand Lamp_stand 17 (master)",
@@ -715,7 +715,7 @@
    ],
    "face": "-x",
    "status": "OPEN",
-   "reason": "fix4 master_ceiling (Atlas, PM-approved): -x at -11.222 = the door-wall far plane, so the box can't reach the room behind Wall_Interior_3x (4)"
+   "reason": "house fix 4 (master ceiling, approved): -x at -11.222 = the door-wall far plane, so the box can't reach the room behind Wall_Interior_3x (4)"
   },
   {
    "name": "Lamp_stand Lamp_stand 17 (master)",
@@ -726,7 +726,7 @@
    ],
    "face": "-z",
    "status": "OPEN",
-   "reason": "fix4 master_ceiling (Atlas, PM-approved): -z at 25.887 = the 0.19 crossfade seam with the trimmed lamp (+z 26.077); sums to 1 in open room air"
+   "reason": "house fix 4 (master ceiling, approved): -z at 25.887 = the 0.19 crossfade seam with the trimmed lamp (+z 26.077); sums to 1 in open room air"
   }
  ]
 }

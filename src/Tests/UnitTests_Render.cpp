@@ -2550,7 +2550,7 @@ void GIVolumeLookup() {
         CHECK(std::abs(chain[3].c[2].x - 4.0f) < 1e-6f); // spreads until every reachable probe is filled
     }
 
-    // Face probes (in the wall / ceiling slab) are captured nudged inward (Jacob #5: the ceiling ring around a fixture).
+    // Face probes (in the wall / ceiling slab) are captured nudged inward (look note #5: the ceiling ring around a fixture).
     {
         const glm::ivec3 d(5, 4, 6);
         const glm::vec3 half(2.0f, 1.5f, 2.5f); // cell 1 m on every axis
@@ -2564,7 +2564,7 @@ void GIVolumeLookup() {
         CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 3, 3), d, half, 0.0f), glm::vec3(0.0f)));                 // 0 = off
         CHECK(near3(GI::FaceProbeNudge(glm::ivec3(2, 3, 3), d, half, 1.0f), glm::vec3(0.0f, -0.45f, 0.0f)));  // clamped to 0.45 cell
     }
-    // The nudge guard: a face probe is nudged only into open air (Jacob: child's bedroom 2, closet doors).
+    // The nudge guard: a face probe is nudged only into open air (look notes: child's bedroom 2, closet doors).
     {
         const auto S = [](float x0, float y0, float z0, float x1, float y1, float z1) { return GI::SolidBox{glm::vec3(x0, y0, z0), glm::vec3(x1, y1, z1)}; };
         const glm::vec3 face(9.42f, 4.0f, 25.0f), nudged(9.27f, 4.0f, 25.0f);
@@ -2898,7 +2898,7 @@ void TestShadowSlotScoring() {
     nested.Classify({1.0f, 1.0f, 1.0f});
     CHECK(nested.Names[nested.ViewRoom] == "GI closet");
     // A doorway gap (in no volume, between living 2 and the hall): the view keeps its last room, so crossing a door is
-    // one re-ranking, not two (Talos's #1189 review).
+    // one re-ranking, not two (the #1189 review).
     rooms.Classify({5.1f, 1.6f, 0.0f});
     CHECK(rooms.ViewRoom >= 0 && rooms.Names[rooms.ViewRoom] == "GI living room");
     rooms.Classify({6.2f, 1.6f, 0.0f}); // into the hall: now the hall
@@ -2971,7 +2971,7 @@ void TestShadowSlotScoring() {
     CHECK(slots.Owner[0] == B);
     slots.Step({A}, {A}, 1, 300, dt, false);
     CHECK(slots.Owner[0] == A && std::abs(slots.Weight[0] - step) < 1e-5f);
-    // Switch-on (Talos's #1189 review): a lamp that was NOT a candidate last frame lights at once, so its shadow is
+    // Switch-on (the #1189 review): a lamp that was NOT a candidate last frame lights at once, so its shadow is
     // full at once - with a free slot, or by taking a leaving holder's - never shining through walls while it fades.
     {
         Slots on;
@@ -2999,7 +2999,7 @@ void TestShadowSlotScoring() {
         CHECK(lit.Owner[0] == Slots::kNone && lit.PrevLit.empty());
         lit.Step({C}, {C}, 1, 3, dt, false);
         CHECK(lit.Owner[0] == C && lit.Weight[0] == 1.0f);
-        // Walking into range (Talos's re-check): C was lit but past its DistanceFade range (lit, not a candidate). Its
+        // Walking into range (the review's re-check): C was lit but past its DistanceFade range (lit, not a candidate). Its
         // light ramps up from 0, so its shadow is a hand-over: it waits for A to fade out, then fades in - no pop.
         Slots walk;
         walk.StepLit({A}, {A}, {A, C}, 1, 1, dt, true);

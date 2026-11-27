@@ -9,7 +9,7 @@
   "reimported": [
     {
       "file": "FirstPerson/Remington870_A_FP_Draw.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Draw.fbx",
+      "source": "A_FP_870_Draw.fbx",
       "action": "A_FP_Draw",
       "frameStart": 0,
       "frameEnd": 46.0,
@@ -25,7 +25,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Fire.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Fire.fbx",
+      "source": "A_FP_870_Fire.fbx",
       "action": "A_FP_Fire",
       "frameStart": 0,
       "frameEnd": 41.99999999870091,
@@ -41,7 +41,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Holster.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Holster.fbx",
+      "source": "A_FP_870_Holster.fbx",
       "action": "A_FP_Holster",
       "frameStart": 0,
       "frameEnd": 28.0,
@@ -57,7 +57,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Idle.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Idle.fbx",
+      "source": "A_FP_870_Idle.fbx",
       "action": "A_FP_Idle",
       "frameStart": 0,
       "frameEnd": 118.0,
@@ -73,7 +73,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Inspect.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Inspect.fbx",
+      "source": "A_FP_870_Inspect.fbx",
       "action": "A_FP_Inspect",
       "frameStart": 0,
       "frameEnd": 300.0,
@@ -89,7 +89,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Mag_Check.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_MagCheck.fbx",
+      "source": "A_FP_870_MagCheck.fbx",
       "action": "A_FP_Mag_Check",
       "frameStart": 0,
       "frameEnd": 144.0,
@@ -105,7 +105,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Melee.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Melee.fbx",
+      "source": "A_FP_870_Melee.fbx",
       "action": "A_FP_Melee",
       "frameStart": 0,
       "frameEnd": 67.0,
@@ -121,7 +121,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Pump.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Pump.fbx",
+      "source": "A_FP_870_Pump.fbx",
       "action": "A_FP_Pump",
       "frameStart": 0,
       "frameEnd": 43.99999999870091,
@@ -137,7 +137,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Regrip.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Regrip.fbx",
+      "source": "A_FP_870_Regrip.fbx",
       "action": "A_FP_Regrip",
       "frameStart": 0,
       "frameEnd": 38.0,
@@ -153,7 +153,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Reload_End.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Reload_End.fbx",
+      "source": "A_FP_870_Reload_End.fbx",
       "action": "A_FP_Reload_end",
       "frameStart": 0,
       "frameEnd": 50.0,
@@ -169,7 +169,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Reload_Loop.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Reload_Loop.fbx",
+      "source": "A_FP_870_Reload_Loop.fbx",
       "action": "A_FP_Reload_loop",
       "frameStart": 0,
       "frameEnd": 70.0,
@@ -185,7 +185,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Reload_Loop_End.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Reload_Loop_End.fbx",
+      "source": "A_FP_870_Reload_Loop_End.fbx",
       "action": "A_FP_Reload_loop_end",
       "frameStart": 0,
       "frameEnd": 98.0,
@@ -201,7 +201,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Reload_Start.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Reload_Start.fbx",
+      "source": "A_FP_870_Reload_Start.fbx",
       "action": "A_FP_reload_start",
       "frameStart": 0,
       "frameEnd": 30.0,
@@ -217,7 +217,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Reload_Start_Empty.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Reload_Start_Empty.fbx",
+      "source": "A_FP_870_Reload_Start_Empty.fbx",
       "action": "A_FP_Reload_start_empty",
       "frameStart": 0,
       "frameEnd": 160.0,
@@ -233,7 +233,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Sprint.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Sprint.fbx",
+      "source": "A_FP_870_Sprint.fbx",
       "action": "A_FP_Sprint",
       "frameStart": 0,
       "frameEnd": 43.99999999870091,
@@ -249,7 +249,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_SprintToIdle.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Sprint_End.fbx",
+      "source": "A_FP_870_Sprint_End.fbx",
       "action": "A_FP_Sprint_end",
       "frameStart": 0,
       "frameEnd": 34.0,
@@ -265,7 +265,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_IdleToSprint.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Sprint_Start.fbx",
+      "source": "A_FP_870_Sprint_Start.fbx",
       "action": "A_FP_Sprint_start",
       "frameStart": 0,
       "frameEnd": 18.0,
@@ -281,7 +281,7 @@
     },
     {
       "file": "FirstPerson/Remington870_A_FP_Walk.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Walk.fbx",
+      "source": "A_FP_870_Walk.fbx",
       "action": "A_FP_Walk",
       "frameStart": 0,
       "frameEnd": 43.99999999870091,
@@ -297,7 +297,7 @@
     },
     {
       "file": "Weapon/Remington870_A_W_Idle.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Idle.fbx",
+      "source": "A_W_870_Idle.fbx",
       "action": "A_W_Idle",
       "frameStart": 0,
       "frameEnd": 30.0,
@@ -312,7 +312,7 @@
     },
     {
       "file": "Weapon/Remington870_A_W_Inspect.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Inspect.fbx",
+      "source": "A_W_870_Inspect.fbx",
       "action": "A_W_Inspect",
       "frameStart": 0,
       "frameEnd": 300.0,
@@ -327,7 +327,7 @@
     },
     {
       "file": "Weapon/Remington870_A_W_Mag_Check.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Mag_Check.fbx",
+      "source": "A_W_870_Mag_Check.fbx",
       "action": "A_W_Mag_Check",
       "frameStart": 0,
       "frameEnd": 144.0,
@@ -342,7 +342,7 @@
     },
     {
       "file": "Weapon/Remington870_A_W_Pump.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Pump.fbx",
+      "source": "A_W_870_Pump.fbx",
       "action": "A_W_Pump",
       "frameStart": 0,
       "frameEnd": 43.99999999870091,
@@ -357,7 +357,7 @@
     },
     {
       "file": "Weapon/Remington870_A_W_Reload_End.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Reload_End.fbx",
+      "source": "A_W_870_Reload_End.fbx",
       "action": "A_W_Reload_end",
       "frameStart": 0,
       "frameEnd": 50.0,
@@ -372,7 +372,7 @@
     },
     {
       "file": "Weapon/Remington870_A_W_Reload_Loop.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Reload_Loop.fbx",
+      "source": "A_W_870_Reload_Loop.fbx",
       "action": "A_W_Reload_loop",
       "frameStart": 0,
       "frameEnd": 70.0,
@@ -387,7 +387,7 @@
     },
     {
       "file": "Weapon/Remington870_A_W_Reload_Loop_End.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Reload_Loop_End.fbx",
+      "source": "A_W_870_Reload_Loop_End.fbx",
       "action": "A_W_Reload_loop_end",
       "frameStart": 0,
       "frameEnd": 98.0,
@@ -402,7 +402,7 @@
     },
     {
       "file": "Weapon/Remington870_A_W_Reload_Start.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Reload_Start.fbx",
+      "source": "A_W_870_Reload_Start.fbx",
       "action": "A_W_Reload_start",
       "frameStart": 0,
       "frameEnd": 30.0,
@@ -417,7 +417,7 @@
     },
     {
       "file": "Weapon/Remington870_A_W_Reload_Start_Empty.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Reload_Start_Empty.fbx",
+      "source": "A_W_870_Reload_Start_Empty.fbx",
       "action": "A_W_Reload_start_empty",
       "frameStart": 0,
       "frameEnd": 160.0,

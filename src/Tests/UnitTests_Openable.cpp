@@ -214,7 +214,7 @@ void OpenablePoseStartRestore() {
     CHECK(oa.Started && oa.Progress == 1.0f && Near(w.Registry.get<TransformComponent>(a).Position, openAt + glm::vec3(0.5f, 0.0f, 0.0f)));
 }
 
-// GIBaker's own door step and its exits (GI Phase 2 Part A; Argus's review): PoseDoors poses and flags the scene,
+// GIBaker's own door step and its exits (GI Phase 2 Part A): PoseDoors poses and flags the scene,
 // and the error path (Abort) and the shutdown / emergency path (RestoreDoors) each put every transform back bit for bit,
 // clear Openable::BakePosed, and are no-ops the second time. An inactive Start Open door isn't posed (Play skips it).
 void GIBakerDoorsRestoreAfterFailure() {
@@ -291,7 +291,7 @@ void GIBakerDoorsRestoreAfterFailure() {
     }
 }
 
-// --bake-gi-doors hidden (Jacob #2, the dark strip on the tile inside a shut door's jamb; Argus's design): a door-sized
+// --bake-gi-doors hidden (look note #2, the dark strip on the tile inside a shut door's jamb): a door-sized
 // hinged or sliding leaf whose two sides are both in a baked room. The test leaves are the 2 x 2 m quad stood upright
 // (90 degrees about X: its thin axis is world Z) and scaled to size.
 struct HiddenDoorsScene {

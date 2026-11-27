@@ -34,7 +34,7 @@
 
 namespace {
 
-constexpr int kFrames = 8;       // frames per atlas side (Jacob's pick: 8 x 8 on a 2K atlas)
+constexpr int kFrames = 8;       // frames per atlas side (chosen: 8 x 8 on a 2K atlas)
 constexpr int kFrameSize = 256;  // px per frame in the atlas
 // Rendered at kSuper x the frame size, box-filtered down: 16 samples a texel give the coverage 17 steps, and the leaf
 // cards' own alpha test runs about as finely as the live trees' near the impostor's start distance (at 2x the needles

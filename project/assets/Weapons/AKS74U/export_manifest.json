@@ -1,11 +1,11 @@
 {
-  "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U",
-  "retainedSource": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U 60fps (Revised).blend",
+  "source": "AKS74U",
+  "retainedSource": "AKS-74U 60fps (Revised).blend",
   "fps": 60,
   "exports": [
     {
       "file": "FirstPerson/AKS-74U_A_FP_Draw.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Draw.fbx",
+      "source": "A_FP_AK_Draw.fbx",
       "action": "A_FP_Draw",
       "frameStart": 0,
       "frameEnd": 46.0,
@@ -20,7 +20,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_Empty_Reload.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Empty_Reload.fbx",
+      "source": "A_FP_AK_Empty_Reload.fbx",
       "action": "A_FP_Empty_Reload",
       "frameStart": 0,
       "frameEnd": 220.0,
@@ -35,7 +35,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_Holster.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Holster.fbx",
+      "source": "A_FP_AK_Holster.fbx",
       "action": "A_FP_Holster",
       "frameStart": 0,
       "frameEnd": 28.0,
@@ -50,7 +50,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_Idle.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Idle.fbx",
+      "source": "A_FP_AK_Idle.fbx",
       "action": "A_FP_Idle",
       "frameStart": 0,
       "frameEnd": 128.0,
@@ -65,7 +65,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_IdleToSprint.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Idle_To_Sprint.fbx",
+      "source": "A_FP_AK_Idle_To_Sprint.fbx",
       "action": "A_FP_IdleToSprint",
       "frameStart": 0,
       "frameEnd": 16.0,
@@ -80,7 +80,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_Inspect.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Inspect.fbx",
+      "source": "A_FP_AK_Inspect.fbx",
       "action": "A_FP_Inspect",
       "frameStart": 0,
       "frameEnd": 282.0,
@@ -95,7 +95,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_Mag_Check.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Mag_Check.fbx",
+      "source": "A_FP_AK_Mag_Check.fbx",
       "action": "A_FP_Mag_Check",
       "frameStart": 0,
       "frameEnd": 260.0,
@@ -110,7 +110,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_Melee.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Melee.fbx",
+      "source": "A_FP_AK_Melee.fbx",
       "action": "A_FP_Melee",
       "frameStart": 0,
       "frameEnd": 65.0,
@@ -125,7 +125,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_Regrip.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Regrip.fbx",
+      "source": "A_FP_AK_Regrip.fbx",
       "action": "A_FP_Regrip",
       "frameStart": 0,
       "frameEnd": 40.0,
@@ -140,7 +140,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_Sprint.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Sprint.fbx",
+      "source": "A_FP_AK_Sprint.fbx",
       "action": "A_FP_Sprint",
       "frameStart": 0,
       "frameEnd": 43.99999999870091,
@@ -155,7 +155,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_SprintToIdle.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Sprint_To_Idle.fbx",
+      "source": "A_FP_AK_Sprint_To_Idle.fbx",
       "action": "A_FP_SprintToIdle",
       "frameStart": 0,
       "frameEnd": 43.99999999870091,
@@ -170,7 +170,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_Tac_Reload.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Tac_Reload.fbx",
+      "source": "A_FP_AK_Tac_Reload.fbx",
       "action": "A_FP_Tac_Reload",
       "frameStart": 0,
       "frameEnd": 170.0,
@@ -185,7 +185,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_Walk.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Walk.fbx",
+      "source": "A_FP_AK_Walk.fbx",
       "action": "A_FP_Walk",
       "frameStart": 0,
       "frameEnd": 43.99999999870091,
@@ -200,7 +200,7 @@
     },
     {
       "file": "Weapon/AKS-74U_A_W_Empty_Reload.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Empty_Reload.fbx",
+      "source": "A_W_AK_Empty_Reload.fbx",
       "action": "A_W_Empty_Reload",
       "frameStart": 0,
       "frameEnd": 220.0,
@@ -216,7 +216,7 @@
     },
     {
       "file": "Weapon/AKS-74U_A_W_Fire.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Fire.fbx",
+      "source": "A_W_AK_Fire.fbx",
       "action": "A_W_Fire",
       "frameStart": 0,
       "frameEnd": 36.0,
@@ -232,7 +232,7 @@
     },
     {
       "file": "Weapon/AKS-74U_A_W_ADS.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Idle.fbx",
+      "source": "A_W_AK_Idle.fbx",
       "action": "A_W_Idle",
       "frameStart": 0,
       "frameEnd": 16.0,
@@ -248,7 +248,7 @@
     },
     {
       "file": "Weapon/AKS-74U_A_W_Inspect.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Inspect.fbx",
+      "source": "A_W_AK_Inspect.fbx",
       "action": "A_W_Inspect",
       "frameStart": 0,
       "frameEnd": 282.0,
@@ -264,7 +264,7 @@
     },
     {
       "file": "Weapon/AKS-74U_A_W_Mag_Check.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Mag_Check.fbx",
+      "source": "A_W_AK_Mag_Check.fbx",
       "action": "A_W_Mag_Check",
       "frameStart": 0,
       "frameEnd": 260.0,
@@ -280,7 +280,7 @@
     },
     {
       "file": "Weapon/AKS-74U_A_W_Tac_Reload.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Tac_Reload.fbx",
+      "source": "A_W_AK_Tac_Reload.fbx",
       "action": "A_W_Tac_Reload",
       "frameStart": 0,
       "frameEnd": 170.0,
@@ -296,7 +296,7 @@
     },
     {
       "file": "Weapon/AKS-74U_A_W_Holster.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Idle.fbx",
+      "source": "A_W_AK_Idle.fbx",
       "action": "A_W_Idle",
       "frameStart": 0,
       "frameEnd": 28.0,
@@ -312,7 +312,7 @@
     },
     {
       "file": "Weapon/AKS-74U_A_W_IdleToSprint.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Idle.fbx",
+      "source": "A_W_AK_Idle.fbx",
       "action": "A_W_Idle",
       "frameStart": 0,
       "frameEnd": 16.0,
@@ -328,7 +328,7 @@
     },
     {
       "file": "Weapon/AKS-74U_A_W_Melee.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Idle.fbx",
+      "source": "A_W_AK_Idle.fbx",
       "action": "A_W_Idle",
       "frameStart": 0,
       "frameEnd": 65.0,
@@ -344,7 +344,7 @@
     },
     {
       "file": "Weapon/AKS-74U_A_W_Sprint.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Idle.fbx",
+      "source": "A_W_AK_Idle.fbx",
       "action": "A_W_Idle",
       "frameStart": 0,
       "frameEnd": 43.99999999870091,
@@ -360,7 +360,7 @@
     },
     {
       "file": "Weapon/AKS-74U_A_W_SprintToIdle.fbx",
-      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Idle.fbx",
+      "source": "A_W_AK_Idle.fbx",
       "action": "A_W_Idle",
       "frameStart": 0,
       "frameEnd": 43.99999999870091,
@@ -376,7 +376,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_ADS.fbx",
-      "source": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U 60fps (Revised).blend",
+      "source": "AKS-74U 60fps (Revised).blend",
       "action": "Bind pose (no take)",
       "frameStart": 0,
       "frameEnd": 0,
@@ -388,7 +388,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_Aim.fbx",
-      "source": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U 60fps (Revised).blend",
+      "source": "AKS-74U 60fps (Revised).blend",
       "action": "Scene",
       "frameStart": 0,
       "frameEnd": 1.0,
@@ -400,7 +400,7 @@
     },
     {
       "file": "FirstPerson/AKS-74U_A_FP_Fire.fbx",
-      "source": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U 60fps (Revised).blend",
+      "source": "AKS-74U 60fps (Revised).blend",
       "action": "Scene",
       "frameStart": 0,
       "frameEnd": 36.0,

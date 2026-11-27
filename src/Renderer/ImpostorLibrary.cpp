@@ -15,7 +15,7 @@
 
 namespace {
 
-constexpr float kDefaultStartDistance = 40.0f; // Jacob's pick (2026-11-12): the probe's 40 m cut
+constexpr float kDefaultStartDistance = 40.0f; // chosen 2026-11-12: the probe's 40 m cut
 
 struct State {
     bool Loaded = false;
