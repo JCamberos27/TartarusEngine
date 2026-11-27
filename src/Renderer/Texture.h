@@ -120,6 +120,9 @@ public:
     // is current; called by the first texture upload anyway, and by AsyncAssetLoader before it
     // starts its workers.
     static void InitGpuCaps();
+    // Tests only: sets the S3TC answer InitGpuCaps would record (-1 not asked yet, 0 absent, 1 present); returns the
+    // previous one so the test can put it back.
+    static int SetS3tcForTest(int state);
     // Keeps a batch of 2D texture names made ahead of time (called once per asset pump). glCreateTextures returns a
     // name, so with the driver's threaded optimization it waited for the driver thread to drain everything queued
     // before it: up to 6 ms per texture uploaded mid-Play.
