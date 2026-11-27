@@ -548,6 +548,9 @@ void FootLock::LetGo(Foot& f, const FootLockSettings& set, bool step) {
     f.ReleaseTime = 0.0f;
     const float travel = glm::length(f.ReleaseFrom) + (set.StepForTravel ? f.AnimSpeed * set.Release : 0.0f);
     f.Lift = step ? std::min(set.StepHeight * travel, set.StepMax) : 0.0f;
+    // LiftFirst: the arc's rise to it (at most half the arc's height) is the hold, where the foot was drawn.
+    f.Hold = f.Lift > 0.0f && set.LiftFirst > 0.0f ? std::asin(std::min(set.LiftFirst / f.Lift, 0.5f)) / 3.14159265f * set.Release : 0.0f;
+    f.HoldAt = f.Prev + f.Offset;
 }
 
 glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& root, const glm::quat& facing, const glm::vec3& local,
@@ -628,7 +631,13 @@ glm::vec3 FootLock::Step(int s, const FootLockSettings& set, const glm::vec3& ro
     } else {
         f.ReleaseTime += dt;
         const float k = std::clamp(f.ReleaseTime / std::max(set.Release, 1e-3f), 0.0f, 1.0f);
-        f.Offset = f.ReleaseFrom * (1.0f - k * k * (3.0f - 2.0f * k));
+        if (f.ReleaseTime <= f.Hold) { // (LiftFirst: still rising, where it was drawn)
+            f.Offset = glm::vec3(f.HoldAt.x - anim.x, 0.0f, f.HoldAt.z - anim.z);
+            f.ReleaseFrom = f.Offset;
+        } else {
+            const float m = std::clamp((f.ReleaseTime - f.Hold) / std::max(set.Release - f.Hold, 1e-3f), 0.0f, 1.0f);
+            f.Offset = f.ReleaseFrom * (1.0f - m * m * (3.0f - 2.0f * m));
+        }
         if (f.Lift > 0.0f) f.Offset.y = f.Lift * std::sin(3.14159265f * k); // the step's arc
         if (k >= 1.0f) f.Lift = 0.0f;
     }

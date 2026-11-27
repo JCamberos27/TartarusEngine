@@ -178,6 +178,11 @@ struct FootLockSettings {
     float Release = 0.2f;   // s a released foot takes to catch up with the animation
     float StepHeight = 0.3f; // a let-go foot that was still down lifts this much per metre it has to go...
     float StepMax = 0.08f;   // ... at most this (m)
+    // A step lifts this much (m, at most half its arc) before it moves sideways: until then the foot keeps its place over
+    // the ground, then catches up through the rest of Release. 0: lifts and moves at once. Without it a foot let go at full
+    // stretch (the body running off it in a 180 degree flick at a jog) rose ~1.5 cm on its first frame while the body
+    // carried it 5.7 cm over the floor (mmplayer, M jog flick 180, 2026-11-27).
+    float LiftFirst = 0.04f;
     // The metres it has to go: its lag when let go, plus - with StepForTravel - the way the animation carries the foot over
     // the ground through the step (its speed, the body's turn included, x Release). Without it a foot let go as the body
     // turned over it measured a 5 cm lag, lifted 1.5 cm, and was carried 24 cm round with the turn, skimming the floor
@@ -248,6 +253,8 @@ private:
         float PrevHeight = 0.0f;   // last frame's height (FootLockSettings::RestFloor)
         float Rest = 0.0f;         // seconds at rest near the ground
         float LastReach = -1.0f;   // Overreach's reach last frame while held (< 0: none yet this hold)
+        float Hold = 0.0f;         // s a step keeps its place before it moves (FootLockSettings::LiftFirst)
+        glm::vec3 HoldAt{0.0f};    // ... where (world, as drawn when let go)
     };
     static void LetGo(Foot& f, const FootLockSettings& set, bool step);
     Foot m_Foot[2];
