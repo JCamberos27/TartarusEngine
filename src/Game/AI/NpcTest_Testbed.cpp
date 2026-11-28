@@ -151,6 +151,9 @@ const TbLeg kTb[] = {
     {"D draw", 2.0f, TbPart::D, {0, 0}, false, false, {}, 90.0f, -3.0f, false, 1},
     {"D holster again", 2.0f, TbPart::D, {0, 0}, false, false, {}, 90.0f, -3.0f, false, 0},
     {"D draw again", 2.5f, TbPart::D, {0, 0}, false, false, {}, 90.0f, -3.0f, false, 1},
+    // Armed, standing, the view flicks 180 (0.15 s): the armed body turns slower than the view, which crosses straight
+    // behind it mid-turn.
+    [] { TbLeg l{"D flick 180", 3.0f, TbPart::D}; l.FlickAt = 0.5f; return l; }(),
     // M (mmplayer): strafes and backwards, the crouch, turning on the spot, the jog - Shift (straight, through a turn,
     // strafing), jumps standing and jogging. Down +Z from kMStart (yaw 90).
     TbM("M settle", 1.5f, {0, 0}, false, false, 90.0f, 0.0f, -1.0f, true, kMStart),
@@ -525,6 +528,10 @@ struct NpcTest::TestbedRun {
     // Per leg (the player's)
     struct LegStats {
         int Frames = 0;
+        // The body's turn reversing: the worst frame-to-frame change of its turn rate where it changes sign (both sides over
+        // 30 deg/s), deg/s.
+        float PrevYawRate = 0.0f, TurnReverseMax = 0.0f;
+        bool HaveYawRate = false;
         int GaitFrames = 0, GaitBack = 0;
         float GaitWorstBack = 0.0f;
         bool HavePrevGait = false;
@@ -828,6 +835,10 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
         if (s.Frames == 0) s.FootYStart = foot[1];
         s.FootYEnd = foot[1];
         ++s.Frames;
+        if (s.HaveYawRate && bd.BodyYawRateDeg * s.PrevYawRate < 0.0f && std::fabs(bd.BodyYawRateDeg) > 30.0f && std::fabs(s.PrevYawRate) > 30.0f)
+            s.TurnReverseMax = std::max(s.TurnReverseMax, std::fabs(bd.BodyYawRateDeg - s.PrevYawRate));
+        s.PrevYawRate = bd.BodyYawRateDeg;
+        s.HaveYawRate = true;
         if (m_Scenario == "mmplayer" || m_Scenario == "mmstress") MmPlayerFrame(world, player, leg, foot);
         // The gait phase never steps back (wrapped; a hair of noise allowed).
         if (L.Moving() && gaitOk) {
@@ -1072,6 +1083,14 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
                     R.FadeWeightMin, R.FadeGap[0] * 1000.0f, R.FadeGap[1] * 1000.0f);
         // (Logged only: holstered, the body's arms let go of the rig on purpose. The rig's own hands-on-gun through its IK fade is
         // the unit test "IK rig at part weight keeps the hand on the gun".)
+        // D: armed, a 180 flick standing - the body turns one way round, never back (was: 9 deg one way, then its turn rate
+        // -116 to +98 deg/s in a frame as the view crossed straight behind it).
+        if (partD) {
+            const TestbedRun::LegStats& s = R.Legs[legIndex("D flick 180")];
+            std::printf("[Testbed] D flick 180: the body's turn reverses by %.0f deg/s at worst (%d frames)\n", s.TurnReverseMax, s.Frames);
+            Check(s.Frames > 60 && s.TurnReverseMax == 0.0f, "D flick 180: armed, the body turns one way round - its turn rate never flips sign (worst flip " +
+                                                                 std::to_string(s.TurnReverseMax) + " deg/s, none allowed)");
+        }
         if (m_Scenario == "mmplayer") {
             // The searchable data (the player's own load: the rig's exclusions in): seconds a search can land on, per style x gait x direction.
             if (const Model* rig = FirstPersonBody::SceneDriverModel(world.Registry)) {

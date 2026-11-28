@@ -866,6 +866,31 @@ void TestPlayerHooks() {
 void TestFacingModel() {
     FirstPersonBodyMotion::Settings cfg;
     const float dt = 1.0f / 60.0f;
+    // A turn holds its side through straight behind: turning left (-), the wanted facing crossing behind (wrapped, now
+    // +175 deg) keeps the turn left, just short of behind; 40 deg past behind (+140) it turns the short way.
+    {
+        const float deg = 3.14159265f / 180.0f, hold = 30.0f * deg;
+        float side = 0.0f;
+        CHECK(std::fabs(FirstPersonBodyMotion::HoldTurnSide(-170.0f * deg, side, hold) + 170.0f * deg) < 1e-5f && side == -1.0f);
+        CHECK(FirstPersonBodyMotion::HoldTurnSide(175.0f * deg, side, hold) < -178.0f * deg && side == -1.0f);
+        CHECK(FirstPersonBodyMotion::HoldTurnSide(155.0f * deg, side, hold) < -178.0f * deg && side == -1.0f);
+        CHECK(std::fabs(FirstPersonBodyMotion::HoldTurnSide(140.0f * deg, side, hold) - 140.0f * deg) < 1e-5f && side == 1.0f);
+        // Settled (within a degree), the side is let go: the next turn picks its own.
+        side = -1.0f;
+        CHECK(FirstPersonBodyMotion::HoldTurnSide(0.5f * deg, side, hold) > 0.0f && side == 0.0f);
+        CHECK(FirstPersonBodyMotion::HoldTurnSide(175.0f * deg, side, hold) > 174.0f * deg && side == 1.0f);
+        // A spring steered by it through a 188 deg turn, the way it started (the wanted facing fixed, wrapped each frame):
+        // the turn rate never changes sign.
+        float sim = 0.0f, rate = 0.0f, worst = 0.0f;
+        side = -1.0f; // (the turn began left: the view swept round that way)
+        const float want = MotionMath::WrapPi(-188.0f * deg);
+        for (int i = 0; i < 240; ++i) {
+            const float d = FirstPersonBodyMotion::HoldTurnSide(MotionMath::WrapPi(want - sim), side, hold);
+            TrajectoryPredictor::SpringScalar(sim, rate, sim + d, cfg.SimFacingHalflife, dt);
+            worst = std::max(worst, rate);
+        }
+        CHECK(worst <= 1e-4f && std::fabs(MotionMath::WrapPi(sim - want)) < 2.0f * deg);
+    }
     // Converges: no clip turn, the character starts 34 deg off the simulation and settles onto it.
     float yaw = 0.6f;
     for (int i = 0; i < 120; ++i) yaw = FirstPersonBodyMotion::StepCharacterFacing(yaw, 0.0f, 0.0f, cfg, dt); // (10 half-lives)

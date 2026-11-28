@@ -245,6 +245,12 @@ public:
     // One step of the character facing: `yaw` turned by the matched clip's own root turn (`clipTurn`, radians), pulled
     // toward the simulation facing `simYaw` (CharacterFacingHalflife), then clamped to MaxFacingOffset off it.
     static float StepCharacterFacing(float yaw, float clipTurn, float simYaw, const Settings& cfg, float dt);
+    // The simulation facing's turn toward the facing wanted (`delta`: the wanted off the simulation's, wrapped to (-pi, pi]).
+    // Wrapped afresh each frame, a turn past straight behind swaps sides the frame the wanted facing crosses it - the body,
+    // turning one way, turns back the other. A turn holds the side it is turning (`side`: -1, 0, +1, kept between frames)
+    // while the wanted facing is within `hold` radians past straight behind, steering just short of it on that side;
+    // further past, it turns the short way. Returns the delta to steer by.
+    static float HoldTurnSide(float delta, float& side, float hold);
     // The root speed (m/s) and turn rate (rad/s) a database frame's root has, as captured (over +-5 frames in its take).
     static float RootSpeed(const MotionDatabase& db, std::uint32_t frame);
     // The database the player's body plays (Start), resolved: the one PrefetchPlayAssets reads ahead of Play.
@@ -265,6 +271,7 @@ private:
     std::vector<LocalTRS> m_Scratch;
     float m_DesiredYaw = 0.0f, m_YawRate = 0.0f;  // the facing wanted; the character facing's turn rate (rad/s)
     float m_SimYaw = 0.0f, m_SimYawRate = 0.0f;   // the simulation facing and its rate
+    float m_TurnSide = 0.0f;                      // the side the simulation facing is turning (HoldTurnSide)
     bool m_HaveYaw = false, m_Still = true, m_Turning = false;
     Air m_Air = Air::None;
     float m_AirTime = 0.0f, m_LandTimer = 0.0f, m_AirRate = 1.0f;
