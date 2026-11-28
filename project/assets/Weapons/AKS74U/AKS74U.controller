@@ -746,7 +746,10 @@
           "fromAny": true,
           "hasExitTime": false,
           "respectPriority": true,
-          "to": "Melee"
+          "to": "Melee",
+          "trackDurations": {
+            "arms3p": 0.2
+          }
         },
         {
           "canTransitionToSelf": true,

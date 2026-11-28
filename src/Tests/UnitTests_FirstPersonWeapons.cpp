@@ -724,6 +724,10 @@ void TestWeaponControllersTriggerAndActions() {
                 if (t.FromKind == AC::Source::Any && t.To == once) { ++found; CHECK(!t.CanTransitionToSelf); }
             CHECK(found == 1);
         }
+        // The melee swing starts fast: the third-person arms ease into it over 0.2 s, the first-person ones over 0.1.
+        for (const auto& t : L.Transitions)
+            if (t.FromKind == AC::Source::Any && t.To == "Melee")
+                CHECK(std::abs(t.Duration - 0.1f) < 1e-6f && std::abs(t.TrackDuration("arms3p") - 0.2f) < 1e-6f && t.TrackDuration("arms") < 0.0f);
         // Played: a fidget, then the trigger, back to Idle on the next update.
         AnimatorControllerComponent ac;
         const auto oneSecond = [](int, int) { return 1.0f; };
