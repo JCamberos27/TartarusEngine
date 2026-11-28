@@ -133,6 +133,15 @@ const TbLeg kTb[] = {
     {"A stop after walk", 2.0f, TbPart::A},
     {"A jog", 3.5f, TbPart::A, {0, 1}, true},
     {"A stop after jog", 2.0f, TbPart::A},
+    // Armed, looking down (#1304): the world body's spine takes the capped aim, so it no longer folds at the waist. On open
+    // ground behind the lane's start.
+    {"A settle for look down", 1.5f, TbPart::A, {0, 0}, false, true, {0.0f, 0.05f, -12.0f}},
+    {"A look down standing", 2.5f, TbPart::A, {0, 0}, false, false, {}, 90.0f, -80.0f},
+    {"A walk looking down", 2.5f, TbPart::A, {0, 1}, false, false, {}, 90.0f, -75.0f},
+    {"A stop after walk looking down", 1.0f, TbPart::A},
+    [] { TbLeg l{"A crouch looking down", 3.0f, TbPart::A}; l.Pitch = -80.0f; l.Crouch = true; return l; }(),
+    {"A stand after crouch", 1.0f, TbPart::A},
+    {"A aim looking down", 2.5f, TbPart::A, {0, 0}, false, false, {}, 90.0f, -80.0f, true},
     // 0.2 m in from the wall's -X edge (x 3.5), 0.65 m short of its face (z 23.85): cover ahead, the edge within the lean.
     {"B settle at cover", 1.5f, TbPart::B, {0, 0}, false, true, {3.7f, 0.05f, 23.2f}, 90.0f, 0.0f},
     {"B aim (corner peek)", 3.0f, TbPart::B, {0, 0}, false, false, {}, 90.0f, 0.0f, true},
@@ -552,6 +561,9 @@ struct NpcTest::TestbedRun {
         // the world twin's off the world gun's grip - the worst of the leg.
         int HandFrames = 0, TwinFrames = 0;
         float HandGapMax = 0.0f, PieceGapMax = 0.0f, TwinGapMax = 0.0f;
+        // Armed, from 1 s in: the world body's torso bend (deg, + = forward), the leg's most forward.
+        int BendFrames = 0;
+        float TwinBendMax = -1e9f;
         // The eye's jitter, steady part of a move: each frame's second difference (x[n] - 2 x[n-1] + x[n-2]) of the camera off
         // the body's eye (the procedural kick) and of the body's eye off the capsule's (the eye's own anchor and filters), m.
         glm::vec3 KickPrev[2]{}, EyePrev[2]{};
@@ -887,6 +899,10 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
                 s.TwinGapMax = std::max({s.TwinGapMax, bd.TwinHandGap[0], bd.TwinHandGap[1]});
             }
         }
+        if (L.Of == TbPart::A && R.Into >= 1.0f && bd.ArmsWeight > 0.99f) {
+            ++s.BendFrames;
+            s.TwinBendMax = std::max(s.TwinBendMax, bd.TwinBendDeg);
+        }
         if ((L.Of == TbPart::C || L.Of == TbPart::A) && L.Moving()) {
             s.HaveReach = true;
             s.LegReachMax = std::max({s.LegReachMax, reachL, reachR});
@@ -1034,6 +1050,18 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
                                                 std::to_string(s.TwinGapMax * 1000.0f) + " mm at worst, < 20 mm)");
             else
                 skip(std::string(name) + ": the world twin's hands on the world gun", "split poses (Weapon Arms' world twins)");
+        }
+        // A: armed and looking down, the world body bends no more than 1.5x #1304's (13 / 12 / 32 / 13 deg): it folded at the
+        // waist (28 / 26 / 47 / 27) while its spine took the uncapped aim. (Crouch walking stays out: still 61 deg.)
+        if (TbPartOn('A')) {
+            for (const auto& [name, cap] : {std::make_pair("A look down standing", 19.5f), std::make_pair("A walk looking down", 18.0f),
+                                            std::make_pair("A crouch looking down", 48.0f), std::make_pair("A aim looking down", 19.5f)}) {
+                const TestbedRun::LegStats& s = R.Legs[legIndex(name)];
+                std::printf("[Testbed] %-22s world body's bend %.1f deg at most (%d armed frames)\n", name, s.TwinBendMax, s.BendFrames);
+                Check(s.BendFrames > 20 && s.TwinBendMax <= cap, std::string(name) + ": the world body bends " + std::to_string(s.TwinBendMax) +
+                                                                     " deg at most (<= " + std::to_string(cap) + ", " +
+                                                                     std::to_string(s.BendFrames) + " armed frames)");
+            }
         }
         // B: the corner peek.
         if (partB) {
