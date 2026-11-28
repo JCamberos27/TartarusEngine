@@ -11,6 +11,8 @@
 #include <vector>
 
 class AssetLibrary;
+class Camera;
+class FirstPersonBody;
 class FirstPersonPresentation;
 class NpcDirector;
 class NavMesh;
@@ -69,6 +71,9 @@ class World;
 //            corner peek's lean with the hands on the gun, stairs and a ramp (gait phase, leg reach, the eye's overshoot), the
 //            hands through holster / draw; the standing dummy's 180-degree start turn, its ragdoll's inherited velocity and a
 //            flinch that keeps its planted feet. NPC_TEST_RECORD: the frames and trace.csv
+//   combos   the weapon combo matrix (NpcTest_Combos.cpp, AnimTestbed.json's open ground): every (weapon, action, movement
+//            state) cell from the fresh body, measured with the first- and third-person jank meters, one "[Combo] ROW" line
+//            each (tools/combo_matrix.py makes the table); TARTARUS_COMBOS / _CELLS pick the cells, _CLIPS records the flagged ones
 class NpcTest {
 public:
     explicit NpcTest(const std::string& scenario);
@@ -77,6 +82,8 @@ public:
     void Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector& npcs, PlayerVitals& vitals, float dt);
     // After everyone's late pose: checks and the log.
     void After(World& world, NpcDirector& npcs, const PlayerVitals& vitals, const Player& player);
+    // Once the body's arms and the world gun are placed this frame (where the Weapon Lab reads them): combos' meters.
+    void AfterPose(const World& world, const FirstPersonBody& body, const FirstPersonPresentation& weapon, const Camera& cam, float dt);
     // The host's assets, for the scenarios that put a dummy in with NpcDirector::SpawnAt (npcloco).
     AssetLibrary* Assets = nullptr;
     // The scene has no Dummy Spawn but the scenario spawns its own: the host starts the director empty (Start's allowEmpty).
@@ -225,6 +232,13 @@ private:
     void MmStressChecks();
     struct TestbedRun;
     std::shared_ptr<TestbedRun> m_Tb;
+    // combos (NpcTest_Combos.cpp): the weapon combo matrix
+    struct CombosRun;
+    std::shared_ptr<CombosRun> m_Combo;
+    static float CombosSeconds();
+    void CombosDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch);
+    void CombosPose(const World& world, const FirstPersonBody& body, const FirstPersonPresentation& weapon, const Camera& cam, float dt);
+    void CombosAfter(NpcDirector& npcs, const Player& player);
     bool m_BodyReset = false; // TakeBodyReset
     // doors (NpcTest_Doors.cpp)
     struct DoorSpot {

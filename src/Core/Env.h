@@ -61,6 +61,9 @@
     X(MmTune, "TARTARUS_MM_TUNE", Str, "motion matching experiments: tuning overrides read at startup, 'Key=value,...' (MmTune in FirstPersonBodyMotion.cpp lists the keys) - no rebuild") \
     X(TestbedLegs, "TARTARUS_TESTBED_LEGS", Str, "--npc-test testbed/mmplayer/mmstress: only the legs matching these comma-separated names (* wildcards), each from its part's last placement leg; checks naming a leg that didn't run are skipped") \
     X(TestbedStart, "TARTARUS_TESTBED_START", Str, "--npc-test testbed/mmplayer/mmstress: where legs start - 'canonical' (every leg from the fresh, settled body plus its one leg before) or 'leg=from;...' (from: leg names joined by +, or state:gait[,move=x/y][,view=deg][,secs=s]); only those legs run") \
+    X(Combos, "TARTARUS_COMBOS", Str, "--npc-test combos: the weapons, comma-separated (ak, 870, rev; default ak)") \
+    X(CombosCells, "TARTARUS_COMBOS_CELLS", Str, "--npc-test combos: only the cells whose id (weapon/action/state, e.g. ak/reload_tac/walk) matches one of these comma-separated patterns (* wildcards)") \
+    X(CombosClips, "TARTARUS_COMBOS_CLIPS", Str, "--npc-test combos: replay each flagged cell recorded every frame into <dir>/<cell>/") \
     X(NpcTestBare, "NPC_TEST_BARE", Flag, "--npc-test: spawn NPCs (and undress the player's body) without outfits")                                   \
     X(NpcTestDoorsOnly, "NPC_TEST_DOORS_ONLY", Str, "--npc-test doors: only doors whose name contains this")          \
     X(NpcTestDoorsTrace, "NPC_TEST_DOORS_TRACE", Flag, "--npc-test doors: trace")                                     \
