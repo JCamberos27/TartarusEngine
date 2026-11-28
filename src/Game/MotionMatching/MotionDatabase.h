@@ -99,13 +99,22 @@ public:
     // playing into one forces a search before it is shown.
     static constexpr float kGlitchDegrees = 35.0f;
     static constexpr int kGlitchPad = 3;
+    // The head and neck (IsHeadBone) carry the first-person camera (the eye rides the mocap head), so a turn the actor's head
+    // never made is a camera jolt far under kGlitchDegrees: a jog start's head stepped 13-20 deg in one frame
+    // (Jog_Card_withStops_Take003 @ 113814). Their limit is kHeadGlitchDegrees: on the pack it flags 99 more bone-frames
+    // (343 more frames excluded with the pads, of 523,807).
+    static constexpr float kHeadGlitchDegrees = 12.0f;
     // The per-frame turn limit (radians) at `fps`: kGlitchDegrees at 60 fps, scaled to the frame time.
     static float GlitchLimit(float fps);
+    // ... and the head's and neck's: kHeadGlitchDegrees at 60 fps, scaled alike.
+    static float HeadGlitchLimit(float fps);
+    // The bones held to HeadGlitchLimit: "head" and every "neck*".
+    static bool IsHeadBone(const std::string& name);
     // Build's glitch scan: sets bad[i] for every frame (and kGlitchPad either side, inside its clip) where a stream bone
-    // turns more than `limit` radians from the frame before. `bad` is sized to the stream. `go` (optional) runs per take;
-    // false stops the scan (returns false).
+    // turns more than `limit` radians from the frame before - a head or neck bone more than `headLimit` (<= 0: `limit`).
+    // `bad` is sized to the stream. `go` (optional) runs per take; false stops the scan (returns false).
     static bool ScanGlitches(const MotionClipStream& stream, float limit, std::vector<char>& bad,
-                             const std::function<bool()>& go = {});
+                             const std::function<bool()>& go = {}, float headLimit = 0.0f);
     double ScanSeconds() const { return m_ScanSeconds; } // of the last Build: the glitch scan
     // Marks more frames Excluded (a host's own pose rules, e.g. the player's hands-up frames) and rebuilds the runway and
     // the boxes. Returns how many frames it newly excluded.

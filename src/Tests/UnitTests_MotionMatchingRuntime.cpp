@@ -1099,6 +1099,34 @@ std::vector<char> GlitchScanReference(const MotionClipStream& s, float limit) {
     return bad;
 }
 
+// The head and neck have their own, tighter limit (the first-person camera rides them); every other bone keeps the general one.
+void TestHeadGlitchLimit() {
+    CHECK(MotionDatabase::IsHeadBone("head") && MotionDatabase::IsHeadBone("neck_01") && MotionDatabase::IsHeadBone("neck_02"));
+    CHECK(!MotionDatabase::IsHeadBone("foot_l") && !MotionDatabase::IsHeadBone("spine_05") && !MotionDatabase::IsHeadBone("headset"));
+    MotionClipStream s;
+    s.Reset(60.0f, {"foot_l", "neck_01", "head"});
+    const glm::vec3 axis = glm::normalize(glm::vec3(0.2f, 1.0f, 0.1f));
+    // One take per case: which bone turns how far (deg) in the middle frame of 9.
+    struct Case { int Bone; float Deg; bool Head; bool General; };
+    const Case cases[] = {{2, 15.0f, true, false}, {1, 15.0f, true, false}, {2, 10.0f, false, false}, {0, 15.0f, false, false},
+                          {0, 40.0f, true, true}, {2, 40.0f, true, true}};
+    for (const Case& c : cases) {
+        std::vector<glm::quat> rot;
+        for (int f = 0; f < 9; ++f)
+            for (int b = 0; b < 3; ++b) rot.push_back(b == c.Bone && f >= 4 ? glm::angleAxis(glm::radians(c.Deg), axis) : glm::quat(1, 0, 0, 0));
+        s.AddClip({"c" + std::to_string(&c - cases), "", 0, 0, 0.0f}, std::vector<MotionClipStream::RootSample>(9),
+                  std::vector<glm::vec3>(9, glm::vec3(0.0f)), rot);
+    }
+    std::vector<char> general, head;
+    CHECK(MotionDatabase::ScanGlitches(s, MotionDatabase::GlitchLimit(60.0f), general));
+    CHECK(MotionDatabase::ScanGlitches(s, MotionDatabase::GlitchLimit(60.0f), head, {}, MotionDatabase::HeadGlitchLimit(60.0f)));
+    for (size_t k = 0; k < sizeof cases / sizeof cases[0]; ++k) {
+        const auto& clip = s.Clips()[k];
+        CHECK((head[clip.First + 4] != 0) == cases[k].Head);
+        CHECK((general[clip.First + 4] != 0) == cases[k].General);
+    }
+}
+
 // ScanGlitches' |dot| < cos(L/2) test excludes exactly the frames the QuatAngle scan did: on turns just over and just
 // under the limit (as stored, after the 48-bit packing) and on the cooked Manny bake when present.
 void TestGlitchScanMatchesAngle() {
@@ -1891,4 +1919,5 @@ void RegisterMotionMatchingRuntimeTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Motion matching: idle runway", TestIdleRunway});
     tests.push_back({"Motion matching: searchable data report", TestSearchableDataReport});
     tests.push_back({"Motion matching: glitch scan (|dot| test == angle test)", TestGlitchScanMatchesAngle});
+    tests.push_back({"Motion matching: the head and neck's own glitch limit", TestHeadGlitchLimit});
 }
