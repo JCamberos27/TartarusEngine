@@ -878,7 +878,9 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     {
         const auto& bm = s.BodyMotion;
         const float bmScale = bm.Enabled ? adsMix(1.0f, bm.AdsScale) : 0.0f;
-        const glm::vec3 v = in.BodyVelocity;
+        // Off the ground the eye-vs-feet motion is the jump pose (legs tucking), not the gait, and Jump has its own air
+        // lag: followed, it added ~1.7 deg to the third-person gun's takeoff settle. The springs ease back to rest.
+        const glm::vec3 v = in.Grounded ? in.BodyVelocity : glm::vec3(0.0f);
         const glm::vec3 lagPos(SoftLimit(-v.x * bm.Lag, bm.MaxLag), SoftLimit(-v.y * bm.Lag, bm.MaxLag), 0.0f);
         const glm::vec3 lagRot(SoftLimit(-v.y * bm.LagPitch, bm.MaxAngle), 0.0f, SoftLimit(-v.x * bm.LagRoll, bm.MaxAngle));
         m_BodyPos.Step(lagPos * bmScale, dt, bm.Spring);
