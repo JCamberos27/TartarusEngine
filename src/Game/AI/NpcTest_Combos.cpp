@@ -22,6 +22,7 @@
 #include "BodyDebugDraw.h"
 #include "Camera.h"
 #include "FirstPersonBody.h"
+#include "FirstPersonBodyMotion.h" // MmPlayerDebug (the trace)
 #include "FirstPersonJankMeter.h"
 #include "FirstPersonPresentation.h"
 #include "Npc.h"
@@ -242,6 +243,14 @@ struct NpcTest::CombosRun {
     std::map<std::string, float> HoldBounce; // weapon/state -> the hold row's bounce (mm)
     int Rows = 0, Flagged = 0, Setups = 0, Replays = 0;
     std::string ClipsDir;
+    // TARTARUS_COMBOS_TRACE: this cell's frames (lead-in and action) as CSV.
+    std::string TraceDir;
+    FILE* Trace = nullptr;
+    bool InWindow = false; // the action has started (the trace's t counts from it)
+    void CloseTrace() {
+        if (Trace) std::fclose(Trace);
+        Trace = nullptr;
+    }
     // The Scene view, this frame.
     glm::vec3 Feet{0.0f};
 };
@@ -257,6 +266,7 @@ void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float
         m_Combo = std::make_shared<CombosRun>();
         m_Combo->Cells = CbPlanFromEnv();
         m_Combo->ClipsDir = Env::IsSet(Env::Var::CombosClips) ? Env::Str(Env::Var::CombosClips) : std::string();
+        m_Combo->TraceDir = Env::IsSet(Env::Var::CombosTrace) ? Env::Str(Env::Var::CombosTrace) : std::string();
         std::printf("[Combo] %zu cells%s\n", m_Combo->Cells.size(), m_Combo->ClipsDir.empty() ? "" : " (flagged cells recorded)");
     }
     CombosRun& R = *m_Combo;
@@ -429,6 +439,16 @@ void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float
             R.MeterOn = true;
             R.ResetMeters = true;
             if (C.Replay && !R.ClipsDir.empty()) m_RecordDir = (std::filesystem::path(R.ClipsDir) / CbDirName(C.Id)).string();
+            if (!C.Replay && !R.TraceDir.empty()) {
+                std::error_code ec;
+                std::filesystem::create_directories(R.TraceDir, ec);
+                R.CloseTrace();
+                if (fopen_s(&R.Trace, (std::filesystem::path(R.TraceDir) / (CbDirName(C.Id) + ".csv")).string().c_str(), "w") != 0) R.Trace = nullptr;
+                if (R.Trace)
+                    std::fprintf(R.Trace, "t,window,state,mm_clip,mm_frame,airborne,locked,pose_step_deg,pose_step_bone,chest_x,chest_y,chest_z,"
+                                          "gun_x,gun_y,gun_z,gun_deg,handL_x,handL_y,handL_z,handR_x,handR_y,handR_z,gapL,gapR,"
+                                          "fp_handL_x,fp_handL_y,fp_handL_z\n");
+            }
         } else if (R.PhaseT >= kCbSettleCap) {
             finishCell(true);
         }
@@ -500,6 +520,7 @@ void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float
                                      : since >= A.Cap || (since >= 0.6f && R.RestFor >= 0.4f && (R.LeftRest || since >= 1.2f));
     if (done) {
         if (A.Fixed <= 0.0f && since >= A.Cap) R.States += " (cap)";
+        R.CloseTrace();
         R.MeterOn = false;
         finishCell(false);
     }
@@ -513,6 +534,7 @@ void NpcTest::CombosPose(const World& world, const FirstPersonBody& body, const 
         R.Fp.Reset();
         R.Tp.Reset();
         R.ResetMeters = false;
+        R.InWindow = false;
         R.CycleMm = R.LastCycleSeen = -1.0f;
         R.PoseState.clear();
         R.StateChanges.clear();
@@ -523,6 +545,7 @@ void NpcTest::CombosPose(const World& world, const FirstPersonBody& body, const 
         R.FpFrom = R.Fp.Time();
         R.TpFrom = R.Tp.Time();
         R.MarkWindow = false;
+        R.InWindow = true;
         R.CycleMm = -1.0f;
         R.LastCycleSeen = R.Fp.LastCycleMm();
         R.SupGripFp = R.SupGripTp = R.SupReach = 0.0f;
@@ -564,6 +587,17 @@ void NpcTest::CombosPose(const World& world, const FirstPersonBody& body, const 
     }
     const WeaponJankFrame tf = WeaponJankFrameFor(world, body, p, dt, "");
     R.Tp.Push(tf);
+    if (R.Trace) {
+        const MmPlayerDebug::Snapshot& mm = MmPlayerDebug::Info();
+        glm::vec3 chest(0.0f);
+        body.BoneWorld(world, "spine_05", chest);
+        const float gunDeg = glm::degrees(2.0f * std::acos(std::clamp(std::abs(tf.GunRot.w), 0.0f, 1.0f)));
+        std::fprintf(R.Trace, "%.4f,%d,%s,%s,%u,%d,%d,%.2f,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.3f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",
+                     R.InWindow ? R.Fp.Time() - R.FpFrom : R.Fp.Time() - 1e3f, R.InWindow ? 1 : 0, s.State.c_str(), mm.Clip.c_str(), mm.Frame,
+                     mm.Airborne ? 1 : 0, mm.Locked ? 1 : 0, mm.PoseStepDeg, mm.PoseStepBone.c_str(), chest.x, chest.y, chest.z,
+                     tf.GunPos.x, tf.GunPos.y, tf.GunPos.z, gunDeg, tf.Hand[0].x, tf.Hand[0].y, tf.Hand[0].z, tf.Hand[1].x, tf.Hand[1].y,
+                     tf.Hand[1].z, tf.HandGap[0], tf.HandGap[1], s.Hand[0].x, s.Hand[0].y, s.Hand[0].z);
+    }
     if (R.Fp.Time() > R.FpFrom && s.Valid) {
         R.SupGripFp = std::max(R.SupGripFp, s.HandGap[0]);
         R.SupReach = std::max(R.SupReach, s.Reach[0]);
@@ -579,6 +613,13 @@ void NpcTest::CombosAfter(NpcDirector& npcs, const Player& player) {
     const float yaw = glm::radians(kCbYaw);
     const glm::vec3 front(std::cos(yaw), 0.0f, std::sin(yaw)), up(0.0f, 1.0f, 0.0f);
     const glm::vec3 right = glm::normalize(glm::cross(front, up));
+    // TARTARUS_COMBOS_CAM=close: on the chest and the gun from 1 m (small moves of the hands and the gun read).
+    static const bool close = Env::IsSet(Env::Var::CombosCam) && Env::Str(Env::Var::CombosCam) == "close";
+    if (close) {
+        m_CamPos = feet + front * 0.85f + right * 0.55f + up * 1.45f;
+        LookAt(feet + up * 1.25f);
+        return;
+    }
     m_CamPos = feet + front * 1.45f + right * 0.85f + up * 1.4f;
     LookAt(feet + up * 1.15f);
 }
