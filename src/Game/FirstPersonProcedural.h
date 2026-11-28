@@ -410,7 +410,7 @@ struct WeaponProceduralInput {
     // The body's gait phase (0 = left foot down, 0.5 = right): the bob dips on the feet's own plants instead of a stride guess.
     bool HaveGaitPhase = false;
     float GaitPhase = 0.0f;
-    // The camera bob's share: 0 while the camera rides a body's mocap head, which bobs as captured (FirstPersonBody::HeadRide).
+    // The camera bob's share: 0 while the camera rides a body's mocap head, which bobs as captured (FirstPersonBody::CameraRide).
     float CameraBobScale = 1.0f;
     float Dt = 0.0f;
     glm::vec3 Velocity{0.0f};      // camera frame, m/s (horizontal plane)

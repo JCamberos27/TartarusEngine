@@ -996,7 +996,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     const float armed = std::clamp(m_ArmsWeight, 0.0f, 1.0f);
     const float eyeRide = std::clamp(cfg.EyeRide, 0.0f, 1.0f);
     m_CameraRide = headRide + eyeRide * armed;
-    BodyDebug::Info().HeadRide = headRide;
+    BodyDebug::Info().CameraRide = m_CameraRide;
     m_Eye = FirstPersonBodyEye(m_RestHead, glm::mix(m_HeadEased, headAnimated, headRide), 1.0f, cfg.CameraOffset);
     BodyDebug::Info().HeadHeight = headAnimated.y * reg.get<TransformComponent>(m_Body).Scale.y;
 
