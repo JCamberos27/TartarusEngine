@@ -221,6 +221,22 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     {
     PROFILE_SCOPE("FPB sync twins");
     SyncTwins(world);
+    // Armed, the twins' chest takes the capped spine aim (LateUpdate's m_TwinSpineFix: less pitch than the pieces'), as
+    // ApplySpineAim spreads it; the neck and head take it back, so the world body's head still looks where the view does.
+    // The world gun goes with the twins' chest (m_TwinChestMove, below), so their arms hold it as the pieces' hold theirs:
+    // left where the pieces' gun is, the support hand came up to 6 cm short of it.
+    m_TwinChestMove = glm::mat4(1.0f);
+    if (!m_Twins.empty() && std::abs(m_TwinSpineFix) > 1e-4f) {
+        const float fix = m_TwinSpineFix;
+        const char* const* kSpine = FPBody::kBoneSpine;
+        glm::mat4 before(1.0f), after(1.0f);
+        const bool haveChest = BoneWorldMatrix(world, kSpine[4], before, true);
+        RotateChain({kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]},
+                    [fix](float n) { return glm::angleAxis(-fix / n, glm::vec3(1.0f, 0.0f, 0.0f)); }, &m_TwinModels, &m_Spine);
+        RotateChain({"neck_01", m_HeadBone}, [fix](float n) { return glm::angleAxis(fix / n, glm::vec3(1.0f, 0.0f, 0.0f)); }, &m_TwinModels,
+                    nullptr);
+        if (haveChest && BoneWorldMatrix(world, kSpine[4], after, true)) m_TwinChestMove = after * glm::inverse(before);
+    }
     }
     const bool enabled = cfg.WeaponArms;
     const bool haveRig = enabled && weaponArms != entt::null && reg.valid(weaponArms) &&
@@ -306,9 +322,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     const IK::Pose& rigPose = rig->AppliedLocalPose();
     if ((int)rigPose.size() != rig->NodeCount()) return;
     const glm::mat4 rigWorld = world.ComposeWorldTransform(weaponArms);
-    // The frame the shoulders are held in: the chest's view (LateUpdate), else the rig's.
+    // The frame the shoulders are held in: the chest's view (LateUpdate), else the rig's (each solve moves it for the twins).
     const glm::mat4 anchorFrame = m_HaveChestView ? m_ChestView : rigWorld;
-    const glm::mat4 anchorInverse = glm::inverse(anchorFrame);
     // Arm Steadiness: the rig's arms are fixed to the view, but the body's shoulders and chest sway with
     // the gait. With the hands pinned to the rig's, that sway came out at the elbows (the support arm,
     // nearly straight, most of all). Steady, each shoulder is held at a slow average of where it sits
@@ -364,6 +379,10 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     auto solveArms = [&](const std::vector<std::shared_ptr<Model>>& models, const std::vector<entt::entity>& ents, const ArmTargets& t,
                          glm::vec3 (&anchor)[2], bool (&haveAnchor)[2], glm::vec3 (&elbowAim)[2], bool (&haveElbowAim)[2],
                          bool firstPersonView) {
+        // The frame the shoulders are steadied in: the chest's view; for the twins, moved as their chest was (m_TwinChestMove) -
+        // held in the pieces' frame, a twin chest pitched less than theirs pulled its shoulders off toward it, hands off the gun.
+        const glm::mat4 frame = firstPersonView ? anchorFrame : m_TwinChestMove * anchorFrame;
+        const glm::mat4 frameInverse = glm::inverse(frame);
         size_t source = models.size();
         for (size_t k = 0; k < models.size() && k < m_Pieces.size() && source == models.size(); ++k)
             if (models[k] && reg.valid(m_Pieces[k]) && IsArmsPiece(reg, m_Pieces[k]) && models[k]->NodeIndex(Bone(kSides[0].Upper)) >= 0)
@@ -440,16 +459,16 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             // by sliding it, which stretched the skin between the neck and the shoulder into a hunch.
             if (steady > 0.0f && clav >= 0) {
                 const glm::vec3 shoulderWorld = ownShoulder[s];
-                const glm::vec3 inFrame = glm::vec3(anchorInverse * glm::vec4(shoulderWorld, 1.0f));
+                const glm::vec3 inFrame = glm::vec3(frameInverse * glm::vec4(shoulderWorld, 1.0f));
                 if (!haveAnchor[s]) { anchor[s] = inFrame; haveAnchor[s] = true; }
                 anchor[s] += (inFrame - anchor[s]) * Follow(dt, cfg.ArmSteadyTime);
-                glm::vec3 shift = glm::vec3(anchorFrame * glm::vec4(anchor[s], 1.0f)) - shoulderWorld;
+                glm::vec3 shift = glm::vec3(frame * glm::vec4(anchor[s], 1.0f)) - shoulderWorld;
                 const float knee = std::max(cfg.ArmSteadyMax, 0.0f);
                 // The anchor is dragged along past three times the knee, so it never trails by more (the hold there is
                 // within 4% of its most, so the drag doesn't show).
                 if (const float len = glm::length(shift), most = 3.0f * knee; len > most) {
                     shift *= len > 1e-6f ? most / len : 0.0f;
-                    anchor[s] = glm::vec3(anchorInverse * glm::vec4(shoulderWorld + shift, 1.0f));
+                    anchor[s] = glm::vec3(frameInverse * glm::vec4(shoulderWorld + shift, 1.0f));
                 }
                 shift = FirstPersonBodySteadyHold(shift, knee);
                 const glm::vec3 want = IK::Position(globals[upper]) + glm::mat3(toModel) * shift * steady;
@@ -498,7 +517,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                     // blend in), and in a tight fold - the melee's recovery, the body's shoulder nearer the gun than the
                     // rig's - the aim swings as fast as the shoulder-to-hand line does. Followed outright, the elbow whipped
                     // round. Held in the chest's view frame.
-                    const glm::mat3 modelToAnchor = glm::mat3(anchorInverse) * glm::mat3(pieceWorld);
+                    const glm::mat3 modelToAnchor = glm::mat3(frameInverse) * glm::mat3(pieceWorld);
                     if (glm::dot(aim, aim) > 1e-8f) {
                         const glm::vec3 aimTo = glm::normalize(modelToAnchor * aim);
                         if (!haveElbowAim[s]) { elbowAim[s] = aimTo; haveElbowAim[s] = true; }
@@ -588,7 +607,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     m_WorldGunDelta = glm::mat4(1.0f);
     if (!m_Twins.empty()) {
         PROFILE_SCOPE("FPB arms: twins");
-        m_WorldGunDelta = rigWorld * thirdPersonGun * glm::inverse(rigWorld);
+        m_WorldGunDelta = m_TwinChestMove * rigWorld * thirdPersonGun * glm::inverse(rigWorld);
         ArmTargets hold = firstPerson;
         glm::mat4 first(1.0f), third(1.0f);
         if (thirdPersonRig && !gunSocket.empty() && (int)thirdPersonRig->AppliedLocalPose().size() == thirdPersonRig->NodeCount() &&

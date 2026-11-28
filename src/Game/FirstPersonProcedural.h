@@ -469,6 +469,12 @@ private:
     float m_CrouchAds = 0.0f;          // smoothed crouch input for the ADS pose
     bool m_WasGrounded = true;
     float m_AirVy = 0.0f;              // vertical speed last frame in the air
+    // A landing's kick (the springs' velocity), fed in over kLandKickSpread seconds: the gun's, and the camera's dip and nod.
+    static constexpr float kLandKickSpread = 0.15f;
+    // The spread kick's scale for the one-frame kick's depth, on one axis of a spring at x0 moving at v0.
+    static float LandSpreadGain(const FirstPersonSpring& sp, float dt, float x0, float v0, float k);
+    glm::vec3 m_LandPosKick{0.0f}, m_LandRotKick{0.0f}, m_CamLandKick{0.0f};
+    float m_LandLeft = 0.0f, m_CamLandLeft = 0.0f;
     float m_BobSprint = 0.0f, m_BobPhase = 0.0f;
     float m_CamBobWeight = 0.0f; // the camera bob's weight (Camera Motion)
     float m_BreathPhase = 0.0f;
