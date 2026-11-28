@@ -936,6 +936,20 @@ void TestRevolver38Assets() {
     CHECK(ac.StateName == "Fire");
     step(1.5f);
     CHECK(ac.StateName == "Idle");
+    // The next shot before the clip ends: the gun cuts to Fire's first frame (the cylinder never turns back in
+    // sight), the arms crossfade 0.05 s.
+    ac.SetTrigger(K::kFire);
+    step(1.0f / 60.0f);
+    step(0.3f);
+    CHECK(ac.StateName == "Fire");
+    ac.SetTrigger(K::kFire);
+    step(1.0f / 60.0f);
+    const int weaponTrack = ctrl.TrackIndex("weapon"), armsTrack = ctrl.TrackIndex("arms");
+    CHECK(ac.StateName == "Fire" && ac.Layers[0].Stack.size() == 2);
+    CHECK(AnimatorTrackCuts(ctrl, ac, 0, weaponTrack) && !AnimatorTrackCuts(ctrl, ac, 0, armsTrack));
+    step(0.1f);
+    CHECK(ac.Layers[0].Stack.size() == 1);
+    step(1.5f);
 
     FirstPersonAnimationSet set;
     std::string error;
