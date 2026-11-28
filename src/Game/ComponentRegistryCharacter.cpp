@@ -514,7 +514,7 @@ void RegisterCharacterComponents() {
               "Seconds the steadied shoulders take to follow a lasting change (a crouch, the view pitching). Longer than a step so the sway is filtered out.", 0.05f, 2.0f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
         m.Fields.push_back({ "Arm Steady Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmSteadyMax), 0.005f,
-              "The most (metres) a shoulder is held off where the body's pose puts it; past this it is carried along.", 0.0f, 0.3f });
+              "Metres a shoulder is held off where the body's pose puts it in full; past this the hold eases off toward twice it (it never stops dead).", 0.0f, 0.3f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
         m.Fields.push_back({ "Look Down Push", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, LookDownPush), 0.005f,
               "Looking down, the eye comes this far (metres) forward over the chest. It moves the gun with it, away from the shoulders,\n"

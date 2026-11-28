@@ -255,8 +255,9 @@ struct FirstPersonBodyComponent {
     // The most (degrees) the chest leans toward a hand still out of reach after its collarbone has turned.
     float ReachLeanMax = 15.0f; // Reach Lean Max
     // Arm Steadiness (Weapon Arms): how much the arms ignore the body's locomotion sway, 0..1. The shoulders
-    // are held at a slow average of where they sit relative to the view (Arm Steady Time), by at most Arm
-    // Steady Max metres, and the elbows bend in the rig's plane. 0 = the arms follow the chest (the old behaviour).
+    // are held at a slow average of where they sit relative to the view (Arm Steady Time), in full up to Arm
+    // Steady Max metres and eased toward twice that past it, and the elbows bend in the rig's plane. 0 = the arms
+    // follow the chest (the old behaviour).
     float ArmSteadiness = 1.0f; // Arm Steadiness
     float ArmSteadyTime = 0.5f; // Arm Steady Time
     float ArmSteadyMax = 0.04f; // Arm Steady Max

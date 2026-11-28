@@ -183,6 +183,12 @@ float FirstPersonBodyCappedSpineAim(float pitchRadians, float spineAim, float ma
     const float capped = maxRadians * std::tanh(want / maxRadians);
     return glm::mix(spineAim, capped / pitchRadians, std::clamp(weight, 0.0f, 1.0f));
 }
+glm::vec3 FirstPersonBodySteadyHold(const glm::vec3& trail, float knee) {
+    if (!(knee > 0.0f)) return glm::vec3(0.0f);
+    const float len = glm::length(trail);
+    if (len <= knee) return trail;
+    return trail * ((knee + knee * std::tanh((len - knee) / knee)) / len);
+}
 float FirstPersonBodyMmAimFade(float speed, float from, float to) {
     if (!(to > from)) return speed <= from ? 1.0f : 0.0f;
     return 1.0f - glm::smoothstep(from, to, speed);
