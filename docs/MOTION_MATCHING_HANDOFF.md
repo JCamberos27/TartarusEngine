@@ -119,7 +119,7 @@ The pack doesn't have these. They are not faked:
   frame) are excluded for everyone at load.
 - Speeds come from the gait table through `Player::DirectionalSpeeds`: stroll, walk, jog, crouch and sprint, each with
   strafe and back speeds. Shift is the jog, Shift pressed while moving is the sprint, the Walk action is the stroll.
-- Camera and body: `MM Head Ride` (the eye rides the mocap head), `FirstPersonBody::EyeBodyPush` and `Player::MinPitch` (so
+- Camera and body: `MM Head Ride` (the eye rides the mocap head) and `Eye Ride` (armed, the shoulders), `FirstPersonBody::EyeBodyPush` and `Player::MinPitch` (so
   looking down never sees inside the torso), `KeepHandsFromEye`, `CaptureArms` / `HangArms`, aim caps
   (`Spine Aim Max Up` / `Max Down`), and Spine Aim fading with speed.
 - Foot work in `src/Game/IK.{h,cpp}`: a foot pivot on its ball, `FootLockSettings::RestFloor`, and a slide meter that

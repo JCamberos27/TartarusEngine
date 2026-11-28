@@ -993,7 +993,9 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     // Motion matching, unarmed: the eye rides the mocap head's own motion by MM Head Ride (the owner, 2026-11-17: the
     // stabilized eye over a body bobbing as captured felt stiff, and the neck rose into the view at every jogging step).
     const float headRide = std::clamp(cfg.MmHeadRide, 0.0f, 1.0f) * (1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f));
-    m_HeadRide = headRide;
+    const float armed = std::clamp(m_ArmsWeight, 0.0f, 1.0f);
+    const float eyeRide = std::clamp(cfg.EyeRide, 0.0f, 1.0f);
+    m_CameraRide = headRide + eyeRide * armed;
     BodyDebug::Info().HeadRide = headRide;
     m_Eye = FirstPersonBodyEye(m_RestHead, glm::mix(m_HeadEased, headAnimated, headRide), 1.0f, cfg.CameraOffset);
     BodyDebug::Info().HeadHeight = headAnimated.y * reg.get<TransformComponent>(m_Body).Scale.y;
@@ -1031,9 +1033,11 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
 
             const glm::vec3 shoulders = shouldersNow();
             const glm::vec3 toRest = shoulders - shouldersAnimated; // the chest's tilt at the shoulders
-            // The eye follows the shoulders' slow average, none of their motion about it (the bob is the
-            // procedural camera's) - not the bind pose, whose shoulders sit elsewhere than the standing
-            // pose's, which would put the shoulders (and so the hands' reach) that far off.
+            // The eye follows the shoulders' slow average - not the bind pose, whose shoulders sit elsewhere than the
+            // standing pose's, which would put the shoulders (and so the hands' reach) that far off - plus Eye Ride of their
+            // motion about it. Held at the average, the gun (on the rig, on the eye) and the hands stayed level while the
+            // torso bobbed 5-9 cm under them, and the arms read as a separate animation; riding, the hands keep to the chest
+            // and the procedural bob gives way by the same share (CameraRide).
             // The eye may trail or under-follow the shoulders by only Eye Slack: a clip that throws the
             // shoulders about (a stop pulling the body back) would otherwise carry them out of the
             // arms' reach and a hand would come off the gun. Bigger motions move the camera with them.
@@ -1051,7 +1055,8 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             // under the eye, and lifted, part of it came out of Near Hide and its cut edge showed) and looking up (the
             // lifted gun took the support hand past its reach, off the handguard).
             const glm::vec3 lift = FirstPersonBodyArmedEyeOffset(cfg.ArmedEyeOffset, viewPitch);
-            const glm::vec3 fromShoulders = m_Feet + yaw * (t.Scale * (m_Shoulders + toRest + lift)) - offset;
+            const glm::vec3 rode = glm::mix(m_Shoulders, shouldersAnimated, eyeRide);
+            const glm::vec3 fromShoulders = m_Feet + yaw * (t.Scale * (rode + toRest + lift)) - offset;
             // Remember where this puts the eye against the head's: unarmed the eye keeps that height, or
             // the camera would jump when the gun is holstered. Taken as it is (both eyes are already smoothed),
             // and held from the frame the arms start to ease off.

@@ -184,7 +184,8 @@ public:
     // run sway and the view bob follow so they dip on the footfalls. False until the feet have planted.
     bool GaitPhase(float& phase) const { phase = m_Gait.Phase; return IsActive() && m_Gait.Locked; }
     // How much of the mocap head's own motion the eye rides (0..1): the presentation drops that share of its camera bob.
-    float HeadRide() const { return m_HeadRide; }
+    // This frame's share of the body's own motion the camera rides: MM Head Ride unarmed, Eye Ride armed (by the arms' weight).
+    float CameraRide() const { return m_CameraRide; }
 
 private:
     bool FootPoints(const World& world, glm::vec3 (&out)[2]) const; // the feet in the driver's model space (x right, y up, z forward)
@@ -272,7 +273,7 @@ private:
     // The look-down limit (Player::MinPitch, set in BeforePlayerMove): the steepest pitch held over kLookLimitHold s (a stride
     // - it rises and falls with the bob), eased.
     float m_LookLimit = -89.0f, m_LookLimitHeld = -89.0f, m_LookLimitAge = 0.0f;
-    float m_HeadRide = 0.0f; // this frame's share of the mocap head the eye rides (MM Head Ride x unarmed)
+    float m_CameraRide = 0.0f; // CameraRide: MM Head Ride x unarmed + Eye Ride x armed
     struct EyeClearPoint { size_t Piece; int Mesh; std::uint32_t Vertex; bool Rim; };
     std::vector<EyeClearPoint> m_EyeClearPoints;
     int m_NeckNode = -1, m_HeadRimNode = -1; // the driver's neck_01 / head (the opening's axis, posed)
