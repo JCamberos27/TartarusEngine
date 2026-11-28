@@ -243,7 +243,8 @@ void WeaponLab::DrawPanel(FirstPersonPresentation* p, bool playing) {
         ImGui::SeparatorText("Third-person hold");
         ImGui::Text("State      %s", m_State.c_str());
         ImGui::Text("Stock lock %.2f", m_Lock);
-        ImGui::Text("Hands off grip  L %.1f cm  R %.1f cm", m_HandGap[0] * 100.0f, m_HandGap[1] * 100.0f);
+        if (m_HandGap[0] < 0.0f || m_HandGap[1] < 0.0f) ImGui::TextUnformatted("Hands off grip  - (easing onto the gun)");
+        else ImGui::Text("Hands off grip  L %.1f cm  R %.1f cm", m_HandGap[0] * 100.0f, m_HandGap[1] * 100.0f);
         if (m_Spare >= 0.0f) ImGui::Text("Spare mag / shell in hand: %.1f cm from it", m_Spare * 100.0f);
         else ImGui::TextDisabled("Spare mag / shell: hidden");
         const int n = (int)(sizeof m_Trace / sizeof m_Trace[0]);

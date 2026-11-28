@@ -375,9 +375,10 @@ private:
     glm::vec3 m_HeadEased{0.0f}; // unarmed: the clips' head as the eye follows it (FirstPersonBodyFollowShoulders)
     float m_ArmsWeightPrev = 0.0f;   // ... and before LateUpdate eased it (ArmsLateUpdate re-decides from it)
     bool m_ArmsWeightEased = false;  // LateUpdate has eased m_ArmsWeight this frame
-    // The world twins' arms weight: eased in over Arms Ease In on a draw (first person takes the rig's hands at once).
-    float m_TwinArmsIn = -1.0f;      // its linear progress 0..1 (smoothstepped into m_TwinArmsWeight); < 0 = not run yet
-    float m_TwinArmsWeight = 0.0f;
+    // The body's armed pose and the world twins' arms: eased in over Arms Ease In on a draw (first person takes the rig's
+    // hands and the eye at once, m_ArmsWeight). Set in LateUpdate.
+    float m_ArmsDrawIn = -1.0f;      // its linear progress 0..1 (smoothstepped into m_ArmsDrawWeight); < 0 = not run yet
+    float m_ArmsDrawWeight = 0.0f;
     bool m_ViewModelFovOk = true;    // the last ArmsLateUpdate had a view-model FOV (LateUpdate's guess at the rig)
     glm::vec3 m_GaitFeet[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // the clips' feet before foot IK (driver model space)
     bool m_HaveGaitFeet = false;

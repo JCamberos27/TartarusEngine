@@ -262,15 +262,10 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     m_ArmsWeightEased = false;
     if (follow) m_ArmsWeight = 1.0f;
     else m_ArmsWeight -= m_ArmsWeight * Follow(dt, cfg.ArmsEaseOut);
-    // The world twins ease in over Arms Ease In instead: taken at once, they jumped from the hang onto the gun in one frame
-    // (every view but the player's own). Out, they go with the pieces; a draw partway out starts from where they are.
-    if (follow) {
-        if (m_TwinArmsIn < 0.0f) m_TwinArmsIn = 1.0f; // Play's first frame with the gun already in hand: nothing to ease
-        else m_TwinArmsIn = cfg.ArmsEaseIn > 1e-4f ? std::min(1.0f, m_TwinArmsIn + dt / cfg.ArmsEaseIn) : 1.0f;
-        m_TwinArmsWeight = FirstPersonBodySmoothStep(m_TwinArmsIn);
-    } else {
-        m_TwinArmsWeight = std::min(m_TwinArmsWeight, m_ArmsWeight);
-        m_TwinArmsIn = FirstPersonBodyInverseSmoothStep(m_TwinArmsWeight);
+    // The eased weight (LateUpdate's, for the body's pose and the world twins) never stays above this one easing out.
+    if (!follow) {
+        m_ArmsDrawWeight = std::min(m_ArmsDrawWeight, m_ArmsWeight);
+        m_ArmsDrawIn = FirstPersonBodyInverseSmoothStep(m_ArmsDrawWeight);
     }
     const bool viewModelArms = follow;
     // Easing off a holstered gun (a weapon swap's holster to draw, or going unarmed) the arms piece is hidden
@@ -565,8 +560,10 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 if (firstPersonView) {
                     BodyDebug::Info().HandGap[s] = gap;
                 } else {
-                    m_TwinHandGap[s] = gap;
-                    BodyDebug::Info().TwinHandGap[s] = gap;
+                    // Easing onto a drawn gun the hands are on their way by design (the gun comes up in the right one):
+                    // no gap to score until they are there.
+                    m_TwinHandGap[s] = weight < 1.0f - 1e-4f ? -1.0f : gap;
+                    BodyDebug::Info().TwinHandGap[s] = m_TwinHandGap[s];
                 }
             }
         m.ApplyLocalPose(pose);
@@ -633,11 +630,11 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             hold.Elbow[s] = glm::vec3(m_WorldGunDelta * glm::vec4(hold.Elbow[s], 1.0f));
         }
         solveArms(m_TwinModels, m_Twins, hold, m_WorldShoulderAnchor, m_WorldHaveShoulderAnchor, m_WorldElbowAim, m_WorldHaveElbowAim, false,
-                  m_TwinArmsWeight);
+                  m_ArmsDrawWeight);
         ArmTwist(m_TwinModels);
         // Easing in (a draw), the world gun comes up in the right hand: carried by the hand's way from where it is to its grip
         // (the move it still has to make, shrinking to none at full weight) instead of waiting at the grip for the hands.
-        if (m_TwinArmsWeight < 1.0f - 1e-4f && hold.Have[1])
+        if (m_ArmsDrawWeight < 1.0f - 1e-4f && hold.Have[1])
             for (size_t k = 0; k < m_TwinModels.size() && k < m_Twins.size(); ++k) {
                 if (!m_TwinModels[k] || !reg.valid(m_Twins[k])) continue;
                 const Model& o = *m_TwinModels[k];
@@ -647,7 +644,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 const glm::vec3 nowPos(now[3]), gripPos = hold.Pos[1] + hold.Palm[1] * gripInset;
                 const glm::quat nowRot = glm::normalize(glm::quat_cast(glm::mat3(glm::normalize(glm::vec3(now[0])),
                                                         glm::normalize(glm::vec3(now[1])), glm::normalize(glm::vec3(now[2])))));
-                const float w = std::clamp(m_TwinArmsWeight, 0.0f, 1.0f);
+                const float w = std::clamp(m_ArmsDrawWeight, 0.0f, 1.0f);
                 const glm::quat spin = glm::slerp(glm::normalize(nowRot * glm::inverse(hold.Rot[1])), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), w);
                 const glm::vec3 from = glm::mix(nowPos, gripPos, w); // the grip carried to here, turned about it
                 const glm::mat4 carry = glm::translate(glm::mat4(1.0f), from) * glm::mat4_cast(spin) * glm::translate(glm::mat4(1.0f), -gripPos);
