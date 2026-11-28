@@ -35,6 +35,7 @@ using namespace FirstPersonBodyDetail;
 
 namespace {
 
+constexpr float kMmChestTwistHalflife = 0.08f;   // s: ... eased toward the view this fast (half the way in this time)
 constexpr float kMmChestTwistMax = 60.0f;       // deg: under MM, the chest's twist toward the view at most this far off the body
 // MM Spine Aim (the owner, 2026-11-17: looking up or down the torso bends standing; moving, the head looks and the body runs
 // as captured): the chest's share of the view's pitch, full below kMmAimFadeFrom m/s, gone by the walk/jog midpoint.
@@ -975,9 +976,16 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         // spread over the spine - on top of the clip's chest. Not a closed loop: the gait's own counter-rotation of the
         // shoulders against the hips passes untouched (re-aimed every frame, the shoulder line was held square to the view:
         // the jog's chest swung 1.36x the clip's against the pelvis).
+        // Eased (kMmChestTwistHalflife, FirstPersonBodyEaseTwist): instant, a 180 flick wound the chest 60 deg off the hips in 4
+        // frames (1400 deg/s) while the clip's turned 5, and a flick past straight behind swung it 120 deg across in one frame.
+        // (Holding the chest on its side through straight behind was tried: it kept the view looking back over the shoulder, and
+        // on a 200 flick the jacket filled 15 % of the lower view against 9 % on the instant twist; eased across, 11 %.)
         const float lim = glm::radians(kMmChestTwistMax);
-        const float twist = std::clamp(m_Twist, -lim, lim) * std::min(cfg.SpineTwist, 1.0f);
+        m_TwistEased = FirstPersonBodyEaseTwist(m_TwistEased, m_Twist, lim, kMmChestTwistHalflife, dt);
+        const float twist = m_TwistEased * std::min(cfg.SpineTwist, 1.0f);
         if (std::abs(twist) > 0.002f) ApplySpineAim(camera, 0.0f, twist);
+    } else {
+        m_TwistEased = 0.0f; // not drawn (armed, or the layers off): it comes back in from square, eased
     }
     if (!haveHead) return;
 

@@ -813,6 +813,30 @@ void TestPlayerHooks() {
     m.SearchParams.Forbid = MotionLabel::Airborne | MotionLabel::Crouch;
     m.Update(dt, in);
     CHECK(m.Searches == 1); // unlocked: the schedule searches at once
+    // A jump that crouches or stands up blends CrouchToggleBlendTime; one that keeps the posture, the usual BlendTime.
+    {
+        const auto& crouch = db.Clip(db.Stream().FindClip("Crouch_Walk"));
+        CHECK((db.Flags(crouch.First + 40) & MotionLabel::Crouch) && !(db.Flags(walk.First + 40) & MotionLabel::Crouch));
+        const int usual = (int)std::lround(m.Inertializer.Params.BlendTime / dt);
+        auto blendFrames = [&](float toggle, std::uint32_t from, std::uint32_t to) {
+            MotionMatcher c;
+            c.Reset(&db, from);
+            c.Locked = true;
+            c.CrouchToggleBlendTime = toggle;
+            for (int i = 0; i < 5; ++i) c.Update(dt, in);
+            c.ForceFrame(to);
+            int n = 0;
+            while (n < 1000) { c.Update(dt, in); ++n; if (!c.Inertializer.Blending()) break; }
+            return n;
+        };
+        const int want = (int)std::lround(0.45f / dt);
+        const int down = blendFrames(0.45f, walk.First + 40, crouch.First + 40), up = blendFrames(0.45f, crouch.First + 40, walk.First + 40);
+        const int same = blendFrames(0.45f, walk.First + 40, walk.First + 100), off = blendFrames(0.0f, walk.First + 40, crouch.First + 40);
+        std::printf("[MotionMatching] crouch toggle blend: down %d, up %d frames (want %d); same posture %d, toggle off %d (usual %d)\n", down,
+                    up, want, same, off, usual);
+        CHECK(std::abs(down - want) <= 1 && std::abs(up - want) <= 1);
+        CHECK(std::abs(same - usual) <= 1 && std::abs(off - usual) <= 1);
+    }
     const float speed = FirstPersonBodyMotion::RootSpeed(db, walk.First + 120);
     CHECK(std::fabs(speed - 1.3f) < 0.05f);
     CHECK(std::fabs(FirstPersonBodyMotion::RootYawRate(db, walk.First + 120)) < 1e-3f);
