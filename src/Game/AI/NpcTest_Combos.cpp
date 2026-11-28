@@ -208,6 +208,7 @@ struct NpcTest::CombosRun {
     float TurnT = 0.0f;    // s the view has turned (turn: from the lead-in's start)
     bool LeftRest = false; // ... and the action has taken it out of one
     bool Jumped = false;
+    bool FastGait = false; // the cell moves at a jog or a sprint (Sprint held): the bounce's line is the fast one
     bool SetupFailed = false;
     std::string States;    // the controller states the window went through
     std::string LastState;
@@ -469,6 +470,7 @@ void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float
     player.ScriptMove = move;
     player.ScriptSprint = S.Move == CbMove::Jog || S.Move == CbMove::Sprint;
     player.ScriptRun = S.Move == CbMove::Sprint;
+    R.FastGait = player.ScriptSprint;
     player.ScriptCrouch = S.Move == CbMove::CrouchIdle || S.Move == CbMove::CrouchWalk || (S.Move == CbMove::IdleToCrouch && changed);
     if (S.Move == CbMove::Turn) {
         R.TurnT += dt;
@@ -561,6 +563,7 @@ void NpcTest::CombosPose(const World& world, const FirstPersonBody& body, const 
     s.Recoil = p.SinceShot() < 0.35f || s.State == "Fire";
     s.Speed = p.PlanarSpeed();
     s.GaitPhase = p.HaveGaitPhase() ? p.GaitPhaseValue() : -1.0f;
+    s.FastGait = R.FastGait;
     for (int k = 0; k < 2; ++k) {
         s.Hand[k] = glm::vec3(h[k].x, h[k].y, -h[k].z); // (the view looks down -Z)
         s.HandGap[k] = bd.HandGap[k];

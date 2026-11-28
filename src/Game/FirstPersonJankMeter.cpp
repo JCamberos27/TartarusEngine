@@ -33,7 +33,7 @@ void FirstPersonJankMeter::Reset() {
     m_Lo[0] = m_Lo[1] = 1e9f;
     m_Hi[0] = m_Hi[1] = -1e9f;
     m_CycleFrames = 0;
-    m_CycleSpeed = 0.0f;
+    m_CycleFast = true;
     m_CycleClean = true;
     m_LastCycleMm = -1.0f;
 }
@@ -73,13 +73,13 @@ void FirstPersonJankMeter::EndCycle() {
         for (int h = 0; h < 2; ++h)
             if (m_Hi[h] > m_Lo[h]) mm = std::max(mm, (m_Hi[h] - m_Lo[h]) * 1000.0f);
         m_LastCycleMm = mm;
-        const float line = m_CycleSpeed / (float)m_CycleFrames >= FastSpeed ? BounceFastMm : BounceMm;
+        const float line = m_CycleFast ? BounceFastMm : BounceMm;
         if (mm > line) Flag(FirstPersonJankEvent::Kind::Bounce, mm, -1, line);
     }
     m_Lo[0] = m_Lo[1] = 1e9f;
     m_Hi[0] = m_Hi[1] = -1e9f;
     m_CycleFrames = 0;
-    m_CycleSpeed = 0.0f;
+    m_CycleFast = true;
     m_CycleClean = true;
 }
 
@@ -99,7 +99,7 @@ void FirstPersonJankMeter::Push(const FirstPersonJankSample& f) {
         m_Lo[0] = m_Lo[1] = 1e9f;
         m_Hi[0] = m_Hi[1] = -1e9f;
         m_CycleFrames = 0;
-        m_CycleSpeed = 0.0f;
+        m_CycleFast = true;
         m_CycleClean = true;
         m_Prev.push_back(f);
         if (m_Prev.size() > 2) m_Prev.erase(m_Prev.begin());
@@ -118,14 +118,14 @@ void FirstPersonJankMeter::Push(const FirstPersonJankSample& f) {
         m_Lo[0] = m_Lo[1] = 1e9f;
         m_Hi[0] = m_Hi[1] = -1e9f;
         m_CycleFrames = 0;
-        m_CycleSpeed = 0.0f;
+        m_CycleFast = true;
         m_CycleClean = true;
     } else {
         if (m_PrevPhase >= 0.0f && f.GaitPhase < m_PrevPhase - 0.5f) EndCycle(); // wrapped
         m_PrevPhase = f.GaitPhase;
         if (f.Recoil) m_CycleClean = false;
         ++m_CycleFrames;
-        m_CycleSpeed += f.Speed;
+        m_CycleFast = m_CycleFast && f.FastGait;
         for (int h = 0; h < 2; ++h) {
             m_Lo[h] = std::min(m_Lo[h], f.Hand[h].y);
             m_Hi[h] = std::max(m_Hi[h], f.Hand[h].y);

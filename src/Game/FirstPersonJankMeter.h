@@ -9,7 +9,7 @@
 // matrix's first-person instrument). It is fed what the player SEES - each hand in the camera's space - plus the body
 // debug's numbers (grip gap, reach, eye-to-arm), and flags:
 //   Bounce  - one gait cycle's vertical hand travel (peak to peak, mm) past its line while moving: the walking arm bounce.
-//             The line is BounceMm, or BounceFastMm for a cycle run at FastSpeed or more (a jog, a sprint).
+//             The line is BounceMm, or BounceFastMm for a cycle run all in a fast gait (a jog, a sprint).
 //   HandPop - an acceleration spike a hand makes in the view (a step, a snap) that a recoil kick does not explain.
 //   Grip    - a hand off the rig's grip (the arm could not reach, or the solve lags): more than GripCm.
 //   Stretch - a hand asked past the arm's reach (Reach > 1): the shoulder shrug and reach lean are what cover it.
@@ -26,6 +26,7 @@ struct FirstPersonJankSample {
     bool Recoil = false;         // a shot's kick this frame: its pop is the recoil's
     float Speed = 0.0f;          // the player's planar speed (m/s)
     float GaitPhase = -1.0f;     // 0..1 the body's step cycle; < 0 none (standing, in the air)
+    bool FastGait = false;       // a jog or a sprint (Sprint held): the bounce's line is BounceFastMm
     glm::vec3 Hand[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // each hand in the camera's space (m; x right, y up, z forward)
     float HandGap[2] = {0.0f, 0.0f};   // m each body hand is off the rig's (BodyDebug HandGap)
     float Reach[2] = {0.0f, 0.0f};     // each hand's distance from its shoulder, of the arm's length (BodyDebug Reach)
@@ -49,9 +50,9 @@ class FirstPersonJankMeter {
 public:
     // Thresholds. A pop is a jump past a smooth path of more than PopCm in a frame (at 60 Hz, scaled to the step).
     float BounceMm = 15.0f;      // a cycle's vertical travel
-    // ... and a cycle run at FastSpeed (m/s, its mean) or more: a jog or a sprint, where Body Motion's gun trail (#1309,
-    // ~0.01 m per m/s) is designed - 1.5x its worst measured (870 jog, 33 mm).
-    float BounceFastMm = 50.0f, FastSpeed = 2.4f;
+    // ... and a cycle run all in a fast gait (a jog, a sprint), where Body Motion's gun trail (#1309) is designed: 1.5x its
+    // worst measured (870 jog, 33 mm).
+    float BounceFastMm = 50.0f;
     float MinBounceSpeed = 0.5f; // m/s: below it no cycle is measured
     float PopCm = 0.6f;
     float GripCm = 1.0f;
@@ -78,7 +79,7 @@ private:
     // The gait cycle being measured: each hand's vertical range since the phase last wrapped.
     float m_PrevPhase = -1.0f, m_Lo[2] = {1e9f, 1e9f}, m_Hi[2] = {-1e9f, -1e9f};
     int m_CycleFrames = 0;
-    float m_CycleSpeed = 0.0f; // the cycle's summed speed (its mean: / m_CycleFrames)
+    bool m_CycleFast = true;   // every frame of the cycle in a fast gait
     bool m_CycleClean = true; // moving, not recoiling, one state throughout
     float m_LastCycleMm = -1.0f;
 };

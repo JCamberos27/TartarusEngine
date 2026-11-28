@@ -15,7 +15,7 @@ using Kind = FirstPersonJankEvent::Kind;
 
 // A walk script: `seconds` at 60 Hz, the gait phase running at `rate` cycles a second, each hand's height off `y(i, phase)`.
 template <typename Fn>
-FirstPersonJankMeter RunWalk(float seconds, float rate, Fn y, float speed = 1.5f, FirstPersonJankMeter m = FirstPersonJankMeter()) {
+FirstPersonJankMeter RunWalk(float seconds, float rate, Fn y, bool fast = false, FirstPersonJankMeter m = FirstPersonJankMeter()) {
     m.Reset();
     float phase = 0.0f;
     const int frames = (int)(seconds * 60.0f);
@@ -23,7 +23,8 @@ FirstPersonJankMeter RunWalk(float seconds, float rate, Fn y, float speed = 1.5f
         FirstPersonJankSample s;
         s.Dt = 1.0f / 60.0f;
         s.State = "Walk";
-        s.Speed = speed;
+        s.Speed = fast ? 3.3f : 1.5f;
+        s.FastGait = fast;
         phase = std::fmod(phase + rate / 60.0f, 1.0f);
         s.GaitPhase = phase;
         s.Hand[0] = glm::vec3(-0.1f, y(i, phase), 0.3f);
@@ -45,10 +46,10 @@ void TestFirstPersonJankMeterBounce() {
     CHECK(bounce.Worst(Kind::Bounce) > 27.0f && bounce.Worst(Kind::Bounce) < 31.0f);
     CHECK(bounce.Events().front().What == Kind::Bounce && bounce.Events().front().State == "Walk");
     CHECK(bounce.Events().front().Line == bounce.BounceMm);
-    // At a jog (3.3 m/s) the line is BounceFastMm (Body Motion's designed gun trail): 30 mm is under it, 60 mm is over.
-    auto jog = RunWalk(3.0f, 1.4f, [](int, float ph) { return 0.015f * std::sin(6.2831853f * 2.0f * ph); }, 3.3f);
+    // At a jog or a sprint the line is BounceFastMm (Body Motion's designed gun trail): 30 mm is under it, 60 mm is over.
+    auto jog = RunWalk(3.0f, 1.4f, [](int, float ph) { return 0.015f * std::sin(6.2831853f * 2.0f * ph); }, true);
     CHECK(jog.Events().empty() && jog.LastCycleMm() > 27.0f);
-    auto jogBig = RunWalk(3.0f, 1.4f, [](int, float ph) { return 0.03f * std::sin(6.2831853f * 2.0f * ph); }, 3.3f);
+    auto jogBig = RunWalk(3.0f, 1.4f, [](int, float ph) { return 0.03f * std::sin(6.2831853f * 2.0f * ph); }, true);
     CHECK(!jogBig.Events().empty() && jogBig.Events().front().Line == jogBig.BounceFastMm && jogBig.Worst(Kind::Bounce) > 55.0f);
     // Standing (no gait phase) or crawling under MinBounceSpeed: nothing is measured, however much the hands move.
     FirstPersonJankMeter still;
