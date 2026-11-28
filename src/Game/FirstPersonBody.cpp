@@ -911,14 +911,21 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     const float viewPitch = std::asin(std::clamp(camera.Front().y, -1.0f, 1.0f));
     // Unarmed, the chest's pitch at the view is capped (Spine Aim Max Up / Down, eased in): past it the head looks on alone.
     const float aimUnarmed = 1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f);
-    float spineAim = FirstPersonBodyCappedSpineAim(viewPitch, FirstPersonBodySpineAim(viewPitch, cfg.SpineAim, cfg.SpineAimDown),
-                                                   glm::radians(viewPitch >= 0.0f ? cfg.SpineAimMaxUp : cfg.SpineAimMaxDown), aimUnarmed);
+    const float aimShare = FirstPersonBodySpineAim(viewPitch, cfg.SpineAim, cfg.SpineAimDown);
+    const float aimCap = glm::radians(viewPitch >= 0.0f ? cfg.SpineAimMaxUp : cfg.SpineAimMaxDown);
+    float spineAim = FirstPersonBodyCappedSpineAim(viewPitch, aimShare, aimCap, aimUnarmed);
+    // The world twins (every view but the player's own) take the cap armed too. The pieces can't: the rig's arms pitch
+    // with the whole view and the chest has to follow for the hands to reach the gun - looking down armed it took 0.9 of
+    // the view's pitch, and seen from outside the body folded at the waist (80 deg at -80, past 100 crouched). The twins
+    // hold the world gun with their own arm solve, from the capped chest.
+    float twinAim = FirstPersonBodyCappedSpineAim(viewPitch, aimShare, aimCap, 1.0f);
     // Motion matching, unarmed: the aim fades out with speed (FirstPersonBodyMmAimFade) - moving, the head looks and the body
     // moves as captured. (Armed, the chest still carries the arms rig's aim.)
     if (m_Mm.Active()) {
         const GaitSpeedTable& g = m_Mm.Gaits();
         const float fade = FirstPersonBodyMmAimFade(glm::length(m_Move), kMmAimFadeFrom, 0.5f * (g.Walk + g.Jog));
         spineAim *= 1.0f - aimUnarmed * (1.0f - fade);
+        twinAim *= 1.0f - aimUnarmed * (1.0f - fade);
         BodyDebug::Info().MmAimFade = fade;
     }
     // The torso's forward bend (BodyDebug): pelvis to the top spine bone off the vertical, in the driver's model space.
@@ -932,6 +939,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     BodyDebug::Info().ViewPitchDeg = glm::degrees(viewPitch);
     // The pitch only: the chest's heading (Spine Twist, or the rig's stance) is closed-loop below, measured off the
     // shoulders - the clips' own spine yaw is in it, so an open-loop twist here was only ever a first guess.
+    m_TwinSpineFix = mmLayers && spineAim > 0.0f ? viewPitch * (twinAim - spineAim) : 0.0f; // (0 unarmed: the same cap)
     if (mmLayers && spineAim > 0.0f) {
         // Arm Hang, unarmed (armed, the arms take the rig's pose and reach the gun: ArmsLateUpdate).
         const float hang = 1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f);

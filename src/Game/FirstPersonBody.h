@@ -280,6 +280,10 @@ private:
     // The look-down limit (Player::MinPitch, set in BeforePlayerMove): the steepest pitch held over kLookLimitHold s (a stride
     // - it rises and falls with the bob), eased.
     float m_LookLimit = -89.0f, m_LookLimitHeld = -89.0f, m_LookLimitAge = 0.0f;
+    // Radians the world twins' spine pitches less than the pieces' (this frame's LateUpdate; ArmsLateUpdate puts it on the
+    // twins): armed, the twins take the capped spine aim the unarmed body has.
+    float m_TwinSpineFix = 0.0f;
+    glm::mat4 m_TwinChestMove{1.0f}; // world: what m_TwinSpineFix did to the twins' chest (the world gun goes with it)
     float m_CameraRide = 0.0f; // CameraRide: MM Head Ride x unarmed + Eye Ride x armed
     glm::vec3 m_EyeMotion{0.0f}, m_EyeFromFeet{0.0f}; // EyeMotion; the eye against the feet last frame
     bool m_HaveEyeFromFeet = false;
