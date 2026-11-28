@@ -532,7 +532,7 @@ struct NpcTest::TestbedRun {
         // vertical, steady part of a moving leg (from 1 s in): the camera off the body's eye, the camera off the capsule's eye,
         // the procedural pose's camera offset
         float ResidMin = 1e9f, ResidMax = -1e9f, CamMin = 1e9f, CamMax = -1e9f, ProcMin = 1e9f, ProcMax = -1e9f;
-        float HeadRide = 0.0f; // BodyDebug::HeadRide, the leg's highest
+        float CameraRide = 0.0f; // BodyDebug::CameraRide, the leg's highest
         int ResidFrames = 0;
         float CamRelMax = -1e9f;      // the camera off the capsule's eye, the whole leg
         float LegReachMax = 0.0f, ClampPullMax = 0.0f; // reach foot IK asked for; m the reach clamp moved a foot
@@ -850,7 +850,7 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
             s.ResidMin = std::min(s.ResidMin, residY);
             s.ResidMax = std::max(s.ResidMax, residY);
             ++s.ResidFrames;
-            s.HeadRide = std::max(s.HeadRide, BodyDebug::Info().HeadRide);
+            s.CameraRide = std::max(s.CameraRide, BodyDebug::Info().CameraRide);
             {
                 const glm::vec3 kick = cam - bodyEye, eye = bodyEye - capsuleEye;
                 if (s.JitterSeen >= 2) {
@@ -970,16 +970,19 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
         }
         {
             const TestbedRun::LegStats& s = R.Legs[legIndex("A walk")];
-            if (s.ResidFrames > 0 && s.HeadRide > 0.99f) {
-                // Riding the mocap head (motion matching, unarmed, MM Head Ride 1) the camera bobs as the head does: the
+            if (s.ResidFrames > 0 && s.CameraRide > 0.99f) {
+                // Riding the body's own motion (MM Head Ride 1 unarmed, Eye Ride 1 armed) the camera bobs as the body does: the
                 // procedural bob is off - none of it on top (the owner, 2026-11-17: "lets go ahead and remove it").
                 const float amp = (s.ResidMax - s.ResidMin) * 0.5f;
-                Check(amp < 0.001f, "A: riding the mocap head, no procedural bob on top - walking, the camera bobs " + std::to_string(amp * 1000.0f) +
+                Check(amp < 0.001f, "A: riding the body's motion, no procedural bob on top - walking, the camera bobs " + std::to_string(amp * 1000.0f) +
                                         " mm off the body's eye (< 1 mm)");
-            } else if (s.ResidFrames > 0) {
+            } else if (s.ResidFrames > 0 && s.CameraRide < 0.01f) {
                 const float amp = (s.ResidMax - s.ResidMin) * 0.5f;
                 Check(amp > 0.005f, "A: the procedural bob reaches the screen - walking, the camera bobs " + std::to_string(amp * 1000.0f) +
                                         " mm off the body's eye (> 5 mm)");
+            } else if (s.ResidFrames > 0) {
+                skip("A: the procedural bob on the screen (a part ride: the bob is part procedural, part the body's)",
+                     "MM Head Ride / Eye Ride at 0 or 1");
             } else {
                 skip("A: the procedural bob reaches the screen (camera off the body's eye > 5 mm at walk)", "BodyDebug::Snapshot::BodyEye");
             }

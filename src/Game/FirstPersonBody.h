@@ -183,8 +183,11 @@ public:
     // The gait's phase from the body's own foot plants (0 = the left foot down, 0.5 = the right), what the weapon's walk and
     // run sway and the view bob follow so they dip on the footfalls. False until the feet have planted.
     bool GaitPhase(float& phase) const { phase = m_Gait.Phase; return IsActive() && m_Gait.Locked; }
-    // How much of the mocap head's own motion the eye rides (0..1): the presentation drops that share of its camera bob.
-    float HeadRide() const { return m_HeadRide; }
+    // This frame's share of the body's own motion the camera rides: MM Head Ride unarmed, Eye Ride armed (by the arms' weight):
+    // the presentation drops that share of its camera bob.
+    float CameraRide() const { return m_CameraRide; }
+    // The sights' blend this frame (0 at the hip, 1 aimed): the armed eye rides Eye Ride ADS by it. Set before LateUpdate.
+    void SetAdsBlend(float blend) { m_AdsBlend = blend; }
 
 private:
     bool FootPoints(const World& world, glm::vec3 (&out)[2]) const; // the feet in the driver's model space (x right, y up, z forward)
@@ -276,7 +279,8 @@ private:
     // twins): armed, the twins take the capped spine aim the unarmed body has.
     float m_TwinSpineFix = 0.0f;
     glm::mat4 m_TwinChestMove{1.0f}; // world: what m_TwinSpineFix did to the twins' chest (the world gun goes with it)
-    float m_HeadRide = 0.0f; // this frame's share of the mocap head the eye rides (MM Head Ride x unarmed)
+    float m_CameraRide = 0.0f; // CameraRide: MM Head Ride x unarmed + Eye Ride x armed
+    float m_AdsBlend = 0.0f; // SetAdsBlend
     struct EyeClearPoint { size_t Piece; int Mesh; std::uint32_t Vertex; bool Rim; };
     std::vector<EyeClearPoint> m_EyeClearPoints;
     int m_NeckNode = -1, m_HeadRimNode = -1; // the driver's neck_01 / head (the opening's axis, posed)

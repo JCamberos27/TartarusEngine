@@ -19,9 +19,12 @@ void Update(Gameplay::WeaponFrame& w) {
             return;
         }
         if (!w.Chambered || Has(w, Cycling | Reloading | Busy) || w.WallBlocked) return;
+        // Hands off the gun (a fidget, draw, holster): no shot on either path. A fire clip couldn't play over
+        // those states anyway, so its request would only spend the cooldown on a round that never went.
+        if (Has(w, IkOff)) return;
         const bool procedural = Has(w, Ads) || (w.HipProcedural && Has(w, Idle | Ready)) || w.RecoilProfile;
         if (procedural) {
-            if (Has(w, IkOff) || !Has(w, Ads | Idle | Ready)) return;
+            if (!Has(w, Ads | Idle | Ready)) return;
             w.Commands |= Commit;
         } else { w.Commands |= FireTrigger; w.WaitingShot = 1; }
         w.Result = 1;

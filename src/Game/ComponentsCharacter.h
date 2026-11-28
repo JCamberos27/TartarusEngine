@@ -151,8 +151,14 @@ struct FirstPersonBodyComponent {
     // MmPostLayers off draws the matcher's pose with foot IK only - no Spine Aim / Twist, arm hang or hands-from-eye.
     bool MmPostLayers = true;
     // Motion matching, unarmed: how much of the mocap head's own motion the eye rides (0 = its slow average, within Eye Slack -
-    // the stabilized camera; 1 = the head as captured: the jog's bob and sway). Armed, the eye stays the rig's.
+    // the stabilized camera; 1 = the head as captured: the jog's bob and sway). Armed: Eye Ride.
     float MmHeadRide = 1.0f;
+    // Armed: how much of the shoulders' own motion the eye rides (and the arms rig, the hands and the gun with it). 0 = their
+    // slow average, within Eye Slack (the stabilized camera, the gun held level while the torso bobs under it); 1 = the
+    // shoulders as the clips move them, so the hands ride the chest. The procedural camera bob scales by 1 - the ride.
+    float EyeRide = 1.0f;
+    // ... with the sights up (blended in as they come up). 0: the aimed sight picture is the stabilized one, as steady as before.
+    float EyeRideAds = 0.0f;
     float WalkSpeed = 1.53f;       // m/s asked of the blend tree when walking - the default gait (the walk clips' speed)
     float RunSpeed = 3.26f;        // ... and with Shift held: the jog (the jog clips' speed)
     float SprintSpeed = 4.72f;     // ... and while sprinting (the run clip's)

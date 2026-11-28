@@ -733,7 +733,7 @@
           "to": "TacReload"
         },
         {
-          "canTransitionToSelf": true,
+          "canTransitionToSelf": false,
           "conditions": [
             {
               "mode": "if",
@@ -765,7 +765,7 @@
           "to": "Fire"
         },
         {
-          "canTransitionToSelf": true,
+          "canTransitionToSelf": false,
           "conditions": [
             {
               "mode": "if",
@@ -781,7 +781,7 @@
           "to": "Inspect"
         },
         {
-          "canTransitionToSelf": true,
+          "canTransitionToSelf": false,
           "conditions": [
             {
               "mode": "if",
@@ -1051,6 +1051,20 @@
         {
           "conditions": [
             {
+              "mode": "if",
+              "param": "Trigger",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Regrip",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
               "mode": "greater",
               "param": "Speed",
               "threshold": 0.05
@@ -1275,21 +1289,6 @@
           "speed": 0.0,
           "tags": [
             "Ready"
-          ],
-          "curves": [
-            {
-              "keys": [
-                [
-                  0.0,
-                  1.0
-                ],
-                [
-                  1.0,
-                  1.0
-                ]
-              ],
-              "name": "WalkBlend"
-            }
           ]
         },
         {
@@ -1341,22 +1340,7 @@
             0.0
           ],
           "priority": 1,
-          "speed": 1.0,
-          "curves": [
-            {
-              "keys": [
-                [
-                  0.0,
-                  1.0
-                ],
-                [
-                  1.0,
-                  1.0
-                ]
-              ],
-              "name": "WalkBlend"
-            }
-          ]
+          "speed": 1.0
         },
         {
           "loop": false,
@@ -1380,22 +1364,7 @@
             140.0
           ],
           "priority": 1,
-          "speed": 1.0,
-          "curves": [
-            {
-              "keys": [
-                [
-                  0.0,
-                  1.0
-                ],
-                [
-                  1.0,
-                  1.0
-                ]
-              ],
-              "name": "WalkBlend"
-            }
-          ]
+          "speed": 1.0
         },
         {
           "loop": true,
@@ -1731,180 +1700,9 @@
           "fromAny": true,
           "hasExitTime": false,
           "to": "Off"
-        },
-        {
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Jog",
-              "threshold": 0.0
-            },
-            {
-              "mode": "greater",
-              "param": "Speed",
-              "threshold": 0.05
-            }
-          ],
-          "duration": 0.25,
-          "exitTime": 0.9,
-          "from": "Idle",
-          "hasExitTime": false,
-          "to": "IdleToSprint"
-        },
-        {
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Jog",
-              "threshold": 0.0
-            },
-            {
-              "mode": "greater",
-              "param": "Speed",
-              "threshold": 0.05
-            }
-          ],
-          "duration": 0.25,
-          "exitTime": 0.9,
-          "from": "Walk",
-          "hasExitTime": false,
-          "to": "IdleToSprint"
-        },
-        {
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Jog",
-              "threshold": 0.0
-            },
-            {
-              "mode": "greater",
-              "param": "Speed",
-              "threshold": 0.05
-            }
-          ],
-          "duration": 0.1,
-          "exitTime": 0.9,
-          "from": "SprintToIdle",
-          "hasExitTime": false,
-          "to": "IdleToSprint"
         }
       ],
       "weight": 1.0
-    },
-    {
-      "name": "Weapon Walk",
-      "blending": "additive",
-      "weight": 1.0,
-      "additiveReferenceState": "Off",
-      "weightCurve": "WalkBlend",
-      "weightCurveLayer": "Weapon Locomotion",
-      "defaultState": "Off",
-      "entryPosition": [
-        -640,
-        140
-      ],
-      "anyPosition": [
-        -320,
-        -150
-      ],
-      "exitPosition": [
-        960,
-        140
-      ],
-      "states": [
-        {
-          "loop": true,
-          "motions": {
-            "arms": {
-              "clip": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Walk.fbx",
-              "clipGuid": "6e8123547b7ff1e4"
-            },
-            "arms3p": {
-              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Walk.fbx",
-              "clipGuid": "b14341a72ccbfac1"
-            }
-          },
-          "name": "Walk",
-          "position": [
-            0.0,
-            140.0
-          ],
-          "speed": 1.0,
-          "speedParam": "WalkRate",
-          "tags": [
-            "Ready"
-          ],
-          "phaseParam": "GaitPhase",
-          "phaseOffset": 0.04,
-          "phaseCycles": 1.0
-        },
-        {
-          "name": "Off",
-          "loop": true,
-          "speed": 0.0,
-          "motions": {
-            "arms": {
-              "clip": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx",
-              "clipGuid": "4168495e7bad8625"
-            },
-            "arms3p": {
-              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Idle.fbx",
-              "clipGuid": "62e9fa0ebfe54ddd"
-            }
-          },
-          "position": [
-            -320,
-            140
-          ]
-        }
-      ],
-      "transitions": [
-        {
-          "to": "Walk",
-          "hasExitTime": false,
-          "conditions": [
-            {
-              "param": "Equipped",
-              "threshold": 0.0,
-              "mode": "if"
-            },
-            {
-              "param": "Speed",
-              "threshold": 0.05,
-              "mode": "greater"
-            }
-          ],
-          "duration": 0.1,
-          "from": "Off"
-        },
-        {
-          "to": "Off",
-          "hasExitTime": false,
-          "conditions": [
-            {
-              "param": "Speed",
-              "threshold": 0.05,
-              "mode": "less"
-            }
-          ],
-          "duration": 0.1,
-          "from": "Walk"
-        },
-        {
-          "fromAny": true,
-          "to": "Off",
-          "hasExitTime": false,
-          "conditions": [
-            {
-              "param": "Equipped",
-              "threshold": 0.0,
-              "mode": "ifNot"
-            }
-          ],
-          "duration": 0.12
-        }
-      ]
     }
   ],
   "parameters": [
@@ -1982,6 +1780,11 @@
       "default": -1.0,
       "name": "GaitPhase",
       "type": "float"
+    },
+    {
+      "default": 0.0,
+      "name": "Trigger",
+      "type": "bool"
     }
   ],
   "tracks": [

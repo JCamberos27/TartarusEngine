@@ -62,7 +62,9 @@ locomotion graphs, its decisions, what each phase shipped and the open issues, i
   `MOTION_MATCHING_HANDOFF.md`, "Test protocol and fast iteration".
 - **The Inspector's First Person Body** keeps two A/B switches:
   - MM Post Layers: off draws the matcher's pose with foot IK only.
-  - MM Head Ride: how much of the mocap head's motion the eye rides.
+  - MM Head Ride: how much of the mocap head's motion the eye rides (unarmed).
+  - Eye Ride: armed, how much of the shoulders' own motion the eye rides, and the arms and gun with it (the procedural
+    camera bob scales by 1 - the ride).
 
 ## Testing
 

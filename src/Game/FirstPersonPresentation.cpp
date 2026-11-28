@@ -518,6 +518,7 @@ void FirstPersonPresentation::StopSet(World& world) {
     m_FullAuto = false;
     m_BurstRemaining = 0;
     m_WaitingAnimatedShot = false;
+    m_TriggerRetry = false;
     m_FireCooldown = 0.0f;
     m_IdleTime = 0.0f;
     ResetReloadKey();
@@ -1029,8 +1030,6 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     }
     static const std::string kLayerLocomotion = "LayerWeight:Weapon Locomotion";
     ac->SetFloat(kLayerLocomotion,glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold));
-    static const std::string kLayerWalk = "LayerWeight:Weapon Walk";
-    ac->SetFloat(kLayerWalk,glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold));
     // ADS zoom: in while the sights are up - Aim, or a reload / mag check carried onto them -
     // and out otherwise. A critically damped spring eases both ends, and a re-press mid-way
     // turns around smoothly instead of restarting.
@@ -1218,6 +1217,7 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
         // Triggers live for exactly one controller update: an input the controller refused
         // (fire during a reload, say) is dropped rather than firing late.
         for (const char* t : {K::kFire, K::kReload, K::kMagCheck, K::kInspect, K::kMelee, K::kFidget, K::kCycle}) ac->ResetTrigger(t);
+        ac->SetBool(K::kTrigger, false); // set again by the next UpdateTrigger while the trigger is down
     }
 
     ApplyHidden(world);

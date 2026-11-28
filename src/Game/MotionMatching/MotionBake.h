@@ -135,7 +135,7 @@ void MirrorPose(const MirrorRig& rig, std::vector<LocalTRS>& pose);
 //     all lie along one line), or for a leaf the direction it comes in from its parent.
 //   - spikes: a bone over kSpikeDeg in a frame (at 60 fps) that is back within kSpikeReturnDeg of where it was in at most
 //     kSpikeMaxFrames frames - slerped across.
-// What is neither stays as captured; MotionDatabase excludes it at load (kGlitchDegrees).
+// What is neither stays as captured; MotionDatabase excludes it at load (kGlitchDegrees; the head and neck kHeadGlitchDegrees).
 inline constexpr float kFlipDeg = 90.0f, kSpikeDeg = 35.0f, kSpikeReturnDeg = 10.0f;
 inline constexpr float kFlipStepDeg = 30.0f; // a flip's frames each turn the bone over this about its axis (at 60 fps)
 inline constexpr int kSpikeMaxFrames = 6;

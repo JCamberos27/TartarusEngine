@@ -94,7 +94,8 @@ bool MotionDatabase::Build(std::string* error) {
     {
         const auto t0 = std::chrono::steady_clock::now();
         std::vector<char> bad;
-        if (!ScanGlitches(m_Stream, GlitchLimit(m_Stream.Fps()), bad, [&] { return go(); })) return fail("cancelled");
+        if (!ScanGlitches(m_Stream, GlitchLimit(m_Stream.Fps()), bad, [&] { return go(); }, HeadGlitchLimit(m_Stream.Fps())))
+            return fail("cancelled");
         m_ScanSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         for (std::uint32_t i = 0; i < n; ++i)
             if (bad[i] && !(m_Feat.Flags(i) & MotionLabel::Excluded)) {
@@ -152,16 +153,28 @@ float MotionDatabase::GlitchLimit(float fps) {
     return kGlitchDegrees * 3.14159265f / 180.0f * 60.0f / std::max(1.0f, fps);
 }
 
+float MotionDatabase::HeadGlitchLimit(float fps) {
+    return kHeadGlitchDegrees * 3.14159265f / 180.0f * 60.0f / std::max(1.0f, fps);
+}
+
+bool MotionDatabase::IsHeadBone(const std::string& name) {
+    return name == "head" || name.rfind("neck", 0) == 0;
+}
+
 bool MotionDatabase::ScanGlitches(const MotionClipStream& stream, float limit, std::vector<char>& bad,
-                                  const std::function<bool()>& go) {
+                                  const std::function<bool()>& go, float headLimit) {
     // angle(a, b) > limit  <=>  |dot(a, b)| < cos(limit / 2) for unit quaternions (q and -q are one rotation), and
     // Rotation() returns unit ones (UnpackQuat normalizes): a 4-term dot per bone instead of MotionMath::QuatAngle's two
     // normalizes, a quaternion product, a sqrt and an atan2. Same Excluded frames (unit test: old vs new on the
     // cooked bake and on turns at limit +- 1e-4 rad).
     // No turn exceeds pi (QuatAngle's range), and cos is periodic: a limit of pi or more (under ~11.7 fps) flags nothing.
-    const float cosHalf = limit >= MotionMath::kPi ? -1.0f : std::cos(0.5f * limit);
+    auto cosOf = [](float l) { return l >= MotionMath::kPi ? -1.0f : std::cos(0.5f * l); };
     const std::uint32_t n = stream.FrameCount();
     const int nb = (int)stream.Bones().size();
+    std::vector<float> cosHalf((size_t)nb, cosOf(limit)); // per bone: the head and neck under their own limit
+    if (headLimit > 0.0f)
+        for (int b = 0; b < nb; ++b)
+            if (IsHeadBone(stream.Bones()[(size_t)b])) cosHalf[(size_t)b] = cosOf(headLimit);
     bad.assign(n, 0);
     std::vector<glm::quat> prev((size_t)nb), cur((size_t)nb);
     for (const auto& clip : stream.Clips()) {
@@ -174,7 +187,7 @@ bool MotionDatabase::ScanGlitches(const MotionClipStream& stream, float limit, s
             for (int b = 0; b < nb; ++b) {
                 const glm::quat q = stream.Rotation(i, b);
                 cur[(size_t)b] = q;
-                glitch = glitch || std::fabs(glm::dot(prev[(size_t)b], q)) < cosHalf;
+                glitch = glitch || std::fabs(glm::dot(prev[(size_t)b], q)) < cosHalf[(size_t)b];
             }
             std::swap(prev, cur);
             if (!glitch) continue;
