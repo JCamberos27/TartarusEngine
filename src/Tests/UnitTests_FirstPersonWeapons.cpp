@@ -695,6 +695,51 @@ void TestThirdPersonArmsTrack() {
     }
 }
 
+// Every shipped weapon's controller: the trigger lets the idle fidget go (the driver's Trigger bool), and pressing
+// Inspect / mag check / melee again while one plays doesn't start it over.
+void TestWeaponControllersTriggerAndActions() {
+    namespace K = FirstPersonAnimatorContract;
+    using AC = AnimatorController;
+    for (const char* rel : {"assets/Weapons/AKS74U/AKS74U.controller", "assets/Weapons/Remington870/Remington870.controller",
+                            "assets/Weapons/Revolver38/Revolver38.controller"}) {
+        const std::string path = ProjectPaths::Resolve(rel);
+        AnimatorController ctrl;
+        if (!std::filesystem::exists(path)) { // a source checkout without weapons; a broken file fails below
+            UnitTestSupport::Skip("no " + path);
+            continue;
+        }
+        CHECK(AnimatorController::LoadFile(path, ctrl));
+        if (ctrl.Layers.empty()) continue;
+        const AC::Parameter* trigger = ctrl.FindParameter(K::kTrigger);
+        CHECK(trigger && trigger->Type == AC::ParamType::Bool);
+        const auto& L = ctrl.Layers[0];
+        bool triggerExit = false;
+        for (const auto& t : L.Transitions)
+            triggerExit = triggerExit || (t.FromKind == AC::Source::State && t.From == "Regrip" && t.To == AC::kExitState &&
+                                          t.Conditions.size() == 1 && t.Conditions[0].Param == K::kTrigger);
+        CHECK(triggerExit);
+        for (const char* once : {"Inspect", "MagCheck", "Melee"}) {
+            int found = 0;
+            for (const auto& t : L.Transitions)
+                if (t.FromKind == AC::Source::Any && t.To == once) { ++found; CHECK(!t.CanTransitionToSelf); }
+            CHECK(found == 1);
+        }
+        // Played: a fidget, then the trigger, back to Idle on the next update.
+        AnimatorControllerComponent ac;
+        const auto oneSecond = [](int, int) { return 1.0f; };
+        auto run = [&](float seconds) {
+            for (float t = 0.0f; t < seconds - 1e-4f; t += 1.0f / 60.0f) AdvanceAnimator(ctrl, ac, 1.0f / 60.0f, oneSecond);
+        };
+        ac.SetBool(K::kEquipped, true);
+        run(2.0f);
+        CHECK(ac.StateName == "Idle");
+        ac.SetTrigger(K::kFidget); run(0.1f);
+        CHECK(ac.StateName == "Regrip" && ac.HasTag(K::kTagIKOff));
+        ac.SetBool(K::kTrigger, true); run(1.0f / 60.0f);
+        CHECK(ac.StateName == "Idle" && !ac.HasTag(K::kTagIKOff));
+    }
+}
+
 // The Remington 870's own controller (project/assets/Weapons/Remington870), driven the way
 // FirstPersonPresentation drives it - every state 1 s long: the pump after a round, a reload loading
 // one shell per LoadRound until LastRound, an empty start chambering its round, the trigger stopping a
@@ -1083,6 +1128,18 @@ void TestFirstPersonAnimationFSM() {
     CHECK(ac.StateName == "Regrip");
     ac.SetTrigger(K::kMelee); run(0.05f);
     CHECK(ac.StateName == "Melee");               // anything real cuts a fidget off
+    run(0.2f);
+    const float swing = ac.StateTime;
+    ac.SetTrigger(K::kMelee); run(1.0f / 60.0f);
+    CHECK(ac.StateName == "Melee" && ac.StateTime > swing); // pressed again mid-swing: it doesn't start over
+    ac.ResetTrigger(K::kMelee);
+    run(1.5f);
+    CHECK(ac.StateName == "Idle");
+    ac.SetTrigger(K::kFidget); run(0.05f);
+    CHECK(ac.StateName == "Regrip");
+    ac.SetBool(K::kTrigger, true); run(1.0f / 60.0f);
+    CHECK(ac.StateName == "Idle");                // the trigger lets the fidget go
+    ac.SetBool(K::kTrigger, false);
 
     // A v2 weapon definition names its controller and carries its gameplay numbers.
     FirstPersonAnimationSet v2;
@@ -1288,6 +1345,43 @@ void TestFirstPersonAds() {
 }
 
 // --- Procedural animation: the first-person weapon stack --------------------------------------
+// A landing kicks the gun and the camera down, eased in: no frame-sized step at touchdown (it was the whole kick in one frame:
+// ~2 cm and ~3 degrees on the world body's gun at a 1 m jump), and the dip itself still there.
+void TestWeaponProceduralLanding() {
+    WeaponProceduralSettings s = WeaponProceduralSettings::Defaults();
+    s.Sway.Enabled = s.Breath.Enabled = s.Lean.Enabled = false;
+    s.StateOffsets.clear();
+    WeaponProceduralState st;
+    WeaponProceduralInput in;
+    in.Dt = 1.0f / 60.0f;
+    std::vector<glm::vec4> f; // per frame: gun pitch (deg), gun height (m), camera nod (deg), camera height (m)
+    auto step = [&] {
+        const WeaponProceduralPose& p = st.Update(s, in);
+        f.push_back(glm::vec4(p.Rotation.x, p.Position.y, p.CameraKick.x, p.CameraOffset.y));
+    };
+    for (int i = 0; i < 30; ++i) step();
+    in.Grounded = false; // a 1 m jump: up at 4.5 m/s, down until 5.5 m/s
+    for (in.VerticalVelocity = 4.5f; in.VerticalVelocity > -5.5f; in.VerticalVelocity -= 9.81f * in.Dt) step();
+    const size_t land = f.size();
+    in.Grounded = true;
+    in.VerticalVelocity = 0.0f;
+    for (int i = 0; i < 90; ++i) step();
+    glm::vec4 worstStep(0.0f), lowest(0.0f);
+    for (size_t i = land - 1; i + 1 < f.size() && i < land + 20; ++i)
+        worstStep = glm::max(worstStep, glm::abs(f[i + 1] - 2.0f * f[i] + f[i - 1])); // the frame's jump off a straight path
+    for (size_t i = land; i < f.size(); ++i) lowest = glm::min(lowest, f[i]);
+    // The worst frame at touchdown (the whole kick in one frame: 2.92 deg, 15.2 mm, 0.94 deg, 26.8 mm) ...
+    CHECK(worstStep.x < 1.2f);
+    CHECK(worstStep.y < 0.007f);
+    CHECK(worstStep.z < 0.4f);
+    CHECK(worstStep.w < 0.012f);
+    // ... with the dips as deep as that kick's (-2.49 deg, -11.9 mm; the camera -1.20 deg, -34.3 mm).
+    CHECK(lowest.x < -2.4f && lowest.x > -2.6f && lowest.y < -0.0114f && lowest.y > -0.0124f);
+    CHECK(lowest.z < -1.15f && lowest.z > -1.25f && lowest.w < -0.033f && lowest.w > -0.0355f);
+    // ... and settles back.
+    CHECK(std::fabs(f.back().x) < 0.05f && std::fabs(f.back().y) < 5e-4f && std::fabs(f.back().w) < 5e-4f);
+}
+
 void TestWeaponProcedural() {
     // Settings round-trip through the .fpsanim "procedural" block.
     const WeaponProceduralSettings defaults = WeaponProceduralSettings::Defaults();
@@ -1848,10 +1942,12 @@ void RegisterFirstPersonWeaponsTests(UnitTestSupport::TestList& tests) {
         {"WeaponJankMeter", TestWeaponJankMeter},
         {"ThirdPersonArmsTrack", TestThirdPersonArmsTrack},
         {"RemingtonController", TestRemingtonController},
+        {"Weapon controllers: trigger and one-shot actions", TestWeaponControllersTriggerAndActions},
         {"Revolver38Assets", TestRevolver38Assets},
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
         {"FirstPersonAds", TestFirstPersonAds},
         {"WeaponProcedural", TestWeaponProcedural},
+        {"WeaponProceduralLanding", TestWeaponProceduralLanding},
         {"ShellCasings", TestShellCasings},
         {"BulletHoles", TestBulletHoles},
         {"WeaponZero", TestWeaponZero},

@@ -395,6 +395,7 @@ private:
     bool m_FullAuto = false;
     int m_BurstRemaining = 0;
     bool m_WaitingAnimatedShot = false;
+    bool m_TriggerRetry = false; // a press a fidget refused: tried once more on the next UpdateTrigger
     void CommitShot(bool ads, bool cycleBolt);
     float m_FireCooldown = 0.0f;  // full-auto: seconds until the next round may go
     float m_IdleTime = 0.0f;      // settled Idle, for the Fidget

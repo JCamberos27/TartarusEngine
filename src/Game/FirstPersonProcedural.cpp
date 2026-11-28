@@ -648,6 +648,49 @@ void WeaponProceduralState::Spring3::Step(const glm::vec3& target, float dt, con
     }
 }
 
+// How much a kick `k` spread over kLandKickSpread must be scaled to swing a spring `sp` - at x0, moving at v0, settling to 0 -
+// as far in the kick's direction as the same kick given in one frame. The spring is linear, so its path is the free motion
+// plus the kick's own response times the kick: both responses simulated once, then the scale found by bisection (a landing is
+// rare, the sums are cheap).
+float WeaponProceduralState::LandSpreadGain(const FirstPersonSpring& sp, float dt, float x0, float v0, float k) {
+    if (dt <= 0.0f) dt = 1.0f / 60.0f;
+    if (std::fabs(k) < 1e-6f) return 1.0f;
+    constexpr int kSteps = 90;
+    float free[kSteps], once[kSteps], spread[kSteps];
+    Spring3 f, a, b;
+    f.X.x = x0;
+    f.V.x = v0;
+    a.V.x = 1.0f;
+    float left = kLandKickSpread;
+    for (int i = 0; i < kSteps; ++i) {
+        if (left > 0.0f) {
+            b.V.x += std::min(dt, left) / kLandKickSpread;
+            left -= dt;
+        }
+        f.Step(glm::vec3(0.0f), dt, sp);
+        a.Step(glm::vec3(0.0f), dt, sp);
+        b.Step(glm::vec3(0.0f), dt, sp);
+        free[i] = f.X.x;
+        once[i] = a.X.x;
+        spread[i] = b.X.x;
+    }
+    const float dir = k > 0.0f ? 1.0f : -1.0f;
+    auto reach = [&](const float* response, float scale) {
+        float most = -1e9f;
+        for (int i = 0; i < kSteps; ++i) most = std::max(most, dir * (free[i] + scale * k * response[i]));
+        return most;
+    };
+    const float want = reach(once, 1.0f);
+    float lo = 1.0f, hi = 3.0f;
+    if (reach(spread, lo) >= want) return lo;
+    if (reach(spread, hi) <= want) return hi;
+    for (int it = 0; it < 24; ++it) {
+        const float mid = 0.5f * (lo + hi);
+        (reach(spread, mid) < want ? lo : hi) = mid;
+    }
+    return 0.5f * (lo + hi);
+}
+
 void WeaponProceduralState::Reset() {
     const auto rng = m_Rng;
     *this = WeaponProceduralState{};
@@ -780,9 +823,22 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
         if (jp.Enabled && hit > 0.0f) {
             const float kick = glm::two_pi<float>() * std::max(jp.Spring.Frequency, 0.01f) * 1.6f;
             const float side = std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng) < 0.5f ? -1.0f : 1.0f;
-            m_JumpPos.V.y -= hit * jp.LandPosition * kick * jumpScale;
-            m_JumpRot.V.x -= hit * jp.LandPitch * kick * jumpScale;
-            m_JumpRot.V.z += side * hit * jp.LandRoll * kick * jumpScale;
+            m_LandPosKick = glm::vec3(0.0f, -hit * jp.LandPosition * kick * jumpScale, 0.0f);
+            m_LandRotKick = glm::vec3(-hit * jp.LandPitch * kick * jumpScale, 0.0f, side * hit * jp.LandRoll * kick * jumpScale);
+            // Each axis scaled so the dip goes as deep as the one-frame kick's did, from where the air lag left the gun.
+            for (int c = 0; c < 3; ++c) {
+                m_LandPosKick[c] *= LandSpreadGain(jp.Spring, dt, m_JumpPos.X[c], m_JumpPos.V[c], m_LandPosKick[c]);
+                m_LandRotKick[c] *= LandSpreadGain(jp.Spring, dt, m_JumpRot.X[c], m_JumpRot.V[c], m_LandRotKick[c]);
+            }
+            m_LandLeft = kLandKickSpread;
+        }
+        // The landing kick goes in over kLandKickSpread, not in one frame: all of it at once jumped the gun ~2 cm and ~3 degrees
+        // in the frame of touchdown (and the world body's gun, which carries this pose, with it).
+        if (m_LandLeft > 0.0f) {
+            const float share = std::min(dt, m_LandLeft) / kLandKickSpread;
+            m_JumpPos.V += m_LandPosKick * share;
+            m_JumpRot.V += m_LandRotKick * share;
+            m_LandLeft -= dt;
         }
         m_JumpPos.Step(airPos * jumpScale, dt, jp.Spring);
         m_JumpRot.Step(airRot * jumpScale, dt, jp.Spring);
@@ -802,8 +858,13 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
         if (impact >= s.Jump.MinImpact) {
             const float hit = std::min(impact, std::max(s.Jump.MaxImpact, s.Jump.MinImpact));
             const float kick = glm::two_pi<float>() * std::max(cm.Spring.Frequency, 0.01f) * 1.6f;
-            m_CamMotion.V.y -= hit * cm.LandDip * kick * camScale;
-            m_CamMotion.V.x -= hit * cm.LandPitch * kick * camScale;
+            m_CamLandKick = glm::vec3(-hit * cm.LandPitch * kick * camScale, -hit * cm.LandDip * kick * camScale, 0.0f);
+            for (int c = 0; c < 2; ++c) m_CamLandKick[c] *= LandSpreadGain(cm.Spring, dt, m_CamMotion.X[c], m_CamMotion.V[c], m_CamLandKick[c]);
+            m_CamLandLeft = kLandKickSpread;
+        }
+        if (m_CamLandLeft > 0.0f) { // (spread as the gun's)
+            m_CamMotion.V += m_CamLandKick * (std::min(dt, m_CamLandLeft) / kLandKickSpread);
+            m_CamLandLeft -= dt;
         }
         const float strafe = in.Grounded ? in.Velocity.x * cm.StrafeRoll * camScale : 0.0f;
         m_CamMotion.Step(glm::vec3(0.0f, 0.0f, -strafe), dt, cm.Spring);

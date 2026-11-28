@@ -270,6 +270,7 @@ inline constexpr const char* kJog = "Jog";           // Bool, the jog (Shift): t
 inline constexpr const char* kAim = "Aim";           // Bool, aim held
 inline constexpr const char* kEquipped = "Equipped"; // Bool, weapon wanted in hand
 inline constexpr const char* kAmmo = "Ammo";         // Int, rounds in the magazine
+inline constexpr const char* kTrigger = "Trigger";   // Bool, the trigger is down (pressed or held): a fidget gives way to it
 // Float clip-rate multipliers that follow the player's speed (procedural.locomotion): use them
 // as the Walk / Sprint states' speed parameter.
 inline constexpr const char* kWalkRate = "WalkRate";

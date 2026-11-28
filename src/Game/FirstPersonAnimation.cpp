@@ -512,6 +512,7 @@ AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set
         {K::kFire, AC::ParamType::Trigger, 0.0f},    {K::kReload, AC::ParamType::Trigger, 0.0f},
         {K::kMagCheck, AC::ParamType::Trigger, 0.0f},{K::kInspect, AC::ParamType::Trigger, 0.0f},
         {K::kMelee, AC::ParamType::Trigger, 0.0f},   {K::kFidget, AC::ParamType::Trigger, 0.0f},
+        {K::kTrigger, AC::ParamType::Bool, 0.0f},
     };
     AC::Layer& L = c.Layers[0];
     L.Name = "Base Layer";
@@ -630,8 +631,13 @@ AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set
     add(S::Any, "", "Fire", {cond(K::kFire, AC::Op::If)}, fadeOf("Fire"));
     add(S::Any, "", "Inspect", {cond(K::kInspect, AC::Op::If)}, fadeOf("Inspect"));
     add(S::Any, "", "MagCheck", {cond(K::kMagCheck, AC::Op::If)}, fadeOf("MagCheck"));
-    // Holster's own Any transition must not restart it every frame while unequipped.
-    for (auto& t : L.Transitions) if (t.FromKind == S::Any && t.To == "Holster") t.CanTransitionToSelf = false;
+    // Holster's own Any transition must not restart it every frame while unequipped. Pressing Inspect, mag check or
+    // melee again while one plays doesn't start it over either (a 5 s inspect, a swing cut back to its wind-up).
+    for (auto& t : L.Transitions) {
+        if (t.FromKind != S::Any) continue;
+        for (const char* once : {"Holster", "Inspect", "MagCheck", "Melee", "ADS Inspect", "ADS MagCheck"})
+            if (t.To == once) t.CanTransitionToSelf = false;
+    }
 
     // Locomotion. Sprinting (held AND moving) beats aiming, aiming beats walking; only the
     // Idle<->Sprint pair has transition clips, and aiming out of a sprint skips SprintToIdle.
@@ -653,11 +659,12 @@ AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set
 
     // The sprint in / out clips never make the player wait: pressing sprint again partway out
     // goes straight back to sprinting, letting go partway in straight back to rest, and aiming
-    // leaves the way out at once. A fidget gives way to moving or aiming the same way.
+    // leaves the way out at once. A fidget gives way to moving or aiming the same way, and to the trigger.
     add(S::State, "SprintToIdle", "Sprint", {sprint, moving}, 0.1f);
     add(S::State, "SprintToIdle", "Aim", {aim, noSprint}, 0.1f);
     add(S::State, "IdleToSprint", exitTo, {noSprint}, 0.15f);
     add(S::State, "IdleToSprint", exitTo, {still}, 0.15f);
+    add(S::State, "Regrip", exitTo, {cond(K::kTrigger, AC::Op::If)}, 0.1f);
     add(S::State, "Regrip", exitTo, {moving}, 0.15f);
     add(S::State, "Regrip", exitTo, {aim}, 0.15f);
 
@@ -718,6 +725,7 @@ std::vector<FPBody::Check> FirstPersonWeaponValidate(const FirstPersonWeaponChec
             {kInspect, PT::Trigger, Sev::Info, "Set on the Inspect key."},
             {kMelee, PT::Trigger, Sev::Info, "Set on the Melee key."},
             {kFidget, PT::Trigger, Sev::Info, "Set after a long idle: the fidget."},
+            {kTrigger, PT::Bool, Sev::Info, "True while the trigger is down: lets a fidget give way to the shot."},
         };
         for (const P& p : kParams) {
             if (std::string(p.Name) == kFire && set.HipShotsProcedural()) continue;
