@@ -66,17 +66,18 @@ bool RecoilAsset::SaveFile(const std::string& path) const {
 namespace {
 
 // Smooth 1D value noise in [-1, 1]: hashed lattice values, quintic-eased between them.
-float Noise1(float x, unsigned channel) {
-    auto lattice = [channel](int i) {
+// x is a double so a clock that runs for hours keeps its per-frame steps (a float near 4096 rounds them to 0.0005).
+float Noise1(double x, unsigned channel) {
+    auto lattice = [channel](long long i) {
         unsigned h = (unsigned)i * 374761393u + channel * 668265263u;
         h = (h ^ (h >> 13)) * 1274126177u;
         h ^= h >> 16;
         return (float)(h & 0xffffu) / 32767.5f - 1.0f;
     };
-    const float f = std::floor(x);
-    const float t = x - f;
+    const double f = std::floor(x);
+    const float t = (float)(x - f);
     const float e = t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
-    const int i = (int)f;
+    const long long i = (long long)f;
     return lattice(i) + (lattice(i + 1) - lattice(i)) * e;
 }
 
@@ -772,13 +773,13 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     const float winded = Smooth01(m_Exertion);
     const float rate = 1.0f + (std::max(br.ExertionRate, 0.0f) - 1.0f) * winded;
     m_BreathPhase = std::fmod(m_BreathPhase + dt * rate / std::max(br.Period, 0.05f), 1.0f);
-    m_DriftTime = std::fmod(m_DriftTime + dt * rate * std::max(br.DriftFrequency, 0.0f), 4096.0f);
+    m_DriftTime += (double)(dt * rate * std::max(br.DriftFrequency, 0.0f)); // never wrapped: a wrap jumped the noise
     if (br.Enabled) {
         const float scale = adsMix(br.HipScale, br.AdsScale) * (1.0f + (std::max(br.ExertionScale, 0.0f) - 1.0f) * winded);
         pose.Position += br.Position.Evaluate(m_BreathPhase) * scale;
         pose.Rotation.x += br.Pitch.Evaluate(m_BreathPhase) * scale;
         // Two octaves of noise per axis: a slow wander with a little faster texture on it.
-        auto drift = [&](unsigned ch) { return 0.75f * Noise1(m_DriftTime, ch) + 0.25f * Noise1(m_DriftTime * 2.7f, ch + 17u); };
+        auto drift = [&](unsigned ch) { return 0.75f * Noise1(m_DriftTime, ch) + 0.25f * Noise1(m_DriftTime * 2.7, ch + 17u); };
         pose.Position += glm::vec3(drift(11u), drift(12u), drift(13u)) * br.DriftPosition * scale;
         pose.Rotation += glm::vec3(drift(14u), drift(15u), drift(16u)) * br.DriftRotation * scale;
     }

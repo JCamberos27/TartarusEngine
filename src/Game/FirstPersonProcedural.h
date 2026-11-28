@@ -464,7 +464,7 @@ private:
     Spring3 m_CamMotion;               // landing dip (y), nod (x), strafe roll (z)
     Spring3 m_Obstruct;                // retract (x), tuck (y), faces up (z)
     Spring3 m_ObstructSide;            // aside: -1 (on the left) .. 1 (on the right), in x
-    float m_DriftTime = 0.0f;
+    double m_DriftTime = 0.0;          // drift noise clock (seconds x Hz)
     float m_Exertion = 0.0f;           // 0..1
     float m_CrouchAds = 0.0f;          // smoothed crouch input for the ADS pose
     bool m_WasGrounded = true;
