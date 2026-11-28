@@ -1029,8 +1029,6 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     }
     static const std::string kLayerLocomotion = "LayerWeight:Weapon Locomotion";
     ac->SetFloat(kLayerLocomotion,glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold));
-    static const std::string kLayerWalk = "LayerWeight:Weapon Walk";
-    ac->SetFloat(kLayerWalk,glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold));
     // ADS zoom: in while the sights are up - Aim, or a reload / mag check carried onto them -
     // and out otherwise. A critically damped spring eases both ends, and a re-press mid-way
     // turns around smoothly instead of restarting.
