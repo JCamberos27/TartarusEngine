@@ -568,9 +568,6 @@ void TestFirstPersonBodyLookOnlyKeepsTwins() {
     CHECK(FirstPersonBodyTestAccess::Twins(fpb) != twins);
 }
 
-// Arm Steadiness's hold: exact to the knee, then eased toward twice it - continuous with a slope of 1 at the knee, never
-// past twice it, rising all the way to where the anchor is dragged (three times the knee), along the trail's own
-// direction; no knee, no hold.
 // The draw's ease (Arms Ease In): smoothstep and its inverse, so a draw started partway through a holster's ease-out
 // picks up from the weight it had.
 void TestFirstPersonBodySmoothStep() {
@@ -588,6 +585,9 @@ void TestFirstPersonBodySmoothStep() {
     CHECK(FirstPersonBodyInverseSmoothStep(-0.5f) == 0.0f && std::abs(FirstPersonBodyInverseSmoothStep(1.5f) - 1.0f) < 1e-6f);
 }
 
+// Arm Steadiness's hold: exact to the knee, then eased toward twice it - continuous with a slope of 1 at the knee, never
+// past twice it, rising all the way to where the anchor is dragged (three times the knee), along the trail's own
+// direction; no knee, no hold.
 void TestFirstPersonBodySteadyHold() {
     const float knee = 0.04f;
     const glm::vec3 dir = glm::normalize(glm::vec3(0.3f, 1.0f, -0.2f));
