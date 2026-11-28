@@ -30,7 +30,8 @@ WeaponJankFrame WeaponJankFrameFor(const World& world, const FirstPersonBody& bo
     const std::string& state = p.CurrentState();
     f.State = label.empty() ? state : label + " / " + state;
     f.Resting = state == "Idle" || state == "Aim" || state == "Walk" || state == "Sprint";
-    f.Recoil = p.SinceShot() < 0.35f;
+    // The shot's kick, from the frame the Fire state starts (SinceShot only counts from the frame after): the hands ride it as the gun does.
+    f.Recoil = p.SinceShot() < 0.35f || state == "Fire";
     f.SinceShot = p.SinceShot();
     f.Speed = p.PlanarSpeed();
     f.View = glm::normalize(glm::quat_cast(glm::mat3(glm::normalize(glm::vec3(p.ArmsWorld()[0])), glm::normalize(glm::vec3(p.ArmsWorld()[1])),
@@ -54,13 +55,20 @@ WeaponJankFrame WeaponJankFrameFor(const World& world, const FirstPersonBody& bo
     f.GunRot = glm::normalize(glm::quat_cast(glm::mat3(r)));
     const WeaponIKSettings& ik = p.Set().Procedural.IK;
     const std::string clipHand[2] = {ik.LeftHand, ik.RightHand};
+    // Each hand off the chest in the CHEST's own axes: the body turning (the view swinging, a pivot) is not the hand
+    // moving - in world axes it read as a hand pop at every turn's end.
     glm::vec3 chest(0.0f);
-    body.BoneWorld(world, "spine_05", chest);
+    glm::mat3 chestAxes(1.0f);
+    if (glm::mat4 cm(1.0f); body.BoneWorldMatrix(world, "spine_05", cm)) {
+        chest = glm::vec3(cm[3]);
+        const glm::mat3 axes(glm::normalize(glm::vec3(cm[0])), glm::normalize(glm::vec3(cm[1])), glm::normalize(glm::vec3(cm[2])));
+        chestAxes = glm::transpose(axes);
+    }
     for (int h = 0; h < 2; ++h) {
         glm::vec3 w;
         glm::mat4 ch(1.0f);
         if (body.BoneWorld(world, h ? "hand_r" : "hand_l", w) && clips->NodeTransform(clipHand[h], ch)) {
-            f.Hand[h] = w - chest;
+            f.Hand[h] = chestAxes * (w - chest);
             f.HandClip[h] = glm::vec3(glm::inverse(clipGun) * p.ArmsWorld() * ch[3]);
         }
         f.HandGap[h] = body.TwinHandGap(h);

@@ -95,6 +95,7 @@ void RegisterGraffitiTests(UnitTestSupport::TestList& tests); // UnitTests_Graff
 void RegisterGizmoIconTests(UnitTestSupport::TestList& tests); // UnitTests_GizmoIcons.cpp
 void RegisterAssetLibraryTests(UnitTestSupport::TestList& tests); // UnitTests_AssetLibrary.cpp
 void RegisterFirstPersonBodyTests(UnitTestSupport::TestList& tests); // UnitTests_FirstPersonBody.cpp
+void RegisterFirstPersonJankTests(UnitTestSupport::TestList& tests); // UnitTests_FirstPersonJank.cpp
 void RegisterOutfitsTests(UnitTestSupport::TestList& tests); // UnitTests_Outfits.cpp
 void RegisterFirstPersonWeaponsTests(UnitTestSupport::TestList& tests); // UnitTests_FirstPersonWeapons.cpp
 void RegisterCoreTests(UnitTestSupport::TestList& tests); // UnitTests_Core.cpp
