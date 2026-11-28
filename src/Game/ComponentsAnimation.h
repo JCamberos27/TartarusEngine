@@ -73,6 +73,10 @@ struct AnimatorLayerRuntime {
         float FadeDuration = 0.0f; // seconds for Fade 0 -> 1 (0 = instant)
         float PrevPhase = -1.0f;   // Phase before the last advance (root motion); -1 = just entered
         bool Matched = false;      // distance matching has placed it at least once
+        int   Via = -1;            // the transition that brought it in (its TrackDurations), or -1
+        float Age = 0.0f;          // seconds since it came in
+        float Hold = 0.0f;         // seconds it stays in the stack for its slowest track (TrackDurations)
+        float TrackScale = 1.0f;   // the transition's TrackDurations scaled as its Duration was (TransitionDuration:*)
     };
     std::vector<Item> Stack;
     int  Transition = -1;          // the transition whose crossfade is running, or -1
