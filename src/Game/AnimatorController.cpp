@@ -216,6 +216,10 @@ const AnimatorController::Parameter* AnimatorController::FindParameter(const std
     return nullptr;
 }
 
+bool AnimatorController::Transition::Cuts(const std::string& track) const {
+    return std::find(CutTracks.begin(), CutTracks.end(), track) != CutTracks.end();
+}
+
 int AnimatorController::PickTransition(int layer, int state, float normalizedTime,
                                        std::vector<AnimatorParam>& params) const {
     if (layer < 0 || layer >= (int)Layers.size()) return -1;
@@ -348,6 +352,7 @@ bool AnimatorController::FromJsonString(const std::string& text, AnimatorControl
         tr.Interruptible = Flag(t, "interruptible", true);
         tr.RespectPriority = Flag(t, "respectPriority", false);
         tr.CanTransitionToSelf = Flag(t, "canTransitionToSelf", false);
+        tr.CutTracks = Strings(t, "cutTracks");
         tr.Conditions = ConditionsFromJson(t);
     };
     auto readLayerBody = [&](const json& lj, Layer& L) {
@@ -477,6 +482,7 @@ std::string AnimatorController::ToJsonString() const {
             if (!t.Interruptible) tj["interruptible"] = false;
             if (t.RespectPriority) tj["respectPriority"] = true;
             if (t.CanTransitionToSelf) tj["canTransitionToSelf"] = true;
+            if (!t.CutTracks.empty()) tj["cutTracks"] = t.CutTracks;
             tj["conditions"] = std::move(cs);
             lj["transitions"].push_back(std::move(tj));
         }
@@ -948,6 +954,15 @@ float AnimatorSampleCurve(const AnimatorController& ctrl, const AnimatorControll
 
 // --- sampling --------------------------------------------------------------------------------
 
+bool AnimatorTrackCuts(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, int layer, int track) {
+    if (layer < 0 || layer >= (int)ctrl.Layers.size() || layer >= (int)ac.Layers.size()) return false;
+    if (track < 0 || track >= (int)ctrl.Tracks.size()) return false;
+    const auto& L = ctrl.Layers[layer];
+    const auto& rt = ac.Layers[layer];
+    return rt.Stack.size() > 1 && rt.Transition >= 0 && rt.Transition < (int)L.Transitions.size() &&
+           L.Transitions[rt.Transition].Cuts(ctrl.Tracks[track]);
+}
+
 float AnimatorLayerWeight(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, int layer) {
     if (layer < 0 || layer >= (int)ctrl.Layers.size()) return 0.0f;
     if (layer == 0) return 1.0f;
@@ -1127,12 +1142,14 @@ void WarmControllerClips(const AnimatorController& ctrl, Sampler& smp) {
 // `top`, when given, also receives the current (topmost) state's own unblended pose.
 void SampleLayer(const AnimatorController::Layer& L, const AnimatorLayerRuntime& rt, Sampler& smp,
                  const std::vector<AnimatorParam>& params, const std::function<float(int, int)>& stateLength,
-                 int layerIndex, const Pose& base, bool atPhaseZero, Pose& out, Pose* top = nullptr) {
+                 int layerIndex, const Pose& base, bool atPhaseZero, Pose& out, Pose* top = nullptr, bool cut = false) {
     out = base;
     if (top) *top = base;
     thread_local Pose item;
     bool first = true;
-    for (const auto& it : rt.Stack) {
+    // A cut track (the running transition's CutTracks) shows only the state being faded into.
+    for (size_t k = cut && !rt.Stack.empty() ? rt.Stack.size() - 1 : 0; k < rt.Stack.size(); ++k) {
+        const auto& it = rt.Stack[k];
         if (it.State < 0 || it.State >= (int)L.States.size()) continue;
         const auto& s = L.States[it.State];
         float len = stateLength(layerIndex, it.State);
@@ -1204,10 +1221,11 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
         const auto& L = ctrl.Layers[li];
         const auto& rt = ac.Layers[li];
         if (rt.Stack.empty()) continue;
+        const bool cut = AnimatorTrackCuts(ctrl, ac, li, track);
         if (li == 0) {
             // The grip the IK keeps comes from the state being faded into (see IK::ApplyRig).
             SampleLayer(L, rt, smp, ac.Params, stateLength, li, bind, false, pose,
-                        ikRig && (rt.Stack.size() > 1 || preserveBaseGrip) ? &gripPose : nullptr);
+                        ikRig && (rt.Stack.size() > 1 || preserveBaseGrip) ? &gripPose : nullptr, cut);
             if (motion && rootNode >= 0) {
                 // Each entry's travel, weighted by how much of it shows in the blended pose.
                 thread_local std::vector<float> fades;
@@ -1240,7 +1258,7 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
         if (LayerIsIdle(L, rt, track)) continue;
         const std::vector<float>& mask = CachedLayerMask(L, model);
         if (L.Mode == AnimatorController::Blending::Override) {
-            SampleLayer(L, rt, smp, ac.Params, stateLength, li, pose, false, layerPose);
+            SampleLayer(L, rt, smp, ac.Params, stateLength, li, pose, false, layerPose, nullptr, cut);
             for (size_t i = 0; i < pose.size(); ++i) {
                 const float w = layerWeight * mask[i];
                 if (w > 0.0f) pose[i] = LocalTRS::Blend(pose[i], layerPose[i], std::min(w, 1.0f));
@@ -1251,10 +1269,10 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
             if(reference>=0) {
                 // A common resting pose preserves held sprint poses and coherent entry/exit offsets.
                 if(!smp.Sample(L.States[reference],0.0f,stateLength(li,reference),ac.Params,refPose)) refPose=bind;
-                SampleLayer(L,rt,smp,ac.Params,stateLength,li,refPose,false,layerPose);
+                SampleLayer(L,rt,smp,ac.Params,stateLength,li,refPose,false,layerPose,nullptr,cut);
             } else {
-                SampleLayer(L, rt, smp, ac.Params, stateLength, li, bind, false, layerPose);
-                SampleLayer(L, rt, smp, ac.Params, stateLength, li, bind, true, refPose);
+                SampleLayer(L, rt, smp, ac.Params, stateLength, li, bind, false, layerPose, nullptr, cut);
+                SampleLayer(L, rt, smp, ac.Params, stateLength, li, bind, true, refPose, nullptr, cut);
             }
             IK::ApplyAdditivePose(pose, layerPose, refPose, mask, layerWeight);
             if(heldBeforeLayers && !preserveBaseGrip) IK::ApplyAdditivePose(gripPose,layerPose,refPose,mask,layerWeight);
