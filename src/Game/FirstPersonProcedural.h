@@ -242,8 +242,8 @@ struct WeaponBodyMotionSettings {
     float MaxLag = 0.03f;      // metres
     float MaxAngle = 4.0f;     // degrees
     float CameraNod = 0.6f;    // degrees of view pitch per m/s up/down (dropping nods the view down)
-    float CameraRoll = 0.3f;   // share of the shoulders' roll the view takes (0..1)
-    float AdsScale = 0.1f;     // all of it, with the sights up
+    float CameraRoll = 0.08f;  // share of the shoulders' roll the view takes (0..1; the clips' shoulders roll ~10 deg a stride)
+    float AdsScale = 0.03f;    // all of it, with the sights up (the aimed sight picture stays as steady as before)
     FirstPersonSpring Spring{5.0f, 0.4f};
 };
 
