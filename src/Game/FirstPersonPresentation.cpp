@@ -518,6 +518,7 @@ void FirstPersonPresentation::StopSet(World& world) {
     m_FullAuto = false;
     m_BurstRemaining = 0;
     m_WaitingAnimatedShot = false;
+    m_TriggerRetry = false;
     m_FireCooldown = 0.0f;
     m_IdleTime = 0.0f;
     ResetReloadKey();
@@ -1216,6 +1217,7 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
         // Triggers live for exactly one controller update: an input the controller refused
         // (fire during a reload, say) is dropped rather than firing late.
         for (const char* t : {K::kFire, K::kReload, K::kMagCheck, K::kInspect, K::kMelee, K::kFidget, K::kCycle}) ac->ResetTrigger(t);
+        ac->SetBool(K::kTrigger, false); // set again by the next UpdateTrigger while the trigger is down
     }
 
     ApplyHidden(world);

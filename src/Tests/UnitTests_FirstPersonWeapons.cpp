@@ -695,6 +695,51 @@ void TestThirdPersonArmsTrack() {
     }
 }
 
+// Every shipped weapon's controller: the trigger lets the idle fidget go (the driver's Trigger bool), and pressing
+// Inspect / mag check / melee again while one plays doesn't start it over.
+void TestWeaponControllersTriggerAndActions() {
+    namespace K = FirstPersonAnimatorContract;
+    using AC = AnimatorController;
+    for (const char* rel : {"assets/Weapons/AKS74U/AKS74U.controller", "assets/Weapons/Remington870/Remington870.controller",
+                            "assets/Weapons/Revolver38/Revolver38.controller"}) {
+        const std::string path = ProjectPaths::Resolve(rel);
+        AnimatorController ctrl;
+        if (!std::filesystem::exists(path)) { // a source checkout without weapons; a broken file fails below
+            UnitTestSupport::Skip("no " + path);
+            continue;
+        }
+        CHECK(AnimatorController::LoadFile(path, ctrl));
+        if (ctrl.Layers.empty()) continue;
+        const AC::Parameter* trigger = ctrl.FindParameter(K::kTrigger);
+        CHECK(trigger && trigger->Type == AC::ParamType::Bool);
+        const auto& L = ctrl.Layers[0];
+        bool triggerExit = false;
+        for (const auto& t : L.Transitions)
+            triggerExit = triggerExit || (t.FromKind == AC::Source::State && t.From == "Regrip" && t.To == AC::kExitState &&
+                                          t.Conditions.size() == 1 && t.Conditions[0].Param == K::kTrigger);
+        CHECK(triggerExit);
+        for (const char* once : {"Inspect", "MagCheck", "Melee"}) {
+            int found = 0;
+            for (const auto& t : L.Transitions)
+                if (t.FromKind == AC::Source::Any && t.To == once) { ++found; CHECK(!t.CanTransitionToSelf); }
+            CHECK(found == 1);
+        }
+        // Played: a fidget, then the trigger, back to Idle on the next update.
+        AnimatorControllerComponent ac;
+        const auto oneSecond = [](int, int) { return 1.0f; };
+        auto run = [&](float seconds) {
+            for (float t = 0.0f; t < seconds - 1e-4f; t += 1.0f / 60.0f) AdvanceAnimator(ctrl, ac, 1.0f / 60.0f, oneSecond);
+        };
+        ac.SetBool(K::kEquipped, true);
+        run(2.0f);
+        CHECK(ac.StateName == "Idle");
+        ac.SetTrigger(K::kFidget); run(0.1f);
+        CHECK(ac.StateName == "Regrip" && ac.HasTag(K::kTagIKOff));
+        ac.SetBool(K::kTrigger, true); run(1.0f / 60.0f);
+        CHECK(ac.StateName == "Idle" && !ac.HasTag(K::kTagIKOff));
+    }
+}
+
 // The Remington 870's own controller (project/assets/Weapons/Remington870), driven the way
 // FirstPersonPresentation drives it - every state 1 s long: the pump after a round, a reload loading
 // one shell per LoadRound until LastRound, an empty start chambering its round, the trigger stopping a
@@ -1097,6 +1142,18 @@ void TestFirstPersonAnimationFSM() {
     CHECK(ac.StateName == "Regrip");
     ac.SetTrigger(K::kMelee); run(0.05f);
     CHECK(ac.StateName == "Melee");               // anything real cuts a fidget off
+    run(0.2f);
+    const float swing = ac.StateTime;
+    ac.SetTrigger(K::kMelee); run(1.0f / 60.0f);
+    CHECK(ac.StateName == "Melee" && ac.StateTime > swing); // pressed again mid-swing: it doesn't start over
+    ac.ResetTrigger(K::kMelee);
+    run(1.5f);
+    CHECK(ac.StateName == "Idle");
+    ac.SetTrigger(K::kFidget); run(0.05f);
+    CHECK(ac.StateName == "Regrip");
+    ac.SetBool(K::kTrigger, true); run(1.0f / 60.0f);
+    CHECK(ac.StateName == "Idle");                // the trigger lets the fidget go
+    ac.SetBool(K::kTrigger, false);
 
     // A v2 weapon definition names its controller and carries its gameplay numbers.
     FirstPersonAnimationSet v2;
@@ -1815,6 +1872,7 @@ void RegisterFirstPersonWeaponsTests(UnitTestSupport::TestList& tests) {
         {"WeaponJankMeter", TestWeaponJankMeter},
         {"ThirdPersonArmsTrack", TestThirdPersonArmsTrack},
         {"RemingtonController", TestRemingtonController},
+        {"Weapon controllers: trigger and one-shot actions", TestWeaponControllersTriggerAndActions},
         {"Revolver38Assets", TestRevolver38Assets},
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
         {"FirstPersonAds", TestFirstPersonAds},
