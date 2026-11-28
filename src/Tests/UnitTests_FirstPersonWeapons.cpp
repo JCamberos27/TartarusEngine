@@ -1499,6 +1499,16 @@ void TestWeaponProcedural() {
             for (int f = 0; f < 60; ++f) sj.Update(b, j);
             CHECK(std::fabs(sj.Pose().CameraKick.x) <= b.BodyMotion.MaxNod + 1e-3f && std::fabs(sj.Pose().CameraKick.x) > 0.8f);
         }
+        // In the air (the jump pose's eye motion, not the gait) it doesn't follow the body.
+        {
+            WeaponProceduralState sa;
+            WeaponProceduralInput air;
+            air.Grounded = false;
+            air.BodyVelocity = glm::vec3(0.5f, -0.5f, 0.0f);
+            const WeaponProceduralPose pa = run(sa, b, air, 0.5f);
+            CHECK(glm::length(pa.Position - base.Position) < 1e-6f && glm::length(pa.Rotation - base.Rotation) < 1e-5f &&
+                  pa.CameraKick.x == base.CameraKick.x);
+        }
         in.BodyRoll = glm::radians(2.0f);
         p = run(st, b, in, 0.1f);
         CHECK(std::fabs(p.CameraRoll - base.CameraRoll - 2.0f * b.BodyMotion.CameraRoll) < 1e-3f);
