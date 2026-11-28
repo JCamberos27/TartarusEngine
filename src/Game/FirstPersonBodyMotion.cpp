@@ -779,6 +779,7 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     if (!m_HaveYaw) {
         m_DesiredYaw = m_SimYaw = yaw;
         m_SimYawRate = 0.0f;
+        m_TurnSide = 0.0f;
         m_HaveYaw = true;
     }
     if (!m_Still || in.TurnThreshold <= 0.0f) {
