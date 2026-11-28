@@ -723,7 +723,7 @@
               "threshold": 0.0
             }
           ],
-          "duration": 0.08,
+          "duration": 0.15,
           "exitTime": 1.0,
           "fromAny": true,
           "hasExitTime": false,
@@ -739,7 +739,7 @@
               "threshold": 0.0
             }
           ],
-          "duration": 0.06,
+          "duration": 0.15,
           "exitTime": 1.0,
           "fromAny": true,
           "hasExitTime": false,
