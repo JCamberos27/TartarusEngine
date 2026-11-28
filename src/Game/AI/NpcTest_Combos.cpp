@@ -187,12 +187,16 @@ struct NpcTest::CombosRun {
     bool SetupFailed = false;
     std::string States;    // the controller states the window went through
     std::string LastState;
+    int AmmoAt = -1;       // the magazine as the action started (after a reload's own SetAmmo)
     // The meters (fed in Pose; reset as the lead-in starts, events counted from the action's start).
     FirstPersonJankMeter Fp;
     WeaponJankMeter Tp;
     bool MeterOn = false, ResetMeters = false, MarkWindow = false;
     float FpFrom = 0.0f, TpFrom = 0.0f;
     float CycleMm = -1.0f, LastCycleSeen = -1.0f;
+    // The support (left) arm through the action, whatever the thresholds: its largest grip gap first person (body hand off
+    // the rig) and third person (world hand off the world gun), and its largest reach (of the arm's length).
+    float SupGripFp = 0.0f, SupGripTp = 0.0f, SupReach = 0.0f;
     std::map<std::string, float> HoldBounce; // weapon/state -> the hold row's bounce (mm)
     int Rows = 0, Flagged = 0, Setups = 0, Replays = 0;
     std::string ClipsDir;
@@ -333,8 +337,11 @@ void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float
         char bounce[16];
         if (R.CycleMm >= 0.0f) std::snprintf(bounce, sizeof bounce, "%.1f", R.CycleMm);
         else std::snprintf(bounce, sizeof bounce, "-");
-        std::printf("[Combo] ROW %s|%s|%.2f|%s|fp=%d|tp=%d|bounce=%s|%s|%s\n", C.Id.c_str(), flagged ? "FLAG" : "PASS", worst, worstText.c_str(),
-                    fpN, tpN, bounce, R.States.empty() ? "-" : R.States.c_str(), clipPath.c_str());
+        char ammo[48]; // the rounds fired, the magazine refilled: the action really ran
+        std::snprintf(ammo, sizeof ammo, " [ammo %d->%d]", R.AmmoAt, weapon.Ammo());
+        std::printf("[Combo] ROW %s|%s|%.2f|%s|fp=%d|tp=%d|bounce=%s|%s%s|%s\n", C.Id.c_str(), flagged ? "FLAG" : "PASS", worst, worstText.c_str(),
+                    fpN, tpN, bounce, R.States.empty() ? "-" : R.States.c_str(), ammo, clipPath.c_str());
+        std::printf("[Combo] SUPPORT %s|grip_fp=%.2f|grip_tp=%.2f|reach=%.3f\n", C.Id.c_str(), R.SupGripFp * 100.0f, R.SupGripTp * 100.0f, R.SupReach);
         for (size_t k = 0; k < lines.size() && k < 16; ++k) std::printf("[Combo] EV %s|%s\n", C.Id.c_str(), lines[k].c_str());
         if (lines.size() > 16) std::printf("[Combo] EV %s|... %zu more\n", C.Id.c_str(), lines.size() - 16);
         if (clip) { // again at once, from the same fresh body, recorded
@@ -418,6 +425,7 @@ void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float
             case CbAct::Melee: m_Action = "Melee"; break;
             default: break;
             }
+            R.AmmoAt = weapon.Ammo();
         }
         return;
     }
@@ -460,6 +468,7 @@ void NpcTest::CombosPose(const World& world, const FirstPersonBody& body, const 
         R.MarkWindow = false;
         R.CycleMm = -1.0f;
         R.LastCycleSeen = R.Fp.LastCycleMm();
+        R.SupGripFp = R.SupGripTp = R.SupReach = 0.0f;
     }
     const BodyDebug::Snapshot& bd = BodyDebug::Info();
     FirstPersonJankSample s;
@@ -484,7 +493,13 @@ void NpcTest::CombosPose(const World& world, const FirstPersonBody& body, const 
         R.LastCycleSeen = c;
         if (R.Fp.Time() > R.FpFrom && CbResting(s.State)) R.CycleMm = std::max(R.CycleMm, c);
     }
-    R.Tp.Push(WeaponJankFrameFor(world, body, p, dt, ""));
+    const WeaponJankFrame tf = WeaponJankFrameFor(world, body, p, dt, "");
+    R.Tp.Push(tf);
+    if (R.Fp.Time() > R.FpFrom && s.Valid) {
+        R.SupGripFp = std::max(R.SupGripFp, s.HandGap[0]);
+        R.SupReach = std::max(R.SupReach, s.Reach[0]);
+        if (tf.Valid) R.SupGripTp = std::max(R.SupGripTp, tf.HandGap[0]);
+    }
 }
 
 void NpcTest::CombosAfter(NpcDirector& npcs, const Player& player) {

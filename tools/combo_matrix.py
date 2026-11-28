@@ -14,6 +14,7 @@ from pathlib import Path
 
 ROW = re.compile(r'^\[Combo\] ROW (.*)$')
 EV = re.compile(r'^\[Combo\] EV ([^|]*)\|(.*)$')
+SUP = re.compile(r'^\[Combo\] SUPPORT ([^|]*)\|grip_fp=([\d.]+)\|grip_tp=([\d.]+)\|reach=([\d.]+)$')
 
 
 def parse(logs):
@@ -31,6 +32,10 @@ def parse(logs):
                     rows[cell] = dict(cell=cell, result=result, score=float(score), worst=worst, fp=int(fp.split('=')[1]),
                                       tp=int(tp.split('=')[1]), bounce=bounce.split('=')[1], states=states, clip=clip)
                     events[cell] = []
+                    continue
+                m = SUP.match(line)
+                if m and m.group(1) in rows:
+                    rows[m.group(1)]['support'] = f'{float(m.group(2)):.1f} / {float(m.group(3)):.1f} cm, reach {float(m.group(4)):.2f}'
                     continue
                 m = EV.match(line)
                 if m and m.group(1) in events:
@@ -51,15 +56,16 @@ def write_md(rows, events, out):
     lines = [f'# Weapon combo matrix', '',
              f'{n} cells: {n - flagged - setup} PASS, {flagged} FLAG, {setup} SETUP. Score = the worst event over its meter\'s '
              'threshold (1.0 = just over). FP = first-person meter, TP = third-person (world body) meter. Bounce = the largest '
-             'gait cycle\'s hand travel in a held state (mm).', '',
-             '| # | cell | result | score | worst | FP ev | TP ev | bounce mm | states | clip |',
-             '|---|---|---|---|---|---|---|---|---|---|']
+             'gait cycle\'s hand travel in a held state (mm). Support arm = the left hand\'s largest grip gap FP / TP and its '
+             'largest reach (of the arm\'s length) through the action, whatever the thresholds.', '',
+             '| # | cell | result | score | worst | FP ev | TP ev | bounce mm | support arm | states | clip |',
+             '|---|---|---|---|---|---|---|---|---|---|---|']
     for i, r in enumerate(ordered, 1):
         clip = r['clip'] if r['clip'] != '-' else ''
         if clip and Path(clip + '.mp4').exists():
             clip += '.mp4'
         lines.append(f"| {i} | {r['cell']} | {r['result']} | {r['score']:.2f} | {r['worst']} | {r['fp']} | {r['tp']} | "
-                     f"{r['bounce']} | {r['states'].replace('|', '/')} | {clip} |")
+                     f"{r['bounce']} | {r.get('support', '-')} | {r['states'].replace('|', '/')} | {clip} |")
     lines += ['', '## Events per flagged cell', '']
     for r in ordered:
         if r['result'] != 'FLAG':
