@@ -152,7 +152,7 @@ base["transitions"] = keep
 
 for layer in ctrl["layers"][1:]:
     # The locomotion layers keep the 870's choice of clip per state (its Weapon Locomotion "Walk" plays Idle;
-    # the walk itself is the Weapon Walk layer's): the same clip name, the revolver's file.
+    # the gun's walk motion is the body's, through Eye Ride): the same clip name, the revolver's file.
     for s in layer["states"]:
         src = (s.get("motions") or {}).get("arms", {}).get("clip", "")
         name = src.rsplit("_A_FP_", 1)[-1][:-4] if "_A_FP_" in src else LOCO.get(s["name"], "Idle")

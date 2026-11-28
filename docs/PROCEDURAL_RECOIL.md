@@ -99,13 +99,10 @@ The ADS pose hold for carried reloads is applied before locomotion layers, so
 walking remains additive during ADS reloads. ADS offsets and arm IK run after
 layer composition.
 
-Walking is sampled once on the **Weapon Walk** additive layer, with a continuous
-WalkRate clock across Walk, IdleToSprint and SprintToIdle. The locomotion layer's
-WalkBlend state curve weights it through the same crossfades as the sprint clips.
-Both transition clips keep their authored motion with walking added over it;
-the walk fades out for full Sprint, Idle and Off. Walk on Weapon Locomotion holds
-the resting frame so walking is never added twice. Weapon Walk uses the same
-ADS Locomotion Scale as Weapon Locomotion.
+Walking adds no clip of its own: the gun rides the body's motion (the First Person
+Body's Eye Ride puts the camera, and the arms rig on it, on the shoulders), so a walk
+clip on top bobbed the gun out of step with the chest. Walk on Weapon Locomotion holds
+the resting frame, and the jog (Shift) stays there too; only Sprint takes the run clip.
 
 Weapon Inspector / ADS / View Placement / ADS Locomotion Scale multiplies the
 Weapon Locomotion layer while aiming (0 = none, 1 = unchanged). It blends over
