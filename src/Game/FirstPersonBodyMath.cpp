@@ -337,3 +337,16 @@ std::vector<std::uint8_t> FirstPersonBodyCollarVertices(const std::vector<glm::v
     }
     return out;
 }
+
+// 3t^2 - 2t^3 on [0, 1]: eased at both ends.
+float FirstPersonBodySmoothStep(float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
+// The t in [0, 1] whose FirstPersonBodySmoothStep is s.
+float FirstPersonBodyInverseSmoothStep(float s) {
+    s = std::clamp(s, 0.0f, 1.0f);
+    return 0.5f - std::sin(std::asin(1.0f - 2.0f * s) / 3.0f);
+}
+

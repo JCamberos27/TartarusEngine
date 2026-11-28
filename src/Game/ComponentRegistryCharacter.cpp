@@ -548,6 +548,11 @@ void RegisterCharacterComponents() {
         m.Fields.push_back({ "Arms Ease Out", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmsEaseOut), 0.005f,
               "Seconds the body's arms take to ease back to the locomotion pose once the gun is holstered.", 0.01f, 1.0f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Arms Ease In", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmsEaseIn), 0.005f,
+              "Seconds the body takes to settle onto a drawn gun: the world body's arms (every view but the player's own, and the\n"
+              "shadows) reach it, the gun coming up in the right hand meanwhile, and the view moves onto the armed eye. The\n"
+              "first-person arms take the rig's hands at once. 0 = all at once.", 0.0f, 1.0f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
         m.Fields.push_back({ "Turn End Angle", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnEndAngle), 0.5f,
               "A turn on the spot ends once the body is within this many degrees of the view.", 0.0f, 45.0f });
         m.Fields.back().Group = "Turning (advanced)";

@@ -817,6 +817,18 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         if (follow) m_ArmsWeight = 1.0f;
         else m_ArmsWeight -= m_ArmsWeight * Follow(dt, cfg.ArmsEaseOut);
         m_ArmsWeightEased = true;
+        // The body's own armed pose (the chest's stance and aim, the arms let go of their hang) and the world twins' arms
+        // ease in over Arms Ease In instead: taken at once, every view but the player's own saw the body jump from the
+        // hang onto the gun in one frame. First person still takes the rig's hands, and the eye, at once (m_ArmsWeight).
+        // Out, it goes with m_ArmsWeight; a draw partway out starts from where it is.
+        if (follow) {
+            if (m_ArmsDrawIn < 0.0f) m_ArmsDrawIn = 1.0f; // Play's first frame with the gun already in hand: nothing to ease
+            else m_ArmsDrawIn = cfg.ArmsEaseIn > 1e-4f ? std::min(1.0f, m_ArmsDrawIn + dt / cfg.ArmsEaseIn) : 1.0f;
+            m_ArmsDrawWeight = FirstPersonBodySmoothStep(m_ArmsDrawIn);
+        } else {
+            m_ArmsDrawWeight = std::min(m_ArmsDrawWeight, m_ArmsWeight);
+            m_ArmsDrawIn = FirstPersonBodyInverseSmoothStep(m_ArmsDrawWeight);
+        }
     }
 
     BodyDebug::Info().ChestPitchClipDeg = ChestPitchDeg();
@@ -910,7 +922,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     }
     const float viewPitch = std::asin(std::clamp(camera.Front().y, -1.0f, 1.0f));
     // Unarmed, the chest's pitch at the view is capped (Spine Aim Max Up / Down, eased in): past it the head looks on alone.
-    const float aimUnarmed = 1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f);
+    const float aimUnarmed = 1.0f - std::clamp(m_ArmsDrawWeight, 0.0f, 1.0f);
     const float aimShare = FirstPersonBodySpineAim(viewPitch, cfg.SpineAim, cfg.SpineAimDown);
     const float aimCap = glm::radians(viewPitch >= 0.0f ? cfg.SpineAimMaxUp : cfg.SpineAimMaxDown);
     float spineAim = FirstPersonBodyCappedSpineAim(viewPitch, aimShare, aimCap, aimUnarmed);
@@ -942,7 +954,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     m_TwinSpineFix = mmLayers && spineAim > 0.0f ? viewPitch * (twinAim - spineAim) : 0.0f; // (0 unarmed: the same cap)
     if (mmLayers && spineAim > 0.0f) {
         // Arm Hang, unarmed (armed, the arms take the rig's pose and reach the gun: ArmsLateUpdate).
-        const float hang = 1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f);
+        const float hang = 1.0f - std::clamp(m_ArmsDrawWeight, 0.0f, 1.0f);
         thread_local std::vector<ArmHangPose> arms;
         if (hang > 1e-3f) CaptureArms(arms);
         ApplySpineAim(camera, spineAim, 0.0f);
@@ -955,7 +967,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     // Armed, the chest takes the arms rig's stance: its shoulder line, measured against the camera. The
     // rig is authored bladed (the left shoulder ~13 cm ahead of the right, ~20 degrees): squared to the
     // view, the body's left shoulder sat ~7 cm behind the rig's, and the support hand came off the gun.
-    const float lineMatch = std::clamp(cfg.ShoulderLineMatch, 0.0f, 1.0f) * std::clamp(m_ArmsWeight, 0.0f, 1.0f);
+    const float lineMatch = std::clamp(cfg.ShoulderLineMatch, 0.0f, 1.0f) * std::clamp(m_ArmsDrawWeight, 0.0f, 1.0f);
     bool matched = false;
     if (armRig && lineMatch > 1e-3f && reg.valid(weaponArms)) {
         glm::mat4 sl(1.0f), sr(1.0f);
@@ -1020,8 +1032,8 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     FirstPersonBodyFollowShoulders(m_HeadEased, m_HaveEye, headAnimated, cfg.EyeSlack, 0.04f, dt);
     // Motion matching, unarmed: the eye rides the mocap head's own motion by MM Head Ride (the owner, 2026-11-17: the
     // stabilized eye over a body bobbing as captured felt stiff, and the neck rose into the view at every jogging step).
-    const float headRide = std::clamp(cfg.MmHeadRide, 0.0f, 1.0f) * (1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f));
-    const float armed = std::clamp(m_ArmsWeight, 0.0f, 1.0f);
+    const float headRide = std::clamp(cfg.MmHeadRide, 0.0f, 1.0f) * (1.0f - std::clamp(m_ArmsDrawWeight, 0.0f, 1.0f));
+    const float armed = std::clamp(m_ArmsDrawWeight, 0.0f, 1.0f);
     // With the sights up the ride is Eye Ride ADS (SetAdsBlend): riding fully there, the sight picture bobbed 2-4x the
     // stabilized eye's.
     const float eyeRide = glm::mix(std::clamp(cfg.EyeRide, 0.0f, 1.0f), std::clamp(cfg.EyeRideAds, 0.0f, 1.0f),
@@ -1092,12 +1104,13 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             // the camera would jump when the gun is holstered. Taken as it is (both eyes are already smoothed),
             // and held from the frame the arms start to ease off.
             const glm::vec3 delta = glm::inverse(yaw) * (fromShoulders - eyeWorld);
-            if (!m_HaveArmedEye || m_ArmsWeight > 0.99f) m_ArmedEyeDelta = delta;
+            if (!m_HaveArmedEye || m_ArmsDrawWeight > 0.99f) m_ArmedEyeDelta = delta;
             m_HaveArmedEye = true;
-            eyeWorld = glm::mix(eyeWorld, fromShoulders, std::min(m_ArmsWeight, 1.0f));
+            // In by the eased weight too (a draw): by m_ArmsWeight the view jumped ~2.5 cm onto the armed eye in one frame.
+            eyeWorld = glm::mix(eyeWorld, fromShoulders, std::min(m_ArmsDrawWeight, 1.0f));
         }
     }
-    if (m_HaveArmedEye) eyeWorld += yaw * m_ArmedEyeDelta * (1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f));
+    if (m_HaveArmedEye) eyeWorld += yaw * m_ArmedEyeDelta * (1.0f - std::clamp(m_ArmsDrawWeight, 0.0f, 1.0f));
     // Looking down, the eye comes forward over the chest as a head does, pitching at the neck. The camera
     // rides at the head bone (the skull's base, over the neck), so straight down it looked into the
     // torso's neck opening: the torso was seen from inside (culled away) and the legs through it.
@@ -1107,7 +1120,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     // Past what the push can do, the look-down limit (motion matching, unarmed - the owner, 2026-11-17: "limit the amount we can
     // look down a little bit so it doesn't clip"): the steepest pitch from which the opening is out of the view.
     {
-        const float share = 1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f);
+        const float share = 1.0f - std::clamp(m_ArmsDrawWeight, 0.0f, 1.0f);
         float limit = -89.0f;
         const float want = viewPitch < glm::radians(-10.0f) && share > 1e-3f ? share * EyeBodyPush(world, camera, eyeWorld, flat, limit) : 0.0f;
         if (share < 0.5f) limit = -89.0f;

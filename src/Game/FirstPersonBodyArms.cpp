@@ -262,6 +262,11 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     m_ArmsWeightEased = false;
     if (follow) m_ArmsWeight = 1.0f;
     else m_ArmsWeight -= m_ArmsWeight * Follow(dt, cfg.ArmsEaseOut);
+    // The eased weight (LateUpdate's, for the body's pose and the world twins) never stays above this one easing out.
+    if (!follow) {
+        m_ArmsDrawWeight = std::min(m_ArmsDrawWeight, m_ArmsWeight);
+        m_ArmsDrawIn = FirstPersonBodyInverseSmoothStep(m_ArmsDrawWeight);
+    }
     const bool viewModelArms = follow;
     // Easing off a holstered gun (a weapon swap's holster to draw, or going unarmed) the arms piece is hidden
     // from the camera, below.
@@ -328,7 +333,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     // the gait. With the hands pinned to the rig's, that sway came out at the elbows (the support arm,
     // nearly straight, most of all). Steady, each shoulder is held at a slow average of where it sits
     // relative to the eye (in the chest's view frame), and each elbow bends in the plane the rig's does.
-    const float steady = std::clamp(cfg.ArmSteadiness, 0.0f, 1.0f) * m_ArmsWeight;
+    const float steadiness = std::clamp(cfg.ArmSteadiness, 0.0f, 1.0f);
 
     struct Side { const char *Clavicle, *Upper, *Lower, *Hand; };
     static const Side kSides[2] = {{FPBody::kBoneClavicle[0], FPBody::kBoneUpperArm[0], FPBody::kBoneLowerArm[0], FPBody::kBoneHand[0]},
@@ -378,7 +383,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     const float leanMax = glm::radians(std::clamp(cfg.ReachLeanMax, 0.0f, 60.0f));
     auto solveArms = [&](const std::vector<std::shared_ptr<Model>>& models, const std::vector<entt::entity>& ents, const ArmTargets& t,
                          glm::vec3 (&anchor)[2], bool (&haveAnchor)[2], glm::vec3 (&elbowAim)[2], bool (&haveElbowAim)[2],
-                         bool firstPersonView) {
+                         bool firstPersonView, float weight) {
+        const float steady = steadiness * weight;
         // The frame the shoulders are steadied in: the chest's view; for the twins, moved as their chest was (m_TwinChestMove) -
         // held in the pieces' frame, a twin chest pitched less than theirs pulled its shoulders off toward it, hands off the gun.
         const glm::mat4 frame = firstPersonView ? anchorFrame : m_TwinChestMove * anchorFrame;
@@ -412,8 +418,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 ownShoulder[s] = glm::vec3(pieceWorld * glm::vec4(IK::Position(globals[u]), 1.0f));
 
         // The rig's arm shapes first, so the elbows bend the way the animation has them; the solve then only fixes the hands.
-        CopyArmShapeCached(m, *t.Shape, m_ArmsWeight, pose, parents, cfg.ClavicleFollow);
-        FirstPersonBodyCurlFingers(m, pose, fingerCurl * m_ArmsWeight);
+        CopyArmShapeCached(m, *t.Shape, weight, pose, parents, cfg.ClavicleFollow);
+        FirstPersonBodyCurlFingers(m, pose, fingerCurl * weight);
         IK::ComputeGlobals(pose, parents, globals);
 
         // Reach Lean: a hand still out of reach once its collarbone has turned all it may (the gun pitches with the whole
@@ -430,7 +436,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 clav[s] = m.NodeIndex(Bone(kSides[s].Clavicle));
             }
             if (glm::quat q; FirstPersonBodyReachLean(globals, upper, lower, hand, clav, t.Have, t.Pos, toModel, chest, shoulderMax, leanMax,
-                                                      m_ArmsWeight, q)) {
+                                                      weight, q)) {
                 IK::OffsetBone(pose, parents, globals, chest, glm::vec3(0.0f), q, IK::Position(globals[chest]));
                 leaned = true;
                 if (firstPersonView) BodyDebug::Info().ReachLean = glm::degrees(FirstPersonBodyAngleOf(q));
@@ -441,7 +447,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             const int upper = m.NodeIndex(Bone(kSides[s].Upper)), lower = m.NodeIndex(Bone(kSides[s].Lower)),
                       hand = m.NodeIndex(Bone(kSides[s].Hand));
             if (upper < 0 || lower < 0 || hand < 0) continue;
-            const glm::vec3 target = glm::vec3(toModel * glm::vec4(t.Pos[s] + t.Palm[s] * gripInset * m_ArmsWeight, 1.0f));
+            const glm::vec3 target = glm::vec3(toModel * glm::vec4(t.Pos[s] + t.Palm[s] * gripInset * weight, 1.0f));
             const glm::quat rot = glm::normalize(toModelRot * t.Rot[s]);
             const int clav = m.NodeIndex(Bone(kSides[s].Clavicle));
             if (firstPersonView) {
@@ -500,7 +506,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 const float dist = glm::length(toTarget);
                 const float excess = std::min(dist - armLen * cfg.ShrugStart, cfg.ShrugMax);
                 if (excess > 1e-4f && dist > 1e-5f) {
-                    FirstPersonBodyTurnClavicle(pose, parents, globals, clav, upper, a + toTarget / dist * excess * m_ArmsWeight, shoulderMax - turned);
+                    FirstPersonBodyTurnClavicle(pose, parents, globals, clav, upper, a + toTarget / dist * excess * weight, shoulderMax - turned);
                     if (firstPersonView) BodyDebug::Info().ShrugShift[s] = glm::length(glm::mat3(pieceWorld) * (IK::Position(globals[upper]) - a));
                 }
             }
@@ -510,7 +516,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             IK::TwoBoneHint hint;
             if (steady > 0.0f && t.HaveElbow[s]) {
                 const glm::vec3 a = IK::Position(globals[upper]), b = IK::Position(globals[lower]), c = IK::Position(globals[hand]);
-                const glm::vec3 line = glm::mix(c, target, std::clamp(m_ArmsWeight, 0.0f, 1.0f)) - a; // the solve's own target, from the shoulder
+                const glm::vec3 line = glm::mix(c, target, std::clamp(weight, 0.0f, 1.0f)) - a; // the solve's own target, from the shoulder
                 const float lab = glm::length(b - a), lcb = glm::length(c - b);
                 if (glm::dot(line, line) > 1e-8f && lab > 1e-6f && lcb > 1e-6f) {
                     const glm::vec3 axis = glm::normalize(line);
@@ -560,7 +566,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                     }
                 }
             }
-            IK::SolveTwoBone(pose, parents, globals, upper, lower, hand, target, &rot, m_ArmsWeight, 0.0f,
+            IK::SolveTwoBone(pose, parents, globals, upper, lower, hand, target, &rot, weight, 0.0f,
                              hint.HintWeight > 0.0f ? &hint : nullptr);
         }
         // How far each of the hands ended up from its target (off the gun, when the arm can't reach).
@@ -570,8 +576,10 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 if (firstPersonView) {
                     BodyDebug::Info().HandGap[s] = gap;
                 } else {
-                    m_TwinHandGap[s] = gap;
-                    BodyDebug::Info().TwinHandGap[s] = gap;
+                    // Easing onto a drawn gun the hands are on their way by design (the gun comes up in the right one):
+                    // no gap to score until they are there.
+                    m_TwinHandGap[s] = weight < 1.0f - 1e-4f ? -1.0f : gap;
+                    BodyDebug::Info().TwinHandGap[s] = m_TwinHandGap[s];
                 }
             }
         m.ApplyLocalPose(pose);
@@ -594,8 +602,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             if (other.empty() || (int)other.size() != o.NodeCount()) continue;
             parents.resize(other.size());
             for (int i = 0; i < (int)other.size(); ++i) parents[i] = o.NodeParent(i);
-            CopyArmShapeCached(o, *t.Shape, m_ArmsWeight, other, parents, cfg.ClavicleFollow);
-            FirstPersonBodyCurlFingers(o, other, fingerCurl * m_ArmsWeight);
+            CopyArmShapeCached(o, *t.Shape, weight, other, parents, cfg.ClavicleFollow);
+            FirstPersonBodyCurlFingers(o, other, fingerCurl * weight);
             for (const std::string& name : solved)
                 if (const int from = m.NodeIndex(name), to = o.NodeIndex(name); from >= 0 && to >= 0) other[to].R = pose[from].R;
             o.ApplyLocalPose(other);
@@ -611,7 +619,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     };
     {
     PROFILE_SCOPE("FPB arms: pieces");
-    solveArms(m_Models, m_Pieces, firstPerson, m_ShoulderAnchor, m_HaveShoulderAnchor, m_ElbowAim, m_HaveElbowAim, true);
+    solveArms(m_Models, m_Pieces, firstPerson, m_ShoulderAnchor, m_HaveShoulderAnchor, m_ElbowAim, m_HaveElbowAim, true, m_ArmsWeight);
     ArmTwist(m_Models);
     }
 
@@ -637,8 +645,28 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             hold.Shoulder[s] = glm::vec3(m_WorldGunDelta * glm::vec4(hold.Shoulder[s], 1.0f));
             hold.Elbow[s] = glm::vec3(m_WorldGunDelta * glm::vec4(hold.Elbow[s], 1.0f));
         }
-        solveArms(m_TwinModels, m_Twins, hold, m_WorldShoulderAnchor, m_WorldHaveShoulderAnchor, m_WorldElbowAim, m_WorldHaveElbowAim, false);
+        solveArms(m_TwinModels, m_Twins, hold, m_WorldShoulderAnchor, m_WorldHaveShoulderAnchor, m_WorldElbowAim, m_WorldHaveElbowAim, false,
+                  m_ArmsDrawWeight);
         ArmTwist(m_TwinModels);
+        // Easing in (a draw), the world gun comes up in the right hand: carried by the hand's way from where it is to its grip
+        // (the move it still has to make, shrinking to none at full weight) instead of waiting at the grip for the hands.
+        if (m_ArmsDrawWeight < 1.0f - 1e-4f && hold.Have[1])
+            for (size_t k = 0; k < m_TwinModels.size() && k < m_Twins.size(); ++k) {
+                if (!m_TwinModels[k] || !reg.valid(m_Twins[k])) continue;
+                const Model& o = *m_TwinModels[k];
+                const int hand = o.NodeIndex(Bone(kSides[1].Hand));
+                if (hand < 0 || (int)o.AppliedLocalPose().size() != o.NodeCount()) continue;
+                const glm::mat4 now = world.ComposeWorldTransform(m_Twins[k]) * o.PoseNodeModelSpace(o.AppliedLocalPose(), hand);
+                const glm::vec3 nowPos(now[3]), gripPos = hold.Pos[1] + hold.Palm[1] * gripInset;
+                const glm::quat nowRot = glm::normalize(glm::quat_cast(glm::mat3(glm::normalize(glm::vec3(now[0])),
+                                                        glm::normalize(glm::vec3(now[1])), glm::normalize(glm::vec3(now[2])))));
+                const float w = std::clamp(m_ArmsDrawWeight, 0.0f, 1.0f);
+                const glm::quat spin = glm::slerp(glm::normalize(nowRot * glm::inverse(hold.Rot[1])), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), w);
+                const glm::vec3 from = glm::mix(nowPos, gripPos, w); // the grip carried to here, turned about it
+                const glm::mat4 carry = glm::translate(glm::mat4(1.0f), from) * glm::mat4_cast(spin) * glm::translate(glm::mat4(1.0f), -gripPos);
+                m_WorldGunDelta = carry * m_WorldGunDelta;
+                break; // one twin's hand is enough: they share the pose
+            }
         PlaceHeadAttachedTwins(world);
     }
 

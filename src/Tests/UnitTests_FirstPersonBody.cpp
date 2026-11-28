@@ -571,6 +571,23 @@ void TestFirstPersonBodyLookOnlyKeepsTwins() {
 // Arm Steadiness's hold: exact to the knee, then eased toward twice it - continuous with a slope of 1 at the knee, never
 // past twice it, rising all the way to where the anchor is dragged (three times the knee), along the trail's own
 // direction; no knee, no hold.
+// The draw's ease (Arms Ease In): smoothstep and its inverse, so a draw started partway through a holster's ease-out
+// picks up from the weight it had.
+void TestFirstPersonBodySmoothStep() {
+    CHECK(FirstPersonBodySmoothStep(0.0f) == 0.0f && FirstPersonBodySmoothStep(1.0f) == 1.0f);
+    CHECK(FirstPersonBodySmoothStep(-1.0f) == 0.0f && FirstPersonBodySmoothStep(2.0f) == 1.0f);
+    CHECK(std::abs(FirstPersonBodySmoothStep(0.5f) - 0.5f) < 1e-6f);
+    float last = 0.0f;
+    for (int i = 1; i <= 20; ++i) {
+        const float t = (float)i / 20.0f, s = FirstPersonBodySmoothStep(t);
+        CHECK(s > last); // rises the whole way
+        CHECK(std::abs(FirstPersonBodyInverseSmoothStep(s) - t) < 1e-4f);
+        last = s;
+    }
+    CHECK(FirstPersonBodySmoothStep(0.05f) < 0.05f); // eased at the start: slower than linear
+    CHECK(FirstPersonBodyInverseSmoothStep(-0.5f) == 0.0f && std::abs(FirstPersonBodyInverseSmoothStep(1.5f) - 1.0f) < 1e-6f);
+}
+
 void TestFirstPersonBodySteadyHold() {
     const float knee = 0.04f;
     const glm::vec3 dir = glm::normalize(glm::vec3(0.3f, 1.0f, -0.2f));
@@ -602,5 +619,6 @@ void RegisterFirstPersonBodyTests(UnitTestSupport::TestList& tests) {
         {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
         {"FirstPersonBodyLookOnlyKeepsTwins", TestFirstPersonBodyLookOnlyKeepsTwins},
         {"FirstPersonBodySteadyHold", TestFirstPersonBodySteadyHold},
+        {"FirstPersonBodySmoothStep", TestFirstPersonBodySmoothStep},
     });
 }
