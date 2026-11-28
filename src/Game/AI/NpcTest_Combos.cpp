@@ -357,7 +357,7 @@ void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float
             ++fpN;
             float s = 0.0f;
             switch (e.What) {
-            case FirstPersonJankEvent::Kind::Bounce: s = e.Size / R.Fp.BounceMm; break;
+            case FirstPersonJankEvent::Kind::Bounce: s = e.Size / (e.Line > 0.0f ? e.Line : R.Fp.BounceMm); break;
             case FirstPersonJankEvent::Kind::HandPop: s = e.Size / R.Fp.PopCm; nonBounce = true; break;
             case FirstPersonJankEvent::Kind::Grip: s = e.Size / R.Fp.GripCm; nonBounce = true; break;
             case FirstPersonJankEvent::Kind::Stretch: s = 1.0f + e.Size / 10.0f; nonBounce = true; break;
@@ -556,7 +556,8 @@ void NpcTest::CombosPose(const World& world, const FirstPersonBody& body, const 
     s.State = p.CurrentState();
     glm::vec3 h[2];
     const bool hands = p.ArmsNodeInView("hand_l", h[0]) && p.ArmsNodeInView("hand_r", h[1]);
-    s.Valid = hands && s.State != "Holstered";
+    s.Valid = hands;
+    s.Hidden = s.State == "Holstered"; // (the arms' path carries on: the draw's first frame is measured against it)
     s.Recoil = p.SinceShot() < 0.35f || s.State == "Fire";
     s.Speed = p.PlanarSpeed();
     s.GaitPhase = p.HaveGaitPhase() ? p.GaitPhaseValue() : -1.0f;

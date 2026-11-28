@@ -33,6 +33,7 @@ void FirstPersonJankMeter::Reset() {
     m_Lo[0] = m_Lo[1] = 1e9f;
     m_Hi[0] = m_Hi[1] = -1e9f;
     m_CycleFrames = 0;
+    m_CycleSpeed = 0.0f;
     m_CycleClean = true;
     m_LastCycleMm = -1.0f;
 }
@@ -44,13 +45,13 @@ float FirstPersonJankMeter::Worst(FirstPersonJankEvent::Kind kind) const {
     return w;
 }
 
-void FirstPersonJankMeter::Flag(FirstPersonJankEvent::Kind kind, float size, int side) {
+void FirstPersonJankMeter::Flag(FirstPersonJankEvent::Kind kind, float size, int side, float line) {
     const int k = (int)kind, s = std::clamp(side, -1, 1) + 1;
     // A run of frames (within a tenth of a second of the last) in the same state and kind is one event, at its worst.
     if (m_LastFlag[k][s] >= 0.0f && m_Time - m_LastFlag[k][s] < 0.1f)
         for (auto it = m_Events.rbegin(); it != m_Events.rend(); ++it)
             if (it->What == kind && it->Side == side && it->State == m_State) {
-                if (size > it->Size) { it->Size = size; it->Time = m_Time; }
+                if (size > it->Size) { it->Size = size; it->Time = m_Time; it->Line = line; }
                 m_LastFlag[k][s] = m_Time;
                 return;
             }
@@ -61,6 +62,7 @@ void FirstPersonJankMeter::Flag(FirstPersonJankEvent::Kind kind, float size, int
     e.Time = m_Time;
     e.Size = size;
     e.Side = side;
+    e.Line = line;
     m_Events.push_back(e);
 }
 
@@ -71,11 +73,13 @@ void FirstPersonJankMeter::EndCycle() {
         for (int h = 0; h < 2; ++h)
             if (m_Hi[h] > m_Lo[h]) mm = std::max(mm, (m_Hi[h] - m_Lo[h]) * 1000.0f);
         m_LastCycleMm = mm;
-        if (mm > BounceMm) Flag(FirstPersonJankEvent::Kind::Bounce, mm);
+        const float line = m_CycleSpeed / (float)m_CycleFrames >= FastSpeed ? BounceFastMm : BounceMm;
+        if (mm > line) Flag(FirstPersonJankEvent::Kind::Bounce, mm, -1, line);
     }
     m_Lo[0] = m_Lo[1] = 1e9f;
     m_Hi[0] = m_Hi[1] = -1e9f;
     m_CycleFrames = 0;
+    m_CycleSpeed = 0.0f;
     m_CycleClean = true;
 }
 
@@ -88,6 +92,17 @@ void FirstPersonJankMeter::Push(const FirstPersonJankSample& f) {
     if (!f.Valid || f.Dt <= 0.0f) {
         m_Prev.clear();
         m_PrevPhase = -1.0f;
+        return;
+    }
+    if (f.Hidden) { // not drawn: no flags and no gait cycle, but the path carries on for the first drawn frame
+        m_PrevPhase = -1.0f;
+        m_Lo[0] = m_Lo[1] = 1e9f;
+        m_Hi[0] = m_Hi[1] = -1e9f;
+        m_CycleFrames = 0;
+        m_CycleSpeed = 0.0f;
+        m_CycleClean = true;
+        m_Prev.push_back(f);
+        if (m_Prev.size() > 2) m_Prev.erase(m_Prev.begin());
         return;
     }
     for (int s = 0; s < 2; ++s) {
@@ -103,12 +118,14 @@ void FirstPersonJankMeter::Push(const FirstPersonJankSample& f) {
         m_Lo[0] = m_Lo[1] = 1e9f;
         m_Hi[0] = m_Hi[1] = -1e9f;
         m_CycleFrames = 0;
+        m_CycleSpeed = 0.0f;
         m_CycleClean = true;
     } else {
         if (m_PrevPhase >= 0.0f && f.GaitPhase < m_PrevPhase - 0.5f) EndCycle(); // wrapped
         m_PrevPhase = f.GaitPhase;
         if (f.Recoil) m_CycleClean = false;
         ++m_CycleFrames;
+        m_CycleSpeed += f.Speed;
         for (int h = 0; h < 2; ++h) {
             m_Lo[h] = std::min(m_Lo[h], f.Hand[h].y);
             m_Hi[h] = std::max(m_Hi[h], f.Hand[h].y);

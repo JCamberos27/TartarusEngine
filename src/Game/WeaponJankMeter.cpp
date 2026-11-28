@@ -31,6 +31,7 @@ std::string WeaponJankEvent::Describe() const {
 void WeaponJankMeter::Reset() {
     m_Events.clear();
     m_Prev.clear();
+    m_PrevHands.clear();
     m_Time = m_StateTime = m_Still = 0.0f;
     m_State.clear();
     m_SettleCm = m_SettleDeg = 0.0f;
@@ -80,6 +81,23 @@ void WeaponJankMeter::Push(const WeaponJankFrame& f) {
     } else {
         m_StateTime += f.Dt;
     }
+    // The hands: their own path, kept through frames with no gun (holstered) so a draw's first frame is measured.
+    const bool hands = (f.Valid || f.HandsOnly) && f.Dt > 0.0f;
+    if (!hands) m_PrevHands.clear();
+    if (hands && m_PrevHands.size() == 2 && !f.Recoil) {
+        const WeaponJankFrame& a = m_PrevHands[0];
+        const WeaponJankFrame& b = m_PrevHands[1];
+        const float scale = (1.0f / 60.0f) * (1.0f / 60.0f) / std::max(f.Dt * f.Dt, 1e-8f); // (as the gun's, below)
+        for (int s = 0; s < 2; ++s) {
+            const float h = glm::length(f.Hand[s] - 2.0f * b.Hand[s] + a.Hand[s]) * 100.0f * scale;
+            const float c = glm::length(f.HandClip[s] - 2.0f * b.HandClip[s] + a.HandClip[s]) * 100.0f * scale;
+            if (h - c > PopCm * 1.5f) Flag(WeaponJankEvent::Kind::HandPop, h - c, s);
+        }
+    }
+    if (hands) {
+        m_PrevHands.push_back(f);
+        if (m_PrevHands.size() > 2) m_PrevHands.erase(m_PrevHands.begin());
+    }
     if (!f.Valid || f.Dt <= 0.0f) {
         m_Prev.clear();
         CloseSettle();
@@ -106,11 +124,6 @@ void WeaponJankMeter::Push(const WeaponJankFrame& f) {
             const glm::quat step = b.GunRot * glm::inverse(a.GunRot);
             const float turnJump = TurnDegrees(f.GunRot, step * b.GunRot) * scale;
             if (turnJump > PopDeg) Flag(WeaponJankEvent::Kind::GunPop, turnJump, -1, true);
-            for (int s = 0; s < 2; ++s) {
-                const float h = glm::length(f.Hand[s] - 2.0f * b.Hand[s] + a.Hand[s]) * 100.0f * scale;
-                const float c = glm::length(f.HandClip[s] - 2.0f * b.HandClip[s] + a.HandClip[s]) * 100.0f * scale;
-                if (h - c > PopCm * 1.5f) Flag(WeaponJankEvent::Kind::HandPop, h - c, s);
-            }
         }
         // Settling: past SettleAfter into the state, the gun keeps moving on its own.
         if (f.Resting && m_StateTime > SettleAfter && m_Still > StillFor) {
