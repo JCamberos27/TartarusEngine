@@ -232,6 +232,17 @@ void FirstPersonGaitPhase::Update(float spread, float lift, bool moving, float d
     Phase += Rate * dt;
     Phase -= std::floor(Phase);
 }
+float FirstPersonBodyEaseTwist(float eased, int& side, float twist, float limit, float halflife, float flipBand, float dt) {
+    constexpr float kPi = 3.14159265f;
+    const int sign = twist > 0.0f ? 1 : twist < 0.0f ? -1 : 0;
+    float target = twist;
+    if (side != 0 && sign != 0 && sign != side && std::abs(twist) > kPi - flipBand) target = (float)side * limit; // held
+    else if (sign != 0) side = sign;
+    target = std::clamp(target, -limit, limit);
+    if (halflife <= 0.0f || dt <= 0.0f) return halflife <= 0.0f ? target : eased;
+    return eased + (target - eased) * (1.0f - std::exp(-0.69314718f * dt / halflife));
+}
+
 glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw) {
     const glm::quat r = YawRotation(yaw);
     const glm::vec3 v(worldVelocity.x, 0.0f, worldVelocity.z);

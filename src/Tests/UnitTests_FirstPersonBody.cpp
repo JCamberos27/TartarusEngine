@@ -229,6 +229,36 @@ void TestBlendTree2D() {
     CHECK(near(FirstPersonBodyWrapAngle(3.5f), 3.5f - 6.2831853f) && near(FirstPersonBodyWrapAngle(-3.5f), -3.5f + 6.2831853f));
     CHECK(near(FirstPersonBodyWrapAngle(0.4f), 0.4f) && near(FirstPersonBodyWrapAngle(6.2831853f + 0.4f), 0.4f));
 
+    // The chest's twist toward the view: eased (half the way in the half-life), capped, and never swapping sides in a frame.
+    {
+        const float dt = 1.0f / 60.0f, lim = glm::radians(60.0f), hl = 0.08f, band = glm::radians(30.0f), pi = 3.14159265f;
+        float e = 0.0f;
+        int side = 0;
+        for (int i = 0; i < 5; ++i) e = FirstPersonBodyEaseTwist(e, side, -1.0f, lim, hl, band, dt); // 0.083 s toward -1 rad
+        CHECK(e < -0.45f && e > -0.6f && side == -1);
+        CHECK(near(FirstPersonBodyEaseTwist(0.3f, side, 2.0f, lim, 0.0f, band, dt), lim)); // no half-life: capped, at once
+        // A 200 deg flick in 0.15 s (the view sweeps round through straight behind and stops 20 deg past it), then the body
+        // turns the short way: the chest stays on the flick's side until the view is clearly round the other way, and no
+        // frame moves it more than the ease allows.
+        e = 0.0f;
+        side = 0;
+        const float most = 2.0f * lim * (1.0f - std::exp(-0.69314718f * dt / hl)) + 1e-5f;
+        float worst = 0.0f, body = 0.0f;
+        bool flippedEarly = false;
+        for (int i = 0; i < 120; ++i) {
+            const float u = std::min(1.0f, i / 9.0f), view = -glm::radians(200.0f) * u * u * (3.0f - 2.0f * u);
+            if (i > 9) body = std::min(body + glm::radians(180.0f) * dt, glm::radians(100.0f)); // the body turns the short way (+)
+            const float twist = FirstPersonBodyWrapAngle(view - body);
+            const float before = e;
+            e = FirstPersonBodyEaseTwist(e, side, twist, lim, hl, band, dt);
+            worst = std::max(worst, std::abs(e - before));
+            if (std::abs(twist) > pi - band && e > 0.0f) flippedEarly = true;
+            CHECK(std::abs(e) <= lim + 1e-5f);
+        }
+        CHECK(worst <= most && !flippedEarly);
+        CHECK(e > 0.3f && side == 1); // round the other way in the end, eased there
+    }
+
     // Foot IK: the pelvis drops to the lower foot (capped), rises a little when both are up.
     CHECK(near(FirstPersonBodyFootPelvis(-0.1f, 0.0f, 0.35f, 0.15f), -0.1f) && near(FirstPersonBodyFootPelvis(0.05f, -0.5f, 0.35f, 0.15f), -0.35f));
     CHECK(near(FirstPersonBodyFootPelvis(0.2f, 0.3f, 0.35f, 0.15f), 0.15f) && near(FirstPersonBodyFootPelvis(0.0f, 0.0f, 0.35f, 0.15f), 0.0f));
