@@ -1109,6 +1109,8 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     in.SprintSpeed = m_SprintSpeed;
     in.HaveGaitPhase = m_HaveGait;
     in.CameraBobScale = m_CameraBobScale;
+    in.BodyVelocity = glm::vec3(glm::dot(m_BodyVelocity, m_FlatRight), m_BodyVelocity.y, -glm::dot(m_BodyVelocity, m_FlatForward));
+    in.BodyRoll = m_BodyRoll;
     in.GaitPhase = m_GaitPhase;
     in.StateName = &ac->StateName;
     in.StateTags = &ac->StateTags;

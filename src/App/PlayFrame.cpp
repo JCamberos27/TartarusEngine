@@ -256,6 +256,8 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
                 // Riding the body's own motion (MM Head Ride unarmed, Eye Ride armed), the camera bobs as captured: the
                 // procedural bob gives way by the same share.
                 firstPersonPresentation.SetCameraBobScale(1.0f - firstPersonBody.CameraRide());
+                // The body's own motion (last LateUpdate's) for the gun's trail and the view's nod (Body Motion).
+                firstPersonPresentation.SetBodyMotion(firstPersonBody.EyeMotion(), firstPersonBody.ShoulderRoll());
             }
             firstPersonPresentation.SetJogging(!player.Crouched && ((gameHasInput && InputMap::GetButton("Sprint")) ||
                                                                  (npcTest && player.ScriptedMove && player.ScriptSprint)));
