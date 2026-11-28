@@ -186,8 +186,8 @@ public:
     // This frame's share of the body's own motion the camera rides: MM Head Ride unarmed, Eye Ride armed (by the arms' weight):
     // the presentation drops that share of its camera bob.
     float CameraRide() const { return m_CameraRide; }
-    // The armed ride's scale this frame (the weapon's Camera Motion share - its ADS Scale with the sights up): set before LateUpdate.
-    void SetEyeRideScale(float scale) { m_EyeRideScale = scale; }
+    // The sights' blend this frame (0 at the hip, 1 aimed): the armed eye rides Eye Ride ADS by it. Set before LateUpdate.
+    void SetAdsBlend(float blend) { m_AdsBlend = blend; }
 
 private:
     bool FootPoints(const World& world, glm::vec3 (&out)[2]) const; // the feet in the driver's model space (x right, y up, z forward)
@@ -276,7 +276,7 @@ private:
     // - it rises and falls with the bob), eased.
     float m_LookLimit = -89.0f, m_LookLimitHeld = -89.0f, m_LookLimitAge = 0.0f;
     float m_CameraRide = 0.0f; // CameraRide: MM Head Ride x unarmed + Eye Ride x armed
-    float m_EyeRideScale = 1.0f; // SetEyeRideScale
+    float m_AdsBlend = 0.0f; // SetAdsBlend
     struct EyeClearPoint { size_t Piece; int Mesh; std::uint32_t Vertex; bool Rim; };
     std::vector<EyeClearPoint> m_EyeClearPoints;
     int m_NeckNode = -1, m_HeadRimNode = -1; // the driver's neck_01 / head (the opening's axis, posed)
