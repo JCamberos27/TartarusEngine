@@ -175,6 +175,8 @@ public:
     void SetGaitPhase(bool have, float phase) { m_HaveGait = have; m_GaitPhase = phase; }
     // The camera bob's share (WeaponProceduralInput::CameraBobScale): 1 - the body's head ride.
     void SetCameraBobScale(float scale) { m_CameraBobScale = scale; }
+    // The body's own motion for Body Motion (FirstPersonBody::EyeMotion, world m/s; ShoulderRoll, radians).
+    void SetBodyMotion(const glm::vec3& eyeVelocity, float shoulderRoll) { m_BodyVelocity = eyeVelocity; m_BodyRoll = shoulderRoll; }
     bool HaveGaitPhase() const { return m_HaveGait; }
     float GaitPhaseValue() const { return m_GaitPhase; }
     // 0..1 how crouched the player is, for WeaponAimSettings::Crouch* (call before Tick; default 0).
@@ -421,6 +423,8 @@ private:
     bool m_Jogging = false;       // SetJogging
     bool m_HaveGait = false;      // SetGaitPhase
     float m_CameraBobScale = 1.0f; // SetCameraBobScale
+    glm::vec3 m_BodyVelocity{0.0f}; // SetBodyMotion
+    float m_BodyRoll = 0.0f;
     float m_GaitPhase = 0.0f;
     float m_JogHold = 0.0f;       // s the jog arms stay off after a shot
     glm::vec3 m_Muzzle{0.0f}, m_BoreDir{0.0f, 0.0f, -1.0f}; // world, from the last PlaceRigs
