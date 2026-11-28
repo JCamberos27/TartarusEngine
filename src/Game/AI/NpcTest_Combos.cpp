@@ -78,6 +78,7 @@ const CbActDef kCbActs[] = {
 };
 constexpr float kCbSettleMin = 1.0f, kCbSettleCap = 6.0f;
 constexpr float kCbFireHoldFor = 1.2f; // s the trigger is held on fire_hold
+constexpr float kCbBounceAfter = 1.2f; // s a held state must have lasted before its gait cycle counts as a bounce (a cycle plus the sights' raise)
 // The cells start here, facing +X (yaw 0): 54 m of clear ground ahead (the 60 m ground, the lane's posts and dummies are at z > 0).
 const glm::vec3 kCbStart(-27.0f, 0.05f, -24.0f);
 constexpr float kCbYaw = 0.0f;
@@ -197,6 +198,16 @@ struct NpcTest::CombosRun {
     // The support (left) arm through the action, whatever the thresholds: its largest grip gap first person (body hand off
     // the rig) and third person (world hand off the world gun), and its largest reach (of the arm's length).
     float SupGripFp = 0.0f, SupGripTp = 0.0f, SupReach = 0.0f;
+    // When the controller last changed state (meter time): a bounce counts only once its state has been held kBounceAfter s.
+    // (Raising the sights moves the hands ~10 cm within the Aim state: over a gait cycle that read as a bounce.)
+    std::string PoseState;
+    std::vector<float> StateChanges;
+    float BounceStateSince(float t) const {
+        float since = 0.0f;
+        for (float c : StateChanges)
+            if (c <= t) since = c;
+        return since;
+    }
     std::map<std::string, float> HoldBounce; // weapon/state -> the hold row's bounce (mm)
     int Rows = 0, Flagged = 0, Setups = 0, Replays = 0;
     std::string ClipsDir;
@@ -290,7 +301,7 @@ void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float
         for (const FirstPersonJankEvent& e : R.Fp.Events()) {
             if (e.Time < R.FpFrom) continue;
             // A bounce is the gait's, in a held state: a reload's or an inspect's own hand travel over a cycle isn't one.
-            if (e.What == FirstPersonJankEvent::Kind::Bounce && !CbResting(e.State)) continue;
+            if (e.What == FirstPersonJankEvent::Kind::Bounce && (!CbResting(e.State) || e.Time - R.BounceStateSince(e.Time) < kCbBounceAfter)) continue;
             ++fpN;
             float s = 0.0f;
             switch (e.What) {
@@ -462,6 +473,8 @@ void NpcTest::CombosPose(const World& world, const FirstPersonBody& body, const 
         R.Tp.Reset();
         R.ResetMeters = false;
         R.CycleMm = R.LastCycleSeen = -1.0f;
+        R.PoseState.clear();
+        R.StateChanges.clear();
     }
     if (!R.MeterOn) return;
     if (R.MarkWindow) { // the action starts: events from here count
@@ -490,10 +503,15 @@ void NpcTest::CombosPose(const World& world, const FirstPersonBody& body, const 
     }
     s.InsideRays = bd.ProbeRays >= 0 ? bd.ProbeInsideRays : 0;
     R.Fp.Push(s);
+    if (s.State != R.PoseState) {
+        R.PoseState = s.State;
+        R.StateChanges.push_back(R.Fp.Time());
+    }
     // The gait cycle's bounce: the largest finished cycle since the action started.
     if (const float c = R.Fp.LastCycleMm(); c >= 0.0f && c != R.LastCycleSeen) {
         R.LastCycleSeen = c;
-        if (R.Fp.Time() > R.FpFrom && CbResting(s.State)) R.CycleMm = std::max(R.CycleMm, c);
+        if (R.Fp.Time() > R.FpFrom && CbResting(s.State) && R.Fp.Time() - R.BounceStateSince(R.Fp.Time()) >= kCbBounceAfter)
+            R.CycleMm = std::max(R.CycleMm, c);
     }
     const WeaponJankFrame tf = WeaponJankFrameFor(world, body, p, dt, "");
     R.Tp.Push(tf);
