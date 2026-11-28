@@ -211,7 +211,10 @@ void MotionMatcher::BeginBlend(std::uint32_t to) {
     if (!m_HaveOut) return;
     const bool intoIdle = IdleEntryBlendTime > 0.0f && m_Db && (m_Db->Flags(to) & MotionLabel::IdleTake) &&
                           !(m_Db->Flags(m_Frame) & MotionLabel::IdleTake);
-    Inertializer.Transition(m_Prev, m_Out, m_OutInterval, intoIdle ? IdleEntryBlendTime : -1.0f);
+    float blend = intoIdle ? IdleEntryBlendTime : -1.0f;
+    if (CrouchToggleBlendTime > 0.0f && m_Db && ((m_Db->Flags(to) ^ m_Db->Flags(m_Frame)) & MotionLabel::Crouch))
+        blend = std::max(blend, CrouchToggleBlendTime);
+    Inertializer.Transition(m_Prev, m_Out, m_OutInterval, blend);
 }
 
 void MotionMatcher::ForceFrame(std::uint32_t frame) {

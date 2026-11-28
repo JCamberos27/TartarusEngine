@@ -174,6 +174,10 @@ public:
         // every other jump, 18 of the course's 31 idle entries turned a bone over 5 deg a frame (the stop's arm swing snapping
         // to the idle's, 11.5 at worst); at 0.5, 2 (7.5 at worst); 0.7 added nothing.
         float IdleEntryBlendTime = 0.5f;
+        // s: a jump that crouches or stands up blends this long (MotionMatcher::CrouchToggleBlendTime). At the 0.2 s of every
+        // other jump the head fell 0.60 m in 0.08 s crouching (the first-person eye at 114 m/s^2) and rose 0.66 m in 0.10 s
+        // standing; at 0.45, 0.28 s and 0.27 s (24 m/s^2).
+        float CrouchBlendTime = 0.45f;
     };
     struct Input {
         float Dt = 0.0f;
