@@ -393,6 +393,7 @@ struct WeaponProceduralPose {
     glm::vec2 AimKick{0.0f};       // aim climb this frame, degrees (pitch, yaw) - apply once, keep
     float Bolt = 0.0f;             // 0..1 of the bolt's travel toward the rear
     float CameraRoll = 0.0f;       // lean + shake + head bob, degrees
+    float AdsBlend = 0.0f;         // the sights' blend this frame: 0 at the hip, 1 aimed (Aim.Blend applied)
     float CameraSide = 0.0f;       // lean, metres along the camera's right
     glm::vec3 CameraOffset{0.0f};  // head bob + landing, camera frame, metres
     float FovKick = 0.0f;          // degrees added to the world FOV
@@ -410,7 +411,7 @@ struct WeaponProceduralInput {
     // The body's gait phase (0 = left foot down, 0.5 = right): the bob dips on the feet's own plants instead of a stride guess.
     bool HaveGaitPhase = false;
     float GaitPhase = 0.0f;
-    // The camera bob's share: 0 while the camera rides a body's mocap head, which bobs as captured (FirstPersonBody::HeadRide).
+    // The camera bob's share: 0 while the camera rides a body's mocap head, which bobs as captured (FirstPersonBody::CameraRide).
     float CameraBobScale = 1.0f;
     float Dt = 0.0f;
     glm::vec3 Velocity{0.0f};      // camera frame, m/s (horizontal plane)
