@@ -120,6 +120,25 @@ void TestFirstPersonJankMeterEvents() {
     CHECK(near.Events().size() == 1 && near.Events()[0].What == Kind::Clip && std::abs(near.Events()[0].Size - 3.0f) < 0.01f);
     auto inside = run([](FirstPersonJankSample& s, int i) { if (i == 70) s.InsideRays = 12; });
     CHECK(inside.Events().size() == 1 && inside.Events()[0].What == Kind::Clip && inside.Events()[0].Size == 0.0f);
+    // The slots are per side: a Clip with no side (inside rays) between two left-arm Clips does not swallow the later one.
+    FirstPersonJankMeter slots;
+    auto push = [&](float eyeToArm, int inside) {
+        FirstPersonJankSample s;
+        s.Dt = 1.0f / 60.0f;
+        s.State = "Walk";
+        s.EyeToArm[0] = eyeToArm;
+        s.InsideRays = inside;
+        slots.Push(s);
+    };
+    push(0.03f, 0);
+    for (int i = 0; i < 280; ++i) push(1.0f, i == 150 ? 5 : 0);
+    push(0.03f, 0);
+    int leftClips = 0;
+    for (const auto& e : slots.Events()) leftClips += e.What == Kind::Clip && e.Side == 0;
+    CHECK(leftClips == 2);
+    // A shot's kick leaves no path behind: the first frame after the window is not a pop against the kick's tail.
+    auto tail = run([](FirstPersonJankSample& s, int i) { s.Recoil = i >= 30 && i < 40; s.Hand[1].x = i < 40 ? 0.0f : 0.0f; if (i >= 30 && i < 40) s.Hand[1].x = 0.03f * (i - 30); else if (i >= 40) s.Hand[1].x = 0.27f; });
+    CHECK(tail.Events().empty());
     // An invalid frame (holstered) restarts the path: a hand that is somewhere else when the gun returns is not a pop.
     auto holster = run([](FirstPersonJankSample& s, int i) { s.Valid = i < 50 || i >= 70; s.Hand[1].x = i >= 70 ? 0.2f : 0.0f; });
     CHECK(holster.Events().empty());

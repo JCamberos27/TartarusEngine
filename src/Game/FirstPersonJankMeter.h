@@ -66,7 +66,7 @@ private:
     std::vector<FirstPersonJankSample> m_Prev; // the last two valid samples (oldest first)
     float m_Time = 0.0f;
     std::string m_State;
-    float m_LastFlag[5][2] = {{-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}};
+    float m_LastFlag[5][3] = {{-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}}; // by kind, then side + 1 (-1 both / none)
     // The gait cycle being measured: each hand's vertical range since the phase last wrapped.
     float m_PrevPhase = -1.0f, m_Lo[2] = {1e9f, 1e9f}, m_Hi[2] = {-1e9f, -1e9f};
     int m_CycleFrames = 0;

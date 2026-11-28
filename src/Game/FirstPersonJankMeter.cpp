@@ -28,7 +28,7 @@ void FirstPersonJankMeter::Reset() {
     m_Prev.clear();
     m_Time = 0.0f;
     m_State.clear();
-    for (auto& k : m_LastFlag) k[0] = k[1] = -1.0f;
+    for (auto& k : m_LastFlag) k[0] = k[1] = k[2] = -1.0f;
     m_PrevPhase = -1.0f;
     m_Lo[0] = m_Lo[1] = 1e9f;
     m_Hi[0] = m_Hi[1] = -1e9f;
@@ -45,7 +45,7 @@ float FirstPersonJankMeter::Worst(FirstPersonJankEvent::Kind kind) const {
 }
 
 void FirstPersonJankMeter::Flag(FirstPersonJankEvent::Kind kind, float size, int side) {
-    const int k = (int)kind, s = std::max(side, 0);
+    const int k = (int)kind, s = std::clamp(side, -1, 1) + 1;
     // A run of frames (within a tenth of a second of the last) in the same state and kind is one event, at its worst.
     if (m_LastFlag[k][s] >= 0.0f && m_Time - m_LastFlag[k][s] < 0.1f)
         for (auto it = m_Events.rbegin(); it != m_Events.rend(); ++it)
@@ -114,7 +114,8 @@ void FirstPersonJankMeter::Push(const FirstPersonJankSample& f) {
             m_Hi[h] = std::max(m_Hi[h], f.Hand[h].y);
         }
     }
-    if (m_Prev.size() == 2 && !f.Recoil) {
+    if (f.Recoil) m_Prev.clear(); // the kick's frames are not a path to measure against: the first frame after starts afresh
+    if (m_Prev.size() == 2) {
         const FirstPersonJankSample& a = m_Prev[0];
         const FirstPersonJankSample& b = m_Prev[1];
         // The jump past a smooth path: this frame against where the last two put it (constant velocity), scaled to a 60 Hz
