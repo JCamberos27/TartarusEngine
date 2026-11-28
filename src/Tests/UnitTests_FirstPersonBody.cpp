@@ -535,6 +535,29 @@ void TestFirstPersonBodyLookOnlyKeepsTwins() {
     CHECK(FirstPersonBodyTestAccess::Twins(fpb) != twins);
 }
 
+// Arm Steadiness's hold: exact to the knee, then eased toward twice it - continuous with a slope of 1 at the knee, never
+// past twice it, rising all the way to where the anchor is dragged (three times the knee), along the trail's own
+// direction; no knee, no hold.
+void TestFirstPersonBodySteadyHold() {
+    const float knee = 0.04f;
+    const glm::vec3 dir = glm::normalize(glm::vec3(0.3f, 1.0f, -0.2f));
+    CHECK(FirstPersonBodySteadyHold(dir * 0.025f, knee) == dir * 0.025f);
+    CHECK(FirstPersonBodySteadyHold(dir * knee, knee) == dir * knee);
+    CHECK(glm::length(FirstPersonBodySteadyHold(dir * 0.05f, 0.0f)) == 0.0f);
+    const float eps = 1e-4f;
+    const float slope = (glm::length(FirstPersonBodySteadyHold(dir * (knee + eps), knee)) - knee) / eps;
+    CHECK(std::abs(slope - 1.0f) < 0.01f);
+    float last = knee;
+    for (float len = 0.045f; len <= 3.0f * knee; len += 0.005f) { // (the anchor is dragged past three times the knee)
+        const glm::vec3 h = FirstPersonBodySteadyHold(dir * len, knee);
+        const float l = glm::length(h);
+        CHECK(l > last && l < 2.0f * knee && l < len);
+        CHECK(glm::dot(h, dir) > 0.9999f * l);
+        last = l;
+    }
+    CHECK(std::abs(glm::length(FirstPersonBodySteadyHold(dir * 0.12f, knee)) - knee * (1.0f + std::tanh(2.0f))) < 1e-4f);
+}
+
 } // namespace
 
 void RegisterFirstPersonBodyTests(UnitTestSupport::TestList& tests) {
@@ -545,5 +568,6 @@ void RegisterFirstPersonBodyTests(UnitTestSupport::TestList& tests) {
         {"FirstPersonBodyClothingHide", TestFirstPersonBodyClothingHide},
         {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
         {"FirstPersonBodyLookOnlyKeepsTwins", TestFirstPersonBodyLookOnlyKeepsTwins},
+        {"FirstPersonBodySteadyHold", TestFirstPersonBodySteadyHold},
     });
 }
