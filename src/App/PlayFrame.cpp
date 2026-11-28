@@ -322,6 +322,8 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
         PROFILE_SCOPE("First Person IK");
         {
         PROFILE_SCOPE("FP Body LateUpdate");
+        // The armed eye's ride steadies with the sights up as the procedural camera bob does (its Camera Motion ADS Scale).
+        firstPersonBody.SetEyeRideScale(firstPersonPresentation.ProceduralPose().CameraMotionScale);
         firstPersonBody.LateUpdate(world, player.Cam, gameDt, firstPersonPresentation.ArmsEntity(),
                                    firstPersonPresentation.CameraBone()); // camera into the body's head
         }

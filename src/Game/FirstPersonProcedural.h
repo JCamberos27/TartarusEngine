@@ -393,6 +393,7 @@ struct WeaponProceduralPose {
     glm::vec2 AimKick{0.0f};       // aim climb this frame, degrees (pitch, yaw) - apply once, keep
     float Bolt = 0.0f;             // 0..1 of the bolt's travel toward the rear
     float CameraRoll = 0.0f;       // lean + shake + head bob, degrees
+    float CameraMotionScale = 1.0f; // Camera Motion's share this frame: 1 at the hip, its ADS Scale with the sights up
     float CameraSide = 0.0f;       // lean, metres along the camera's right
     glm::vec3 CameraOffset{0.0f};  // head bob + landing, camera frame, metres
     float FovKick = 0.0f;          // degrees added to the world FOV

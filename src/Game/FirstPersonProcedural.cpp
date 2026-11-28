@@ -770,6 +770,7 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     }
 
     // The camera: head bob on the gun bob's stride, a roll into strafes, a dip on landing.
+    pose.CameraMotionScale = adsMix(1.0f, cm.AdsScale);
     if (cm.Enabled) {
         const float camScale = adsMix(1.0f, cm.AdsScale);
         const glm::vec2 amp = (cm.WalkBob * (1.0f - m_BobSprint) + cm.SprintBob * m_BobSprint) * m_CamBobWeight * camScale *

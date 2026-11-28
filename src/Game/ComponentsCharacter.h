@@ -155,7 +155,8 @@ struct FirstPersonBodyComponent {
     float MmHeadRide = 1.0f;
     // Armed: how much of the shoulders' own motion the eye rides (and the arms rig, the hands and the gun with it). 0 = their
     // slow average, within Eye Slack (the stabilized camera, the gun held level while the torso bobs under it); 1 = the
-    // shoulders as the clips move them, so the hands ride the chest. The procedural camera bob scales by 1 - this.
+    // shoulders as the clips move them, so the hands ride the chest. With the sights up it scales by the weapon's Camera Motion
+    // ADS Scale (FirstPersonBody::SetEyeRideScale). The procedural camera bob scales by 1 - the ride.
     float EyeRide = 1.0f;
     float WalkSpeed = 1.53f;       // m/s asked of the blend tree when walking - the default gait (the walk clips' speed)
     float RunSpeed = 3.26f;        // ... and with Shift held: the jog (the jog clips' speed)

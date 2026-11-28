@@ -994,7 +994,8 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     // stabilized eye over a body bobbing as captured felt stiff, and the neck rose into the view at every jogging step).
     const float headRide = std::clamp(cfg.MmHeadRide, 0.0f, 1.0f) * (1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f));
     const float armed = std::clamp(m_ArmsWeight, 0.0f, 1.0f);
-    const float eyeRide = std::clamp(cfg.EyeRide, 0.0f, 1.0f);
+    // With the sights up the ride steadies as the procedural bob it stands in for did (SetEyeRideScale).
+    const float eyeRide = std::clamp(cfg.EyeRide, 0.0f, 1.0f) * std::clamp(m_EyeRideScale, 0.0f, 1.0f);
     m_CameraRide = headRide + eyeRide * armed;
     BodyDebug::Info().CameraRide = m_CameraRide;
     m_Eye = FirstPersonBodyEye(m_RestHead, glm::mix(m_HeadEased, headAnimated, headRide), 1.0f, cfg.CameraOffset);
