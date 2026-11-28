@@ -283,6 +283,7 @@ struct FirstPersonBodyComponent {
     // stay attached), which reach toward the gun - in view they'd bulge into the camera.
     std::string CameraHiddenBones = "clavicle_l, clavicle_r, upperarm_l, upperarm_r"; // Camera Hidden Bones
     float ArmsEaseOut = 0.1f; // Arms Ease Out
+    float ArmsEaseIn = 0.25f; // Arms Ease In (the world body's arms onto a drawn gun; first person takes it at once)
     float TurnEndAngle = 8.0f; // Turn End Angle
     // Foot lock (IK::FootLock): a planted foot held in the world; the player body and the soldiers
     bool FootLockEnabled = true; // Foot Lock

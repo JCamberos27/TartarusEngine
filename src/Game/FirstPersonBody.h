@@ -375,6 +375,9 @@ private:
     glm::vec3 m_HeadEased{0.0f}; // unarmed: the clips' head as the eye follows it (FirstPersonBodyFollowShoulders)
     float m_ArmsWeightPrev = 0.0f;   // ... and before LateUpdate eased it (ArmsLateUpdate re-decides from it)
     bool m_ArmsWeightEased = false;  // LateUpdate has eased m_ArmsWeight this frame
+    // The world twins' arms weight: eased in over Arms Ease In on a draw (first person takes the rig's hands at once).
+    float m_TwinArmsIn = -1.0f;      // its linear progress 0..1 (smoothstepped into m_TwinArmsWeight); < 0 = not run yet
+    float m_TwinArmsWeight = 0.0f;
     bool m_ViewModelFovOk = true;    // the last ArmsLateUpdate had a view-model FOV (LateUpdate's guess at the rig)
     glm::vec3 m_GaitFeet[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // the clips' feet before foot IK (driver model space)
     bool m_HaveGaitFeet = false;
@@ -452,6 +455,8 @@ void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& lin
 // Frame-rate independent approach toward a target over `seconds`: the share of the way to go this step. 1 (a snap) at
 // `snapBelow` seconds or less.
 float FirstPersonBodyFollow(float dt, float seconds, float snapBelow = 1e-4f);
+float FirstPersonBodySmoothStep(float t);         // 3t^2 - 2t^3 on [0, 1]
+float FirstPersonBodyInverseSmoothStep(float s);  // the t whose smoothstep is s
 // A rotation's angle, radians (0..pi).
 float FirstPersonBodyAngleOf(const glm::quat& q);
 // The collarbone turned about its inner end so the upper arm heads for `want` (model space), by at most `maxAngle` -
