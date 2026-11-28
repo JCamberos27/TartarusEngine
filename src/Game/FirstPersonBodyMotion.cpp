@@ -45,6 +45,9 @@ float MmTune(const char* key, float fallback) {
 
 namespace {
 constexpr float kPi = 3.14159265358979f;
+// A turn holds its side until the wanted facing is this far past straight behind (HoldTurnSide): a flick of up to 210 deg
+// carries on round the way the mouse went.
+constexpr float kTurnSideHold = 30.0f * kPi / 180.0f;
 float Wrap(float a) { return MotionMath::WrapPi(a); }
 // The share of the way a spring with half-life `h` closes in `dt`.
 float Toward(float dt, float h) { return h > 1e-5f ? 1.0f - std::exp(-0.69314718f * dt / h) : 1.0f; }
@@ -592,6 +595,13 @@ float FirstPersonBodyMotion::StepCharacterFacing(float yaw, float clipTurn, floa
     return Wrap(yaw);
 }
 
+float FirstPersonBodyMotion::HoldTurnSide(float delta, float& side, float hold) {
+    const float deg = kPi / 180.0f;
+    if (side != 0.0f && delta * side < 0.0f && std::fabs(delta) > kPi - hold) delta = side * (kPi - deg); // just short of behind
+    side = std::fabs(delta) > deg ? std::copysign(1.0f, delta) : 0.0f;
+    return delta;
+}
+
 float FirstPersonBodyMotion::RootSpeed(const MotionDatabase& db, std::uint32_t frame) {
     const auto& c = db.Clip(db.ClipOf(frame));
     const std::uint32_t a = std::max(c.First, frame >= 5 ? frame - 5 : 0u), b = std::min(c.First + c.Count - 1, frame + 5);
@@ -663,6 +673,7 @@ bool FirstPersonBodyMotion::Start(const std::vector<std::shared_ptr<Model>>& mod
         m_YawRate = carry->m_YawRate;
         m_SimYaw = carry->m_SimYaw;
         m_SimYawRate = carry->m_SimYawRate;
+        m_TurnSide = carry->m_TurnSide;
         m_HaveYaw = carry->m_HaveYaw;
         m_Still = carry->m_Still;
         m_Turning = carry->m_Turning;
@@ -768,6 +779,7 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
     if (!m_HaveYaw) {
         m_DesiredYaw = m_SimYaw = yaw;
         m_SimYawRate = 0.0f;
+        m_TurnSide = 0.0f;
         m_HaveYaw = true;
     }
     if (!m_Still || in.TurnThreshold <= 0.0f) {
@@ -810,8 +822,14 @@ void FirstPersonBodyMotion::Tick(const Input& in, float& yaw) {
         m_SimYaw = yaw;
         m_SimYawRate = m_YawRate;
         m_DesiredYaw = yaw;
+        m_TurnSide = 0.0f;
     } else {
-        const float goal = m_SimYaw + Wrap(m_DesiredYaw - m_SimYaw);
+        // Held on the side it is turning through straight behind (a 180 flick: armed, the body turned 9 deg one way, then
+        // - the view crossing behind it - back the other, its turn rate -116 to +98 deg/s in a frame). The wanted facing
+        // steered by goes to the trajectory too, so the prediction turns the same way.
+        const float delta = HoldTurnSide(Wrap(m_DesiredYaw - m_SimYaw), m_TurnSide, kTurnSideHold);
+        m_DesiredYaw = Wrap(m_SimYaw + delta);
+        const float goal = m_SimYaw + delta;
         TrajectoryPredictor::SpringScalar(m_SimYaw, m_SimYawRate, goal, Config.SimFacingHalflife, dt);
         m_SimYaw = Wrap(m_SimYaw);
     }
