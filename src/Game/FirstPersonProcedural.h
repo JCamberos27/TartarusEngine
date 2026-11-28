@@ -245,6 +245,10 @@ struct WeaponBodyMotionSettings {
     float CameraRoll = 0.08f;  // share of the shoulders' roll the view takes (0..1; the clips' shoulders roll ~10 deg a stride)
     float AdsScale = 0.03f;    // all of it, with the sights up (the aimed sight picture stays as steady as before)
     FirstPersonSpring Spring{5.0f, 0.4f};
+    // The view's nod follows on its own spring, critically damped: the body's motion is a frame difference, and a landing
+    // or a crouch toggle jumps it in one frame - followed outright, the view stepped.
+    FirstPersonSpring NodSpring{8.0f, 1.0f};
+    float MaxNod = 1.5f;       // degrees: the nod's own cap (a gait's nod is under 1; a landing's frame jump is not a nod)
 };
 
 // Walls, in two stages. Something closer than Reach in front of the gun first slides it straight
@@ -486,6 +490,7 @@ private:
     Spring3 m_JumpRot, m_JumpPos;      // air lag + landing kick
     Spring3 m_CamMotion;               // landing dip (y), nod (x), strafe roll (z)
     Spring3 m_BodyPos, m_BodyRot;      // Body Motion: the gun trailing the body
+    Spring3 m_BodyNod;                 // ... and the view's nod (x)
     Spring3 m_Obstruct;                // retract (x), tuck (y), faces up (z)
     Spring3 m_ObstructSide;            // aside: -1 (on the left) .. 1 (on the right), in x
     float m_DriftTime = 0.0f;

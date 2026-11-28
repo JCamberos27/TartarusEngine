@@ -279,7 +279,7 @@ json WeaponProceduralSettings::ToJson() const {
     j["bodyMotion"] = {
         {"enabled", bm.Enabled}, {"lag", bm.Lag}, {"lagPitch", bm.LagPitch}, {"lagRoll", bm.LagRoll}, {"maxLag", bm.MaxLag},
         {"maxAngle", bm.MaxAngle}, {"cameraNod", bm.CameraNod}, {"cameraRoll", bm.CameraRoll}, {"adsScale", bm.AdsScale},
-        {"spring", SpringJson(bm.Spring)},
+        {"spring", SpringJson(bm.Spring)}, {"nodSpring", SpringJson(bm.NodSpring)}, {"maxNod", bm.MaxNod},
     };
     const auto& ob = Obstruction;
     j["obstruction"] = {
@@ -397,6 +397,8 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.Number("cameraRoll", o.CameraRoll);
         r.Number("adsScale", o.AdsScale);
         r.Spring("spring", o.Spring);
+        r.Spring("nodSpring", o.NodSpring);
+        r.Number("maxNod", o.MaxNod);
     });
     root.Object("obstruction", [&](Reader& r) {
         auto& o = s.Obstruction;
@@ -821,7 +823,8 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
         m_BodyRot.Step(lagRot * bmScale, dt, bm.Spring);
         pose.Position += m_BodyPos.X;
         pose.Rotation += m_BodyRot.X;
-        pose.CameraKick.x += SoftLimit(v.y * bm.CameraNod, bm.MaxAngle) * bmScale;
+        m_BodyNod.Step(glm::vec3(SoftLimit(v.y * bm.CameraNod, bm.MaxNod) * bmScale, 0.0f, 0.0f), dt, bm.NodSpring);
+        pose.CameraKick.x += m_BodyNod.X.x;
         pose.CameraRoll += glm::degrees(in.BodyRoll) * std::clamp(bm.CameraRoll, 0.0f, 1.0f) * bmScale;
     }
 

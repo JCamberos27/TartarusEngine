@@ -1379,6 +1379,18 @@ void TestWeaponProcedural() {
         p = run(st, b, in, 3.0f);
         CHECK(std::fabs(p.Position.y - base.Position.y) < 1e-4f && std::fabs(p.Rotation.x - base.Rotation.x) < 0.01f &&
               std::fabs(p.CameraKick.x) < 1e-5f);
+        // A one-frame jump (a landing, a crouch toggle): the nod eases in, it doesn't step.
+        {
+            WeaponProceduralState sj;
+            WeaponProceduralInput j;
+            j.Dt = 1.0f / 120.0f;
+            sj.Update(b, j);
+            j.BodyVelocity = glm::vec3(0.0f, -3.0f, 0.0f);
+            const float step = std::fabs(sj.Update(b, j).CameraKick.x); // unfiltered, this frame took the whole 1.8 deg
+            CHECK(step < 0.3f);
+            for (int f = 0; f < 60; ++f) sj.Update(b, j);
+            CHECK(std::fabs(sj.Pose().CameraKick.x) <= b.BodyMotion.MaxNod + 1e-3f && std::fabs(sj.Pose().CameraKick.x) > 0.8f);
+        }
         in.BodyRoll = glm::radians(2.0f);
         p = run(st, b, in, 0.1f);
         CHECK(std::fabs(p.CameraRoll - base.CameraRoll - 2.0f * b.BodyMotion.CameraRoll) < 1e-3f);
