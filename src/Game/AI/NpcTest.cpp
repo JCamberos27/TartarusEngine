@@ -40,6 +40,7 @@ constexpr ScenarioTraits kScenarios[] = {
     {"mmview", 0.0f, true, true, true},      {"mmdb", 0.0f, true, true, true},         {"flame", 14.0f, true, false, false},
     {"revolver", 116.0f, false, true, true}, {"blood", 44.0f, false, false, true},     {"decals", 52.0f, false, true, true},
     {"doors", 300.0f, false, true, true},    {"roam", 420.0f, false, true, true},      {"ragdoll", 240.0f, false, false, true},
+    {"combos", 0.0f, true, true, true},
 };
 const ScenarioTraits& TraitsOf(const std::string& name) {
     static constexpr ScenarioTraits kNone{"", 0.0f, false, false, false};
@@ -78,6 +79,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "l
             std::printf("[NpcTest] leg filter '%s', start '%s': %zu legs left out\n", Env::Str(Env::Var::TestbedLegs).c_str(),
                         Env::Str(Env::Var::TestbedStart).c_str(), m_SkipLegs.size());
     }
+    if (m_Scenario == "combos") m_Duration = CombosSeconds();
     if (m_Scenario == "mmview") m_Duration = MmViewSeconds();
     if (m_Scenario == "mmdb") m_Duration = MmDbSeconds();
     if (Env::IsSet(Env::Var::NpcTestSeconds)) m_Duration = std::max(5.0f, Env::Float(Env::Var::NpcTestSeconds, 0.0f));
@@ -161,6 +163,7 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     if (m_Scenario == "labloco") LabLocoDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "testbed" || m_Scenario == "mmplayer" || m_Scenario == "mmstress") TestbedDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "roam") RoamDrive(player, dt, wantYaw, wantPitch);
+    if (m_Scenario == "combos") CombosDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "mmview") MmViewDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "mmdb") MmDbDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "flame") {
@@ -197,6 +200,10 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     player.Cam.Pitch += std::clamp(dp, -step, step);
 }
 
+void NpcTest::AfterPose(const World& world, const FirstPersonBody& body, const FirstPersonPresentation& weapon, const Camera& cam, float dt) {
+    if (m_Scenario == "combos") CombosPose(world, body, weapon, cam, dt);
+}
+
 bool NpcTest::SceneCamera(glm::vec3& pos, float& yaw, float& pitch) const {
     if (!m_HaveCam) return false;
     pos = m_CamPos;
@@ -211,6 +218,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     const float now = npcs.Now();
     m_Time = now;
     m_Shot.clear();
+    if (m_Scenario == "combos") {
+        CombosAfter(npcs, player);
+        return;
+    }
     if (m_Scenario == "deaths") {
         Deaths(world, npcs, now);
         return;

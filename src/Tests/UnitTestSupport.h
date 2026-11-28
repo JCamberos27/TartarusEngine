@@ -96,6 +96,7 @@ void RegisterGizmoIconTests(UnitTestSupport::TestList& tests); // UnitTests_Gizm
 void RegisterAssetLibraryTests(UnitTestSupport::TestList& tests); // UnitTests_AssetLibrary.cpp
 void RegisterFirstPersonBodyTests(UnitTestSupport::TestList& tests); // UnitTests_FirstPersonBody.cpp
 void RegisterFirstPersonJankTests(UnitTestSupport::TestList& tests); // UnitTests_FirstPersonJank.cpp
+void RegisterCombosTests(UnitTestSupport::TestList& tests); // UnitTests_Combos.cpp
 void RegisterOutfitsTests(UnitTestSupport::TestList& tests); // UnitTests_Outfits.cpp
 void RegisterFirstPersonWeaponsTests(UnitTestSupport::TestList& tests); // UnitTests_FirstPersonWeapons.cpp
 void RegisterCoreTests(UnitTestSupport::TestList& tests); // UnitTests_Core.cpp
