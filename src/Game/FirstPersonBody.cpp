@@ -411,6 +411,9 @@ void FirstPersonBody::SyncLook(World& world) {
 }
 
 void FirstPersonBody::Stop(World& world) {
+    m_EyeMotion = glm::vec3(0.0f);
+    m_HaveEyeFromFeet = m_HaveShoulderRoll = false;
+    m_ShoulderRoll = 0.0f;
     m_ArmShapeCache.clear(); // keyed by model address: the next Start's models may reuse this run's
     BodyDebug::Info() = BodyDebug::Snapshot{};
     BodyDebug::Clear();
@@ -896,6 +899,15 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         return 0.5f * (l + r);
     };
     const glm::vec3 shouldersAnimated = shouldersNow();
+    // ShoulderRoll: the clips' own shoulder line (the driver's - the arms piece's carries the rig's shape), about its slow
+    // average.
+    if (haveShoulders) {
+        const glm::vec3 across = ModelPoint(*model, m_ShoulderNode[0]) - ModelPoint(*model, m_ShoulderNode[1]); // right to left
+        const float roll = std::atan2(across.y, glm::length(glm::vec2(across.x, across.z)));
+        if (!m_HaveShoulderRoll) { m_ShoulderRollAvg = roll; m_HaveShoulderRoll = true; }
+        m_ShoulderRollAvg += (roll - m_ShoulderRollAvg) * Follow(dt, 0.5f);
+        m_ShoulderRoll = std::clamp(roll - m_ShoulderRollAvg, glm::radians(-8.0f), glm::radians(8.0f));
+    }
     const float viewPitch = std::asin(std::clamp(camera.Front().y, -1.0f, 1.0f));
     // Unarmed, the chest's pitch at the view is capped (Spine Aim Max Up / Down, eased in): past it the head looks on alone.
     const float aimUnarmed = 1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f);
@@ -1149,6 +1161,14 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     BodyDebug::Info().BodyEye = eyeWorld;
     const glm::vec3 cameraIn = camera.Position;
     camera.Position = eyeWorld + viewKick;
+    // EyeMotion: the eye against the feet, so the walk itself isn't in it; capped (a respawn or a snap is not a motion).
+    {
+        const glm::vec3 fromFeet = eyeWorld - m_Feet;
+        m_EyeMotion = m_HaveEyeFromFeet && dt > 1e-5f ? (fromFeet - m_EyeFromFeet) / dt : glm::vec3(0.0f);
+        if (const float speed = glm::length(m_EyeMotion); speed > 3.0f) m_EyeMotion *= 3.0f / speed;
+        m_EyeFromFeet = fromFeet;
+        m_HaveEyeFromFeet = true;
+    }
     m_CameraApplied = camera.Position - cameraIn;
     BodyDebug::Info().EyeApplied = m_CameraApplied;
     // Arm Steadiness holds the shoulders in this frame: it moves with the camera (the eye, the bob, the lean - the arms

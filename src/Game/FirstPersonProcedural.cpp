@@ -275,6 +275,12 @@ json WeaponProceduralSettings::ToJson() const {
         {"strafeRoll", cm.StrafeRoll}, {"landDip", cm.LandDip}, {"landPitch", cm.LandPitch},
         {"adsScale", cm.AdsScale}, {"spring", SpringJson(cm.Spring)},
     };
+    const auto& bm = BodyMotion;
+    j["bodyMotion"] = {
+        {"enabled", bm.Enabled}, {"lag", bm.Lag}, {"lagPitch", bm.LagPitch}, {"lagRoll", bm.LagRoll}, {"maxLag", bm.MaxLag},
+        {"maxAngle", bm.MaxAngle}, {"cameraNod", bm.CameraNod}, {"cameraRoll", bm.CameraRoll}, {"adsScale", bm.AdsScale},
+        {"spring", SpringJson(bm.Spring)},
+    };
     const auto& ob = Obstruction;
     j["obstruction"] = {
         {"enabled", ob.Enabled}, {"reach", ob.Reach}, {"maxRetract", ob.MaxRetract}, {"tuckRange", ob.TuckRange},
@@ -376,6 +382,19 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.Number("strafeRoll", o.StrafeRoll);
         r.Number("landDip", o.LandDip);
         r.Number("landPitch", o.LandPitch);
+        r.Number("adsScale", o.AdsScale);
+        r.Spring("spring", o.Spring);
+    });
+    root.Object("bodyMotion", [&](Reader& r) {
+        auto& o = s.BodyMotion;
+        r.Bool("enabled", o.Enabled);
+        r.Number("lag", o.Lag);
+        r.Number("lagPitch", o.LagPitch);
+        r.Number("lagRoll", o.LagRoll);
+        r.Number("maxLag", o.MaxLag);
+        r.Number("maxAngle", o.MaxAngle);
+        r.Number("cameraNod", o.CameraNod);
+        r.Number("cameraRoll", o.CameraRoll);
         r.Number("adsScale", o.AdsScale);
         r.Spring("spring", o.Spring);
     });
@@ -789,6 +808,21 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
         pose.CameraOffset.y += m_CamMotion.X.y;
         pose.CameraKick.x += m_CamMotion.X.x;
         pose.CameraRoll += m_CamMotion.X.z;
+    }
+
+    // Body Motion: the gun trails the body's own motion on a spring, the view nods with it and takes a share of its roll.
+    {
+        const auto& bm = s.BodyMotion;
+        const float bmScale = bm.Enabled ? adsMix(1.0f, bm.AdsScale) : 0.0f;
+        const glm::vec3 v = in.BodyVelocity;
+        const glm::vec3 lagPos(SoftLimit(-v.x * bm.Lag, bm.MaxLag), SoftLimit(-v.y * bm.Lag, bm.MaxLag), 0.0f);
+        const glm::vec3 lagRot(SoftLimit(-v.y * bm.LagPitch, bm.MaxAngle), 0.0f, SoftLimit(-v.x * bm.LagRoll, bm.MaxAngle));
+        m_BodyPos.Step(lagPos * bmScale, dt, bm.Spring);
+        m_BodyRot.Step(lagRot * bmScale, dt, bm.Spring);
+        pose.Position += m_BodyPos.X;
+        pose.Rotation += m_BodyRot.X;
+        pose.CameraKick.x += SoftLimit(v.y * bm.CameraNod, bm.MaxAngle) * bmScale;
+        pose.CameraRoll += glm::degrees(in.BodyRoll) * std::clamp(bm.CameraRoll, 0.0f, 1.0f) * bmScale;
     }
 
     // ADS aim offset. (The hip carry, Aim.Hip*, is placed on the whole rig by the presentation:

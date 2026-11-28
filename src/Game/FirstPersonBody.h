@@ -186,6 +186,11 @@ public:
     // This frame's share of the body's own motion the camera rides: MM Head Ride unarmed, Eye Ride armed (by the arms' weight):
     // the presentation drops that share of its camera bob.
     float CameraRide() const { return m_CameraRide; }
+    // The body's own motion, for the gun and view (Body Motion): the eye's velocity against the feet (world, m/s - the
+    // gait's bob and sway, a crouch; not the walk itself), and the clips' shoulder line's roll about its slow average
+    // (radians, + = the left shoulder up). Both from the last LateUpdate.
+    glm::vec3 EyeMotion() const { return m_EyeMotion; }
+    float ShoulderRoll() const { return m_ShoulderRoll; }
     // The sights' blend this frame (0 at the hip, 1 aimed): the armed eye rides Eye Ride ADS by it. Set before LateUpdate.
     void SetAdsBlend(float blend) { m_AdsBlend = blend; }
 
@@ -276,6 +281,10 @@ private:
     // - it rises and falls with the bob), eased.
     float m_LookLimit = -89.0f, m_LookLimitHeld = -89.0f, m_LookLimitAge = 0.0f;
     float m_CameraRide = 0.0f; // CameraRide: MM Head Ride x unarmed + Eye Ride x armed
+    glm::vec3 m_EyeMotion{0.0f}, m_EyeFromFeet{0.0f}; // EyeMotion; the eye against the feet last frame
+    bool m_HaveEyeFromFeet = false;
+    float m_ShoulderRoll = 0.0f, m_ShoulderRollAvg = 0.0f; // ShoulderRoll; its slow average
+    bool m_HaveShoulderRoll = false;
     float m_AdsBlend = 0.0f; // SetAdsBlend
     struct EyeClearPoint { size_t Piece; int Mesh; std::uint32_t Vertex; bool Rim; };
     std::vector<EyeClearPoint> m_EyeClearPoints;
