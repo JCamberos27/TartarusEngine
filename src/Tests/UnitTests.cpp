@@ -161,6 +161,7 @@ int RunUnitTests(const char* filter) {
     RegisterFirstPersonWeaponsTests(tests); // UnitTests_FirstPersonWeapons.cpp
     RegisterOutfitsTests(tests); // UnitTests_Outfits.cpp
     RegisterFirstPersonBodyTests(tests); // UnitTests_FirstPersonBody.cpp
+    RegisterFirstPersonJankTests(tests); // UnitTests_FirstPersonJank.cpp
     RegisterCharacterMoverTests(tests); // UnitTests_CharacterMover.cpp
     RegisterEngineTests(tests);
     RegisterGameplayTests(tests);
