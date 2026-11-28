@@ -1019,6 +1019,11 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     } else {
         m_TwistEased = 0.0f; // not drawn (armed, or the layers off): it comes back in from square, eased
     }
+    if (haveShoulders) {
+        const glm::vec3 a = ModelPoint(*model, m_ShoulderNode[0]) - ModelPoint(*model, m_ShoulderNode[1]);
+        BodyDebug::Info().ProbeChestYawDeg = glm::degrees(std::atan2(-a.z, a.x));
+    }
+    BodyDebug::Info().ProbeTwistEasedDeg = glm::degrees(m_TwistEased);
     if (!haveHead) return;
 
     // The camera into the head: smoothed in the body's own frame, so it never trails the move.

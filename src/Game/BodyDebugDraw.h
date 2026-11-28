@@ -19,6 +19,8 @@ struct Snapshot {
     bool Turning = false;
     float ViewOffsetDeg = 0.0f;   // the view's angle off the body's heading (+ = to the left)
     float TwistDeg = 0.0f;        // the chest's twist toward the view
+    float ProbeChestYawDeg = 0.0f; // PROBE: shoulder line yaw off the body heading
+    float ProbeTwistEasedDeg = 0.0f; // PROBE
     bool Still = false;
     float IdleTime = 0.0f, MoveTime = 0.0f;
     float MoveSpeed = 0.0f;       // |MoveX, MoveY|

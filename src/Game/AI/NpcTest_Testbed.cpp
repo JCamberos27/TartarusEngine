@@ -133,6 +133,8 @@ const TbLeg kTb[] = {
     {"A stop after walk", 2.0f, TbPart::A},
     {"A jog", 3.5f, TbPart::A, {0, 1}, true},
     {"A stop after jog", 2.0f, TbPart::A},
+    [] { TbLeg l{"A idle exact180", 5.0f, TbPart::A}; l.Equip = 1; l.FlickAt = 2.0f; return l; }(),
+    [] { TbLeg l{"A walkback exact180", 4.0f, TbPart::A, {0, -1}}; l.Equip = 1; return l; }(),
     // 0.2 m in from the wall's -X edge (x 3.5), 0.65 m short of its face (z 23.85): cover ahead, the edge within the lean.
     {"B settle at cover", 1.5f, TbPart::B, {0, 0}, false, true, {3.7f, 0.05f, 23.2f}, 90.0f, 0.0f},
     {"B aim (corner peek)", 3.0f, TbPart::B, {0, 0}, false, false, {}, 90.0f, 0.0f, true},
@@ -213,6 +215,8 @@ const TbLeg kTb[] = {
     TbMFlick("M jog flick 180", 4.0f, true, 90.0f, 2.0f),
     TbM("M stop after jog flick", 1.5f, {0, 0}, false, false, 270.0f),
     TbMFlick("M walk flick 180", 4.0f, false, 270.0f, 2.0f),
+    [] { TbLeg l = TbMFlick("M idle exact180", 5.0f, false, 90.0f, 2.0f); l.Move = {0, 0}; return l; }(),
+    TbM("M walkback exact180", 4.0f, {0, -1}, false, false, 90.0f),
     TbM("M stop after walk flick", 1.5f, {0, 0}, false, false, 90.0f),
     // The owner's play test 4 (2026-11-17): standing, the hands jerked back and forth and no idle played (a rewind loop);
     // sprinting with the mouse moving everywhere, the sprint stopped in turns and looked goofy. A long idle, then sprints
@@ -777,6 +781,9 @@ void NpcTest::TestbedDrive(Player& player, FirstPersonPresentation& weapon, floa
     const float wanderPitch = L.WanderPitch * (0.6f * std::sin(tau * 0.31f * into + 2.0f) + 0.4f * std::sin(tau * 0.9f * into + 0.5f));
     wantYaw = player.Cam.Yaw = L.Yaw + L.ViewTurn * into + L.SweepDeg * std::sin(tau * L.SweepHz * into) + flick + wanderYaw;
     wantPitch = L.Pitch + wanderPitch;
+    if (std::strstr(L.Name, "exact180") || std::strstr(L.Name, "flick 180"))
+        std::printf("[X180] %s %.4f view %.0f off %.3f twist %.3f eased %.3f chest %.3f yawrate %.1f turning %d arms %.2f\n", L.Name, R.Clock,
+                    player.Cam.Yaw, BodyDebug::Info().ViewOffsetDeg, BodyDebug::Info().TwistDeg, BodyDebug::Info().ProbeTwistEasedDeg, BodyDebug::Info().ProbeChestYawDeg, BodyDebug::Info().BodyYawRateDeg, (int)BodyDebug::Info().Turning, BodyDebug::Info().ArmsWeight);
 }
 
 void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, float now) {
