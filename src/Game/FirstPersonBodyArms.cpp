@@ -221,6 +221,22 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     {
     PROFILE_SCOPE("FPB sync twins");
     SyncTwins(world);
+    // Armed, the twins' chest takes the capped spine aim (LateUpdate's m_TwinSpineFix: less pitch than the pieces'), as
+    // ApplySpineAim spreads it; the neck and head take it back, so the world body's head still looks where the view does.
+    // The world gun goes with the twins' chest (m_TwinChestMove, below), so their arms hold it as the pieces' hold theirs:
+    // left where the pieces' gun is, the support hand came up to 6 cm short of it.
+    m_TwinChestMove = glm::mat4(1.0f);
+    if (!m_Twins.empty() && std::abs(m_TwinSpineFix) > 1e-4f) {
+        const float fix = m_TwinSpineFix;
+        const char* const* kSpine = FPBody::kBoneSpine;
+        glm::mat4 before(1.0f), after(1.0f);
+        const bool haveChest = BoneWorldMatrix(world, kSpine[4], before, true);
+        RotateChain({kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]},
+                    [fix](float n) { return glm::angleAxis(-fix / n, glm::vec3(1.0f, 0.0f, 0.0f)); }, &m_TwinModels, &m_Spine);
+        RotateChain({"neck_01", m_HeadBone}, [fix](float n) { return glm::angleAxis(fix / n, glm::vec3(1.0f, 0.0f, 0.0f)); }, &m_TwinModels,
+                    nullptr);
+        if (haveChest && BoneWorldMatrix(world, kSpine[4], after, true)) m_TwinChestMove = after * glm::inverse(before);
+    }
     }
     const bool enabled = cfg.WeaponArms;
     const bool haveRig = enabled && weaponArms != entt::null && reg.valid(weaponArms) &&
@@ -585,7 +601,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     m_WorldGunDelta = glm::mat4(1.0f);
     if (!m_Twins.empty()) {
         PROFILE_SCOPE("FPB arms: twins");
-        m_WorldGunDelta = rigWorld * thirdPersonGun * glm::inverse(rigWorld);
+        m_WorldGunDelta = m_TwinChestMove * rigWorld * thirdPersonGun * glm::inverse(rigWorld);
         ArmTargets hold = firstPerson;
         glm::mat4 first(1.0f), third(1.0f);
         if (thirdPersonRig && !gunSocket.empty() && (int)thirdPersonRig->AppliedLocalPose().size() == thirdPersonRig->NodeCount() &&
