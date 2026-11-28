@@ -759,9 +759,17 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
         if (jp.Enabled && hit > 0.0f) {
             const float kick = glm::two_pi<float>() * std::max(jp.Spring.Frequency, 0.01f) * 1.6f;
             const float side = std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng) < 0.5f ? -1.0f : 1.0f;
-            m_JumpPos.V.y -= hit * jp.LandPosition * kick * jumpScale;
-            m_JumpRot.V.x -= hit * jp.LandPitch * kick * jumpScale;
-            m_JumpRot.V.z += side * hit * jp.LandRoll * kick * jumpScale;
+            m_LandPosKick = glm::vec3(0.0f, -hit * jp.LandPosition * kick * jumpScale, 0.0f);
+            m_LandRotKick = glm::vec3(-hit * jp.LandPitch * kick * jumpScale, 0.0f, side * hit * jp.LandRoll * kick * jumpScale);
+            m_LandLeft = kLandKickSpread;
+        }
+        // The landing kick goes in over kLandKickSpread, not in one frame: all of it at once jumped the gun ~2 cm and ~3 degrees
+        // in the frame of touchdown (and the world body's gun, which carries this pose, with it).
+        if (m_LandLeft > 0.0f) {
+            const float share = std::min(dt, m_LandLeft) / kLandKickSpread;
+            m_JumpPos.V += m_LandPosKick * share;
+            m_JumpRot.V += m_LandRotKick * share;
+            m_LandLeft -= dt;
         }
         m_JumpPos.Step(airPos * jumpScale, dt, jp.Spring);
         m_JumpRot.Step(airRot * jumpScale, dt, jp.Spring);
@@ -781,8 +789,12 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
         if (impact >= s.Jump.MinImpact) {
             const float hit = std::min(impact, std::max(s.Jump.MaxImpact, s.Jump.MinImpact));
             const float kick = glm::two_pi<float>() * std::max(cm.Spring.Frequency, 0.01f) * 1.6f;
-            m_CamMotion.V.y -= hit * cm.LandDip * kick * camScale;
-            m_CamMotion.V.x -= hit * cm.LandPitch * kick * camScale;
+            m_CamLandKick = glm::vec3(-hit * cm.LandPitch * kick * camScale, -hit * cm.LandDip * kick * camScale, 0.0f);
+            m_CamLandLeft = kLandKickSpread;
+        }
+        if (m_CamLandLeft > 0.0f) { // (spread as the gun's)
+            m_CamMotion.V += m_CamLandKick * (std::min(dt, m_CamLandLeft) / kLandKickSpread);
+            m_CamLandLeft -= dt;
         }
         const float strafe = in.Grounded ? in.Velocity.x * cm.StrafeRoll * camScale : 0.0f;
         m_CamMotion.Step(glm::vec3(0.0f, 0.0f, -strafe), dt, cm.Spring);
