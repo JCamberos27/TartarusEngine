@@ -493,9 +493,10 @@ bool SharedMotionDatabase::Measure(SharedMotionDatabase& measured, const std::st
     }
     const MotionDatabase& db = shared->Db;
     shared->Gaits = GaitSpeedTable::Measure(db);
-    std::printf("[MotionMatching] %s: %u frames, %u excluded as capture glitches (a bone over %.0f deg in a frame, %d either side), %u "
-                "as the way to and from prone (%.1f s)\n", base.c_str(), db.FrameCount(), db.GlitchFrames(), MotionDatabase::kGlitchDegrees,
-                MotionDatabase::kGlitchPad, db.ProneApproachFrames(), MotionDatabase::kProneApproachSeconds);
+    std::printf("[MotionMatching] %s: %u frames, %u excluded as capture glitches (a bone over %.0f deg in a frame, the head and neck "
+                "over %.0f, %d either side), %u as the way to and from prone (%.1f s)\n", base.c_str(), db.FrameCount(), db.GlitchFrames(),
+                MotionDatabase::kGlitchDegrees, MotionDatabase::kHeadGlitchDegrees, MotionDatabase::kGlitchPad, db.ProneApproachFrames(),
+                MotionDatabase::kProneApproachSeconds);
     // The turn on the spot: the idle frames whose root turns (over 30 deg/s), standing, searchable; their p75 rate.
     std::vector<float> rates;
     for (std::uint32_t f = 0; f < db.FrameCount(); ++f) {
