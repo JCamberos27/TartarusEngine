@@ -724,6 +724,9 @@ void TestWeaponControllersTriggerAndActions() {
                 if (t.FromKind == AC::Source::Any && t.To == once) { ++found; CHECK(!t.CanTransitionToSelf); }
             CHECK(found == 1);
         }
+        // Inspect and the mag check ease in over 0.15 s: shorter, the third-person support hand jumped at the start.
+        for (const auto& t : L.Transitions)
+            if (t.FromKind == AC::Source::Any && (t.To == "Inspect" || t.To == "MagCheck")) CHECK(std::abs(t.Duration - 0.15f) < 1e-6f);
         // The melee swing starts fast: the third-person arms ease into it over 0.2 s, the first-person ones over 0.1.
         for (const auto& t : L.Transitions)
             if (t.FromKind == AC::Source::Any && t.To == "Melee")
