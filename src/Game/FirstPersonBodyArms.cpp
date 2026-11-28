@@ -237,6 +237,15 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                     nullptr);
         if (haveChest && BoneWorldMatrix(world, kSpine[4], after, true)) m_TwinChestMove = after * glm::inverse(before);
     }
+    BodyDebug::Info().TwinBendDeg = BodyDebug::Info().TorsoBendDeg;
+    for (size_t k = 0; k < m_Pieces.size() && k < m_TwinModels.size(); ++k) {
+        glm::mat4 p(1.0f), c(1.0f);
+        if (m_Pieces[k] != m_Driver || !m_TwinModels[k] || !m_TwinModels[k]->NodeTransform(Bone(FPBody::kBonePelvis), p) ||
+            !m_TwinModels[k]->NodeTransform(Bone(FPBody::kBoneSpine[4]), c))
+            continue;
+        const glm::vec3 d = glm::vec3(c[3]) - glm::vec3(p[3]); // driver model space, as LateUpdate's torso bend
+        BodyDebug::Info().TwinBendDeg = glm::degrees(std::atan2(glm::dot(d, kForward), d.y));
+    }
     }
     const bool enabled = cfg.WeaponArms;
     const bool haveRig = enabled && weaponArms != entt::null && reg.valid(weaponArms) &&

@@ -26,6 +26,9 @@ struct Snapshot {
     // The torso's forward bend (deg, + = forward): pelvis to spine_05 off the vertical, in the body's frame - as the clips
     // (or motion matching) pose it, and as drawn after the spine's aim at the view; and the view's pitch (deg, + = up).
     float ClipBendDeg = 0.0f, TorsoBendDeg = 0.0f, ViewPitchDeg = 0.0f;
+    // The same bend on the world twins (what every view but the player's camera shows) after their capped spine aim; the
+    // pieces' bend when there are no twins.
+    float TwinBendDeg = 0.0f;
     // The upper arms off straight down (deg, the worse of the two, body frame): as the spine's pitch at the view leaves them,
     // and as drawn (unarmed, Arm Hang turns them back to hang).
     float ArmDownAimDeg = 0.0f, ArmDownDeg = 0.0f;
