@@ -893,6 +893,31 @@ void SelectionPanel::DrawTransitionSettings(AC::Transition& tr) {
                 EditorUI::SetTooltip("This track switches to the destination at once instead of crossfading (e.g. a gun part whose clip "
                                      "starts where a blend would visibly turn it the wrong way).");
         }
+        // Track fades: with more than one track, any of them can crossfade over its own seconds instead of Duration.
+        for (int t = 0; D.Tracks.size() > 1 && t < (int)D.Tracks.size(); ++t) {
+            row(t == 0 ? "Track Fades" : "");
+            ImGui::PushID(100 + t);
+            auto own = std::find_if(tr.TrackDurations.begin(), tr.TrackDurations.end(),
+                                    [&](const auto& td) { return td.first == D.Tracks[t]; });
+            bool has = own != tr.TrackDurations.end();
+            if (EditorUIPrimitives::Checkbox(D.Tracks[t].c_str(), &has)) {
+                if (has) tr.TrackDurations.emplace_back(D.Tracks[t], tr.Duration);
+                else tr.TrackDurations.erase(own);
+                changed = true;
+                own = std::find_if(tr.TrackDurations.begin(), tr.TrackDurations.end(),
+                                   [&](const auto& td) { return td.first == D.Tracks[t]; });
+            }
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("This track crossfades over its own seconds instead of Duration (e.g. the third-person arms easing "
+                                     "into a fast swing over longer than the first-person ones).");
+            if (own != tr.TrackDurations.end()) {
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::DragFloat("##tdtrack", &own->second, 0.005f, 0.0f, 5.0f, "%.3f s");
+                if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;
+            }
+            ImGui::PopID();
+        }
         // Preview (Edit mode, needs a rig): the pose at a point in the crossfade - the source where it leaves
         // (its exit time, or its start), blended into the destination from its Offset. Blend trees at their defaults.
         if (!live && tr.FromKind == AC::Source::State && tr.To != AC::kExitState && W.Entity != entt::null && world.Registry.valid(W.Entity) && assets) {

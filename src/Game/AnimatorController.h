@@ -7,6 +7,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 class World;
@@ -148,6 +149,12 @@ struct AnimatorController {
         // weapon track, whose Fire clip starts the cylinder a chamber back - blended, it would turn backwards in view.
         std::vector<std::string> CutTracks;
         bool Cuts(const std::string& track) const;
+        // Tracks (by name) that crossfade over their own seconds instead of Duration: e.g. the third-person arms easing
+        // into a fast melee swing over longer than the first-person ones. The entry stays faded-in-progress until its
+        // slowest track is done. A cut track (CutTracks) still cuts.
+        std::vector<std::pair<std::string, float>> TrackDurations;
+        float TrackDuration(const std::string& track) const; // < 0: the track has none of its own (it takes Duration)
+        float LongestDuration() const;                        // Duration, or the longest of TrackDurations
     };
 
     enum class Blending { Override = 0, Additive = 1 };
@@ -265,6 +272,9 @@ float AnimatorLayerWeight(const AnimatorController& ctrl, const AnimatorControll
 // Whether `track` of `layer` shows only the state being faded into right now: the running transition lists the
 // track in its CutTracks (see AnimatorController::Transition). Pure data.
 bool AnimatorTrackCuts(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, int layer, int track);
+// The eased crossfade weight `track` gives stack entry `entry` of `layer` over the ones beneath it: the entry's own Fade,
+// or, when the transition that brought it in has a TrackDurations entry for the track, its age over that. Pure data.
+float AnimatorTrackFadeWeight(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, int layer, int entry, int track);
 
 // Distance matching (State::DistanceParam): the phase (0..1) at which `state` of `layer`, for the current
 // parameters, is at `metres` as its DistanceMode reads them (see State); < 0 when it can't tell (no clips).

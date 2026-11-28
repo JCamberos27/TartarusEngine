@@ -488,6 +488,60 @@ void TestAnimatorTransitionCutTracks() {
     CHECK(ac.Layers[0].Stack.size() == 1 && !AnimatorTrackCuts(back, ac, 0, 1)); // the fade done
 }
 
+// A transition's per-track fade: the listed track crossfades over its own seconds, the rest over Duration; the entry
+// stays in the stack until the slowest track is done; JSON round trip.
+void TestAnimatorTransitionTrackDurations() {
+    AnimatorController c;
+    c.Tracks = {"arms", "weapon", "arms3p"};
+    AnimatorController::State a, b;
+    a.Name = "Idle";
+    b.Name = "Melee";
+    c.Layers[0].States = {a, b};
+    AnimatorController::Transition t;
+    t.FromKind = AnimatorController::Source::Any;
+    t.To = "Melee";
+    t.Duration = 0.1f;
+    t.Conditions = {{"Melee", AnimatorController::Op::If, 0.0f}};
+    t.TrackDurations = {{"arms3p", 0.2f}};
+    c.Layers[0].Transitions = {t};
+    c.Parameters = {{"Melee", AnimatorController::ParamType::Trigger, 0.0f}};
+    AnimatorController back;
+    CHECK(AnimatorController::FromJsonString(c.ToJsonString(), back));
+    const auto& bt = back.Layers[0].Transitions[0];
+    CHECK(bt.TrackDurations.size() == 1 && bt.TrackDuration("arms3p") == 0.2f && bt.TrackDuration("arms") < 0.0f);
+    CHECK(std::abs(bt.LongestDuration() - 0.2f) < 1e-6f);
+    AnimatorController plain = c;
+    plain.Layers[0].Transitions[0].TrackDurations.clear();
+    CHECK(plain.ToJsonString().find("trackDurations") == std::string::npos); // nothing written when empty
+
+    AnimatorControllerComponent ac;
+    const auto len = [](int, int) { return 1.0f; };
+    const float dt = 1.0f / 60.0f;
+    AdvanceAnimator(back, ac, dt, len);
+    ac.SetTrigger("Melee");
+    AdvanceAnimator(back, ac, dt, len);
+    CHECK(ac.StateName == "Melee" && ac.Layers[0].Stack.size() == 2);
+    for (int i = 0; i < 6; ++i) AdvanceAnimator(back, ac, dt, len); // 0.1 s in
+    CHECK(ac.Layers[0].Stack.size() == 2);                              // arms3p still fading
+    CHECK(AnimatorTrackFadeWeight(back, ac, 0, 1, 0) == 1.0f);          // arms: done
+    const float mid = AnimatorTrackFadeWeight(back, ac, 0, 1, 2);       // arms3p: about half way
+    CHECK(mid > 0.3f && mid < 0.7f);
+    for (int i = 0; i < 7; ++i) AdvanceAnimator(back, ac, dt, len);     // past 0.2 s
+    CHECK(ac.Layers[0].Stack.size() == 1);
+    CHECK(AnimatorTrackFadeWeight(back, ac, 0, 5, 2) == 1.0f && AnimatorTrackFadeWeight(back, ac, 4, 0, 0) == 1.0f); // out of range
+
+    // A TransitionDuration override scales the track's own seconds with Duration.
+    ac = {};
+    ac.SetFloat("TransitionDuration:Melee", 0.2f);
+    AdvanceAnimator(back, ac, dt, len);
+    ac.SetTrigger("Melee");
+    AdvanceAnimator(back, ac, dt, len);
+    for (int i = 0; i < 12; ++i) AdvanceAnimator(back, ac, dt, len); // 0.2 s in: arms done, arms3p (0.4 s) half way
+    CHECK(AnimatorTrackFadeWeight(back, ac, 0, 1, 0) == 1.0f);
+    const float scaled = AnimatorTrackFadeWeight(back, ac, 0, 1, 2);
+    CHECK(scaled > 0.3f && scaled < 0.7f);
+}
+
 // ---- lane A round 3 ----
 // A weight curve authored on a state is read back at the state's phase, blended by the crossfade; no curve = 1.
 void TestClipWeightCurveSamplingAndLayerScaling() {
@@ -2062,6 +2116,7 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"IK rig at part weight keeps the hand on the gun", TestApplyRigPartialWeightKeepsHandOnGun});
     tests.push_back({"Weapon IK hand offsets round-trip", TestWeaponIkHandOffsetsRoundTrip});
     tests.push_back({"Animator transitions cut the tracks they list", TestAnimatorTransitionCutTracks});
+    tests.push_back({"Animator transitions fade tracks over their own seconds", TestAnimatorTransitionTrackDurations});
     tests.push_back({"Clip weight curves sample and scale the IK layers", TestClipWeightCurveSamplingAndLayerScaling});
     tests.push_back({"Clip IK curve and the IKOff tag combine", TestClipCurveAndIKOffTagCombine});
     tests.push_back({"ADS blend pieces: additive, crouch, camera share", TestAdsBlendPieces});
