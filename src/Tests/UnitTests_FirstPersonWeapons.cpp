@@ -1288,6 +1288,43 @@ void TestFirstPersonAds() {
 }
 
 // --- Procedural animation: the first-person weapon stack --------------------------------------
+// A landing kicks the gun and the camera down, eased in: no frame-sized step at touchdown (it was the whole kick in one frame:
+// ~2 cm and ~3 degrees on the world body's gun at a 1 m jump), and the dip itself still there.
+void TestWeaponProceduralLanding() {
+    WeaponProceduralSettings s = WeaponProceduralSettings::Defaults();
+    s.Sway.Enabled = s.Breath.Enabled = s.Lean.Enabled = false;
+    s.StateOffsets.clear();
+    WeaponProceduralState st;
+    WeaponProceduralInput in;
+    in.Dt = 1.0f / 60.0f;
+    std::vector<glm::vec4> f; // per frame: gun pitch (deg), gun height (m), camera nod (deg), camera height (m)
+    auto step = [&] {
+        const WeaponProceduralPose& p = st.Update(s, in);
+        f.push_back(glm::vec4(p.Rotation.x, p.Position.y, p.CameraKick.x, p.CameraOffset.y));
+    };
+    for (int i = 0; i < 30; ++i) step();
+    in.Grounded = false; // a 1 m jump: up at 4.5 m/s, down until 5.5 m/s
+    for (in.VerticalVelocity = 4.5f; in.VerticalVelocity > -5.5f; in.VerticalVelocity -= 9.81f * in.Dt) step();
+    const size_t land = f.size();
+    in.Grounded = true;
+    in.VerticalVelocity = 0.0f;
+    for (int i = 0; i < 90; ++i) step();
+    glm::vec4 worstStep(0.0f), lowest(0.0f);
+    for (size_t i = land - 1; i + 1 < f.size() && i < land + 20; ++i)
+        worstStep = glm::max(worstStep, glm::abs(f[i + 1] - 2.0f * f[i] + f[i - 1])); // the frame's jump off a straight path
+    for (size_t i = land; i < f.size(); ++i) lowest = glm::min(lowest, f[i]);
+    // The worst frame at touchdown (the whole kick in one frame: 2.92 deg, 15.2 mm, 0.94 deg, 26.8 mm) ...
+    CHECK(worstStep.x < 1.2f);
+    CHECK(worstStep.y < 0.007f);
+    CHECK(worstStep.z < 0.4f);
+    CHECK(worstStep.w < 0.012f);
+    // ... with the dips as deep as that kick's (-2.49 deg, -11.9 mm; the camera -1.20 deg, -34.3 mm).
+    CHECK(lowest.x < -2.4f && lowest.x > -2.6f && lowest.y < -0.0114f && lowest.y > -0.0124f);
+    CHECK(lowest.z < -1.15f && lowest.z > -1.25f && lowest.w < -0.033f && lowest.w > -0.0355f);
+    // ... and settles back.
+    CHECK(std::fabs(f.back().x) < 0.05f && std::fabs(f.back().y) < 5e-4f && std::fabs(f.back().w) < 5e-4f);
+}
+
 void TestWeaponProcedural() {
     // Settings round-trip through the .fpsanim "procedural" block.
     const WeaponProceduralSettings defaults = WeaponProceduralSettings::Defaults();
@@ -1805,6 +1842,7 @@ void RegisterFirstPersonWeaponsTests(UnitTestSupport::TestList& tests) {
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
         {"FirstPersonAds", TestFirstPersonAds},
         {"WeaponProcedural", TestWeaponProcedural},
+        {"WeaponProceduralLanding", TestWeaponProceduralLanding},
         {"ShellCasings", TestShellCasings},
         {"BulletHoles", TestBulletHoles},
         {"WeaponZero", TestWeaponZero},
