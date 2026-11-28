@@ -322,6 +322,18 @@ void TestBlendTree2D() {
         CHECK(std::abs(glm::degrees(2.0f * std::acos(std::clamp(std::abs(half.w), 0.0f, 1.0f))) - 10.0f) < 0.01f);
         CHECK(near(FirstPersonBodyShoulderLineTurn(squared, bladed, 0.0f).w, 1.0f));
         CHECK(near(FirstPersonBodyShoulderLineTurn(glm::vec3(0.0f), bladed, 1.0f).w, 1.0f));
+        // Near a half turn (the view flicked behind the body) the turn stays a yaw: a body line tilted 6 degrees turned onto
+        // a line of the same tilt 120 to 180 degrees round (the shortest arc's axis tipped off the vertical there).
+        for (const float deg : {120.0f, 150.0f, 170.0f, 179.0f, 180.0f}) {
+            const float tilt = glm::radians(6.0f);
+            const glm::vec3 body(std::cos(tilt), std::sin(tilt), 0.0f);
+            const float turnRad = glm::radians(deg);
+            const glm::vec3 rig(std::cos(tilt) * std::cos(turnRad), std::sin(tilt), std::cos(tilt) * std::sin(turnRad));
+            const glm::quat flick = FirstPersonBodyShoulderLineTurn(body, rig, 1.0f);
+            CHECK(glm::length(flick * body - rig) < 1e-4f);
+            const glm::vec3 axis = glm::vec3(flick.x, flick.y, flick.z);
+            CHECK(std::abs(axis.y) > 0.99f * glm::length(axis) || glm::length(axis) < 1e-3f); // about the vertical (to ~8 deg)
+        }
         // The rig's tilt (a reload lifting its left shoulder, 30 degrees) is taken only by Clavicle Follow; its
         // blade and length are kept whatever the share.
         const glm::vec3 lifted = glm::vec3(bladed.x * std::cos(glm::radians(30.0f)), std::sin(glm::radians(30.0f)),

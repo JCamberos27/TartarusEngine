@@ -95,7 +95,18 @@ glm::quat FirstPersonBodyShoulderLineTurn(const glm::vec3& bodyAcross, const glm
     const glm::quat none(1.0f, 0.0f, 0.0f, 0.0f);
     weight = std::clamp(weight, 0.0f, 1.0f);
     if (weight <= 0.0f || glm::dot(bodyAcross, bodyAcross) < 1e-10f || glm::dot(rigAcross, rigAcross) < 1e-10f) return none;
-    const glm::quat full(glm::normalize(bodyAcross), glm::normalize(rigAcross));
+    const glm::vec3 from = glm::normalize(bodyAcross), to = glm::normalize(rigAcross);
+    glm::quat full(from, to);
+    // The blade is a turn about the vertical: take it as one, then only the small tilt between what is left. The shortest
+    // arc alone turns about the axis perpendicular to both lines, and near a half turn (a view flicked behind the body) the
+    // lines' slight tilt tips that axis well off the vertical (~20 deg at 150, ~50 at 170): the chest rolled and its shoulder
+    // swung into the first-person view.
+    const glm::vec2 flatFrom(from.x, from.z), flatTo(to.x, to.z);
+    if (glm::dot(flatFrom, flatFrom) > 1e-10f && glm::dot(flatTo, flatTo) > 1e-10f) {
+        const float blade = std::atan2(flatFrom.x * flatTo.y - flatFrom.y * flatTo.x, glm::dot(flatFrom, flatTo)); // x -> z about +Y is clockwise
+        const glm::quat yaw = glm::angleAxis(-blade, glm::vec3(0.0f, 1.0f, 0.0f));
+        full = glm::quat(yaw * from, to) * yaw;
+    }
     return glm::normalize(glm::slerp(none, full, weight));
 }
 glm::vec3 FirstPersonBodyShoulderLineTilt(const glm::vec3& bodyAcross, const glm::vec3& rigAcross, float tilt) {
