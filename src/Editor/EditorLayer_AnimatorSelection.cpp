@@ -878,6 +878,21 @@ void SelectionPanel::DrawTransitionSettings(AC::Transition& tr) {
         row("Interruptible");
         if (EditorUIPrimitives::Checkbox("##tint", &tr.Interruptible)) changed = true;
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Off: nothing can interrupt this transition's crossfade once it starts.");
+        // Cut tracks: with more than one track, any of them can switch at once while the rest crossfade.
+        for (int t = 0; D.Tracks.size() > 1 && t < (int)D.Tracks.size(); ++t) {
+            row(t == 0 ? "Cut Tracks" : "");
+            bool cut = tr.Cuts(D.Tracks[t]);
+            ImGui::PushID(t);
+            if (EditorUIPrimitives::Checkbox(D.Tracks[t].c_str(), &cut)) {
+                if (cut) tr.CutTracks.push_back(D.Tracks[t]);
+                else tr.CutTracks.erase(std::remove(tr.CutTracks.begin(), tr.CutTracks.end(), D.Tracks[t]), tr.CutTracks.end());
+                changed = true;
+            }
+            ImGui::PopID();
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("This track switches to the destination at once instead of crossfading (e.g. a gun part whose clip "
+                                     "starts where a blend would visibly turn it the wrong way).");
+        }
         // Preview (Edit mode, needs a rig): the pose at a point in the crossfade - the source where it leaves
         // (its exit time, or its start), blended into the destination from its Offset. Blend trees at their defaults.
         if (!live && tr.FromKind == AC::Source::State && tr.To != AC::kExitState && W.Entity != entt::null && world.Registry.valid(W.Entity) && assets) {

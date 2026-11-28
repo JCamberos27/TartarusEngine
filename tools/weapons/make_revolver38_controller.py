@@ -139,9 +139,11 @@ for tr in base["transitions"]:
     if tr.get("to") in DROP or tr.get("from") in DROP:
         continue
     if tr.get("fromAny") and tr.get("to") == "Fire":
-        # A cut, not a crossfade: the Fire clip starts the cylinder one chamber back (+60, which looks the same
-        # as 0) and turns it to 0. A blend in would swing it back those 60 degrees in sight first.
-        tr["duration"] = 0.0
+        # The gun cuts, the arms crossfade: the Fire clip starts the cylinder one chamber back (+60, which looks the
+        # same as 0) and turns it to 0, so a blend in would swing it back those 60 degrees in sight first. The arms
+        # take 0.05 s, so a shot fired before the last one's clip ends doesn't snap them back to its first frame.
+        tr["duration"] = 0.05
+        tr["cutTracks"] = ["weapon"]
     keep.append(tr)
 keep.append({"canTransitionToSelf": False, "conditions": [{"mode": "if", "param": "Reload", "threshold": 0.0},
                                                          {"mode": "less", "param": "Ammo", "threshold": CAPACITY - 0.5}],
