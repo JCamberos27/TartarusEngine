@@ -936,6 +936,20 @@ void TestRevolver38Assets() {
     CHECK(ac.StateName == "Fire");
     step(1.5f);
     CHECK(ac.StateName == "Idle");
+    // The next shot before the clip ends: the gun cuts to Fire's first frame (the cylinder never turns back in
+    // sight), the arms crossfade 0.05 s.
+    ac.SetTrigger(K::kFire);
+    step(1.0f / 60.0f);
+    step(0.3f);
+    CHECK(ac.StateName == "Fire");
+    ac.SetTrigger(K::kFire);
+    step(1.0f / 60.0f);
+    const int weaponTrack = ctrl.TrackIndex("weapon"), armsTrack = ctrl.TrackIndex("arms");
+    CHECK(ac.StateName == "Fire" && ac.Layers[0].Stack.size() == 2);
+    CHECK(AnimatorTrackCuts(ctrl, ac, 0, weaponTrack) && !AnimatorTrackCuts(ctrl, ac, 0, armsTrack));
+    step(0.1f);
+    CHECK(ac.Layers[0].Stack.size() == 1);
+    step(1.5f);
 
     FirstPersonAnimationSet set;
     std::string error;
@@ -1454,6 +1468,53 @@ void TestWeaponProcedural() {
         WeaponProceduralState st;
         st.OnShot(off, true);
         CHECK(st.ActiveShots() == 0);
+    }
+
+    // Body Motion: the body dropping (the eye moving down against the feet) lifts the gun and tips its muzzle up, and nods the
+    // view down; all of it settles once the body is still. The view takes Camera Roll of the shoulders' roll. Off, nothing;
+    // the settings round-trip.
+    {
+        WeaponProceduralSettings b = s;
+        b.CameraMotion.Enabled = b.Jump.Enabled = false;
+        WeaponProceduralState still;
+        const WeaponProceduralPose base = run(still, b, {}, 0.5f);
+        WeaponProceduralInput in;
+        in.BodyVelocity = glm::vec3(0.0f, -0.5f, 0.0f);
+        WeaponProceduralState st;
+        WeaponProceduralPose p = run(st, b, in, 0.5f);
+        CHECK(p.Position.y - base.Position.y > 0.002f && p.Rotation.x - base.Rotation.x > 0.3f && p.CameraKick.x < -0.1f);
+        in.BodyVelocity = glm::vec3(0.0f);
+        p = run(st, b, in, 3.0f);
+        CHECK(std::fabs(p.Position.y - base.Position.y) < 1e-4f && std::fabs(p.Rotation.x - base.Rotation.x) < 0.01f &&
+              std::fabs(p.CameraKick.x) < 1e-5f);
+        // A one-frame jump (a landing, a crouch toggle): the nod eases in, it doesn't step.
+        {
+            WeaponProceduralState sj;
+            WeaponProceduralInput j;
+            j.Dt = 1.0f / 120.0f;
+            sj.Update(b, j);
+            j.BodyVelocity = glm::vec3(0.0f, -3.0f, 0.0f);
+            const float step = std::fabs(sj.Update(b, j).CameraKick.x); // unfiltered, this frame took the whole 1.8 deg
+            CHECK(step < 0.3f);
+            for (int f = 0; f < 60; ++f) sj.Update(b, j);
+            CHECK(std::fabs(sj.Pose().CameraKick.x) <= b.BodyMotion.MaxNod + 1e-3f && std::fabs(sj.Pose().CameraKick.x) > 0.8f);
+        }
+        in.BodyRoll = glm::radians(2.0f);
+        p = run(st, b, in, 0.1f);
+        CHECK(std::fabs(p.CameraRoll - base.CameraRoll - 2.0f * b.BodyMotion.CameraRoll) < 1e-3f);
+        WeaponProceduralSettings off = b;
+        off.BodyMotion.Enabled = false;
+        WeaponProceduralState so;
+        in.BodyVelocity = glm::vec3(0.5f, -0.5f, 0.0f);
+        p = run(so, off, in, 0.5f);
+        CHECK(glm::length(p.Position - base.Position) < 1e-6f && glm::length(p.Rotation - base.Rotation) < 1e-5f &&
+              p.CameraKick.x == base.CameraKick.x && p.CameraRoll == base.CameraRoll);
+        b.BodyMotion.Lag = 0.02f;
+        b.BodyMotion.CameraNod = 0.9f;
+        WeaponProceduralSettings back;
+        CHECK(WeaponProceduralSettings::FromJson(b.ToJson(), back, &error));
+        CHECK(back.BodyMotion.Lag == 0.02f && back.BodyMotion.CameraNod == 0.9f &&
+              back.BodyMotion.Spring.Frequency == b.BodyMotion.Spring.Frequency && back.BodyMotion.Enabled);
     }
 
     // Per-state offsets blend in on a state name or a tag, and back out.

@@ -63,6 +63,8 @@
     X(TestbedStart, "TARTARUS_TESTBED_START", Str, "--npc-test testbed/mmplayer/mmstress: where legs start - 'canonical' (every leg from the fresh, settled body plus its one leg before) or 'leg=from;...' (from: leg names joined by +, or state:gait[,move=x/y][,view=deg][,secs=s]); only those legs run") \
     X(Combos, "TARTARUS_COMBOS", Str, "--npc-test combos: the weapons, comma-separated (ak, 870, rev; default ak)") \
     X(CombosCells, "TARTARUS_COMBOS_CELLS", Str, "--npc-test combos: only the cells whose id (weapon/action/state, e.g. ak/reload_tac/walk) matches one of these comma-separated patterns (* wildcards)") \
+    X(CombosTrace, "TARTARUS_COMBOS_TRACE", Str, "--npc-test combos: each cell's frames (lead-in and action) as <dir>/<cell>.csv: the matched take, the pose step, the chest, the world gun and hands") \
+    X(CombosCam, "TARTARUS_COMBOS_CAM", Str, "--npc-test combos: the recorded world-body view - 'close' (the chest and gun from 1 m); default the whole body from the front right") \
     X(CombosClips, "TARTARUS_COMBOS_CLIPS", Str, "--npc-test combos: replay each flagged cell recorded every frame into <dir>/<cell>/") \
     X(NpcTestBare, "NPC_TEST_BARE", Flag, "--npc-test: spawn NPCs (and undress the player's body) without outfits")                                   \
     X(NpcTestDoorsOnly, "NPC_TEST_DOORS_ONLY", Str, "--npc-test doors: only doors whose name contains this")          \

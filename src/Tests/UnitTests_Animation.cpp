@@ -450,6 +450,44 @@ void TestWeaponIkHandOffsetsRoundTrip() {
     CHECK(back.IK.LeftHandRotation == s.IK.LeftHandRotation);
 }
 
+// A transition's cut tracks switch at once while the others crossfade, and survive the JSON round trip.
+void TestAnimatorTransitionCutTracks() {
+    AnimatorController c;
+    c.Tracks = {"arms", "weapon"};
+    AnimatorController::State a, b;
+    a.Name = "Idle";
+    b.Name = "Fire";
+    c.Layers[0].States = {a, b};
+    AnimatorController::Transition t;
+    t.FromKind = AnimatorController::Source::Any;
+    t.To = "Fire";
+    t.Duration = 0.05f;
+    t.Conditions = {{"Fire", AnimatorController::Op::If, 0.0f}};
+    t.CanTransitionToSelf = true;
+    t.CutTracks = {"weapon"};
+    c.Layers[0].Transitions = {t};
+    c.Parameters = {{"Fire", AnimatorController::ParamType::Trigger, 0.0f}};
+    AnimatorController back;
+    CHECK(AnimatorController::FromJsonString(c.ToJsonString(), back));
+    CHECK(back.Layers[0].Transitions.size() == 1 && back.Layers[0].Transitions[0].CutTracks == std::vector<std::string>{"weapon"});
+    AnimatorController plain = c;
+    plain.Layers[0].Transitions[0].CutTracks.clear();
+    CHECK(plain.ToJsonString().find("cutTracks") == std::string::npos); // nothing written when empty
+
+    AnimatorControllerComponent ac;
+    const auto len = [](int, int) { return 1.0f; };
+    AdvanceAnimator(back, ac, 1.0f / 60.0f, len);
+    CHECK(ac.StateName == "Idle" && !AnimatorTrackCuts(back, ac, 0, 1)); // nothing fading: no cut
+    ac.SetTrigger("Fire");
+    AdvanceAnimator(back, ac, 1.0f / 60.0f, len);
+    CHECK(ac.StateName == "Fire" && ac.Layers[0].Stack.size() == 2);
+    CHECK(AnimatorTrackCuts(back, ac, 0, 1));   // the weapon shows Fire alone ...
+    CHECK(!AnimatorTrackCuts(back, ac, 0, 0));  // ... while the arms crossfade
+    CHECK(!AnimatorTrackCuts(back, ac, 0, 7) && !AnimatorTrackCuts(back, ac, 3, 1)); // out of range: no cut
+    for (int i = 0; i < 6; ++i) AdvanceAnimator(back, ac, 1.0f / 60.0f, len);
+    CHECK(ac.Layers[0].Stack.size() == 1 && !AnimatorTrackCuts(back, ac, 0, 1)); // the fade done
+}
+
 // ---- lane A round 3 ----
 // A weight curve authored on a state is read back at the state's phase, blended by the crossfade; no curve = 1.
 void TestClipWeightCurveSamplingAndLayerScaling() {
@@ -2023,6 +2061,7 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Limb grip offset moves the hand", TestLimbGripOffsetMovesHand});
     tests.push_back({"IK rig at part weight keeps the hand on the gun", TestApplyRigPartialWeightKeepsHandOnGun});
     tests.push_back({"Weapon IK hand offsets round-trip", TestWeaponIkHandOffsetsRoundTrip});
+    tests.push_back({"Animator transitions cut the tracks they list", TestAnimatorTransitionCutTracks});
     tests.push_back({"Clip weight curves sample and scale the IK layers", TestClipWeightCurveSamplingAndLayerScaling});
     tests.push_back({"Clip IK curve and the IKOff tag combine", TestClipCurveAndIKOffTagCombine});
     tests.push_back({"ADS blend pieces: additive, crouch, camera share", TestAdsBlendPieces});

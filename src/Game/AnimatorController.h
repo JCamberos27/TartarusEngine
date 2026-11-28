@@ -144,6 +144,10 @@ struct AnimatorController {
         bool RespectPriority = false;
         // Any State only: may re-enter the state that is already playing (restarting it).
         bool CanTransitionToSelf = false;
+        // Tracks (by name) that switch to the destination at once while the others crossfade: e.g. a revolver's
+        // weapon track, whose Fire clip starts the cylinder a chamber back - blended, it would turn backwards in view.
+        std::vector<std::string> CutTracks;
+        bool Cuts(const std::string& track) const;
     };
 
     enum class Blending { Override = 0, Additive = 1 };
@@ -258,6 +262,9 @@ std::vector<std::string> FindAnimatorControllers();
 float AnimatorSampleCurve(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, int layer,
                           const std::string& name, float fallback = 1.0f);
 float AnimatorLayerWeight(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, int layer);
+// Whether `track` of `layer` shows only the state being faded into right now: the running transition lists the
+// track in its CutTracks (see AnimatorController::Transition). Pure data.
+bool AnimatorTrackCuts(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, int layer, int track);
 
 // Distance matching (State::DistanceParam): the phase (0..1) at which `state` of `layer`, for the current
 // parameters, is at `metres` as its DistanceMode reads them (see State); < 0 when it can't tell (no clips).

@@ -31,8 +31,10 @@ Applied in memory on every export:
   cocked and the cylinder indexing one chamber (60°, counter-clockwise from the rear) over six frames, the
   hammer falling on frame 7, the trigger resetting by frame 24 (`F_PULLED, F_FALL, F_HOLD, F_RESET`). Two
   frames turned the cylinder 30° a frame, where a six-chamber cylinder aliases (reads as still or backwards).
-  The cylinder starts one chamber back, so the clip ends where Idle is; Any→Fire is a cut (duration 0) so
-  that +60° start never blends back in sight. The round leaves on the hammer fall: the Fire state's Shot event
+  The cylinder starts one chamber back, so the clip ends where Idle is. Any→Fire cuts the weapon track
+  (`"cutTracks": ["weapon"]`) so that +60° start never blends back in sight, while the arms crossfade over
+  0.05 s: a shot fired before the last one's clip has ended (200 RPM = 0.3 s, the clip 0.48 s) no longer
+  snaps the arms back to its first frame. The round leaves on the hammer fall: the Fire state's Shot event
   is at frame 7 (0.117 s). The arms' trigger finger curls with the trigger, about the joints' hinge, by the
   trigger's travel in the hand's space (it stays in the guard).
 - **Index finger.** The takes lay the right index along the frame and hook its tip over the trigger's root.
