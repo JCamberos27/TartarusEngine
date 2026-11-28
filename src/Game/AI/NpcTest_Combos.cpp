@@ -208,6 +208,7 @@ struct NpcTest::CombosRun {
     float TurnT = 0.0f;    // s the view has turned (turn: from the lead-in's start)
     bool LeftRest = false; // ... and the action has taken it out of one
     bool Jumped = false;
+    bool FastGait = false; // the cell moves at a jog or a sprint (Sprint held): the bounce's line is the fast one
     bool SetupFailed = false;
     std::string States;    // the controller states the window went through
     std::string LastState;
@@ -357,7 +358,7 @@ void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float
             ++fpN;
             float s = 0.0f;
             switch (e.What) {
-            case FirstPersonJankEvent::Kind::Bounce: s = e.Size / R.Fp.BounceMm; break;
+            case FirstPersonJankEvent::Kind::Bounce: s = e.Size / (e.Line > 0.0f ? e.Line : R.Fp.BounceMm); break;
             case FirstPersonJankEvent::Kind::HandPop: s = e.Size / R.Fp.PopCm; nonBounce = true; break;
             case FirstPersonJankEvent::Kind::Grip: s = e.Size / R.Fp.GripCm; nonBounce = true; break;
             case FirstPersonJankEvent::Kind::Stretch: s = 1.0f + e.Size / 10.0f; nonBounce = true; break;
@@ -469,6 +470,7 @@ void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float
     player.ScriptMove = move;
     player.ScriptSprint = S.Move == CbMove::Jog || S.Move == CbMove::Sprint;
     player.ScriptRun = S.Move == CbMove::Sprint;
+    R.FastGait = player.ScriptSprint;
     player.ScriptCrouch = S.Move == CbMove::CrouchIdle || S.Move == CbMove::CrouchWalk || (S.Move == CbMove::IdleToCrouch && changed);
     if (S.Move == CbMove::Turn) {
         R.TurnT += dt;
@@ -556,10 +558,12 @@ void NpcTest::CombosPose(const World& world, const FirstPersonBody& body, const 
     s.State = p.CurrentState();
     glm::vec3 h[2];
     const bool hands = p.ArmsNodeInView("hand_l", h[0]) && p.ArmsNodeInView("hand_r", h[1]);
-    s.Valid = hands && s.State != "Holstered";
+    s.Valid = hands;
+    s.Hidden = s.State == "Holstered"; // (the arms' path carries on: the draw's first frame is measured against it)
     s.Recoil = p.SinceShot() < 0.35f || s.State == "Fire";
     s.Speed = p.PlanarSpeed();
     s.GaitPhase = p.HaveGaitPhase() ? p.GaitPhaseValue() : -1.0f;
+    s.FastGait = R.FastGait;
     for (int k = 0; k < 2; ++k) {
         s.Hand[k] = glm::vec3(h[k].x, h[k].y, -h[k].z); // (the view looks down -Z)
         s.HandGap[k] = bd.HandGap[k];

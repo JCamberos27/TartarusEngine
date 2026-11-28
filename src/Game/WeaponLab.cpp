@@ -45,14 +45,17 @@ WeaponJankFrame WeaponJankFrameFor(const World& world, const FirstPersonBody& bo
     const Model* clips = p.ThirdPersonArms();
     const entt::entity gun = p.WorldWeaponEntity();
     glm::mat4 socket(1.0f);
-    f.Valid = clips && gun != entt::null && world.Registry.valid(gun) && clips->NodeTransform(p.GunSocket(), socket) &&
-              !world.Registry.any_of<InactiveTag, DeactivatedTag>(gun);
-    if (!f.Valid) return f;
-    const glm::mat4 gunWorld = rigid(world.ComposeWorldTransform(gun));
+    const bool haveClips = clips && clips->NodeTransform(p.GunSocket(), socket);
+    f.Valid = haveClips && gun != entt::null && world.Registry.valid(gun) && !world.Registry.any_of<InactiveTag, DeactivatedTag>(gun);
+    if (!haveClips) return f;
+    // No gun in hand (holstered, between guns): the hands are still read (HandsOnly), so the draw's first frame is measured.
     const glm::mat4 clipGun = rigid(p.ArmsWorld() * socket);
-    const glm::mat4 r = glm::inverse(clipGun) * gunWorld;
-    f.GunPos = glm::vec3(r[3]);
-    f.GunRot = glm::normalize(glm::quat_cast(glm::mat3(r)));
+    if (f.Valid) {
+        const glm::mat4 gunWorld = rigid(world.ComposeWorldTransform(gun));
+        const glm::mat4 r = glm::inverse(clipGun) * gunWorld;
+        f.GunPos = glm::vec3(r[3]);
+        f.GunRot = glm::normalize(glm::quat_cast(glm::mat3(r)));
+    }
     const WeaponIKSettings& ik = p.Set().Procedural.IK;
     const std::string clipHand[2] = {ik.LeftHand, ik.RightHand};
     // Each hand off the chest in the CHEST's own axes: the body turning (the view swinging, a pivot) is not the hand
@@ -64,15 +67,19 @@ WeaponJankFrame WeaponJankFrameFor(const World& world, const FirstPersonBody& bo
         const glm::mat3 axes(glm::normalize(glm::vec3(cm[0])), glm::normalize(glm::vec3(cm[1])), glm::normalize(glm::vec3(cm[2])));
         chestAxes = glm::transpose(axes);
     }
+    bool handsRead = true;
     for (int h = 0; h < 2; ++h) {
         glm::vec3 w;
         glm::mat4 ch(1.0f);
         if (body.BoneWorld(world, h ? "hand_r" : "hand_l", w) && clips->NodeTransform(clipHand[h], ch)) {
             f.Hand[h] = chestAxes * (w - chest);
             f.HandClip[h] = glm::vec3(glm::inverse(clipGun) * p.ArmsWorld() * ch[3]);
+        } else {
+            handsRead = false;
         }
-        f.HandGap[h] = body.TwinHandGap(h);
+        f.HandGap[h] = f.Valid ? body.TwinHandGap(h) : 0.0f;
     }
+    f.HandsOnly = !f.Valid && handsRead;
     return f;
 }
 

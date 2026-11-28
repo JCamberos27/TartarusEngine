@@ -660,6 +660,20 @@ void TestWeaponJankMeter() {
     // The left hand 3 cm off its grip for a stretch: one Grip event on that side.
     auto grip = run([](int) { return glm::vec3(0.0f); }, [](WeaponJankFrame& f, int i) { if (i > 40 && i < 50) f.HandGap[0] = 0.03f; });
     CHECK(grip.size() == 1 && grip[0].What == WeaponJankEvent::Kind::Grip && grip[0].Side == 0 && std::abs(grip[0].Size - 3.0f) < 0.01f);
+    // No gun (holstered) but the hands read: the hands' path carries on, so a hand that snaps 40 cm on the draw's first
+    // frame is a hand pop; the gun, absent, isn't measured. With the hands unread too, the snap starts a fresh path.
+    auto draw = [](bool handsRead) {
+        return [handsRead](WeaponJankFrame& f, int i) {
+            f.Valid = i < 30 || i >= 50;
+            f.HandsOnly = !f.Valid && handsRead;
+            f.Hand[1] = glm::vec3(i >= 50 ? 0.4f : 0.0f, 0.0f, 0.0f);
+            f.GunPos = glm::vec3(i < 30 ? 0.0f : 0.1f, 0, 0); // (the gun comes back elsewhere: a new gun, not a pop)
+        };
+    };
+    auto drawn = run([](int) { return glm::vec3(0.0f); }, draw(true));
+    CHECK(drawn.size() == 1 && drawn[0].What == WeaponJankEvent::Kind::HandPop && drawn[0].Side == 1 && drawn[0].Size > 30.0f);
+    auto unread = run([](int) { return glm::vec3(0.0f); }, draw(false));
+    CHECK(unread.empty());
 }
 
 // The third-person hold (FirstPersonPresentation::ThirdPersonGunCorrection): each weapon's controller plays an

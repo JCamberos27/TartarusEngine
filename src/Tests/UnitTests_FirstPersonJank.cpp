@@ -15,7 +15,7 @@ using Kind = FirstPersonJankEvent::Kind;
 
 // A walk script: `seconds` at 60 Hz, the gait phase running at `rate` cycles a second, each hand's height off `y(i, phase)`.
 template <typename Fn>
-FirstPersonJankMeter RunWalk(float seconds, float rate, Fn y, FirstPersonJankMeter m = FirstPersonJankMeter()) {
+FirstPersonJankMeter RunWalk(float seconds, float rate, Fn y, bool fast = false, FirstPersonJankMeter m = FirstPersonJankMeter()) {
     m.Reset();
     float phase = 0.0f;
     const int frames = (int)(seconds * 60.0f);
@@ -23,7 +23,8 @@ FirstPersonJankMeter RunWalk(float seconds, float rate, Fn y, FirstPersonJankMet
         FirstPersonJankSample s;
         s.Dt = 1.0f / 60.0f;
         s.State = "Walk";
-        s.Speed = 1.5f;
+        s.Speed = fast ? 3.3f : 1.5f;
+        s.FastGait = fast;
         phase = std::fmod(phase + rate / 60.0f, 1.0f);
         s.GaitPhase = phase;
         s.Hand[0] = glm::vec3(-0.1f, y(i, phase), 0.3f);
@@ -44,6 +45,12 @@ void TestFirstPersonJankMeterBounce() {
     CHECK(!bounce.Events().empty());
     CHECK(bounce.Worst(Kind::Bounce) > 27.0f && bounce.Worst(Kind::Bounce) < 31.0f);
     CHECK(bounce.Events().front().What == Kind::Bounce && bounce.Events().front().State == "Walk");
+    CHECK(bounce.Events().front().Line == bounce.BounceMm);
+    // At a jog or a sprint the line is BounceFastMm (Body Motion's designed gun trail): 30 mm is under it, 60 mm is over.
+    auto jog = RunWalk(3.0f, 1.4f, [](int, float ph) { return 0.015f * std::sin(6.2831853f * 2.0f * ph); }, true);
+    CHECK(jog.Events().empty() && jog.LastCycleMm() > 27.0f);
+    auto jogBig = RunWalk(3.0f, 1.4f, [](int, float ph) { return 0.03f * std::sin(6.2831853f * 2.0f * ph); }, true);
+    CHECK(!jogBig.Events().empty() && jogBig.Events().front().Line == jogBig.BounceFastMm && jogBig.Worst(Kind::Bounce) > 55.0f);
     // Standing (no gait phase) or crawling under MinBounceSpeed: nothing is measured, however much the hands move.
     FirstPersonJankMeter still;
     for (int i = 0; i < 180; ++i) {
@@ -142,6 +149,11 @@ void TestFirstPersonJankMeterEvents() {
     // An invalid frame (holstered) restarts the path: a hand that is somewhere else when the gun returns is not a pop.
     auto holster = run([](FirstPersonJankSample& s, int i) { s.Valid = i < 50 || i >= 70; s.Hand[1].x = i >= 70 ? 0.2f : 0.0f; });
     CHECK(holster.Events().empty());
+    // A hidden frame (holstered: the arms not drawn) keeps the path: nothing is flagged while hidden, but a hand that is
+    // somewhere else on the first drawn frame is a pop - the draw's first frame counts.
+    auto hidden = run([](FirstPersonJankSample& s, int i) { s.Hidden = i >= 50 && i < 70; s.Hand[1].x = i >= 70 ? 0.2f : i >= 60 ? 0.1f : 0.0f; s.HandGap[0] = s.Hidden ? 0.05f : 0.0f; });
+    CHECK(hidden.Events().size() == 1 && hidden.Events()[0].What == Kind::HandPop && hidden.Events()[0].State == "Reload" &&
+          hidden.Events()[0].Time > 70.0f / 60.0f && hidden.Events()[0].Size > 5.0f);
     // Describe names the kind, side, state and unit.
     CHECK(grip.Events()[0].Describe().find("off grip") != std::string::npos && grip.Events()[0].Describe().find("Reload") != std::string::npos);
 }

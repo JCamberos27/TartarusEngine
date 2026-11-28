@@ -18,7 +18,10 @@
 struct WeaponJankFrame {
     float Dt = 0.0f;
     std::string State;
-    bool Valid = true;           // false: nothing to measure this frame (holstered, no gun)
+    bool Valid = true;           // false: no gun this frame (holstered, between guns): the gun isn't measured
+    // ... but the hands still are (Hand, HandClip read): they stay on screen, so a draw that snaps them onto the gun is
+    // measured from its first frame against the hang before it.
+    bool HandsOnly = false;
     bool Recoil = false;         // a shot's kick this frame: its pop is the recoil's (not flagged)
     float SinceShot = 1e3f;      // seconds since a round left: a settle in the recoil's recovery is the recoil's
     float Speed = 0.0f;          // the player's planar speed (m/s): a settle needs the player still ...
@@ -64,6 +67,7 @@ private:
     void CloseSettle();
     std::vector<WeaponJankEvent> m_Events;
     std::vector<WeaponJankFrame> m_Prev; // the last two valid frames (oldest first)
+    std::vector<WeaponJankFrame> m_PrevHands; // ... and the last two with the hands read (valid or HandsOnly)
     float m_Time = 0.0f, m_StateTime = 0.0f, m_Still = 0.0f;
     std::string m_State;
     // The settle being measured in this state: travel since SettleAfter, while moving.
