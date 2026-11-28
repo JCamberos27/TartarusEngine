@@ -1051,11 +1051,11 @@ void NpcTest::Testbed(World& world, NpcDirector& npcs, const Player& player, flo
             else
                 skip(std::string(name) + ": the world twin's hands on the world gun", "split poses (Weapon Arms' world twins)");
         }
-        // A: armed and looking down, the world body bends no more than 1.5x #1304's (13 / 12 / 32 / 13 deg): it folded at the
+        // A: armed and looking down, the world body bends no more than 1.5x #1304's (13 / 12 / 13 deg; crouched 40, under the old fold): it folded at the
         // waist (28 / 26 / 47 / 27) while its spine took the uncapped aim. (Crouch walking stays out: still 61 deg.)
         if (TbPartOn('A')) {
             for (const auto& [name, cap] : {std::make_pair("A look down standing", 19.5f), std::make_pair("A walk looking down", 18.0f),
-                                            std::make_pair("A crouch looking down", 48.0f), std::make_pair("A aim looking down", 19.5f)}) {
+                                            std::make_pair("A crouch looking down", 40.0f), std::make_pair("A aim looking down", 19.5f)}) {
                 const TestbedRun::LegStats& s = R.Legs[legIndex(name)];
                 std::printf("[Testbed] %-22s world body's bend %.1f deg at most (%d armed frames)\n", name, s.TwinBendMax, s.BendFrames);
                 Check(s.BendFrames > 20 && s.TwinBendMax <= cap, std::string(name) + ": the world body bends " + std::to_string(s.TwinBendMax) +
