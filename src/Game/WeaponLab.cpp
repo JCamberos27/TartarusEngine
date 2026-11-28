@@ -30,7 +30,8 @@ WeaponJankFrame WeaponJankFrameFor(const World& world, const FirstPersonBody& bo
     const std::string& state = p.CurrentState();
     f.State = label.empty() ? state : label + " / " + state;
     f.Resting = state == "Idle" || state == "Aim" || state == "Walk" || state == "Sprint";
-    f.Recoil = p.SinceShot() < 0.35f;
+    // The shot's kick, from the frame the Fire state starts (SinceShot only counts from the frame after): the hands ride it as the gun does.
+    f.Recoil = p.SinceShot() < 0.35f || state == "Fire";
     f.SinceShot = p.SinceShot();
     f.Speed = p.PlanarSpeed();
     f.View = glm::normalize(glm::quat_cast(glm::mat3(glm::normalize(glm::vec3(p.ArmsWorld()[0])), glm::normalize(glm::vec3(p.ArmsWorld()[1])),
