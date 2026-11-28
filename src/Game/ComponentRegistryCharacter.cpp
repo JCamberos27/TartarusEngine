@@ -371,6 +371,13 @@ void RegisterCharacterComponents() {
             { "MM Head Ride", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, MmHeadRide), 0.01f,
               "Motion matching, unarmed: how much of the mocap head's own motion the camera rides. 0 = its slow average\n"
               "(the stabilized camera, within Eye Slack); 1 = the head as captured (the jog's bob and sway). Live in Play.", 0.0f, 1.0f },
+            { "Eye Ride", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, EyeRide), 0.01f,
+              "Armed: how much of the shoulders' own motion the camera rides - and the arms and gun with it. 0 = their slow\n"
+              "average (the stabilized camera: the gun holds level while the torso bobs under it); 1 = the shoulders as the\n"
+              "clips move them, so the hands stay on the chest. The procedural camera bob scales by 1 - the ride. Live in Play.", 0.0f, 1.0f },
+            { "Eye Ride ADS", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, EyeRideAds), 0.01f,
+              "Eye Ride with the sights up, blended in as they come up. 0 = the stabilized sight picture (steady aim); 1 = the\n"
+              "shoulders' motion as at the hip. Live in Play.", 0.0f, 1.0f },
             { "Walk Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, WalkSpeed), 0.01f,
               "Metres per second asked of the blend tree when walking - the default gait. Match the walk clips (1.53).", 0.0f, 20.0f },
             { "Run Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, RunSpeed), 0.01f,
