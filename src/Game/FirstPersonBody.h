@@ -406,6 +406,10 @@ float FirstPersonBodySpineAim(float pitchRadians, float spineAim, float spineAim
 float FirstPersonBodyCappedSpineAim(float pitchRadians, float spineAim, float maxRadians, float weight);
 // Motion matching: the share of Spine Aim kept at capsule speed `speed` (m/s) - 1 up to `from`, eased to 0 at `to`.
 float FirstPersonBodyMmAimFade(float speed, float from, float to);
+// Arm Steadiness's hold on a shoulder, `trail` (m) being how far the steadied shoulder is from the pose's: exact up to
+// `knee` (Arm Steady Max), then eased toward twice it (tanh, the slope still 1 at the knee) - not cut off there. A hard
+// cut at the knee let every step's sway past it through in full, the jog's at a kink each time. 0 = no hold.
+glm::vec3 FirstPersonBodySteadyHold(const glm::vec3& trail, float knee);
 // How far segment `a`-`b` must move along unit `dir` for every one of `points` to be at least `clearance` from it:
 // the first of 0, `step`, 2 `step` ... that clears, and `maxPush` when none up to it does. 0 when already clear.
 float FirstPersonBodyClearPush(const std::vector<glm::vec3>& points, const glm::vec3& a, const glm::vec3& b, const glm::vec3& dir,

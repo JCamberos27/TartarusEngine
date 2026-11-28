@@ -434,21 +434,24 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             }
             float turned = 0.0f; // radians the collarbone has turned so far this frame
             // Steady: the shoulder back to its slow average in the anchor frame, so the gait's sway doesn't reach the arm.
-            // Bigger departures (a crouch, a stop clip) are followed, trailing by at most Arm Steady Max. The shoulders move
-            // by turning each clavicle about its root (the collarbone's inner end) - never by sliding it, which stretched the
-            // skin between the neck and the shoulder into a hunch.
+            // Bigger departures (a crouch, a stop clip) are followed: held in full up to Arm Steady Max, then eased toward
+            // twice it (FirstPersonBodySteadyHold) - cut off at the limit, the jog's sway past it came through at a kink
+            // every step. The shoulders move by turning each clavicle about its root (the collarbone's inner end) - never
+            // by sliding it, which stretched the skin between the neck and the shoulder into a hunch.
             if (steady > 0.0f && clav >= 0) {
                 const glm::vec3 shoulderWorld = ownShoulder[s];
                 const glm::vec3 inFrame = glm::vec3(anchorInverse * glm::vec4(shoulderWorld, 1.0f));
                 if (!haveAnchor[s]) { anchor[s] = inFrame; haveAnchor[s] = true; }
                 anchor[s] += (inFrame - anchor[s]) * Follow(dt, cfg.ArmSteadyTime);
                 glm::vec3 shift = glm::vec3(anchorFrame * glm::vec4(anchor[s], 1.0f)) - shoulderWorld;
-                const float maxShift = std::max(cfg.ArmSteadyMax, 0.0f);
-                if (const float len = glm::length(shift); len > maxShift) {
-                    // Past the limit the anchor is dragged along, so it never trails by more.
-                    shift *= len > 1e-6f ? maxShift / len : 0.0f;
+                const float knee = std::max(cfg.ArmSteadyMax, 0.0f);
+                // The anchor is dragged along past three times the knee, so it never trails by more (the hold there is
+                // within 4% of its most, so the drag doesn't show).
+                if (const float len = glm::length(shift), most = 3.0f * knee; len > most) {
+                    shift *= len > 1e-6f ? most / len : 0.0f;
                     anchor[s] = glm::vec3(anchorInverse * glm::vec4(shoulderWorld + shift, 1.0f));
                 }
+                shift = FirstPersonBodySteadyHold(shift, knee);
                 const glm::vec3 want = IK::Position(globals[upper]) + glm::mat3(toModel) * shift * steady;
                 turned += FirstPersonBodyAngleOf(FirstPersonBodyTurnClavicle(pose, parents, globals, clav, upper, want, shoulderMax));
                 if (firstPersonView) BodyDebug::Info().ArmSteadyShift[s] = glm::length(shift);
