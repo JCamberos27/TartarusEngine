@@ -477,7 +477,23 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                     anchor[s] = glm::vec3(frameInverse * glm::vec4(shoulderWorld + shift, 1.0f));
                 }
                 shift = FirstPersonBodySteadyHold(shift, knee);
-                const glm::vec3 want = IK::Position(globals[upper]) + glm::mat3(toModel) * shift * steady;
+                // The hand comes first: the hold is only as much as keeps the hand within the arm's reach (Shrug Start). Held in
+                // full, the sway filter spent the collarbone's turn and left the shrug too little - a swap from the revolver
+                // left the pump 3 cm off the hand at full stretch.
+                const glm::vec3 a0 = IK::Position(globals[upper]);
+                const glm::vec3 held = glm::mat3(toModel) * shift * steady;
+                const float reachLimit = cfg.ShrugStart * (glm::length(IK::Position(globals[lower]) - a0) +
+                                                           glm::length(IK::Position(globals[hand]) - IK::Position(globals[lower])));
+                float k = 1.0f;
+                if (glm::length(target - (a0 + held)) > reachLimit) {
+                    k = 0.0f;
+                    const glm::vec3 d = target - a0;
+                    const float hh = glm::dot(held, held), dh = glm::dot(d, held), c = glm::dot(d, d) - reachLimit * reachLimit;
+                    // The most of the hold that still keeps the hand in reach: the positive root of |d - k held| = reach
+                    // (there is one whenever the hand is in reach with none of the hold, c <= 0).
+                    if (c <= 0.0f && hh > 1e-12f) k = std::clamp((dh + std::sqrt(std::max(dh * dh - hh * c, 0.0f))) / hh, 0.0f, 1.0f);
+                }
+                const glm::vec3 want = a0 + held * k;
                 turned += FirstPersonBodyAngleOf(FirstPersonBodyTurnClavicle(pose, parents, globals, clav, upper, want, shoulderMax));
                 if (firstPersonView) BodyDebug::Info().ArmSteadyShift[s] = glm::length(shift);
             }
