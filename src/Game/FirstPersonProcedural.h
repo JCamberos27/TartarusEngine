@@ -229,6 +229,28 @@ struct WeaponCameraMotionSettings {
     FirstPersonSpring Spring{5.0f, 0.55f};
 };
 
+// The body's own motion (FirstPersonBody: the eye against the feet - the gait's bob and sway, not the walk), on the gun and
+// the view. The eye rides the body (Eye Ride), so the camera's bob alone is a pure shift, all but invisible against a far
+// horizon. So the gun trails it like a carried weight - up as the body drops onto each foot, settling on a spring - and its
+// muzzle tips with it; the view nods with the drop and takes a share of the shoulders' roll. Timed by the body, so the
+// third-person arms (which hold the rig's gun) keep its steps.
+struct WeaponBodyMotionSettings {
+    bool Enabled = true;
+    float Lag = 0.010f;        // metres the gun trails per m/s of the body's motion (up/down and sideways)
+    float LagPitch = 2.0f;     // degrees of muzzle per m/s up/down (the body dropping tips the muzzle up)
+    float LagRoll = 1.5f;      // degrees of gun roll per m/s sideways
+    float MaxLag = 0.03f;      // metres
+    float MaxAngle = 4.0f;     // degrees
+    float CameraNod = 0.6f;    // degrees of view pitch per m/s up/down (dropping nods the view down)
+    float CameraRoll = 0.08f;  // share of the shoulders' roll the view takes (0..1; the clips' shoulders roll ~10 deg a stride)
+    float AdsScale = 0.03f;    // all of it, with the sights up (the aimed sight picture stays as steady as before)
+    FirstPersonSpring Spring{5.0f, 0.4f};
+    // The view's nod follows on its own spring, critically damped: the body's motion is a frame difference, and a landing
+    // or a crouch toggle jumps it in one frame - followed outright, the view stepped.
+    FirstPersonSpring NodSpring{8.0f, 1.0f};
+    float MaxNod = 1.5f;       // degrees: the nod's own cap (a gait's nod is under 1; a landing's frame jump is not a nod)
+};
+
 // Walls, in two stages. Something closer than Reach in front of the gun first slides it straight
 // back, one for one, so the muzzle stops at the surface while the player can still aim (up to
 // MaxRetract metres); past that, over TuckRange more metres, it tucks into a low ready (Position,
@@ -370,6 +392,7 @@ struct WeaponProceduralSettings {
     WeaponBreathSettings Breath;
     WeaponJumpSettings Jump;
     WeaponCameraMotionSettings CameraMotion;
+    WeaponBodyMotionSettings BodyMotion;
     WeaponObstructionSettings Obstruction;
     WeaponAimSettings Aim;
     std::vector<WeaponStateOffset> StateOffsets;
@@ -413,6 +436,10 @@ struct WeaponProceduralInput {
     float GaitPhase = 0.0f;
     // The camera bob's share: 0 while the camera rides a body's mocap head, which bobs as captured (FirstPersonBody::CameraRide).
     float CameraBobScale = 1.0f;
+    // The body's own motion (FirstPersonBody::EyeMotion, in this frame: x right, y up, z back; m/s) and its shoulders' roll
+    // about their slow average (radians, + = the left shoulder up), for Body Motion.
+    glm::vec3 BodyVelocity{0.0f};
+    float BodyRoll = 0.0f;
     float Dt = 0.0f;
     glm::vec3 Velocity{0.0f};      // camera frame, m/s (horizontal plane)
     float VerticalVelocity = 0.0f; // m/s, + up
@@ -462,6 +489,8 @@ private:
     float m_BoltTime = 1e9f;
     Spring3 m_JumpRot, m_JumpPos;      // air lag + landing kick
     Spring3 m_CamMotion;               // landing dip (y), nod (x), strafe roll (z)
+    Spring3 m_BodyPos, m_BodyRot;      // Body Motion: the gun trailing the body
+    Spring3 m_BodyNod;                 // ... and the view's nod (x)
     Spring3 m_Obstruct;                // retract (x), tuck (y), faces up (z)
     Spring3 m_ObstructSide;            // aside: -1 (on the left) .. 1 (on the right), in x
     double m_DriftTime = 0.0;          // drift noise clock (seconds x Hz)

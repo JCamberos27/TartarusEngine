@@ -704,7 +704,10 @@
               "threshold": 0.0
             }
           ],
-          "duration": 0.0,
+          "cutTracks": [
+            "weapon"
+          ],
+          "duration": 0.05,
           "exitTime": 1.0,
           "fromAny": true,
           "hasExitTime": false,
