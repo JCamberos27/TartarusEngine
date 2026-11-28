@@ -297,9 +297,17 @@ void FirstPersonPresentation::ToggleFireMode() {
     Log::Info(std::string("Fire mode: ")+(m_FullAuto?"Full-Auto":"Semi-Auto"));
 }
 void FirstPersonPresentation::UpdateTrigger(bool pressed, bool held) {
-    const auto request=RunGameplay(3,0.0f,pressed,held);
+    // The trigger down lets a fidget go (the controller's Trigger exit; cleared after each controller update). A press
+    // the hands-off fidget refused gets one more try on the next call, once the controller has let the gun go: the
+    // shot goes a frame late instead of being lost. Draw / holster stay hands-off, so a press there is still dropped.
+    auto* ac=Animator();
+    if(ac && (pressed||held)) ac->SetBool(K::kTrigger,true);
+    const bool retry=m_TriggerRetry;
+    m_TriggerRetry=false;
+    const auto request=RunGameplay(3,0.0f,pressed||retry,held);
     if(!request.Result) return;
     const bool fired=Fire();
+    if(!fired && pressed && ac && ac->HasTag(K::kTagIKOff)) m_TriggerRetry=true;
     const auto result=RunGameplay(4,0.0f,fired,held);
     m_Procedural.SetFiring(result.Result!=0);
 }

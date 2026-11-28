@@ -680,7 +680,7 @@
           "to": "Holster"
         },
         {
-          "canTransitionToSelf": true,
+          "canTransitionToSelf": false,
           "conditions": [
             {
               "mode": "if",
@@ -712,7 +712,7 @@
           "to": "Fire"
         },
         {
-          "canTransitionToSelf": true,
+          "canTransitionToSelf": false,
           "conditions": [
             {
               "mode": "if",
@@ -728,7 +728,7 @@
           "to": "Inspect"
         },
         {
-          "canTransitionToSelf": true,
+          "canTransitionToSelf": false,
           "conditions": [
             {
               "mode": "if",
@@ -1141,6 +1141,20 @@
           "duration": 0.15,
           "exitTime": 1.0,
           "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Trigger",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Regrip",
           "hasExitTime": false,
           "to": "Exit"
         },
@@ -2001,6 +2015,11 @@
       "default": -1.0,
       "name": "GaitPhase",
       "type": "float"
+    },
+    {
+      "default": 0.0,
+      "name": "Trigger",
+      "type": "bool"
     }
   ],
   "tracks": [

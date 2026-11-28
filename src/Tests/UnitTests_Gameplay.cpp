@@ -68,6 +68,11 @@ void TestNativeWeaponRules() {
     using namespace Gameplay;
     WeaponFrame w; w.Equipped=1; w.Chambered=1; w.Ammo=30; w.Magazine=30; w.Rpm=700;
     w.AllowFullAuto=1; w.RecoilProfile=1; w.Tags=32;
+    // Hands off the gun (a fidget, draw, holster: IKOff 128): no shot, procedural or clip, and no cooldown spent.
+    w.Tags=128; w.Operation=1; WeaponRules::Update(w); CHECK(w.Result==0 && w.Commands==0);
+    w.RecoilProfile=0; WeaponRules::Update(w); CHECK(w.Result==0 && w.Commands==0 && w.WaitingShot==0);
+    w.Tags=32; WeaponRules::Update(w); CHECK(w.Result==1 && (w.Commands&4) && w.WaitingShot==1); // the clip shot from Idle
+    w.WaitingShot=0; w.RecoilProfile=1;
     w.Operation=1; WeaponRules::Update(w); CHECK(w.Result==1 && (w.Commands&2));
     w.Operation=2; WeaponRules::Update(w); CHECK(w.Ammo==29);
     w.Operation=5; WeaponRules::Update(w); CHECK(w.Result==1 && (w.Commands&64));
