@@ -481,14 +481,11 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 float k = 1.0f;
                 if (glm::length(target - (a0 + held)) > reachLimit) {
                     k = 0.0f;
-                    if (glm::length(target - a0) <= reachLimit) {
-                        float lo = 0.0f, hi = 1.0f; // the most of the hold that still keeps the hand in reach
-                        for (int i = 0; i < 6; ++i) {
-                            const float mid = 0.5f * (lo + hi);
-                            (glm::length(target - (a0 + held * mid)) <= reachLimit ? lo : hi) = mid;
-                        }
-                        k = lo;
-                    }
+                    const glm::vec3 d = target - a0;
+                    const float hh = glm::dot(held, held), dh = glm::dot(d, held), c = glm::dot(d, d) - reachLimit * reachLimit;
+                    // The most of the hold that still keeps the hand in reach: the positive root of |d - k held| = reach
+                    // (there is one whenever the hand is in reach with none of the hold, c <= 0).
+                    if (c <= 0.0f && hh > 1e-12f) k = std::clamp((dh + std::sqrt(std::max(dh * dh - hh * c, 0.0f))) / hh, 0.0f, 1.0f);
                 }
                 const glm::vec3 want = a0 + held * k;
                 turned += FirstPersonBodyAngleOf(FirstPersonBodyTurnClavicle(pose, parents, globals, clav, upper, want, shoulderMax));
