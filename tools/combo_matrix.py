@@ -58,6 +58,10 @@ def write_md(rows, events, out):
              'threshold (1.0 = just over). FP = first-person meter, TP = third-person (world body) meter. Bounce = the largest '
              'gait cycle\'s hand travel in a held state (mm). Support arm = the left hand\'s largest grip gap FP / TP and its '
              'largest reach (of the arm\'s length) through the action, whatever the thresholds.', '',
+             'Scores: a pop, grip gap, settle or bounce = its size over its threshold (FP pop 0.6 cm, grip 1 cm, bounce 15 mm; '
+             'TP pop 0.4 cm / 0.5 deg, settle 0.5 cm / 0.6 deg, grip 1.5 cm). A stretch = 1 + % past the arm\'s length / 10 and '
+             'an arm in the eye = 1 + how far inside 6 cm it is / 6 (both have no size threshold), so either outranks an event '
+             'barely over its line.', '',
              '| # | cell | result | score | worst | FP ev | TP ev | bounce mm | support arm | states | clip |',
              '|---|---|---|---|---|---|---|---|---|---|---|']
     for i, r in enumerate(ordered, 1):

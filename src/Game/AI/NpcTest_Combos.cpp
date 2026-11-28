@@ -222,7 +222,9 @@ void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float
     m_Reload = false;
     m_Firing = false;
     m_Target.clear();
-    BodyDebug::ProbeRequested() = true; // the camera probe: the eye-to-arm distances and the rays into the body
+    // The camera probe: the eye-to-arm distances and the rays into the body. Left on for the rest of the process (a scenario
+    // run ends with it); it costs ~4.5 ms a frame, most of the matrix's wall time.
+    BodyDebug::ProbeRequested() = true;
     wantYaw = player.Cam.Yaw = kCbYaw;
     wantPitch = -3.0f;
     player.ScriptMove = glm::vec2(0.0f);
