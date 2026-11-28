@@ -1078,7 +1078,7 @@
               "threshold": 0.0
             }
           ],
-          "duration": 0.05,
+          "duration": 0.25,
           "exitTime": 1.0,
           "from": "Holstered",
           "hasExitTime": false,
