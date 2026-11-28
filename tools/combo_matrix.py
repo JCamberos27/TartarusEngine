@@ -61,7 +61,8 @@ def write_md(rows, events, out):
              'Scores: a pop, grip gap, settle or bounce = its size over its threshold (FP pop 0.6 cm, grip 1 cm, bounce 15 mm; '
              'TP pop 0.4 cm / 0.5 deg, settle 0.5 cm / 0.6 deg, grip 1.5 cm). A stretch = 1 + % past the arm\'s length / 10 and '
              'an arm in the eye = 1 + how far inside 6 cm it is / 6 (both have no size threshold), so either outranks an event '
-             'barely over its line.', '',
+             'barely over its line. An FP hand pop, grip gap or stretch while that hand is out of the view (the arms\' FOV, '
+             '10% slack) is listed as "off screen" and not scored; the states column counts them.', '',
              '| # | cell | result | score | worst | FP ev | TP ev | bounce mm | support arm | states | clip |',
              '|---|---|---|---|---|---|---|---|---|---|---|']
     for i, r in enumerate(ordered, 1):
