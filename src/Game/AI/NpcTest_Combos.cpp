@@ -17,6 +17,7 @@
 // right). A cell flagged only by the walking bounce gets its clip when the bounce is over 1.3x its state's hold row (that row
 // itself gets one).
 #include "NpcTest.h"
+#include "NpcTest_Combos.h"
 #include "Core/Env.h"
 #include "BodyDebugDraw.h"
 #include "Camera.h"
@@ -78,6 +79,7 @@ const CbActDef kCbActs[] = {
 };
 constexpr float kCbSettleMin = 1.0f, kCbSettleCap = 6.0f;
 constexpr float kCbFireHoldFor = 1.2f; // s the trigger is held on fire_hold
+constexpr float kCbScreenMargin = 0.1f; // a hand this share past the view's edge still counts as seen (the wrist bone; the hand reaches past it)
 constexpr float kCbBounceAfter = 1.2f; // s a held state must have lasted before its gait cycle counts as a bounce (a cycle plus the sights' raise)
 // The cells start here, facing +X (yaw 0): 54 m of clear ground ahead (the 60 m ground, the lane's posts and dummies are at z > 0).
 const glm::vec3 kCbStart(-27.0f, 0.05f, -24.0f);
@@ -93,17 +95,7 @@ struct CbCell {
     float MaxSeconds() const { return kCbSettleCap + std::max(kCbStates[State].Lead, 1.0f) + kCbActs[Act].Cap + 0.2f; }
 };
 
-bool CbMatch(const std::string& s, const std::string& p) {
-    size_t i = 0, j = 0, star = std::string::npos, mark = 0;
-    while (i < s.size()) {
-        if (j < p.size() && (p[j] == s[i])) { ++i; ++j; }
-        else if (j < p.size() && p[j] == '*') { star = j++; mark = i; }
-        else if (star != std::string::npos) { j = star + 1; i = ++mark; }
-        else return false;
-    }
-    while (j < p.size() && p[j] == '*') ++j;
-    return j == p.size();
-}
+bool CbMatch(const std::string& s, const std::string& p) { return Combos::Match(s, p); }
 std::vector<std::string> CbList(const std::string& s) {
     std::vector<std::string> out;
     size_t at = 0;
@@ -118,11 +110,12 @@ std::vector<std::string> CbList(const std::string& s) {
     return out;
 }
 
-std::vector<CbCell> CbPlan() {
+// The cells, in run order: TARTARUS_COMBOS's weapons (empty: the AK), TARTARUS_COMBOS_CELLS's patterns (empty: every cell).
+std::vector<CbCell> CbPlan(const std::string& weaponList, const std::string& cellList) {
     std::vector<CbCell> cells;
-    std::vector<std::string> weapons = CbList(Env::IsSet(Env::Var::Combos) ? Env::Str(Env::Var::Combos) : std::string("ak"));
+    std::vector<std::string> weapons = CbList(weaponList);
     if (weapons.empty()) weapons.push_back("ak");
-    const std::vector<std::string> only = CbList(Env::IsSet(Env::Var::CombosCells) ? Env::Str(Env::Var::CombosCells) : std::string());
+    const std::vector<std::string> only = CbList(cellList);
     auto add = [&](int w, int a, int swapTo, int st) {
         CbCell c;
         c.Weapon = w;
@@ -172,7 +165,36 @@ std::string CbDirName(std::string id) {
         if (c == '/' || c == '>') c = c == '/' ? '-' : '~';
     return id;
 }
+std::vector<CbCell> CbPlanFromEnv() {
+    return CbPlan(Env::IsSet(Env::Var::Combos) ? Env::Str(Env::Var::Combos) : std::string(),
+                  Env::IsSet(Env::Var::CombosCells) ? Env::Str(Env::Var::CombosCells) : std::string());
+}
 } // namespace
+
+namespace Combos {
+bool Match(const std::string& s, const std::string& p) {
+    size_t i = 0, j = 0, star = std::string::npos, mark = 0;
+    while (i < s.size()) {
+        if (j < p.size() && p[j] == s[i]) { ++i; ++j; }
+        else if (j < p.size() && p[j] == '*') { star = j++; mark = i; }
+        else if (star != std::string::npos) { j = star + 1; i = ++mark; }
+        else return false;
+    }
+    while (j < p.size() && p[j] == '*') ++j;
+    return j == p.size();
+}
+std::vector<std::string> CellIds(const std::string& weapons, const std::string& cells) {
+    std::vector<std::string> ids;
+    for (const CbCell& c : CbPlan(weapons, cells)) ids.push_back(c.Id);
+    return ids;
+}
+bool OnScreen(const glm::vec3& view, float vfovDeg, float aspect, float margin) {
+    const float depth = -view.z; // (the view looks down -Z)
+    if (depth < 0.02f) return false;
+    const float h = std::tan(glm::radians(vfovDeg) * 0.5f) * (1.0f + margin);
+    return std::abs(view.y) <= h * depth && std::abs(view.x) <= h * aspect * depth;
+}
+} // namespace Combos
 
 struct NpcTest::CombosRun {
     std::vector<CbCell> Cells;
@@ -199,6 +221,15 @@ struct NpcTest::CombosRun {
     // the rig) and third person (world hand off the world gun), and its largest reach (of the arm's length).
     float SupGripFp = 0.0f, SupGripTp = 0.0f, SupReach = 0.0f;
     // When the controller last changed state (meter time): a bounce counts only once its state has been held kBounceAfter s.
+    // Each frame (meter time): whether each hand was in the view.
+    struct Seen { float Time; bool On[2]; };
+    std::vector<Seen> OnScreen;
+    bool HandOnScreen(float t, int side) const {
+        const Seen* best = nullptr;
+        for (const Seen& s : OnScreen)
+            if (!best || std::abs(s.Time - t) < std::abs(best->Time - t)) best = &s;
+        return !best || best->On[side]; // (no record: counted, as before)
+    }
     // (Raising the sights moves the hands ~10 cm within the Aim state: over a gait cycle that read as a bounce.)
     std::string PoseState;
     std::vector<float> StateChanges;
@@ -217,14 +248,14 @@ struct NpcTest::CombosRun {
 
 float NpcTest::CombosSeconds() {
     float t = 0.0f;
-    for (const CbCell& c : CbPlan()) t += c.MaxSeconds();
+    for (const CbCell& c : CbPlanFromEnv()) t += c.MaxSeconds();
     return t + 2.0f;
 }
 
 void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch) {
     if (!m_Combo) {
         m_Combo = std::make_shared<CombosRun>();
-        m_Combo->Cells = CbPlan();
+        m_Combo->Cells = CbPlanFromEnv();
         m_Combo->ClipsDir = Env::IsSet(Env::Var::CombosClips) ? Env::Str(Env::Var::CombosClips) : std::string();
         std::printf("[Combo] %zu cells%s\n", m_Combo->Cells.size(), m_Combo->ClipsDir.empty() ? "" : " (flagged cells recorded)");
     }
@@ -296,12 +327,23 @@ void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float
         float worst = 0.0f;
         std::string worstText = "-";
         bool nonBounce = false;
-        int fpN = 0, tpN = 0;
+        int fpN = 0, tpN = 0, fpOff = 0;
         std::vector<std::string> lines;
         for (const FirstPersonJankEvent& e : R.Fp.Events()) {
             if (e.Time < R.FpFrom) continue;
             // A bounce is the gait's, in a held state: a reload's or an inspect's own hand travel over a cycle isn't one.
             if (e.What == FirstPersonJankEvent::Kind::Bounce && (!CbResting(e.State) || e.Time - R.BounceStateSince(e.Time) < kCbBounceAfter)) continue;
+            char at[32];
+            std::snprintf(at, sizeof at, " (+%.2f s)", e.Time - R.FpFrom);
+            // A hand's pop, grip gap or stretch while that hand is out of the view isn't seen first person: listed, not counted
+            // (the world body's meter still sees it).
+            const bool handKind = e.What == FirstPersonJankEvent::Kind::HandPop || e.What == FirstPersonJankEvent::Kind::Grip ||
+                                  e.What == FirstPersonJankEvent::Kind::Stretch;
+            if (handKind && (e.Side == 0 || e.Side == 1) && !R.HandOnScreen(e.Time, e.Side)) {
+                ++fpOff;
+                lines.push_back("FP off screen: " + e.Describe() + at);
+                continue;
+            }
             ++fpN;
             float s = 0.0f;
             switch (e.What) {
@@ -311,8 +353,6 @@ void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float
             case FirstPersonJankEvent::Kind::Stretch: s = 1.0f + e.Size / 10.0f; nonBounce = true; break;
             case FirstPersonJankEvent::Kind::Clip: s = 1.0f + std::max(0.0f, R.Fp.ClipCm - e.Size) / R.Fp.ClipCm; nonBounce = true; break;
             }
-            char at[32];
-            std::snprintf(at, sizeof at, " (+%.2f s)", e.Time - R.FpFrom);
             lines.push_back("FP " + e.Describe() + at);
             if (s > worst) { worst = s; worstText = "FP " + std::string(FirstPersonJankEvent::KindName(e.What)) + (e.Side == 0 ? " L " : e.Side == 1 ? " R " : " ");
                              char v[64]; std::snprintf(v, sizeof v, "%.2f %s in %s +%.2f s", e.Size, e.What == FirstPersonJankEvent::Kind::Bounce ? "mm" :
@@ -351,7 +391,8 @@ void NpcTest::CombosDrive(Player& player, FirstPersonPresentation& weapon, float
         if (R.CycleMm >= 0.0f) std::snprintf(bounce, sizeof bounce, "%.1f", R.CycleMm);
         else std::snprintf(bounce, sizeof bounce, "-");
         char ammo[48]; // the rounds fired, the magazine refilled: the action really ran
-        std::snprintf(ammo, sizeof ammo, " [ammo %d->%d]", R.AmmoAt, weapon.Ammo());
+        if (fpOff > 0) std::snprintf(ammo, sizeof ammo, " [ammo %d->%d] [%d FP off screen]", R.AmmoAt, weapon.Ammo(), fpOff);
+        else std::snprintf(ammo, sizeof ammo, " [ammo %d->%d]", R.AmmoAt, weapon.Ammo());
         std::printf("[Combo] ROW %s|%s|%.2f|%s|fp=%d|tp=%d|bounce=%s|%s%s|%s\n", C.Id.c_str(), flagged ? "FLAG" : "PASS", worst, worstText.c_str(),
                     fpN, tpN, bounce, R.States.empty() ? "-" : R.States.c_str(), ammo, clipPath.c_str());
         std::printf("[Combo] SUPPORT %s|grip_fp=%.2f|grip_tp=%.2f|reach=%.3f\n", C.Id.c_str(), R.SupGripFp * 100.0f, R.SupGripTp * 100.0f, R.SupReach);
@@ -475,6 +516,7 @@ void NpcTest::CombosPose(const World& world, const FirstPersonBody& body, const 
         R.CycleMm = R.LastCycleSeen = -1.0f;
         R.PoseState.clear();
         R.StateChanges.clear();
+        R.OnScreen.clear();
     }
     if (!R.MeterOn) return;
     if (R.MarkWindow) { // the action starts: events from here count
@@ -503,6 +545,13 @@ void NpcTest::CombosPose(const World& world, const FirstPersonBody& body, const 
     }
     s.InsideRays = bd.ProbeRays >= 0 ? bd.ProbeInsideRays : 0;
     R.Fp.Push(s);
+    // Each hand in the view this frame: the arms are drawn with the view-model FOV (16:9, as the body's camera probe takes it).
+    {
+        const float fov = p.ViewModelFov();
+        CombosRun::Seen seen{R.Fp.Time(), {false, false}};
+        for (int k = 0; k < 2; ++k) seen.On[k] = hands && fov > 0.0f && Combos::OnScreen(h[k], fov, 16.0f / 9.0f, kCbScreenMargin);
+        R.OnScreen.push_back(seen);
+    }
     if (s.State != R.PoseState) {
         R.PoseState = s.State;
         R.StateChanges.push_back(R.Fp.Time());
