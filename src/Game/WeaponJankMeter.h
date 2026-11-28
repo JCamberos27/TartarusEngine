@@ -26,7 +26,7 @@ struct WeaponJankFrame {
     bool Resting = false;        // a held state (idle, walk, aim, sprint): the gun should be still past its start
     glm::vec3 GunPos{0.0f};      // the world gun, the clips' gun taken out (m, the clips' gun frame)
     glm::quat GunRot{1.0f, 0.0f, 0.0f, 0.0f};
-    glm::vec3 Hand[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};     // each world hand off the chest (world axes, m)
+    glm::vec3 Hand[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};     // each world hand off the chest (the chest's own axes, m)
     glm::vec3 HandClip[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // ... and the clips' hand on their gun (m)
     float HandGap[2] = {0.0f, 0.0f}; // each world hand off where the hold put it (m)
 };

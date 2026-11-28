@@ -229,6 +229,39 @@ void TestBlendTree2D() {
     CHECK(near(FirstPersonBodyWrapAngle(3.5f), 3.5f - 6.2831853f) && near(FirstPersonBodyWrapAngle(-3.5f), -3.5f + 6.2831853f));
     CHECK(near(FirstPersonBodyWrapAngle(0.4f), 0.4f) && near(FirstPersonBodyWrapAngle(6.2831853f + 0.4f), 0.4f));
 
+    // The chest's twist toward the view: eased (half the way in the half-life), capped, and never across in a frame.
+    {
+        const float dt = 1.0f / 60.0f, lim = glm::radians(60.0f), hl = 0.08f;
+        float e = 0.0f;
+        for (int i = 0; i < 5; ++i) e = FirstPersonBodyEaseTwist(e, -1.0f, lim, hl, dt); // 0.083 s toward -1 rad
+        CHECK(e < -0.45f && e > -0.6f);
+        CHECK(near(FirstPersonBodyEaseTwist(0.3f, 2.0f, lim, 0.0f, dt), lim)); // no half-life: capped, at once
+        CHECK(near(FirstPersonBodyEaseTwist(0.3f, 2.0f, lim, hl, 0.0f), 0.3f)); // no time: where it was
+        // A 200 deg flick in 0.15 s (the view sweeps round through straight behind and stops 20 deg past it), then the body
+        // turns the short way: the target jumps across as the view passes straight behind, the chest swings across eased -
+        // no frame moves it more than the ease allows, and it crosses once, not back and forth.
+        e = 0.0f;
+        const float most = 2.0f * lim * (1.0f - std::exp(-0.69314718f * dt / hl)) + 1e-5f;
+        float worst = 0.0f, body = 0.0f;
+        int crossings = 0;
+        for (int i = 0; i < 120; ++i) {
+            const float u = std::min(1.0f, i / 9.0f), view = -glm::radians(200.0f) * u * u * (3.0f - 2.0f * u);
+            if (i > 9) body = std::min(body + glm::radians(180.0f) * dt, glm::radians(100.0f)); // the body turns the short way (+)
+            const float before = e;
+            e = FirstPersonBodyEaseTwist(e, FirstPersonBodyWrapAngle(view - body), lim, hl, dt);
+            worst = std::max(worst, std::abs(e - before));
+            crossings += (before < 0.0f && e > 0.0f) || (before > 0.0f && e < 0.0f) ? 1 : 0;
+            CHECK(std::abs(e) <= lim + 1e-5f);
+        }
+        CHECK(worst <= most && worst > 0.1f * most && crossings == 1);
+        CHECK(e > 0.3f); // round the other way in the end, eased there
+        // The view held at straight behind, its wrapped offset flickering in sign every frame: the chest settles near square
+        // instead of following the flicker.
+        e = lim;
+        for (int i = 0; i < 120; ++i) e = FirstPersonBodyEaseTwist(e, (i & 1) ? 3.14f : -3.14f, lim, hl, dt);
+        CHECK(std::abs(e) < 0.2f * lim);
+    }
+
     // Foot IK: the pelvis drops to the lower foot (capped), rises a little when both are up.
     CHECK(near(FirstPersonBodyFootPelvis(-0.1f, 0.0f, 0.35f, 0.15f), -0.1f) && near(FirstPersonBodyFootPelvis(0.05f, -0.5f, 0.35f, 0.15f), -0.35f));
     CHECK(near(FirstPersonBodyFootPelvis(0.2f, 0.3f, 0.35f, 0.15f), 0.15f) && near(FirstPersonBodyFootPelvis(0.0f, 0.0f, 0.35f, 0.15f), 0.0f));
@@ -535,6 +568,29 @@ void TestFirstPersonBodyLookOnlyKeepsTwins() {
     CHECK(FirstPersonBodyTestAccess::Twins(fpb) != twins);
 }
 
+// Arm Steadiness's hold: exact to the knee, then eased toward twice it - continuous with a slope of 1 at the knee, never
+// past twice it, rising all the way to where the anchor is dragged (three times the knee), along the trail's own
+// direction; no knee, no hold.
+void TestFirstPersonBodySteadyHold() {
+    const float knee = 0.04f;
+    const glm::vec3 dir = glm::normalize(glm::vec3(0.3f, 1.0f, -0.2f));
+    CHECK(FirstPersonBodySteadyHold(dir * 0.025f, knee) == dir * 0.025f);
+    CHECK(FirstPersonBodySteadyHold(dir * knee, knee) == dir * knee);
+    CHECK(glm::length(FirstPersonBodySteadyHold(dir * 0.05f, 0.0f)) == 0.0f);
+    const float eps = 1e-4f;
+    const float slope = (glm::length(FirstPersonBodySteadyHold(dir * (knee + eps), knee)) - knee) / eps;
+    CHECK(std::abs(slope - 1.0f) < 0.01f);
+    float last = knee;
+    for (float len = 0.045f; len <= 3.0f * knee; len += 0.005f) { // (the anchor is dragged past three times the knee)
+        const glm::vec3 h = FirstPersonBodySteadyHold(dir * len, knee);
+        const float l = glm::length(h);
+        CHECK(l > last && l < 2.0f * knee && l < len);
+        CHECK(glm::dot(h, dir) > 0.9999f * l);
+        last = l;
+    }
+    CHECK(std::abs(glm::length(FirstPersonBodySteadyHold(dir * 0.12f, knee)) - knee * (1.0f + std::tanh(2.0f))) < 1e-4f);
+}
+
 } // namespace
 
 void RegisterFirstPersonBodyTests(UnitTestSupport::TestList& tests) {
@@ -545,5 +601,6 @@ void RegisterFirstPersonBodyTests(UnitTestSupport::TestList& tests) {
         {"FirstPersonBodyClothingHide", TestFirstPersonBodyClothingHide},
         {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
         {"FirstPersonBodyLookOnlyKeepsTwins", TestFirstPersonBodyLookOnlyKeepsTwins},
+        {"FirstPersonBodySteadyHold", TestFirstPersonBodySteadyHold},
     });
 }

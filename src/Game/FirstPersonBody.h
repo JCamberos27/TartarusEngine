@@ -318,6 +318,7 @@ private:
     float m_TurnThreshold = 0.0f;
     bool m_Turning = false;        // a turn-in-place clip is carrying the body round
     float m_Twist = 0.0f;          // view heading minus body heading, radians, wrapped
+    float m_TwistEased = 0.0f;     // the unarmed chest's twist as drawn (FirstPersonBodyEaseTwist; 0 while not drawn)
     int m_HeadNode = -1;
     std::string m_HeadBone;        // the component's Head Bone through the Bone Map (Start)
     glm::vec3 m_RestHead{0.0f};   // head bone, model space, in the bind pose
@@ -380,6 +381,11 @@ private:
 float FirstPersonBodyYaw(const glm::vec3& front, float fallback = 0.0f);
 // An angle wrapped to (-pi, pi].
 float FirstPersonBodyWrapAngle(float radians);
+// The chest's twist toward the view (unarmed Spine Twist), eased: returns `eased` (radians) moved toward the view's offset
+// off the body `twist` (wrapped, (-pi, pi]) clamped to +-`limit`, with half-life `halflife` (s; 0: at once). A flick no
+// longer slams the chest round in a frame or two, and a flick past straight behind - where the wrapped offset changes sign
+// and the capped target jumps from one side to the other - swings the chest across over the half-life, not in a frame.
+float FirstPersonBodyEaseTwist(float eased, float twist, float limit, float halflife, float dt);
 // A world velocity in the frame of a body at heading `yaw`: x = to its right, y = forward.
 glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw);
 // The eye in model space: the head's standing position, plus `bob` of the head's motion away
@@ -404,6 +410,10 @@ float FirstPersonBodySpineAim(float pitchRadians, float spineAim, float spineAim
 float FirstPersonBodyCappedSpineAim(float pitchRadians, float spineAim, float maxRadians, float weight);
 // Motion matching: the share of Spine Aim kept at capsule speed `speed` (m/s) - 1 up to `from`, eased to 0 at `to`.
 float FirstPersonBodyMmAimFade(float speed, float from, float to);
+// Arm Steadiness's hold on a shoulder, `trail` (m) being how far the steadied shoulder is from the pose's: exact up to
+// `knee` (Arm Steady Max), then eased toward twice it (tanh, the slope still 1 at the knee) - not cut off there. A hard
+// cut at the knee let every step's sway past it through in full, the jog's at a kink each time. 0 = no hold.
+glm::vec3 FirstPersonBodySteadyHold(const glm::vec3& trail, float knee);
 // How far segment `a`-`b` must move along unit `dir` for every one of `points` to be at least `clearance` from it:
 // the first of 0, `step`, 2 `step` ... that clears, and `maxPush` when none up to it does. 0 when already clear.
 float FirstPersonBodyClearPush(const std::vector<glm::vec3>& points, const glm::vec3& a, const glm::vec3& b, const glm::vec3& dir,
