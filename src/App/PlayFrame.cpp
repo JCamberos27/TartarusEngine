@@ -346,6 +346,7 @@ void PlayFrame::Simulate(const PlayFrameInputs& in) {
                                                      haveHolding ? &holdingHand : nullptr);
         }
         if (weaponLab) weaponLab->AfterPose(world, firstPersonBody, firstPersonPresentation, player.Cam, gameDt);
+        if (npcTest) npcTest->AfterPose(world, firstPersonBody, firstPersonPresentation, player.Cam, gameDt);
         }
         // This frame's rounds, down the bore from the muzzle: a hole where each struck.
         PROFILE_SCOPE("Player Shots + Impacts");
