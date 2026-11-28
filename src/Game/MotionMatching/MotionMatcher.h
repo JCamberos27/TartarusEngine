@@ -51,6 +51,9 @@ public:
     // place of Inertializer.Params.BlendTime: the arms of a stop or a walk settle into the idle's instead of snapping to it.
     // 0 = every jump blends alike.
     float IdleEntryBlendTime = 0.0f;
+    // A jump that crouches or stands up (MotionLabel::Crouch differs between the frames) blends at least this long (s): the
+    // posture change is the blend's, and at the usual 0.2 s the head dropped (or rose) ~0.6 m in under 0.1 s. 0 = alike.
+    float CrouchToggleBlendTime = 0.0f;
     std::int64_t HoldFrame = -1;
     // Standing idle (the host sets it each update): no searching on the timer - the playing take plays on while its
     // continuation fits the wanted trajectory: its root 1 s on within IdleTravel of where it's wanted and facing within
@@ -117,7 +120,7 @@ private:
     // Starts a dead blend from what is on screen. Its velocity is the last two output poses' over the time between them -
     // not this update's dt: in Play the frame time varies, and a hitch's long frame (or the short one after it) would scale
     // the carried velocity by the ratio of the two (into the 4 pi rad/s clamp: a lurch at the jump). `to`: the frame jumped
-    // to (IdleEntryBlendTime).
+    // to (IdleEntryBlendTime, CrouchToggleBlendTime).
     void BeginBlend(std::uint32_t to);
     // The reselect history: the run of frames shown since the last jump starts at m_RunFirst; a jump files it (with its age).
     void EndRun();
