@@ -575,7 +575,7 @@ void TestFirstPersonBodySteadyHold() {
     const float knee = 0.04f;
     const glm::vec3 dir = glm::normalize(glm::vec3(0.3f, 1.0f, -0.2f));
     CHECK(FirstPersonBodySteadyHold(dir * 0.025f, knee) == dir * 0.025f);
-    CHECK(FirstPersonBodySteadyHold(dir * knee, knee) == dir * knee);
+    CHECK(glm::length(FirstPersonBodySteadyHold(dir * knee, knee) - dir * knee) < 1e-6f); // (|dir * knee| may round a hair past the knee)
     CHECK(glm::length(FirstPersonBodySteadyHold(dir * 0.05f, 0.0f)) == 0.0f);
     const float eps = 1e-4f;
     const float slope = (glm::length(FirstPersonBodySteadyHold(dir * (knee + eps), knee)) - knee) / eps;
